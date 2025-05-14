@@ -34,15 +34,29 @@
 
   <h2>Pediatric Drug Dose Calculator (Denver Metro EMS Protocol)</h2>
 
-  <label for="weight">Patient Weight (kg):</label>
-  <input type="number" id="weight" placeholder="e.g., 16">
+  <label for="inputType">Enter Weight or Age:</label>
+  <select id="inputType" onchange="toggleInputType()">
+    <option value="weight">Enter Weight (kg)</option>
+    <option value="age">Estimate Weight by Age</option>
+  </select>
+
+  <input type="number" id="weightInput" placeholder="Weight in kg">
+  <input type="number" id="ageInput" placeholder="Age in years" style="display:none">
+
+  <label for="complaint">Select Chief Complaint:</label>
+  <select id="complaint" onchange="filterDrugs()">
+    <option value="all">All</option>
+    <option value="anaphylaxis">Anaphylaxis</option>
+    <option value="seizure">Seizure</option>
+    <option value="nausea">Nausea</option>
+    <option value="pain">Pain</option>
+    <option value="respiratory">Respiratory Distress</option>
+    <option value="cardiac">Cardiac Arrest</option>
+    <option value="hypoglycemia">Hypoglycemia</option>
+  </select>
 
   <label for="medication">Select Medication:</label>
-  <select id="medication" onchange="updateDrugDetails()">
-    <option value="epi_im_anaphylaxis">Epinephrine 1:1,000 IM (Anaphylaxis)</option>
-    <option value="midazolam_in_seizure">Midazolam IN (Seizure)</option>
-    <option value="ondansetron_iv_nausea">Ondansetron IV (Nausea)</option>
-  </select>
+  <select id="medication"></select>
 
   <label for="concentration">Medication Concentration (mg/mL):</label>
   <input type="number" id="concentration" placeholder="e.g., 1 for 1:1,000 or 5 for Midazolam 5mg/mL">
@@ -67,27 +81,58 @@
         dosePerKg: 0.01, maxDose: 0.3,
         indication: "Anaphylaxis, severe allergic reaction, upper airway stridor (croup).",
         contraindication: "None in life-threatening anaphylaxis.",
-        route: "IM (Intramuscular)"
+        route: "IM (Intramuscular)",
+        complaint: "anaphylaxis"
       },
       'midazolam_in_seizure': {
         dosePerKg: 0.2, maxDose: 10,
         indication: "Active seizures, status epilepticus.",
         contraindication: "Hypotension, respiratory depression, allergy to benzodiazepines.",
-        route: "IN (Intranasal), also IV/IM if available"
+        route: "IN (Intranasal), also IV/IM if available",
+        complaint: "seizure"
       },
       'ondansetron_iv_nausea': {
         dosePerKg: 0.1, maxDose: 4,
         indication: "Nausea, vomiting.",
         contraindication: "Prolonged QT interval, hypersensitivity.",
-        route: "IV, IM, PO, or ODT"
+        route: "IV, IM, PO, or ODT",
+        complaint: "nausea"
       }
     };
+
+    function toggleInputType() {
+      const inputType = document.getElementById('inputType').value;
+      document.getElementById('weightInput').style.display = inputType === 'weight' ? 'block' : 'none';
+      document.getElementById('ageInput').style.display = inputType === 'age' ? 'block' : 'none';
+    }
+
+    function getWeight() {
+      const type = document.getElementById('inputType').value;
+      if (type === 'weight') return parseFloat(document.getElementById('weightInput').value);
+      const age = parseFloat(document.getElementById('ageInput').value);
+      return isNaN(age) ? NaN : (age * 2 + 8);
+    }
+
+    function filterDrugs() {
+      const complaint = document.getElementById('complaint').value;
+      const medSelect = document.getElementById('medication');
+      medSelect.innerHTML = '';
+      for (const key in protocolDoses) {
+        if (complaint === 'all' || protocolDoses[key].complaint === complaint) {
+          const option = document.createElement('option');
+          option.value = key;
+          option.text = key.replace(/_/g, ' ').toUpperCase();
+          medSelect.appendChild(option);
+        }
+      }
+      updateDrugDetails();
+    }
 
     function updateDrugDetails() {
       const medKey = document.getElementById('medication').value;
       const details = protocolDoses[medKey];
       const drugDetails = document.getElementById('drugDetails');
-
+      if (!details) return;
       drugDetails.innerHTML = `
         <strong>Indication:</strong> ${details.indication}<br>
         <strong>Contraindication:</strong> ${details.contraindication}<br>
@@ -96,13 +141,13 @@
     }
 
     function calculateDose() {
-      const weight = parseFloat(document.getElementById('weight').value);
+      const weight = getWeight();
       const medKey = document.getElementById('medication').value;
       const concentration = parseFloat(document.getElementById('concentration').value);
       const output = document.getElementById('output');
 
       if (isNaN(weight) || isNaN(concentration)) {
-        output.innerHTML = "<strong>Please enter valid weight and concentration.</strong>";
+        output.innerHTML = "<strong>Please enter valid weight/age and concentration.</strong>";
         return;
       }
 
@@ -119,15 +164,14 @@
 
       output.innerHTML = `
         <strong>Calculated Dose:</strong><br>
-        Weight: ${weight} kg<br>
+        Weight: ${weight.toFixed(1)} kg<br>
         Medication Dose: ${doseMg.toFixed(2)} mg<br>
         Volume to Administer: ${volumeMl.toFixed(2)} mL<br>
         ${isMaxed ? "<em>Max dose applied per protocol.</em>" : ""}
       `;
     }
 
-    // Show initial drug info on page load
-    window.onload = updateDrugDetails;
+    window.onload = filterDrugs;
   </script>
 
 </body>
