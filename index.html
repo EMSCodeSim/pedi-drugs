@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -43,8 +42,227 @@
 </head>
 <body>
 
-  <!-- Screen content omitted for brevity. (Identical to prior code) -->
+  <div class="screen active" id="screen1">
+    <h2>Select Chief Complaint</h2>
+    <select id="complaint" onchange="loadDrugs()">
+      <option value="">-- Select --</option>
+      <option value="anaphylaxis">Anaphylaxis</option>
+      <option value="seizure">Seizure</option>
+      <option value="pain">Pain</option>
+      <option value="nausea">Nausea</option>
+      <option value="hypoglycemia">Hypoglycemia</option>
+    </select>
+    <button onclick="nextScreen('screen2')">Next</button>
+  </div>
+
+  <div class="screen" id="screen2">
+    <h2>Select Drug</h2>
+    <select id="drug" onchange="showDrugInfo()"></select>
+    <div id="drugInfo" class="notes"></div>
+    <button onclick="nextScreen('screen3')">Next</button>
+  </div>
+
+  <div class="screen" id="screen3">
+    <h2>Enter Patient Information</h2>
+    <label>Age (optional):</label>
+    <input type="number" id="age" placeholder="Age in years">
+    <label>Weight in kg (or leave blank for auto-estimate):</label>
+    <input type="number" id="weight">
+    <label>Route:</label>
+    <input type="text" id="route" readonly>
+    <label>Concentration (mg/mL):</label>
+    <input type="number" id="concentration" placeholder="e.g., 1 or 5">
+    <button onclick="calculateDose()">Calculate Dose</button>
+  </div>
+
+  <div class="screen" id="screen4">
+    <h2>Dose Result</h2>
+    <div id="result" class="result"></div>
+    <div class="notes">
+      <h4>Protocol Reference:</h4>
+      <p>Denver Metro EMS Pediatric Protocols (2024)</p>
+      <p>Equation: <strong>mg = weight (kg) × dose per kg</strong><br>
+      mL = mg ÷ concentration</p>
+    </div>
+  </div>
+
+  <script>
+    const drugsByComplaint = {
+      anaphylaxis: ['epinephrine_im', 'diphenhydramine'],
+      seizure: ['midazolam', 'diazepam'],
+      pain: ['fentanyl', 'morphine'],
+      nausea: ['ondansetron'],
+      hypoglycemia: ['oral_glucose', 'dextrose', 'glucagon']
+    };
+
+    const drugData = {
+      epinephrine_im: {
+        name: 'Epinephrine 1:1,000 IM',
+        dosePerKg: 0.01,
+        maxDose: 0.3,
+        indication: 'Anaphylaxis, stridor',
+        contraindication: 'None in emergency',
+        route: 'IM'
+      },
+      diphenhydramine: {
+        name: 'Diphenhydramine',
+        dosePerKg: 1,
+        maxDose: 50,
+        indication: 'Allergic reaction',
+        contraindication: 'Sedation risk',
+        route: 'IV/IM/PO'
+      },
+      midazolam: {
+        name: 'Midazolam',
+        dosePerKg: 0.2,
+        maxDose: 10,
+        indication: 'Seizures',
+        contraindication: 'Respiratory depression',
+        route: 'IN/IV/IM'
+      },
+      diazepam: {
+        name: 'Diazepam',
+        dosePerKg: 0.2,
+        maxDose: 10,
+        indication: 'Seizures',
+        contraindication: 'Respiratory compromise',
+        route: 'IV/Rectal'
+      },
+      fentanyl: {
+        name: 'Fentanyl',
+        dosePerKg: 1,
+        maxDose: 100,
+        indication: 'Moderate to severe pain',
+        contraindication: 'Hypotension, respiratory depression',
+        route: 'IV/IN/IM'
+      },
+      morphine: {
+        name: 'Morphine',
+        dosePerKg: 0.1,
+        maxDose: 10,
+        indication: 'Severe pain',
+        contraindication: 'Hypotension',
+        route: 'IV/IM'
+      },
+      ondansetron: {
+        name: 'Ondansetron',
+        dosePerKg: 0.1,
+        maxDose: 4,
+        indication: 'Nausea/Vomiting',
+        contraindication: 'Prolonged QT',
+        route: 'IV/IM/ODT'
+      },
+      oral_glucose: {
+        name: 'Oral Glucose',
+        dosePerKg: 0,
+        maxDose: 30,
+        indication: 'Hypoglycemia (alert)',
+        contraindication: 'Unconscious',
+        route: 'PO'
+      },
+      dextrose: {
+        name: 'Dextrose D10',
+        dosePerKg: 5,
+        maxDose: 200,
+        indication: 'Hypoglycemia',
+        contraindication: 'None',
+        route: 'IV'
+      },
+      glucagon: {
+        name: 'Glucagon',
+        dosePerKg: 0.03,
+        maxDose: 1,
+        indication: 'Hypoglycemia, no IV access',
+        contraindication: 'Pheochromocytoma',
+        route: 'IM'
+      }
+    };
+
+    function nextScreen(id) {
+      document.querySelectorAll('.screen').forEach(div => div.classList.remove('active'));
+      document.getElementById(id).classList.add('active');
+    }
+
+    function loadDrugs() {
+      const complaint = document.getElementById('complaint').value;
+      const drugSelect = document.getElementById('drug');
+      drugSelect.innerHTML = '';
+      if (drugsByComplaint[complaint]) {
+        drugsByComplaint[complaint].forEach(key => {
+          const opt = document.createElement('option');
+          opt.value = key;
+          opt.textContent = drugData[key].name;
+          drugSelect.appendChild(opt);
+        });
+        showDrugInfo();
+      }
+    }
+
+    function showDrugInfo() {
+      const key = document.getElementById('drug').value;
+      const info = drugData[key];
+      if (info) {
+        document.getElementById('drugInfo').innerHTML =
+          `<strong>Indication:</strong> ${info.indication}<br>
+           <strong>Contraindication:</strong> ${info.contraindication}<br>
+           <strong>Route:</strong> ${info.route}`;
+        document.getElementById('route').value = info.route;
+      }
+    }
+
+    function calculateDose() {
+      let weight = parseFloat(document.getElementById('weight').value);
+      const age = parseFloat(document.getElementById('age').value);
+      const key = document.getElementById('drug').value;
+      const concentration = parseFloat(document.getElementById('concentration').value);
+      const drug = drugData[key];
+
+      if (isNaN(weight) && !isNaN(age)) {
+        weight = (age * 2) + 8;
+      }
+
+      if (!drug || isNaN(weight) || isNaN(concentration)) {
+        alert('Please complete all fields.');
+        return;
+      }
+
+      let mg = weight * drug.dosePerKg;
+      const braslo = brasloColor(weight);
+      let isMaxed = false;
+
+      if (mg > drug.maxDose) {
+        mg = drug.maxDose;
+        isMaxed = true;
+      }
+
+      const ml = mg / concentration;
+
+      document.getElementById('result').innerHTML = `
+        <strong>Drug:</strong> ${drug.name}<br>
+        <strong>Route:</strong> ${drug.route}<br>
+        <strong>Weight:</strong> ${weight.toFixed(1)} kg<br>
+        <strong>Broselow Color:</strong> ${braslo}<br>
+        <strong>Dose:</strong> ${mg.toFixed(2)} mg<br>
+        <strong>Volume to Administer:</strong> ${ml.toFixed(2)} mL<br>
+        ${isMaxed ? "<em>Max dose applied per protocol.</em>" : ""}
+      `;
+
+      nextScreen('screen4');
+    }
+
+    function brasloColor(kg) {
+      if (kg < 3) return "Gray";
+      if (kg < 5) return "Pink";
+      if (kg < 8) return "Red";
+      if (kg < 10) return "Purple";
+      if (kg < 14) return "Yellow";
+      if (kg < 18) return "White";
+      if (kg < 23) return "Blue";
+      if (kg < 29) return "Orange";
+      if (kg < 36) return "Green";
+      return "No tape match";
+    }
+  </script>
 
 </body>
 </html>
-    
