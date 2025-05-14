@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -23,6 +22,12 @@
       padding: 10px;
       border-left: 4px solid #004d99;
     }
+    .notes {
+      margin-top: 30px;
+      padding: 15px;
+      background: #fff8dc;
+      border-left: 4px solid #ff9900;
+    }
   </style>
 </head>
 <body>
@@ -45,6 +50,15 @@
   <button onclick="calculateDose()">Calculate Dose</button>
 
   <div id="output" class="result"></div>
+
+  <div class="notes">
+    <h4>Protocol Reference:</h4>
+    <p>This calculator follows the <strong>Denver Metro EMS Pediatric Drug Protocols (2024)</strong>.</p>
+    <h4>Dose Equation:</h4>
+    <p><strong>mg dose = weight (kg) × dose per kg</strong><br>
+       <strong>mL to administer = mg dose ÷ concentration (mg/mL)</strong><br>
+       If dose exceeds protocol max, the max is used.</p>
+  </div>
 
   <script>
     const protocolDoses = {
@@ -87,4 +101,3 @@
 
 </body>
 </html>
-    
