@@ -16,7 +16,7 @@
       display: block;
       margin: 10px 0;
     }
-    .result {
+    .result, .details {
       margin-top: 20px;
       background: #e6f2ff;
       padding: 10px;
@@ -38,7 +38,7 @@
   <input type="number" id="weight" placeholder="e.g., 16">
 
   <label for="medication">Select Medication:</label>
-  <select id="medication">
+  <select id="medication" onchange="updateDrugDetails()">
     <option value="epi_im_anaphylaxis">Epinephrine 1:1,000 IM (Anaphylaxis)</option>
     <option value="midazolam_in_seizure">Midazolam IN (Seizure)</option>
     <option value="ondansetron_iv_nausea">Ondansetron IV (Nausea)</option>
@@ -49,7 +49,8 @@
 
   <button onclick="calculateDose()">Calculate Dose</button>
 
-  <div id="output" class="result"></div>
+  <div class="details" id="drugDetails"></div>
+  <div class="result" id="output"></div>
 
   <div class="notes">
     <h4>Protocol Reference:</h4>
@@ -62,10 +63,37 @@
 
   <script>
     const protocolDoses = {
-      'epi_im_anaphylaxis': {dosePerKg: 0.01, maxDose: 0.3},
-      'midazolam_in_seizure': {dosePerKg: 0.2, maxDose: 10},
-      'ondansetron_iv_nausea': {dosePerKg: 0.1, maxDose: 4}
+      'epi_im_anaphylaxis': {
+        dosePerKg: 0.01, maxDose: 0.3,
+        indication: "Anaphylaxis, severe allergic reaction, upper airway stridor (croup).",
+        contraindication: "None in life-threatening anaphylaxis.",
+        route: "IM (Intramuscular)"
+      },
+      'midazolam_in_seizure': {
+        dosePerKg: 0.2, maxDose: 10,
+        indication: "Active seizures, status epilepticus.",
+        contraindication: "Hypotension, respiratory depression, allergy to benzodiazepines.",
+        route: "IN (Intranasal), also IV/IM if available"
+      },
+      'ondansetron_iv_nausea': {
+        dosePerKg: 0.1, maxDose: 4,
+        indication: "Nausea, vomiting.",
+        contraindication: "Prolonged QT interval, hypersensitivity.",
+        route: "IV, IM, PO, or ODT"
+      }
     };
+
+    function updateDrugDetails() {
+      const medKey = document.getElementById('medication').value;
+      const details = protocolDoses[medKey];
+      const drugDetails = document.getElementById('drugDetails');
+
+      drugDetails.innerHTML = `
+        <strong>Indication:</strong> ${details.indication}<br>
+        <strong>Contraindication:</strong> ${details.contraindication}<br>
+        <strong>Route:</strong> ${details.route}
+      `;
+    }
 
     function calculateDose() {
       const weight = parseFloat(document.getElementById('weight').value);
@@ -97,6 +125,9 @@
         ${isMaxed ? "<em>Max dose applied per protocol.</em>" : ""}
       `;
     }
+
+    // Show initial drug info on page load
+    window.onload = updateDrugDetails;
   </script>
 
 </body>
