@@ -1,8 +1,9 @@
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>Pediatric Drug Calculator</title>
+  <title>Denver Metro Pediatric Drug Calculator</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <style>
     body { font-family: Arial, sans-serif; background: #f0f8ff; padding: 20px; font-size: 1.1em; }
@@ -11,31 +12,27 @@
       width: 100%; margin: 10px 0; padding: 12px; font-size: 1em;
     }
     .section, .result, .notes {
-      background: #e6f2ff;
-      padding: 15px;
-      margin-top: 15px;
-      border-left: 4px solid #004d99;
+      background: #e6f2ff; padding: 15px; margin-top: 15px; border-left: 4px solid #004d99;
     }
-    .notes {
-      background: #fff8dc;
-      border-left: 4px solid #ff9900;
-    }
+    .notes { background: #fff8dc; border-left: 4px solid #ff9900; }
     .warning, .disclaimer {
-      color: red;
-      font-weight: bold;
-      margin-top: 10px;
+      color: red; font-weight: bold; margin-top: 10px;
     }
   </style>
 </head>
 <body>
 
-<h2>Pediatric Drug Calculator (Denver Metro EMS)</h2>
+<h2>Denver Metro Pediatric Drug Calculator</h2>
 
 <label>Chief Complaint</label>
 <select id="complaint" onchange="loadDrugs()">
   <option value="">-- Select --</option>
+  <option value="cardiac_arrest">Cardiac Arrest</option>
   <option value="seizure">Seizure</option>
+  <option value="resp_distress">Respiratory Distress</option>
+  <option value="anaphylaxis">Anaphylaxis</option>
   <option value="pain">Pain</option>
+  <option value="nausea">Nausea</option>
 </select>
 
 <div id="drugSection" class="section" style="display:none;">
@@ -48,24 +45,10 @@
   <div id="drugInfo" class="notes"></div>
 
   <label>Age (years)</label>
-  <input type="number" id="age" placeholder="Enter patient age">
-
-  <label>Broselow Tape Color (optional)</label>
-  <select id="broselowColor" onchange="estimateWeightByColor()">
-    <option value="">-- Select Color --</option>
-    <option value="gray">Gray (~3 kg)</option>
-    <option value="pink">Pink (~5 kg)</option>
-    <option value="red">Red (~8 kg)</option>
-    <option value="purple">Purple (~10 kg)</option>
-    <option value="yellow">Yellow (~14 kg)</option>
-    <option value="white">White (~18 kg)</option>
-    <option value="blue">Blue (~22 kg)</option>
-    <option value="orange">Orange (~28 kg)</option>
-    <option value="green">Green (~34 kg)</option>
-  </select>
+  <input type="number" id="age" placeholder="Required for protocol check">
 
   <label>Weight (kg)</label>
-  <input type="number" id="weight" placeholder="Enter weight or use tape color">
+  <input type="number" id="weight" placeholder="Estimated or known weight">
 
   <label>Concentration (mg/mL)</label>
   <input type="number" id="concentration" placeholder="e.g., 1 or 5">
@@ -76,17 +59,35 @@
 
 <div id="result" class="result" style="display:none;"></div>
 <div class="disclaimer" id="disclaimer" style="display:none;">
-  ⚠️ Confirm all calculations and doses before administration.
+  ⚠️ Confirm all calculations before administering medications.
 </div>
 <button id="homeButton" onclick="location.reload()" style="display:none;">🔁 Start Over</button>
 
 <div class="notes">
-  <strong>Reference:</strong> Denver Metro EMS Protocols (2025)<br>
-  Dose = weight (kg) × dose/kg · Volume = mg ÷ concentration
+  <strong>Reference:</strong> Based on Denver Metro EMS Pediatric Protocols (2025)<br>
+  Equation: Dose = weight (kg) × dose/kg · Volume = mg ÷ concentration
 </div>
 
 <script>
   const drugs = {
+    cardiac_arrest: {
+      epinephrine: {
+        name: "Epinephrine 1:10,000",
+        routes: { IV: { dosePerKg: 0.01, maxDose: 1 } },
+        indication: "Cardiac arrest",
+        contraindication: "None",
+        callIn: false,
+        minAge: 0, maxAge: 18
+      },
+      amiodarone: {
+        name: "Amiodarone",
+        routes: { IV: { dosePerKg: 5, maxDose: 300 } },
+        indication: "Shock-refractory VF/pVT",
+        contraindication: "Bradycardia, AV block",
+        callIn: true,
+        minAge: 0, maxAge: 18
+      }
+    },
     seizure: {
       midazolam: {
         name: "Midazolam",
@@ -94,10 +95,46 @@
           IV: { dosePerKg: 0.1, maxDose: 5 },
           IN: { dosePerKg: 0.2, maxDose: 10 }
         },
-        indication: "Active seizure",
+        indication: "Seizure activity",
         contraindication: "Respiratory depression",
-        minAge: 0, maxAge: 18,
-        callIn: false
+        callIn: false,
+        minAge: 0, maxAge: 18
+      }
+    },
+    resp_distress: {
+      albuterol: {
+        name: "Albuterol",
+        routes: { NEB: { dosePerKg: 0, fixedDose: 2.5 } },
+        indication: "Wheezing, asthma, bronchiolitis",
+        contraindication: "Tachycardia, sensitivity",
+        callIn: false,
+        minAge: 0, maxAge: 18
+      },
+      epinephrine_neb: {
+        name: "Epinephrine 1:1,000 (Nebulized)",
+        routes: { NEB: { dosePerKg: 0.5, maxDose: 5 } },
+        indication: "Stridor, croup",
+        contraindication: "None in emergency",
+        callIn: false,
+        minAge: 6, maxAge: 18
+      }
+    },
+    anaphylaxis: {
+      epinephrine_im: {
+        name: "Epinephrine 1:1,000 IM",
+        routes: { IM: { dosePerKg: 0.01, maxDose: 0.3 } },
+        indication: "Anaphylaxis",
+        contraindication: "None",
+        callIn: false,
+        minAge: 0, maxAge: 18
+      },
+      diphenhydramine: {
+        name: "Diphenhydramine",
+        routes: { IV: { dosePerKg: 1, maxDose: 50 } },
+        indication: "Allergic reaction",
+        contraindication: "CNS depression",
+        callIn: false,
+        minAge: 1, maxAge: 18
       }
     },
     pain: {
@@ -107,10 +144,23 @@
           IV: { dosePerKg: 1, maxDose: 100 },
           IN: { dosePerKg: 2, maxDose: 200 }
         },
-        indication: "Moderate to severe pain",
-        contraindication: "Respiratory depression",
-        minAge: 0, maxAge: 18,
-        callIn: false
+        indication: "Moderate/severe pain",
+        contraindication: "Hypotension",
+        callIn: false,
+        minAge: 0, maxAge: 18
+      }
+    },
+    nausea: {
+      ondansetron: {
+        name: "Ondansetron",
+        routes: {
+          IV: { dosePerKg: 0.1, maxDose: 4 },
+          IM: { dosePerKg: 0.1, maxDose: 4 }
+        },
+        indication: "Nausea, vomiting",
+        contraindication: "QT prolongation",
+        callIn: false,
+        minAge: 2, maxAge: 18
       }
     }
   };
@@ -156,18 +206,7 @@
     document.getElementById('drugInfo').innerHTML =
       `<strong>Indication:</strong> ${info.indication}<br>
        <strong>Contraindication:</strong> ${info.contraindication}<br>
-       ${info.callIn ? "<strong style='color:red;'>Call-in required</strong>" : ""}`;
-  }
-
-  function estimateWeightByColor() {
-    const map = {
-      gray: 3, pink: 5, red: 8, purple: 10,
-      yellow: 14, white: 18, blue: 22, orange: 28, green: 34
-    };
-    const color = document.getElementById('broselowColor').value;
-    if (map[color]) {
-      document.getElementById('weight').value = map[color];
-    }
+       ${info.callIn ? "<strong style='color:red;'>Call-in required!</strong>" : ""}`;
   }
 
   function calculateDose() {
@@ -208,9 +247,9 @@
     }
 
     const doseData = drug.routes[route];
-    let dose = weight * doseData.dosePerKg;
-    if (dose > doseData.maxDose) dose = doseData.maxDose;
-    const volume = dose / conc;
+    let dose = doseData.fixedDose || (weight * doseData.dosePerKg);
+    if (doseData.maxDose && dose > doseData.maxDose) dose = doseData.maxDose;
+    const volume = doseData.fixedDose ? "N/A" : (dose / conc).toFixed(2);
 
     resultDiv.style.display = 'block';
     disclaimer.style.display = 'block';
@@ -218,11 +257,10 @@
 
     resultDiv.innerHTML = `
       <strong>Drug:</strong> ${drug.name} (${route})<br>
+      <strong>Age:</strong> ${age} yrs<br>
       <strong>Weight:</strong> ${weight.toFixed(1)} kg<br>
-      <strong>Dose per kg:</strong> ${doseData.dosePerKg} mg/kg<br>
-      <strong>Concentration:</strong> ${conc} mg/mL<br>
-      <strong>Total Dose:</strong> ${dose.toFixed(2)} mg<br>
-      <strong>Volume to Administer:</strong> ${volume.toFixed(2)} mL
+      <strong>Dose:</strong> ${dose.toFixed(2)} mg<br>
+      <strong>Volume to Administer:</strong> ${volume} mL
     `;
   }
 </script>
