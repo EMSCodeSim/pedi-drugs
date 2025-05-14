@@ -1,0 +1,90 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Pediatric Drug Dose Calculator</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background: #f0f8ff;
+      padding: 20px;
+    }
+    h2 {
+      color: #004d99;
+    }
+    label, select, input {
+      display: block;
+      margin: 10px 0;
+    }
+    .result {
+      margin-top: 20px;
+      background: #e6f2ff;
+      padding: 10px;
+      border-left: 4px solid #004d99;
+    }
+  </style>
+</head>
+<body>
+
+  <h2>Pediatric Drug Dose Calculator (Denver Metro EMS Protocol)</h2>
+
+  <label for="weight">Patient Weight (kg):</label>
+  <input type="number" id="weight" placeholder="e.g., 16">
+
+  <label for="medication">Select Medication:</label>
+  <select id="medication">
+    <option value="epi_im_anaphylaxis">Epinephrine 1:1,000 IM (Anaphylaxis)</option>
+    <option value="midazolam_in_seizure">Midazolam IN (Seizure)</option>
+    <option value="ondansetron_iv_nausea">Ondansetron IV (Nausea)</option>
+  </select>
+
+  <label for="concentration">Medication Concentration (mg/mL):</label>
+  <input type="number" id="concentration" placeholder="e.g., 1 for 1:1,000 or 5 for Midazolam 5mg/mL">
+
+  <button onclick="calculateDose()">Calculate Dose</button>
+
+  <div id="output" class="result"></div>
+
+  <script>
+    const protocolDoses = {
+      'epi_im_anaphylaxis': {dosePerKg: 0.01, maxDose: 0.3},
+      'midazolam_in_seizure': {dosePerKg: 0.2, maxDose: 10},
+      'ondansetron_iv_nausea': {dosePerKg: 0.1, maxDose: 4}
+    };
+
+    function calculateDose() {
+      const weight = parseFloat(document.getElementById('weight').value);
+      const medKey = document.getElementById('medication').value;
+      const concentration = parseFloat(document.getElementById('concentration').value);
+      const output = document.getElementById('output');
+
+      if (isNaN(weight) || isNaN(concentration)) {
+        output.innerHTML = "<strong>Please enter valid weight and concentration.</strong>";
+        return;
+      }
+
+      const { dosePerKg, maxDose } = protocolDoses[medKey];
+      let doseMg = weight * dosePerKg;
+      let isMaxed = false;
+
+      if (doseMg > maxDose) {
+        doseMg = maxDose;
+        isMaxed = true;
+      }
+
+      const volumeMl = doseMg / concentration;
+
+      output.innerHTML = `
+        <strong>Calculated Dose:</strong><br>
+        Weight: ${weight} kg<br>
+        Medication Dose: ${doseMg.toFixed(2)} mg<br>
+        Volume to Administer: ${volumeMl.toFixed(2)} mL<br>
+        ${isMaxed ? "<em>Max dose applied per protocol.</em>" : ""}
+      `;
+    }
+  </script>
+
+</body>
+</html>
+    
