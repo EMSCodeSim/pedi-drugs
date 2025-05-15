@@ -11,7 +11,7 @@
       "max_dose": "1 mg",
       "max_doses": "\u221e",
       "call_in": "No",
-      "drip_setup": NaN
+      "drip_setup": "N/A"
     },
     {
       "age_range": "Adult",
@@ -24,7 +24,7 @@
       "max_dose": "1 mg",
       "max_doses": "\u221e",
       "call_in": "No",
-      "drip_setup": NaN
+      "drip_setup": "N/A"
     },
     {
       "age_range": "Pediatric",
@@ -112,7 +112,7 @@
       "max_dose": "1 inch",
       "max_doses": "Repeat every 30-60 min",
       "call_in": "No",
-      "drip_setup": NaN
+      "drip_setup": "N/A"
     },
     {
       "age_range": "Adult",
