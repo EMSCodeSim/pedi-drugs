@@ -1,268 +1,110 @@
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>Denver Metro Pediatric Drug Calculator</title>
+  <title>Pediatric Drug Calculator</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <style>
-    body { font-family: Arial, sans-serif; background: #f0f8ff; padding: 20px; font-size: 1.1em; }
-    h2 { color: #004d99; }
+    body { font-family: Arial, sans-serif; background: #eef9ff; padding: 20px; font-size: 1.1em; }
     label, select, input, button {
-      width: 100%; margin: 10px 0; padding: 12px; font-size: 1em;
+      width: 100%; margin: 10px 0; padding: 10px; font-size: 1em;
     }
-    .section, .result, .notes {
-      background: #e6f2ff; padding: 15px; margin-top: 15px; border-left: 4px solid #004d99;
-    }
-    .notes { background: #fff8dc; border-left: 4px solid #ff9900; }
-    .warning, .disclaimer {
-      color: red; font-weight: bold; margin-top: 10px;
-    }
+    .age-inputs { display: flex; gap: 10px; }
+    .section { background: #d9f0ff; padding: 15px; margin-top: 15px; border-left: 4px solid #0077cc; }
+    .medication { background: #fff; margin-top: 10px; padding: 10px; border: 1px solid #ccc; }
+    .medication h4 { margin: 0 0 5px 0; }
+    .warning { color: red; font-weight: bold; }
   </style>
 </head>
 <body>
 
-<h2>Denver Metro Pediatric Drug Calculator</h2>
+<h2>Pediatric Drug Lookup (Denver Metro EMS)</h2>
 
 <label>Chief Complaint</label>
-<select id="complaint" onchange="loadDrugs()">
+<select id="complaintSelect" onchange="loadMedications()">
   <option value="">-- Select --</option>
-  <option value="cardiac_arrest">Cardiac Arrest</option>
-  <option value="seizure">Seizure</option>
-  <option value="resp_distress">Respiratory Distress</option>
-  <option value="anaphylaxis">Anaphylaxis</option>
-  <option value="pain">Pain</option>
-  <option value="nausea">Nausea</option>
 </select>
 
-<div id="drugSection" class="section" style="display:none;">
-  <label>Medication</label>
-  <select id="drug" onchange="loadRoutes()"></select>
-
-  <label>Route</label>
-  <select id="route" onchange="updateInfo()"></select>
-
-  <div id="drugInfo" class="notes"></div>
-
-  <label>Age (years)</label>
-  <input type="number" id="age" placeholder="Required for protocol check">
-
-  <label>Weight (kg)</label>
-  <input type="number" id="weight" placeholder="Estimated or known weight">
-
-  <label>Concentration (mg/mL)</label>
-  <input type="number" id="concentration" placeholder="e.g., 1 or 5">
-
-  <button onclick="calculateDose()">Calculate Dose</button>
-  <div id="warning" class="warning"></div>
+<label>Patient Age</label>
+<div class="age-inputs">
+  <input type="number" id="ageYears" placeholder="Years" min="0">
+  <input type="number" id="ageMonths" placeholder="Months" min="0" max="11">
+  <input type="number" id="ageDays" placeholder="Days" min="0" max="30">
 </div>
 
-<div id="result" class="result" style="display:none;"></div>
-<div class="disclaimer" id="disclaimer" style="display:none;">
-  ⚠️ Confirm all calculations before administering medications.
-</div>
-<button id="homeButton" onclick="location.reload()" style="display:none;">🔁 Start Over</button>
+<button onclick="loadMedications()">Find Medications</button>
 
-<div class="notes">
-  <strong>Reference:</strong> Based on Denver Metro EMS Pediatric Protocols (2025)<br>
-  Equation: Dose = weight (kg) × dose/kg · Volume = mg ÷ concentration
-</div>
+<div id="medList" class="section"></div>
 
 <script>
-  const drugs = {
-    cardiac_arrest: {
-      epinephrine: {
-        name: "Epinephrine 1:10,000",
-        routes: { IV: { dosePerKg: 0.01, maxDose: 1 } },
-        indication: "Cardiac arrest",
-        contraindication: "None",
-        callIn: false,
-        minAge: 0, maxAge: 18
-      },
-      amiodarone: {
-        name: "Amiodarone",
-        routes: { IV: { dosePerKg: 5, maxDose: 300 } },
-        indication: "Shock-refractory VF/pVT",
-        contraindication: "Bradycardia, AV block",
-        callIn: true,
-        minAge: 0, maxAge: 18
-      }
-    },
-    seizure: {
-      midazolam: {
-        name: "Midazolam",
-        routes: {
-          IV: { dosePerKg: 0.1, maxDose: 5 },
-          IN: { dosePerKg: 0.2, maxDose: 10 }
-        },
-        indication: "Seizure activity",
-        contraindication: "Respiratory depression",
-        callIn: false,
-        minAge: 0, maxAge: 18
-      }
-    },
-    resp_distress: {
-      albuterol: {
-        name: "Albuterol",
-        routes: { NEB: { dosePerKg: 0, fixedDose: 2.5 } },
-        indication: "Wheezing, asthma, bronchiolitis",
-        contraindication: "Tachycardia, sensitivity",
-        callIn: false,
-        minAge: 0, maxAge: 18
-      },
-      epinephrine_neb: {
-        name: "Epinephrine 1:1,000 (Nebulized)",
-        routes: { NEB: { dosePerKg: 0.5, maxDose: 5 } },
-        indication: "Stridor, croup",
-        contraindication: "None in emergency",
-        callIn: false,
-        minAge: 6, maxAge: 18
-      }
-    },
-    anaphylaxis: {
-      epinephrine_im: {
-        name: "Epinephrine 1:1,000 IM",
-        routes: { IM: { dosePerKg: 0.01, maxDose: 0.3 } },
-        indication: "Anaphylaxis",
-        contraindication: "None",
-        callIn: false,
-        minAge: 0, maxAge: 18
-      },
-      diphenhydramine: {
-        name: "Diphenhydramine",
-        routes: { IV: { dosePerKg: 1, maxDose: 50 } },
-        indication: "Allergic reaction",
-        contraindication: "CNS depression",
-        callIn: false,
-        minAge: 1, maxAge: 18
-      }
-    },
-    pain: {
-      fentanyl: {
-        name: "Fentanyl",
-        routes: {
-          IV: { dosePerKg: 1, maxDose: 100 },
-          IN: { dosePerKg: 2, maxDose: 200 }
-        },
-        indication: "Moderate/severe pain",
-        contraindication: "Hypotension",
-        callIn: false,
-        minAge: 0, maxAge: 18
-      }
-    },
-    nausea: {
-      ondansetron: {
-        name: "Ondansetron",
-        routes: {
-          IV: { dosePerKg: 0.1, maxDose: 4 },
-          IM: { dosePerKg: 0.1, maxDose: 4 }
-        },
-        indication: "Nausea, vomiting",
-        contraindication: "QT prolongation",
-        callIn: false,
-        minAge: 2, maxAge: 18
-      }
-    }
-  };
+let allMeds = {};
 
-  function loadDrugs() {
-    const complaint = document.getElementById('complaint').value;
-    const drugSelect = document.getElementById('drug');
-    drugSelect.innerHTML = '';
-    if (!drugs[complaint]) return;
-
-    Object.keys(drugs[complaint]).forEach(key => {
-      const opt = document.createElement('option');
-      opt.value = key;
-      opt.textContent = drugs[complaint][key].name;
-      drugSelect.appendChild(opt);
+fetch("medications_by_complaint_with_age_first.json")
+  .then(res => res.json())
+  .then(data => {
+    allMeds = data;
+    const complaintSelect = document.getElementById("complaintSelect");
+    Object.keys(data).forEach(complaint => {
+      const option = document.createElement("option");
+      option.value = complaint;
+      option.textContent = complaint;
+      complaintSelect.appendChild(option);
     });
+  });
 
-    document.getElementById('drugSection').style.display = 'block';
-    loadRoutes();
+function getAgeInText() {
+  const y = parseInt(document.getElementById("ageYears").value) || 0;
+  const m = parseInt(document.getElementById("ageMonths").value) || 0;
+  const d = parseInt(document.getElementById("ageDays").value) || 0;
+  return `${y}y ${m}m ${d}d`;
+}
+
+function loadMedications() {
+  const complaint = document.getElementById("complaintSelect").value;
+  const ageY = parseInt(document.getElementById("ageYears").value) || 0;
+  const medList = document.getElementById("medList");
+  medList.innerHTML = "";
+
+  if (!complaint || !allMeds[complaint]) {
+    medList.innerHTML = "<div class='warning'>Please select a chief complaint and enter age.</div>";
+    return;
   }
 
-  function loadRoutes() {
-    const complaint = document.getElementById('complaint').value;
-    const drug = document.getElementById('drug').value;
-    const routeSelect = document.getElementById('route');
-    routeSelect.innerHTML = '';
-    if (!drugs[complaint] || !drugs[complaint][drug]) return;
+  const matches = allMeds[complaint].filter(med => {
+    const range = med.age_range.toLowerCase();
+    return (
+      range.includes("all") ||
+      (range.includes("adult") && ageY >= 18) ||
+      (range.includes("pediatric") && ageY < 18) ||
+      (range.includes("<") && ageY < parseInt(range.match(/\d+/))) ||
+      (range.includes(">") && ageY > parseInt(range.match(/\d+/))) ||
+      (range.includes("-") && ageY >= parseInt(range.split("-")[0]) && ageY <= parseInt(range.split("-")[1]))
+    );
+  });
 
-    Object.keys(drugs[complaint][drug].routes).forEach(rt => {
-      const opt = document.createElement('option');
-      opt.value = rt;
-      opt.textContent = rt;
-      routeSelect.appendChild(opt);
-    });
-
-    updateInfo();
+  if (matches.length === 0) {
+    medList.innerHTML = "<div class='warning'>No medications found for this age and complaint.</div>";
+    return;
   }
 
-  function updateInfo() {
-    const complaint = document.getElementById('complaint').value;
-    const drug = document.getElementById('drug').value;
-    const info = drugs[complaint][drug];
-    document.getElementById('drugInfo').innerHTML =
-      `<strong>Indication:</strong> ${info.indication}<br>
-       <strong>Contraindication:</strong> ${info.contraindication}<br>
-       ${info.callIn ? "<strong style='color:red;'>Call-in required!</strong>" : ""}`;
-  }
-
-  function calculateDose() {
-    const complaint = document.getElementById('complaint').value;
-    const drugKey = document.getElementById('drug').value;
-    const route = document.getElementById('route').value;
-    const age = parseFloat(document.getElementById('age').value);
-    let weight = parseFloat(document.getElementById('weight').value);
-    const conc = parseFloat(document.getElementById('concentration').value);
-    const warningDiv = document.getElementById('warning');
-    const resultDiv = document.getElementById('result');
-    const disclaimer = document.getElementById('disclaimer');
-    const homeBtn = document.getElementById('homeButton');
-
-    warningDiv.innerHTML = '';
-    resultDiv.style.display = 'none';
-    disclaimer.style.display = 'none';
-    homeBtn.style.display = 'none';
-
-    if (!age || isNaN(age)) {
-      warningDiv.textContent = "Age is required.";
-      return;
-    }
-
-    if (!weight || isNaN(weight)) {
-      weight = (age * 2) + 8;
-    }
-
-    if (!conc || isNaN(conc)) {
-      warningDiv.textContent = "Enter valid concentration.";
-      return;
-    }
-
-    const drug = drugs[complaint][drugKey];
-    if (age < drug.minAge || age > drug.maxAge) {
-      warningDiv.textContent = `Age outside protocol range (${drug.minAge}-${drug.maxAge} years).`;
-      return;
-    }
-
-    const doseData = drug.routes[route];
-    let dose = doseData.fixedDose || (weight * doseData.dosePerKg);
-    if (doseData.maxDose && dose > doseData.maxDose) dose = doseData.maxDose;
-    const volume = doseData.fixedDose ? "N/A" : (dose / conc).toFixed(2);
-
-    resultDiv.style.display = 'block';
-    disclaimer.style.display = 'block';
-    homeBtn.style.display = 'block';
-
-    resultDiv.innerHTML = `
-      <strong>Drug:</strong> ${drug.name} (${route})<br>
-      <strong>Age:</strong> ${age} yrs<br>
-      <strong>Weight:</strong> ${weight.toFixed(1)} kg<br>
-      <strong>Dose:</strong> ${dose.toFixed(2)} mg<br>
-      <strong>Volume to Administer:</strong> ${volume} mL
+  matches.forEach(med => {
+    const div = document.createElement("div");
+    div.className = "medication";
+    div.innerHTML = `
+      <h4>${med.medication} (${med.route})</h4>
+      <strong>Age Range:</strong> ${med.age_range}<br>
+      <strong>Indication:</strong> ${med.indication}<br>
+      <strong>Dose:</strong> ${med.dose}<br>
+      <strong>Concentration:</strong> ${med.concentration}<br>
+      <strong>Max Dose:</strong> ${med.max_dose}<br>
+      <strong>Max Doses:</strong> ${med.max_doses}<br>
+      <strong>Call-In:</strong> ${med.call_in}<br>
+      <strong>Contraindication:</strong> ${med.contraindication}<br>
+      ${med.drip_setup !== "N/A" ? `<strong>Drip Setup:</strong> ${med.drip_setup}` : ""}
     `;
-  }
+    medList.appendChild(div);
+  });
+}
 </script>
 
 </body>
