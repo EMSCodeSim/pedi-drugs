@@ -24,7 +24,6 @@
   <option value="">-- Select --</option>
 </select>
 
-<label>Age</label><br>
 <div class="input-group">
   <input type="number" id="ageValue" class="input-short" placeholder=" " min="0">
   <select id="ageUnit" class="input-short">
@@ -50,7 +49,7 @@
 <script>
 let allMeds = {};
 
-fetch("./data/medications_by_complaint_with_age_first.json")
+fetch("./medications_by_complaint_with_age_first.json")
   .then(res => res.json())
   .then(data => {
     allMeds = data;
