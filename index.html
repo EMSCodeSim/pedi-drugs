@@ -10,7 +10,9 @@
     .input-group { display: flex; gap: 10px; margin-bottom: 10px; }
     .input-short { width: 100px; }
     .section { background: #d9f0ff; padding: 15px; margin-top: 15px; border-left: 4px solid #0077cc; }
-    .medication { background: #fff; margin-top: 10px; padding: 10px; border: 1px solid #ccc; }
+    .dropdown { background: #ffffff; border: 1px solid #ccc; margin-bottom: 10px; }
+    .dropdown summary { font-weight: bold; cursor: pointer; padding: 10px; }
+    .dropdown .details { padding: 10px; }
     .warning { color: red; font-weight: bold; }
     .calc-details { margin-top: 10px; font-size: 0.95em; background: #f6faff; padding: 8px; border-left: 3px solid #339; }
   </style>
@@ -24,6 +26,7 @@
   <option value="">-- Select --</option>
 </select>
 
+<label>Age</label><br>
 <div class="input-group">
   <input type="number" id="ageValue" class="input-short" placeholder=" " min="0">
   <select id="ageUnit" class="input-short">
@@ -49,7 +52,7 @@
 <script>
 let allMeds = {};
 
-fetch("./medications_by_complaint_with_age_first.json")
+fetch("./data/medications_by_complaint_with_age_first.json")
   .then(res => res.json())
   .then(data => {
     allMeds = data;
@@ -122,9 +125,6 @@ function loadMedications() {
   const weightInKg = weightUnit === "lb" ? weight / 2.2046 : weight;
 
   matches.forEach(med => {
-    const div = document.createElement("div");
-    div.className = "medication";
-
     let calcHtml = '';
     if (med.dose.includes("mg/kg") || med.dose.includes("mcg/kg")) {
       const perKg = parseFloat(med.dose.match(/[\d\.]+/)[0]);
@@ -144,20 +144,24 @@ function loadMedications() {
       `;
     }
 
-    div.innerHTML = `
-      <h4>${med.medication} (${med.route})</h4>
-      <strong>Age Range:</strong> ${med.age_range}<br>
-      <strong>Indication:</strong> ${med.indication}<br>
-      <strong>Dose:</strong> ${med.dose}<br>
-      <strong>Concentration:</strong> ${med.concentration}<br>
-      <strong>Max Dose:</strong> ${med.max_dose}<br>
-      <strong>Max Doses:</strong> ${med.max_doses}<br>
-      <strong>Call-In:</strong> ${med.call_in}<br>
-      <strong>Contraindication:</strong> ${med.contraindication}<br>
-      ${med.drip_setup && med.drip_setup !== "N/A" ? `<strong>Drip Setup:</strong> ${med.drip_setup}<br>` : ""}
-      ${calcHtml}
+    const wrapper = document.createElement("details");
+    wrapper.className = "dropdown";
+    wrapper.innerHTML = `
+      <summary>${med.medication} (${med.route})</summary>
+      <div class="details">
+        <strong>Age Range:</strong> ${med.age_range}<br>
+        <strong>Indication:</strong> ${med.indication}<br>
+        <strong>Dose:</strong> ${med.dose}<br>
+        <strong>Concentration:</strong> ${med.concentration}<br>
+        <strong>Max Dose:</strong> ${med.max_dose}<br>
+        <strong>Max Doses:</strong> ${med.max_doses}<br>
+        <strong>Call-In:</strong> ${med.call_in}<br>
+        <strong>Contraindication:</strong> ${med.contraindication}<br>
+        ${med.drip_setup && med.drip_setup !== "N/A" ? `<strong>Drip Setup:</strong> ${med.drip_setup}<br>` : ""}
+        ${calcHtml}
+      </div>
     `;
-    medList.appendChild(div);
+    medList.appendChild(wrapper);
   });
 }
 </script>
