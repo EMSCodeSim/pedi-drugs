@@ -2,14 +2,15 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>Pediatric Drug Calculator</title>
+  <title>Pediatric Drug Lookup</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <style>
-    body { font-family: Arial, sans-serif; background: #eef9ff; padding: 20px; font-size: 1.1em; }
+    body { font-family: Arial, sans-serif; background: #eef9ff; padding: 20px; font-size: 1em; }
     label, select, input, button {
-      width: 100%; margin: 10px 0; padding: 10px; font-size: 1em;
+      margin: 10px 0; padding: 10px; font-size: 1em;
     }
-    .age-inputs { display: flex; gap: 10px; }
+    .input-group { display: flex; align-items: center; gap: 10px; }
+    .input-short { width: 100px; }
     .section { background: #d9f0ff; padding: 15px; margin-top: 15px; border-left: 4px solid #0077cc; }
     .medication { background: #fff; margin-top: 10px; padding: 10px; border: 1px solid #ccc; }
     .medication h4 { margin: 0 0 5px 0; }
@@ -20,16 +21,19 @@
 
 <h2>Pediatric Drug Lookup (Denver Metro EMS)</h2>
 
-<label>Chief Complaint</label>
-<select id="complaintSelect" onchange="loadMedications()">
+<label>Chief Complaint</label><br>
+<select id="complaintSelect">
   <option value="">-- Select --</option>
 </select>
 
-<label>Patient Age</label>
-<div class="age-inputs">
-  <input type="number" id="ageYears" placeholder="Years" min="0">
-  <input type="number" id="ageMonths" placeholder="Months" min="0" max="11">
-  <input type="number" id="ageDays" placeholder="Days" min="0" max="30">
+<label>Age</label><br>
+<div class="input-group">
+  <input type="number" id="ageValue" class="input-short" placeholder="Age" min="0">
+  <select id="ageUnit" class="input-short">
+    <option value="years">Years</option>
+    <option value="months">Months</option>
+    <option value="days">Days</option>
+  </select>
 </div>
 
 <button onclick="loadMedications()">Find Medications</button>
@@ -39,7 +43,7 @@
 <script>
 let allMeds = {};
 
-fetch("medications_by_complaint_with_age_first.json")
+fetch("./medications_by_complaint_with_age_first.json")
   .then(res => res.json())
   .then(data => {
     allMeds = data;
@@ -52,16 +56,17 @@ fetch("medications_by_complaint_with_age_first.json")
     });
   });
 
-function getAgeInText() {
-  const y = parseInt(document.getElementById("ageYears").value) || 0;
-  const m = parseInt(document.getElementById("ageMonths").value) || 0;
-  const d = parseInt(document.getElementById("ageDays").value) || 0;
-  return `${y}y ${m}m ${d}d`;
+function convertAgeToYears(age, unit) {
+  if (unit === "days") return age / 365;
+  if (unit === "months") return age / 12;
+  return age;
 }
 
 function loadMedications() {
   const complaint = document.getElementById("complaintSelect").value;
-  const ageY = parseInt(document.getElementById("ageYears").value) || 0;
+  const ageVal = parseFloat(document.getElementById("ageValue").value);
+  const ageUnit = document.getElementById("ageUnit").value;
+  const ageY = convertAgeToYears(ageVal || 0, ageUnit);
   const medList = document.getElementById("medList");
   medList.innerHTML = "";
 
@@ -100,7 +105,7 @@ function loadMedications() {
       <strong>Max Doses:</strong> ${med.max_doses}<br>
       <strong>Call-In:</strong> ${med.call_in}<br>
       <strong>Contraindication:</strong> ${med.contraindication}<br>
-      ${med.drip_setup !== "N/A" ? `<strong>Drip Setup:</strong> ${med.drip_setup}` : ""}
+      ${med.drip_setup && med.drip_setup !== "N/A" ? `<strong>Drip Setup:</strong> ${med.drip_setup}` : ""}
     `;
     medList.appendChild(div);
   });
