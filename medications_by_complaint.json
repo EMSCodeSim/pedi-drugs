@@ -1,0 +1,174 @@
+{
+  "Cardiac Arrest": [
+    {
+      "medication": "Epinephrine",
+      "indication": "Pulseless arrest",
+      "contraindication": "None",
+      "route": "IV",
+      "dose": "0.01 mg/kg",
+      "age_range": "Pediatric",
+      "concentration": "1:10,000",
+      "max_dose": "1 mg",
+      "max_doses": "\u221e",
+      "call_in": "No",
+      "drip_setup": NaN
+    },
+    {
+      "medication": "Epinephrine",
+      "indication": "Pulseless arrest",
+      "contraindication": "None",
+      "route": "IV",
+      "dose": "1 mg every 3-5 min",
+      "age_range": "Adult",
+      "concentration": "1:10,000",
+      "max_dose": "1 mg",
+      "max_doses": "\u221e",
+      "call_in": "No",
+      "drip_setup": NaN
+    },
+    {
+      "medication": "Amiodarone",
+      "indication": "Shock-refractory VT/VF",
+      "contraindication": "AV block",
+      "route": "IV",
+      "dose": "5 mg/kg",
+      "age_range": "Pediatric",
+      "concentration": "50 mg/mL",
+      "max_dose": "300 mg",
+      "max_doses": "2",
+      "call_in": "Yes",
+      "drip_setup": "If drip: 150 mg in 100 mL over 10 min"
+    }
+  ],
+  "Bradycardia": [
+    {
+      "medication": "Epinephrine",
+      "indication": "Symptomatic bradycardia",
+      "contraindication": "None",
+      "route": "IV Drip",
+      "dose": "2-10 mcg/min",
+      "age_range": "Adult",
+      "concentration": "1 mg in 250 mL NS",
+      "max_dose": "10 mcg/min",
+      "max_doses": "Continuous",
+      "call_in": "Yes",
+      "drip_setup": "Mix 1 mg epi (1:1,000) in 250 mL NS = 4 mcg/mL"
+    }
+  ],
+  "Bradycardia/Shock": [
+    {
+      "medication": "Dopamine",
+      "indication": "Shock unresponsive to fluids",
+      "contraindication": "Tachyarrhythmias",
+      "route": "IV Drip",
+      "dose": "5-20 mcg/kg/min",
+      "age_range": "All ages",
+      "concentration": "400 mg/250 mL",
+      "max_dose": "20 mcg/kg/min",
+      "max_doses": "Continuous",
+      "call_in": "Yes",
+      "drip_setup": "Premix 400 mg in 250 mL D5W = 1600 mcg/mL"
+    }
+  ],
+  "Tachycardia": [
+    {
+      "medication": "Amiodarone",
+      "indication": "Stable wide-complex tachycardia",
+      "contraindication": "AV block",
+      "route": "IV Drip",
+      "dose": "150 mg over 10 min",
+      "age_range": "Adult",
+      "concentration": "150 mg/100 mL",
+      "max_dose": "150 mg",
+      "max_doses": "Repeat x1",
+      "call_in": "Yes",
+      "drip_setup": "Infuse 150 mg in 100 mL D5W over 10 minutes"
+    }
+  ],
+  "Torsades, Eclampsia": [
+    {
+      "medication": "Magnesium Sulfate",
+      "indication": "Torsades or seizure in pregnancy",
+      "contraindication": "Heart block, Renal failure",
+      "route": "IV Drip",
+      "dose": "1-2 g over 10-20 min",
+      "age_range": "Adult",
+      "concentration": "1 g/2 mL",
+      "max_dose": "2 g",
+      "max_doses": "1",
+      "call_in": "Yes",
+      "drip_setup": "Mix 2 g in 100 mL NS over 10-20 min"
+    }
+  ],
+  "Chest Pain/CHF": [
+    {
+      "medication": "Nitroglycerin",
+      "indication": "Pulmonary edema, ACS",
+      "contraindication": "SBP < 90 mmHg, ED meds",
+      "route": "Paste",
+      "dose": "1 inch",
+      "age_range": "Adult",
+      "concentration": "2% paste",
+      "max_dose": "1 inch",
+      "max_doses": "Repeat every 30-60 min",
+      "call_in": "No",
+      "drip_setup": NaN
+    },
+    {
+      "medication": "Nitroglycerin",
+      "indication": "Pulmonary edema, ACS",
+      "contraindication": "SBP < 90 mmHg, ED meds",
+      "route": "IV Drip",
+      "dose": "Start 10 mcg/min, titrate",
+      "age_range": "Adult",
+      "concentration": "50 mg/250 mL",
+      "max_dose": "200 mcg/min",
+      "max_doses": "Continuous",
+      "call_in": "Yes",
+      "drip_setup": "50 mg in 250 mL D5W = 200 mcg/mL"
+    }
+  ],
+  "Cyanide Exposure": [
+    {
+      "medication": "Hydroxocobalamin",
+      "indication": "Suspected cyanide poisoning",
+      "contraindication": "None",
+      "route": "IV",
+      "dose": "70 mg/kg",
+      "age_range": "All ages",
+      "concentration": "5 g vial",
+      "max_dose": "5 g",
+      "max_doses": "1",
+      "call_in": "Yes",
+      "drip_setup": "5 g IV over 15 min"
+    }
+  ],
+  "Hypoglycemia": [
+    {
+      "medication": "Dextrose (D10)",
+      "indication": "Low blood sugar",
+      "contraindication": "None",
+      "route": "IV",
+      "dose": "5 mL/kg",
+      "age_range": "Pediatric",
+      "concentration": "D10",
+      "max_dose": "250 mL",
+      "max_doses": "Repeat PRN",
+      "call_in": "No",
+      "drip_setup": "D10 pre-mixed bag"
+    },
+    {
+      "medication": "Dextrose (D10)",
+      "indication": "Low blood sugar",
+      "contraindication": "None",
+      "route": "IV",
+      "dose": "25 g",
+      "age_range": "Adult",
+      "concentration": "D10",
+      "max_dose": "25 g",
+      "max_doses": "Repeat PRN",
+      "call_in": "No",
+      "drip_setup": "D10 pre-mixed bag"
+    }
+  ]
+}
