@@ -1,31 +1,29 @@
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>Pediatric Drug Lookup (Denver Metro EMS)</title>
+  <title>Pediatric Drug Calculator</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <style>
-    body { font-family: Arial, sans-serif; background: #eef9ff; padding: 20px; font-size: 1em; }
-    label, select, input, button {
-      margin: 10px 0; padding: 10px; font-size: 1em;
-    }
-    .input-group { display: flex; align-items: center; gap: 10px; }
+    body { font-family: Arial; padding: 20px; background: #eef9ff; }
+    .input-group { display: flex; gap: 10px; margin-bottom: 10px; }
     .input-short { width: 100px; }
     .section { background: #d9f0ff; padding: 15px; margin-top: 15px; border-left: 4px solid #0077cc; }
     .medication { background: #fff; margin-top: 10px; padding: 10px; border: 1px solid #ccc; }
-    .medication h4 { margin: 0 0 5px 0; }
     .warning { color: red; font-weight: bold; }
   </style>
 </head>
 <body>
 
-<h2>Pediatric Drug Lookup (Denver Metro EMS)</h2>
+<h2>Pediatric Drug Calculator</h2>
 
 <label>Chief Complaint</label><br>
 <select id="complaintSelect">
   <option value="">-- Select --</option>
 </select>
 
+<label>Age</label><br>
 <div class="input-group">
   <input type="number" id="ageValue" class="input-short" placeholder=" " min="0">
   <select id="ageUnit" class="input-short">
@@ -44,22 +42,22 @@
   </select>
 </div>
 
-  <input type="number" id="ageValue" class="input-short" placeholder=" " min="0">
-  <select id="ageUnit" class="input-short">
-    <option value="years">Years</option>
-    <option value="months">Months</option>
-    <option value="days">Days</option>
-  </select>
-</div>
-
 <button onclick="loadMedications()">Find Medications</button>
 
 <div id="medList" class="section"></div>
 
+<div id="calcDetails" class="section" style="display:none;">
+  <h4>Calculation Details</h4>
+  <div id="doseEquation"></div>
+  <div id="doseCalculation"></div>
+  <div id="volumeEquation"></div>
+  <div id="volumeCalculation"></div>
+</div>
+
 <script>
 let allMeds = {};
 
-fetch("./medications_by_complaint_with_age_first.json")
+fetch("./data/medications_by_complaint_with_age_first.json")
   .then(res => res.json())
   .then(data => {
     allMeds = data;
@@ -70,16 +68,31 @@ fetch("./medications_by_complaint_with_age_first.json")
       option.textContent = complaint;
       complaintSelect.appendChild(option);
     });
-  })
-  .catch(err => {
-    document.getElementById("medList").innerHTML = "<div class='warning'>Failed to load medication data.</div>";
-    console.error("JSON fetch error:", err);
   });
 
 function convertAgeToYears(age, unit) {
   if (unit === "days") return age / 365;
   if (unit === "months") return age / 12;
   return age;
+}
+
+document.getElementById("ageValue").addEventListener("input", () => {
+  const age = parseFloat(document.getElementById("ageValue").value) || 0;
+  const unit = document.getElementById("ageUnit").value;
+  estimateWeight(age, unit);
+});
+document.getElementById("ageUnit").addEventListener("change", () => {
+  const age = parseFloat(document.getElementById("ageValue").value) || 0;
+  const unit = document.getElementById("ageUnit").value;
+  estimateWeight(age, unit);
+});
+
+function estimateWeight(age, unit) {
+  let kg = 10;
+  if (unit === "years") kg = 2 * age + 8;
+  else if (unit === "months") kg = (age / 2) + 4;
+  else if (unit === "days") kg = (age / 365) * 10 + 3;
+  document.getElementById("weightValue").value = kg.toFixed(1);
 }
 
 function loadMedications() {
@@ -89,6 +102,7 @@ function loadMedications() {
   const ageY = convertAgeToYears(ageVal || 0, ageUnit);
   const medList = document.getElementById("medList");
   medList.innerHTML = "";
+  document.getElementById("calcDetails").style.display = "none";
 
   if (!complaint || !allMeds[complaint]) {
     medList.innerHTML = "<div class='warning'>Please select a chief complaint and enter age.</div>";
@@ -128,32 +142,26 @@ function loadMedications() {
       ${med.drip_setup && med.drip_setup !== "N/A" ? `<strong>Drip Setup:</strong> ${med.drip_setup}` : ""}
     `;
     medList.appendChild(div);
+
+    const weight = parseFloat(document.getElementById("weightValue").value);
+    const weightUnit = document.getElementById("weightUnit").value;
+    const weightInKg = weightUnit === "lb" ? weight / 2.2046 : weight;
+
+    if (med.dose.includes("mg/kg") || med.dose.includes("mcg/kg")) {
+      const perKg = parseFloat(med.dose.match(/[\d\.]+/)[0]);
+      const isMcg = med.dose.includes("mcg");
+      const doseMg = isMcg ? (perKg * weightInKg) / 1000 : perKg * weightInKg;
+      const concentrationValue = parseFloat(med.concentration.match(/[\d\.]+/));
+      const volume = doseMg / concentrationValue;
+
+      document.getElementById("calcDetails").style.display = "block";
+      document.getElementById("doseEquation").innerText = "Dose = weight × dose/kg";
+      document.getElementById("doseCalculation").innerText = `${weightInKg.toFixed(1)} kg × ${perKg}${isMcg ? " mcg/kg" : " mg/kg"} = ${doseMg.toFixed(2)} mg`;
+      document.getElementById("volumeEquation").innerText = "Volume = Dose ÷ Concentration";
+      document.getElementById("volumeCalculation").innerText = `${doseMg.toFixed(2)} mg ÷ ${concentrationValue} = ${volume.toFixed(2)} mL`;
+    }
   });
 }
-
-function estimateWeight(age, unit) {
-  let kg;
-  if (unit === "years") {
-    kg = 2 * age + 8;
-  } else if (unit === "months") {
-    kg = (age / 2) + 4;
-  } else {
-    kg = (age / 365) * 10 + 3; // crude estimate for days
-  }
-  document.getElementById("weightValue").value = kg.toFixed(1);
-}
-
-document.getElementById("ageValue").addEventListener("input", () => {
-  const age = parseFloat(document.getElementById("ageValue").value) || 0;
-  const unit = document.getElementById("ageUnit").value;
-  estimateWeight(age, unit);
-});
-document.getElementById("ageUnit").addEventListener("change", () => {
-  const age = parseFloat(document.getElementById("ageValue").value) || 0;
-  const unit = document.getElementById("ageUnit").value;
-  estimateWeight(age, unit);
-});
-
 </script>
 
 </body>
