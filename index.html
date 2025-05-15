@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>Pediatric Drug Lookup</title>
+  <title>Pediatric Drug Lookup (Denver Metro EMS)</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <style>
     body { font-family: Arial, sans-serif; background: #eef9ff; padding: 20px; font-size: 1em; }
@@ -28,7 +28,7 @@
 
 <label>Age</label><br>
 <div class="input-group">
-  <input type="number" id="ageValue" class="input-short" placeholder="Age" min="0">
+  <input type="number" id="ageValue" class="input-short" placeholder=" " min="0">
   <select id="ageUnit" class="input-short">
     <option value="years">Years</option>
     <option value="months">Months</option>
@@ -43,7 +43,7 @@
 <script>
 let allMeds = {};
 
-fetch("./medications_by_complaint_with_age_first.json")
+fetch("./data/medications_by_complaint_with_age_first.json")
   .then(res => res.json())
   .then(data => {
     allMeds = data;
@@ -54,6 +54,10 @@ fetch("./medications_by_complaint_with_age_first.json")
       option.textContent = complaint;
       complaintSelect.appendChild(option);
     });
+  })
+  .catch(err => {
+    document.getElementById("medList").innerHTML = "<div class='warning'>Failed to load medication data.</div>";
+    console.error("JSON fetch error:", err);
   });
 
 function convertAgeToYears(age, unit) {
