@@ -43,7 +43,7 @@
 <script>
 let allMeds = {};
 
-fetch("./data/medications_by_complaint_with_age_first.json")
+fetch("./medications_by_complaint_with_age_first.json")
   .then(res => res.json())
   .then(data => {
     allMeds = data;
