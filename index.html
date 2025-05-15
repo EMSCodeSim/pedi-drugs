@@ -12,6 +12,7 @@
     .section { background: #d9f0ff; padding: 15px; margin-top: 15px; border-left: 4px solid #0077cc; }
     .medication { background: #fff; margin-top: 10px; padding: 10px; border: 1px solid #ccc; }
     .warning { color: red; font-weight: bold; }
+    .calc-details { margin-top: 10px; font-size: 0.95em; background: #f6faff; padding: 8px; border-left: 3px solid #339; }
   </style>
 </head>
 <body>
@@ -23,6 +24,7 @@
   <option value="">-- Select --</option>
 </select>
 
+<label>Age</label><br>
 <div class="input-group">
   <input type="number" id="ageValue" class="input-short" placeholder=" " min="0">
   <select id="ageUnit" class="input-short">
@@ -45,18 +47,10 @@
 
 <div id="medList" class="section"></div>
 
-<div id="calcDetails" class="section" style="display:none;">
-  <h4>Calculation Details</h4>
-  <div id="doseEquation"></div>
-  <div id="doseCalculation"></div>
-  <div id="volumeEquation"></div>
-  <div id="volumeCalculation"></div>
-</div>
-
 <script>
 let allMeds = {};
 
-fetch("./medications_by_complaint_with_age_first.json")
+fetch("./data/medications_by_complaint_with_age_first.json")
   .then(res => res.json())
   .then(data => {
     allMeds = data;
@@ -75,6 +69,14 @@ function convertAgeToYears(age, unit) {
   return age;
 }
 
+function estimateWeight(age, unit) {
+  let kg = 10;
+  if (unit === "years") kg = 2 * age + 8;
+  else if (unit === "months") kg = (age / 2) + 4;
+  else if (unit === "days") kg = (age / 365) * 10 + 3;
+  document.getElementById("weightValue").value = kg.toFixed(1);
+}
+
 document.getElementById("ageValue").addEventListener("input", () => {
   const age = parseFloat(document.getElementById("ageValue").value) || 0;
   const unit = document.getElementById("ageUnit").value;
@@ -86,14 +88,6 @@ document.getElementById("ageUnit").addEventListener("change", () => {
   estimateWeight(age, unit);
 });
 
-function estimateWeight(age, unit) {
-  let kg = 10;
-  if (unit === "years") kg = 2 * age + 8;
-  else if (unit === "months") kg = (age / 2) + 4;
-  else if (unit === "days") kg = (age / 365) * 10 + 3;
-  document.getElementById("weightValue").value = kg.toFixed(1);
-}
-
 function loadMedications() {
   const complaint = document.getElementById("complaintSelect").value;
   const ageVal = parseFloat(document.getElementById("ageValue").value);
@@ -101,7 +95,6 @@ function loadMedications() {
   const ageY = convertAgeToYears(ageVal || 0, ageUnit);
   const medList = document.getElementById("medList");
   medList.innerHTML = "";
-  document.getElementById("calcDetails").style.display = "none";
 
   if (!complaint || !allMeds[complaint]) {
     medList.innerHTML = "<div class='warning'>Please select a chief complaint and enter age.</div>";
@@ -125,9 +118,33 @@ function loadMedications() {
     return;
   }
 
+  const weight = parseFloat(document.getElementById("weightValue").value);
+  const weightUnit = document.getElementById("weightUnit").value;
+  const weightInKg = weightUnit === "lb" ? weight / 2.2046 : weight;
+
   matches.forEach(med => {
     const div = document.createElement("div");
     div.className = "medication";
+
+    let calcHtml = '';
+    if (med.dose.includes("mg/kg") || med.dose.includes("mcg/kg")) {
+      const perKg = parseFloat(med.dose.match(/[\d\.]+/)[0]);
+      const isMcg = med.dose.includes("mcg");
+      const doseMg = isMcg ? (perKg * weightInKg) / 1000 : perKg * weightInKg;
+      const conc = parseFloat(med.concentration.match(/[\d\.]+/));
+      const volume = doseMg / conc;
+
+      calcHtml = `
+        <div class="calc-details">
+          <strong>Calculation Details:</strong><br>
+          Dose = weight × dose/kg<br>
+          ${weightInKg.toFixed(1)} kg × ${perKg}${isMcg ? " mcg/kg" : " mg/kg"} = ${doseMg.toFixed(2)} mg<br><br>
+          Volume = Dose ÷ Concentration<br>
+          ${doseMg.toFixed(2)} mg ÷ ${conc} = ${volume.toFixed(2)} mL
+        </div>
+      `;
+    }
+
     div.innerHTML = `
       <h4>${med.medication} (${med.route})</h4>
       <strong>Age Range:</strong> ${med.age_range}<br>
@@ -138,27 +155,10 @@ function loadMedications() {
       <strong>Max Doses:</strong> ${med.max_doses}<br>
       <strong>Call-In:</strong> ${med.call_in}<br>
       <strong>Contraindication:</strong> ${med.contraindication}<br>
-      ${med.drip_setup && med.drip_setup !== "N/A" ? `<strong>Drip Setup:</strong> ${med.drip_setup}` : ""}
+      ${med.drip_setup && med.drip_setup !== "N/A" ? `<strong>Drip Setup:</strong> ${med.drip_setup}<br>` : ""}
+      ${calcHtml}
     `;
     medList.appendChild(div);
-
-    const weight = parseFloat(document.getElementById("weightValue").value);
-    const weightUnit = document.getElementById("weightUnit").value;
-    const weightInKg = weightUnit === "lb" ? weight / 2.2046 : weight;
-
-    if (med.dose.includes("mg/kg") || med.dose.includes("mcg/kg")) {
-      const perKg = parseFloat(med.dose.match(/[\d\.]+/)[0]);
-      const isMcg = med.dose.includes("mcg");
-      const doseMg = isMcg ? (perKg * weightInKg) / 1000 : perKg * weightInKg;
-      const concentrationValue = parseFloat(med.concentration.match(/[\d\.]+/));
-      const volume = doseMg / concentrationValue;
-
-      document.getElementById("calcDetails").style.display = "block";
-      document.getElementById("doseEquation").innerText = "Dose = weight × dose/kg";
-      document.getElementById("doseCalculation").innerText = `${weightInKg.toFixed(1)} kg × ${perKg}${isMcg ? " mcg/kg" : " mg/kg"} = ${doseMg.toFixed(2)} mg`;
-      document.getElementById("volumeEquation").innerText = "Volume = Dose ÷ Concentration";
-      document.getElementById("volumeCalculation").innerText = `${doseMg.toFixed(2)} mg ÷ ${concentrationValue} = ${volume.toFixed(2)} mL`;
-    }
   });
 }
 </script>
