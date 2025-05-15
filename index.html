@@ -35,6 +35,23 @@
   </select>
 </div>
 
+<label>Weight</label><br>
+<div class="input-group">
+  <input type="number" id="weightValue" class="input-short" placeholder="Auto-estimated" step="0.1">
+  <select id="weightUnit" class="input-short">
+    <option value="kg">kg</option>
+    <option value="lb">lb</option>
+  </select>
+</div>
+
+  <input type="number" id="ageValue" class="input-short" placeholder=" " min="0">
+  <select id="ageUnit" class="input-short">
+    <option value="years">Years</option>
+    <option value="months">Months</option>
+    <option value="days">Days</option>
+  </select>
+</div>
+
 <button onclick="loadMedications()">Find Medications</button>
 
 <div id="medList" class="section"></div>
@@ -113,6 +130,30 @@ function loadMedications() {
     medList.appendChild(div);
   });
 }
+
+function estimateWeight(age, unit) {
+  let kg;
+  if (unit === "years") {
+    kg = 2 * age + 8;
+  } else if (unit === "months") {
+    kg = (age / 2) + 4;
+  } else {
+    kg = (age / 365) * 10 + 3; // crude estimate for days
+  }
+  document.getElementById("weightValue").value = kg.toFixed(1);
+}
+
+document.getElementById("ageValue").addEventListener("input", () => {
+  const age = parseFloat(document.getElementById("ageValue").value) || 0;
+  const unit = document.getElementById("ageUnit").value;
+  estimateWeight(age, unit);
+});
+document.getElementById("ageUnit").addEventListener("change", () => {
+  const age = parseFloat(document.getElementById("ageValue").value) || 0;
+  const unit = document.getElementById("ageUnit").value;
+  estimateWeight(age, unit);
+});
+
 </script>
 
 </body>
