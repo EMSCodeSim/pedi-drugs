@@ -69,54 +69,133 @@
       "Call-In": "Yes if >2 doses",
       "Drip Setup": "N/A"
     }
-  ]
-}
-{
-  "Nausea/Vomiting": [
+  ],
+  "Allergic Reaction": [
     {
-      "Medication": "Ondansetron IV",
-      "Chief Complaint": "Nausea/Vomiting",
-      "Indication": "Nausea and vomiting",
-      "Contraindication": "Caution in 1st trimester",
-      "Route": "IV",
-      "Dose": "4 mg, may repeat x1",
+      "Medication": "Epinephrine 1:1,000",
+      "Indication": "Severe allergic reaction, anaphylaxis",
+      "Contraindication": "None in emergency setting",
+      "Route": "IM",
+      "Dose": "0.3 mg IM (adult), 0.15 mg IM (peds)",
+      "Age Range": "All",
+      "Concentration": "1 mg/mL",
+      "Max Dose": "0.3 mg (adult)",
+      "Max # of Doses": "Repeat every 5\u201315 min",
+      "Call-In": "No",
+      "Drip Setup": "N/A"
+    },
+    {
+      "Medication": "Benadryl",
+      "Indication": "Allergic reaction, anaphylaxis",
+      "Contraindication": "Acute asthma, glaucoma",
+      "Route": "IV/IM/PO",
+      "Dose": "25\u201350 mg",
       "Age Range": "Adult",
-      "Concentration": "4 mg/2 mL",
-      "Max Dose": "8 mg",
-      "Max # of Doses": "2",
+      "Concentration": "50 mg/mL (inj), 25 mg/tab",
+      "Max Dose": "50 mg",
+      "Max # of Doses": "1",
+      "Call-In": "No",
+      "Drip Setup": "N/A"
+    },
+    {
+      "Medication": "Solumedrol",
+      "Indication": "Severe allergic reaction, asthma/COPD exacerbation",
+      "Contraindication": "Systemic fungal infection",
+      "Route": "IV/IM",
+      "Dose": "125 mg",
+      "Age Range": "Adult",
+      "Concentration": "125 mg vial",
+      "Max Dose": "125 mg",
+      "Max # of Doses": "1",
       "Call-In": "No",
       "Drip Setup": "N/A"
     }
   ],
-  "Pain Management": [
+  "Respiratory Distress": [
     {
-      "Medication": "Fentanyl",
-      "Chief Complaint": "Pain Management",
-      "Indication": "Moderate to severe pain",
-      "Contraindication": "Respiratory depression, hypotension",
-      "Route": "IN/IV/IM",
-      "Dose": "1\u20132 mcg/kg",
+      "Medication": "Albuterol",
+      "Indication": "Bronchospasm (asthma, COPD, allergic reaction)",
+      "Contraindication": "Known hypersensitivity",
+      "Route": "NEB/MDI",
+      "Dose": "2.5 mg via NEB or 90 mcg via MDI",
       "Age Range": "All",
-      "Concentration": "50 mcg/mL",
-      "Max Dose": "3 mcg/kg (adult), 4 mcg/kg (IN)",
-      "Max # of Doses": "2",
-      "Call-In": "Yes if exceeding max",
+      "Concentration": "2.5 mg/3 mL",
+      "Max Dose": "None",
+      "Max # of Doses": "Repeat PRN",
+      "Call-In": "No",
+      "Drip Setup": "N/A"
+    },
+    {
+      "Medication": "Atrovent",
+      "Indication": "Bronchospasm (asthma, COPD)",
+      "Contraindication": "Allergy to atropine or ipratropium",
+      "Route": "NEB",
+      "Dose": "0.5 mg",
+      "Age Range": "Adult",
+      "Concentration": "0.5 mg/2.5 mL",
+      "Max Dose": "0.5 mg",
+      "Max # of Doses": "1",
+      "Call-In": "No",
       "Drip Setup": "N/A"
     }
   ],
-  "Seizure/Sedation": [
+  "Overdose": [
     {
-      "Medication": "Midazolam",
-      "Chief Complaint": "Seizure/Sedation",
-      "Indication": "Seizures, sedation, agitation",
-      "Contraindication": "Respiratory depression, hypotension",
-      "Route": "IN/IV/IM",
-      "Dose": "0.1\u20130.2 mg/kg",
+      "Medication": "Naloxone (Narcan)",
+      "Indication": "Suspected opioid overdose with respiratory depression",
+      "Contraindication": "Hypersensitivity",
+      "Route": "IN/IM/IV",
+      "Dose": "0.4\u20132 mg (adult), 0.1 mg/kg (peds)",
       "Age Range": "All",
-      "Concentration": "5 mg/mL",
-      "Max Dose": "10 mg",
-      "Max # of Doses": "2",
-      "Call-In": "Yes if >2 doses",
+      "Concentration": "0.4 mg/mL",
+      "Max Dose": "10 mg total",
+      "Max # of Doses": "Repeat PRN",
+      "Call-In": "No",
+      "Drip Setup": "N/A"
+    }
+  ],
+  "Bradycardia": [
+    {
+      "Medication": "Atropine",
+      "Indication": "Symptomatic bradycardia",
+      "Contraindication": "None in emergency use",
+      "Route": "IV",
+      "Dose": "0.5 mg every 3\u20135 min",
+      "Age Range": "Adult",
+      "Concentration": "1 mg/10 mL",
+      "Max Dose": "3 mg",
+      "Max # of Doses": "6",
+      "Call-In": "No",
+      "Drip Setup": "N/A"
+    }
+  ],
+  "Hypoglycemia": [
+    {
+      "Medication": "Dextrose 10%",
+      "Indication": "Blood glucose < 60 mg/dL",
+      "Contraindication": "None in emergency",
+      "Route": "IV",
+      "Dose": "100 mL (25 g)",
+      "Age Range": "Adult",
+      "Concentration": "10 g/100 mL",
+      "Max Dose": "25 g",
+      "Max # of Doses": "Repeat PRN",
+      "Call-In": "No",
+      "Drip Setup": "N/A"
+    }
+  ],
+  "Chest Pain": [
+    {
+      "Medication": "Aspirin",
+      "Indication": "Suspected cardiac chest pain",
+      "Contraindication": "Allergy, active GI bleed, recent surgery",
+      "Route": "PO",
+      "Dose": "324 mg (4 x 81 mg)",
+      "Age Range": "Adult",
+      "Concentration": "81 mg/tab",
+      "Max Dose": "324 mg",
+      "Max # of Doses": "1",
+      "Call-In": "No",
       "Drip Setup": "N/A"
     }
   ]
