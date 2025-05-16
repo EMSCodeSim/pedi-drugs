@@ -102,7 +102,17 @@ function loadMedications() {
     return;
   }
 
-  const matches = allMeds[complaint].filter(med => {
+  
+    const matches = allMeds[complaint].filter(med => {
+      const range = med["Age Range"]?.toLowerCase() || "";
+      return (
+        range.includes("all") ||
+        (range.includes("adult") && ageY >= 18) ||
+        (range.includes("pediatric") && ageY < 18) ||
+        (!isNaN(parseFloat(range)) && ageY === parseFloat(range)) ||
+        (range.includes("-") && ageY >= parseInt(range.split("-")[0]) && ageY <= parseInt(range.split("-")[1]))
+      );
+    
     const range = med.age_range.toLowerCase();
     return (
       range.includes("all") ||
