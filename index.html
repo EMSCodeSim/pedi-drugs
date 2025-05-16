@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -39,8 +40,8 @@
 <select id="broselowColor" style="display:none;"></select>
 
 <div class="button-row">
-  <button onclick="loadMedications()">Find Medications</button>
-  <button onclick="loadAllMedications()">All Medications</button>
+  <button id="findBtn">Find Medications</button>
+  <button id="allBtn">All Medications</button>
 </div>
 
 <div id="medList"></div>
@@ -55,6 +56,13 @@ let allMeds = {};
 
 document.getElementById("ageValue").addEventListener("input", updateBroselowEstimate);
 document.getElementById("ageUnit").addEventListener("change", updateBroselowEstimate);
+
+document.getElementById("findBtn").addEventListener("click", () => {
+  loadMedications();
+});
+document.getElementById("allBtn").addEventListener("click", () => {
+  loadAllMedications();
+});
 
 function updateBroselowEstimate() {
   const age = parseFloat(document.getElementById("ageValue").value);
@@ -109,10 +117,10 @@ function displayMedications(meds, ageY, weightInKg) {
 
     let calcHtml = "";
     if (med.Dose?.toLowerCase().includes("mg/kg") || med.Dose?.toLowerCase().includes("mcg/kg")) {
-      const perKg = parseFloat(med.Dose.match(/\\d+\\.?\\d*/)[0]);
+      const perKg = parseFloat(med.Dose.match(/\d+\.?\d*/)[0]);
       const isMcg = med.Dose.includes("mcg");
       const doseMg = isMcg ? (perKg * weightInKg) / 1000 : perKg * weightInKg;
-      const conc = parseFloat(med.Concentration?.match(/\\d+\\.?\\d*/));
+      const conc = parseFloat(med.Concentration?.match(/\d+\.?\d*/));
       const volume = doseMg / conc;
       calcHtml = `
         <br><strong>Calculation:</strong><br>
@@ -148,6 +156,23 @@ function displayMedications(meds, ageY, weightInKg) {
   });
 }
 
+function getAgeInYears() {
+  const val = parseFloat(document.getElementById("ageValue").value);
+  const unit = document.getElementById("ageUnit").value;
+  return unit === "months" ? val / 12 : unit === "days" ? val / 365 : val;
+}
+
+function getWeightInKg() {
+  const weight = parseFloat(document.getElementById("weightValue").value);
+  const unit = document.getElementById("weightUnit").value;
+  return unit === "lb" ? weight / 2.2046 : weight;
+}
+
+function isMedInAgeRange(med, ageY) {
+  const range = med["Age Range"]?.toLowerCase() || "";
+  return range.includes("all") || (range.includes("adult") && ageY >= 18) || (range.includes("pediatric") && ageY < 18);
+}
+
 function loadMedications() {
   const ageY = getAgeInYears();
   const weightInKg = getWeightInKg();
@@ -165,23 +190,6 @@ function loadAllMedications() {
     allMatches.push(...allMeds[section].filter(med => isMedInAgeRange(med, ageY)));
   }
   displayMedications(allMatches, ageY, weightInKg);
-}
-
-function isMedInAgeRange(med, ageY) {
-  const range = med["Age Range"]?.toLowerCase() || "";
-  return range.includes("all") || (range.includes("adult") && ageY >= 18) || (range.includes("pediatric") && ageY < 18);
-}
-
-function getAgeInYears() {
-  const val = parseFloat(document.getElementById("ageValue").value);
-  const unit = document.getElementById("ageUnit").value;
-  return unit === "months" ? val / 12 : unit === "days" ? val / 365 : val;
-}
-
-function getWeightInKg() {
-  const weight = parseFloat(document.getElementById("weightValue").value);
-  const unit = document.getElementById("weightUnit").value;
-  return unit === "lb" ? weight / 2.2046 : weight;
 }
 
 fetch("./medications_by_complaint.json")
