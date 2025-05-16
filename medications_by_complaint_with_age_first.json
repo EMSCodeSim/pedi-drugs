@@ -1,4 +1,77 @@
 {
+  "Pain Management": [
+    {
+      "Medication": "Fentanyl",
+      "Indication": "Moderate to severe pain",
+      "Contraindication": "Respiratory depression, hypotension",
+      "Route": "IN/IV/IM",
+      "Dose": "1\u20132 mcg/kg",
+      "Age Range": "All",
+      "Concentration": "50 mcg/mL",
+      "Max Dose": "3 mcg/kg (adult), 4 mcg/kg (IN)",
+      "Max # of Doses": "2",
+      "Call-In": "Yes if exceeding max",
+      "Drip Setup": "N/A"
+    },
+    {
+      "Medication": "Ketamine (Pain Management)",
+      "Indication": "Severe pain not controlled by opioids",
+      "Contraindication": "Schizophrenia, elevated ICP",
+      "Route": "IV/IM",
+      "Dose": "0.1\u20130.3 mg/kg",
+      "Age Range": "Adult",
+      "Concentration": "50 mg/mL",
+      "Max Dose": "30 mg",
+      "Max # of Doses": "1",
+      "Call-In": "Yes",
+      "Drip Setup": "N/A"
+    }
+  ],
+  "Cardiac Arrest": [
+    {
+      "Medication": "Epinephrine 1:10,000",
+      "Indication": "Pulseless arrest (asystole, PEA, VF, VT)",
+      "Contraindication": "None in cardiac arrest",
+      "Route": "IV",
+      "Dose": "1 mg IV every 3\u20135 min (adult)",
+      "Age Range": "All",
+      "Concentration": "0.1 mg/mL",
+      "Max Dose": "1 mg/dose",
+      "Max # of Doses": "Repeat PRN",
+      "Call-In": "No",
+      "Drip Setup": "N/A"
+    },
+    {
+      "Medication": "Amiodarone",
+      "Indication": "Shock-refractory VF/VT",
+      "Contraindication": "2nd/3rd degree AV block, iodine allergy",
+      "Route": "IV",
+      "Dose": "300 mg initial, 150 mg repeat",
+      "Age Range": "Adult",
+      "Concentration": "150 mg/3 mL",
+      "Max Dose": "450 mg",
+      "Max # of Doses": "2",
+      "Call-In": "No",
+      "Drip Setup": "150 mg in 100 mL over 10 min"
+    }
+  ],
+  "Seizure/Sedation": [
+    {
+      "Medication": "Midazolam",
+      "Indication": "Seizures, sedation, agitation",
+      "Contraindication": "Respiratory depression, hypotension",
+      "Route": "IN/IV/IM",
+      "Dose": "0.1\u20130.2 mg/kg",
+      "Age Range": "All",
+      "Concentration": "5 mg/mL",
+      "Max Dose": "10 mg",
+      "Max # of Doses": "2",
+      "Call-In": "Yes if >2 doses",
+      "Drip Setup": "N/A"
+    }
+  ]
+}
+{
   "Nausea/Vomiting": [
     {
       "Medication": "Ondansetron IV",
