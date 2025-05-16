@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -38,6 +37,7 @@
   <option value="kg">kg</option>
   <option value="lb">lb</option>
 </select>
+<select id="broselowColor" style="display:none;"></select>
 
 <div class="button-row">
   <button onclick="loadMedications()">Find Medications</button>
@@ -49,6 +49,48 @@
 <script>
 let allMeds = {};
 let editableConcentrations = {};
+const broselowMap = {
+  "Gray": 3, "Pink": 5, "Red": 8, "Purple": 10, "Yellow": 12,
+  "White": 14, "Blue": 18, "Orange": 22, "Green": 26, "Lt Green": 30
+};
+
+document.getElementById("ageValue").addEventListener("input", updateEstimate);
+document.getElementById("ageUnit").addEventListener("change", updateEstimate);
+
+function updateEstimate() {
+  const age = parseFloat(document.getElementById("ageValue").value);
+  const unit = document.getElementById("ageUnit").value;
+  if (isNaN(age)) return;
+  const ageY = unit === "months" ? age / 12 : unit === "days" ? age / 365 : age;
+  const weightBox = document.getElementById("weightValue");
+  const broselowBox = document.getElementById("broselowColor");
+  broselowBox.innerHTML = "";
+
+  if (ageY > 0 && ageY <= 12) {
+    const estWeight = 2 * ageY + 8;
+    weightBox.value = estWeight.toFixed(1);
+    document.getElementById("weightUnit").value = "kg";
+    for (let color in broselowMap) {
+      const option = document.createElement("option");
+      option.value = broselowMap[color];
+      option.textContent = `${color} (${broselowMap[color]} kg)`;
+      if (Math.abs(estWeight - broselowMap[color]) < 2) option.selected = true;
+      broselowBox.appendChild(option);
+    }
+    broselowBox.style.display = "inline-block";
+  } else {
+    broselowBox.style.display = "none";
+  }
+}
+
+function getVitalsByAge(ageY) {
+  if (ageY <= 1) return { hr: "100–160", rr: "30–60", sbp: "70–100" };
+  if (ageY <= 3) return { hr: "90–150", rr: "24–40", sbp: "80–110" };
+  if (ageY <= 5) return { hr: "80–140", rr: "22–34", sbp: "80–110" };
+  if (ageY <= 8) return { hr: "70–120", rr: "18–30", sbp: "85–115" };
+  if (ageY <= 12) return { hr: "60–100", rr: "18–24", sbp: "90–120" };
+  return null;
+}
 
 function getAgeInYears() {
   const val = parseFloat(document.getElementById("ageValue").value);
@@ -98,27 +140,34 @@ function displayMedications(meds, ageY, weightInKg) {
     const body = document.createElement("div");
     body.className = "dropdown-body";
 
-    let calcHtml = "";
     const concentrationKey = `${med.Medication}_${index}`;
     let concentration = editableConcentrations[concentrationKey] || med.Concentration;
+    let calcHtml = "";
 
     if (med.Dose?.toLowerCase().includes("mg/kg") || med.Dose?.toLowerCase().includes("mcg/kg")) {
-      const perKg = parseFloat(med.Dose.match(/\d+\.?\d*/)[0]);
+      const perKg = parseFloat(med.Dose.match(/\\d+\\.?\\d*/)[0]);
       const isMcg = med.Dose.includes("mcg");
       const doseMg = isMcg ? (perKg * weightInKg) / 1000 : perKg * weightInKg;
-      const conc = parseFloat(concentration?.match(/\d+\.?\d*/));
+      const conc = parseFloat(concentration.match(/\\d+\\.?\\d*/));
       const volume = doseMg / conc;
       calcHtml = `
-        <div><strong>Calculation:</strong><br>
-        ${weightInKg.toFixed(1)} kg × ${perKg}${isMcg ? " mcg/kg" : " mg/kg"} = 
+        <br><strong>Calculation:</strong><br>
+        ${weightInKg.toFixed(1)} kg × ${perKg}${isMcg ? " mcg/kg" : " mg/kg"} =
         <span class="highlight">${doseMg.toFixed(2)} mg</span><br>
-        ${doseMg.toFixed(2)} mg ÷ ${conc} = 
+        ${doseMg.toFixed(2)} mg ÷ ${conc} =
         <span class="highlight">${volume.toFixed(2)} mL</span><br>
         <button onclick="editConcentration('${concentrationKey}', '${med.Concentration}')">Edit Concentration</button>
-        <div class='warning'>⚠️ Confirm all calculations before administering medications.</div>
-        </div>
+        <div class="warning">⚠️ Confirm all calculations before administering medications.</div>
       `;
     }
+
+    const vitals = getVitalsByAge(ageY);
+    const vitalsHtml = vitals ? `
+      <br><strong>Normal Vitals:</strong><br>
+      Pulse: ${vitals.hr} bpm<br>
+      Respiratory Rate: ${vitals.rr}<br>
+      Systolic BP: ${vitals.sbp} mmHg
+    ` : '';
 
     body.innerHTML = `
       <strong>Indication:</strong> ${med.Indication}<br>
@@ -126,6 +175,7 @@ function displayMedications(meds, ageY, weightInKg) {
       <strong>Concentration:</strong> <span id="conc_${concentrationKey}">${concentration}</span><br>
       <strong>Contraindication:</strong> ${med.Contraindication}<br>
       ${calcHtml}
+      ${vitalsHtml}
     `;
     header.onclick = () => {
       body.style.display = body.style.display === "block" ? "none" : "block";
