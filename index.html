@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -6,174 +5,141 @@
   <title>Pediatric Drug Calculator</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <style>
-    body { font-family: Arial; padding: 20px; background: #eef9ff; }
-    .input-group { display: flex; gap: 10px; margin-bottom: 10px; }
-    .input-short { width: 100px; }
-    .section { background: #d9f0ff; padding: 15px; margin-top: 15px; border-left: 4px solid #0077cc; }
-    .dropdown { background: #ffffff; border: 1px solid #ccc; margin-bottom: 10px; }
-    .dropdown summary { font-weight: bold; cursor: pointer; padding: 10px; }
-    .dropdown .details { padding: 10px; }
-    .warning { color: red; font-weight: bold; }
-    .calc-details { margin-top: 10px; font-size: 0.95em; background: #f6faff; padding: 8px; border-left: 3px solid #339; }
+    body { font-family: Arial, sans-serif; background: #eef9ff; padding: 20px; }
+    h2 { color: #005580; }
+    select, input, button {
+      padding: 10px;
+      margin: 5px 0;
+      width: 100%;
+      max-width: 300px;
+      font-size: 1rem;
+    }
+    .input-row { display: flex; gap: 10px; flex-wrap: wrap; }
+    .medication { margin-top: 20px; padding: 15px; border-left: 4px solid #0077cc; background: #f5faff; }
+    .warning { color: red; font-weight: bold; margin-top: 15px; }
+    .calc-details { background: #f0faff; padding: 10px; margin-top: 10px; border-left: 3px solid #339; }
   </style>
 </head>
 <body>
 
-<h2>Pediatric Drug Calculator</h2>
+  <h2>Pediatric Drug Calculator</h2>
 
-<label>Chief Complaint</label><br>
-<select id="complaintSelect">
-  <option value="">-- Select --</option>
-</select>
-
-<div class="input-group">
-  <input type="number" id="ageValue" class="input-short" placeholder=" " min="0">
-  <select id="ageUnit" class="input-short">
-    <option value="years">Years</option>
-    <option value="months">Months</option>
-    <option value="days">Days</option>
+  <label for="complaintSelect">Chief Complaint:</label>
+  <select id="complaintSelect">
+    <option value="">-- Select Complaint --</option>
   </select>
-</div>
 
-<label>Weight</label><br>
-<div class="input-group">
-  <input type="number" id="weightValue" class="input-short" placeholder="Auto-estimated" step="0.1">
-  <select id="weightUnit" class="input-short">
-    <option value="kg">kg</option>
-    <option value="lb">lb</option>
-  </select>
-</div>
+  <label>Age:</label>
+  <div class="input-row">
+    <input type="number" id="ageValue" placeholder="Age" />
+    <select id="ageUnit">
+      <option value="years">Years</option>
+      <option value="months">Months</option>
+      <option value="days">Days</option>
+    </select>
+  </div>
 
-<button onclick="loadMedications()">Find Medications</button>
+  <label>Weight:</label>
+  <div class="input-row">
+    <input type="number" id="weightValue" placeholder="Auto-estimate..." />
+    <select id="weightUnit">
+      <option value="kg">kg</option>
+      <option value="lb">lb</option>
+    </select>
+  </div>
 
-<div id="medList" class="section"></div>
+  <button onclick="loadMedications()">Find Medications</button>
 
-<script>
-let allMeds = {};
+  <div id="medList"></div>
 
-fetch("./medications_by_complaint.json")
-  .then(res => res.json())
-  .then(data => {
-    allMeds = data;
-    const complaintSelect = document.getElementById("complaintSelect");
-    Object.keys(data).forEach(complaint => {
-      const option = document.createElement("option");
-      option.value = complaint;
-      option.textContent = complaint;
-      complaintSelect.appendChild(option);
-    });
-  });
+  <script>
+    let allMeds = {};
 
-function convertAgeToYears(age, unit) {
-  if (unit === "days") return age / 365;
-  if (unit === "months") return age / 12;
-  return age;
-}
+    fetch("./data/medications_by_complaint.json")
+      .then(response => response.json())
+      .then(data => {
+        allMeds = data;
+        const complaintSelect = document.getElementById("complaintSelect");
+        Object.keys(data).forEach(complaint => {
+          const option = document.createElement("option");
+          option.value = complaint;
+          option.textContent = complaint;
+          complaintSelect.appendChild(option);
+        });
+      });
 
-function estimateWeight(age, unit) {
-  let kg = 10;
-  if (unit === "years") kg = 2 * age + 8;
-  else if (unit === "months") kg = (age / 2) + 4;
-  else if (unit === "days") kg = (age / 365) * 10 + 3;
-  document.getElementById("weightValue").value = kg.toFixed(1);
-}
+    function loadMedications() {
+      const complaint = document.getElementById("complaintSelect").value;
+      const ageVal = parseFloat(document.getElementById("ageValue").value);
+      const ageUnit = document.getElementById("ageUnit").value;
+      const weight = parseFloat(document.getElementById("weightValue").value);
+      const weightUnit = document.getElementById("weightUnit").value;
+      const weightInKg = weightUnit === "lb" ? weight / 2.2046 : weight;
+      const ageY = ageUnit === "months" ? ageVal / 12 : ageUnit === "days" ? ageVal / 365 : ageVal;
+      const medList = document.getElementById("medList");
+      medList.innerHTML = "";
 
-document.getElementById("ageValue").addEventListener("input", () => {
-  const age = parseFloat(document.getElementById("ageValue").value) || 0;
-  const unit = document.getElementById("ageUnit").value;
-  estimateWeight(age, unit);
-});
-document.getElementById("ageUnit").addEventListener("change", () => {
-  const age = parseFloat(document.getElementById("ageValue").value) || 0;
-  const unit = document.getElementById("ageUnit").value;
-  estimateWeight(age, unit);
-});
+      if (!complaint || !allMeds[complaint]) {
+        medList.innerHTML = "<div class='warning'>Please select a chief complaint and enter age.</div>";
+        return;
+      }
 
-function loadMedications() {
-  const complaint = document.getElementById("complaintSelect").value;
-  const ageVal = parseFloat(document.getElementById("ageValue").value);
-  const ageUnit = document.getElementById("ageUnit").value;
-  const ageY = convertAgeToYears(ageVal || 0, ageUnit);
-  const medList = document.getElementById("medList");
-  medList.innerHTML = "";
+      const matches = allMeds[complaint].filter(med => {
+        const range = med["Age Range"]?.toLowerCase() || "";
+        return (
+          range.includes("all") ||
+          (range.includes("adult") && ageY >= 18) ||
+          (range.includes("pediatric") && ageY < 18) ||
+          (!isNaN(parseFloat(range)) && ageY === parseFloat(range)) ||
+          (range.includes("-") && ageY >= parseInt(range.split("-")[0]) && ageY <= parseInt(range.split("-")[1]))
+        );
+      });
 
-  if (!complaint || !allMeds[complaint]) {
-    medList.innerHTML = "<div class='warning'>Please select a chief complaint and enter age.</div>";
-    return;
-  }
+      if (matches.length === 0) {
+        medList.innerHTML = "<div class='warning'>No medications found for this age and complaint.</div>";
+        return;
+      }
 
-  
-    const matches = allMeds[complaint].filter(med => {
-      const range = med["Age Range"]?.toLowerCase() || "";
-      return (
-        range.includes("all") ||
-        (range.includes("adult") && ageY >= 18) ||
-        (range.includes("pediatric") && ageY < 18) ||
-        (!isNaN(parseFloat(range)) && ageY === parseFloat(range)) ||
-        (range.includes("-") && ageY >= parseInt(range.split("-")[0]) && ageY <= parseInt(range.split("-")[1]))
-      );
-    
-    const range = med.age_range.toLowerCase();
-    return (
-      range.includes("all") ||
-      (range.includes("adult") && ageY >= 18) ||
-      (range.includes("pediatric") && ageY < 18) ||
-      (range.includes("<") && ageY < parseInt(range.match(/\d+/))) ||
-      (range.includes(">") && ageY > parseInt(range.match(/\d+/))) ||
-      (range.includes("-") && ageY >= parseInt(range.split("-")[0]) && ageY <= parseInt(range.split("-")[1]))
-    );
-  });
+      matches.forEach(med => {
+        const div = document.createElement("div");
+        div.className = "medication";
 
-  if (matches.length === 0) {
-    medList.innerHTML = "<div class='warning'>No medications found for this age and complaint.</div>";
-    return;
-  }
+        let calcHtml = '';
+        if (med.Dose?.toLowerCase().includes("mg/kg") || med.Dose?.toLowerCase().includes("mcg/kg")) {
+          const perKg = parseFloat(med.Dose.match(/[\d\.]+/)[0]);
+          const isMcg = med.Dose.includes("mcg");
+          const doseMg = isMcg ? (perKg * weightInKg) / 1000 : perKg * weightInKg;
+          const conc = parseFloat(med.Concentration?.match(/[\d\.]+/));
+          const volume = doseMg / conc;
 
-  const weight = parseFloat(document.getElementById("weightValue").value);
-  const weightUnit = document.getElementById("weightUnit").value;
-  const weightInKg = weightUnit === "lb" ? weight / 2.2046 : weight;
+          calcHtml = `
+            <div class="calc-details">
+              <strong>Calculation Details:</strong><br>
+              Dose = weight × dose/kg<br>
+              ${weightInKg.toFixed(1)} kg × ${perKg}${isMcg ? " mcg/kg" : " mg/kg"} = ${doseMg.toFixed(2)} mg<br><br>
+              Volume = Dose ÷ Concentration<br>
+              ${doseMg.toFixed(2)} mg ÷ ${conc} = ${volume.toFixed(2)} mL
+            </div>
+          `;
+        }
 
-  matches.forEach(med => {
-    let calcHtml = '';
-    if (med.dose.includes("mg/kg") || med.dose.includes("mcg/kg")) {
-      const perKg = parseFloat(med.dose.match(/[\d\.]+/)[0]);
-      const isMcg = med.dose.includes("mcg");
-      const doseMg = isMcg ? (perKg * weightInKg) / 1000 : perKg * weightInKg;
-      const conc = parseFloat(med.concentration.match(/[\d\.]+/));
-      const volume = doseMg / conc;
-
-      calcHtml = `
-        <div class="calc-details">
-          <strong>Calculation Details:</strong><br>
-          Dose = weight × dose/kg<br>
-          ${weightInKg.toFixed(1)} kg × ${perKg}${isMcg ? " mcg/kg" : " mg/kg"} = ${doseMg.toFixed(2)} mg<br><br>
-          Volume = Dose ÷ Concentration<br>
-          ${doseMg.toFixed(2)} mg ÷ ${conc} = ${volume.toFixed(2)} mL
-        </div>
-      `;
+        div.innerHTML = `
+          <h4>${med.Medication} (${med.Route})</h4>
+          <strong>Age Range:</strong> ${med["Age Range"]}<br>
+          <strong>Indication:</strong> ${med.Indication}<br>
+          <strong>Dose:</strong> ${med.Dose}<br>
+          <strong>Concentration:</strong> ${med.Concentration}<br>
+          <strong>Max Dose:</strong> ${med["Max Dose"]}<br>
+          <strong>Max Doses:</strong> ${med["Max # of Doses"]}<br>
+          <strong>Call-In:</strong> ${med["Call-In"]}<br>
+          <strong>Contraindication:</strong> ${med.Contraindication}<br>
+          ${med["Drip Setup"] && med["Drip Setup"] !== "N/A" ? `<strong>Drip Setup:</strong> ${med["Drip Setup"]}<br>` : ""}
+          ${calcHtml}
+        `;
+        medList.appendChild(div);
+      });
     }
-
-    const wrapper = document.createElement("details");
-    wrapper.className = "dropdown";
-    wrapper.innerHTML = `
-      <summary>${med.medication} (${med.route})</summary>
-      <div class="details">
-        <strong>Age Range:</strong> ${med.age_range}<br>
-        <strong>Indication:</strong> ${med.indication}<br>
-        <strong>Dose:</strong> ${med.dose}<br>
-        <strong>Concentration:</strong> ${med.concentration}<br>
-        <strong>Max Dose:</strong> ${med.max_dose}<br>
-        <strong>Max Doses:</strong> ${med.max_doses}<br>
-        <strong>Call-In:</strong> ${med.call_in}<br>
-        <strong>Contraindication:</strong> ${med.contraindication}<br>
-        ${med.drip_setup && med.drip_setup !== "N/A" ? `<strong>Drip Setup:</strong> ${med.drip_setup}<br>` : ""}
-        ${calcHtml}
-      </div>
-    `;
-    medList.appendChild(wrapper);
-  });
-}
-</script>
+  </script>
 
 </body>
 </html>
