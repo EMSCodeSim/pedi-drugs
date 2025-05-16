@@ -1,169 +1,142 @@
-
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8" />
-  <title>Pediatric Drug Calculator</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <style>
-    body { font-family: Arial; padding: 20px; background: #eef9ff; }
-    .input-group { display: flex; gap: 10px; margin-bottom: 10px; }
-    .input-short { width: 100px; }
-    .section { background: #d9f0ff; padding: 15px; margin-top: 15px; border-left: 4px solid #0077cc; }
-    .dropdown { background: #ffffff; border: 1px solid #ccc; margin-bottom: 10px; }
-    .dropdown summary { font-weight: bold; cursor: pointer; padding: 10px; }
-    .dropdown .details { padding: 10px; }
-    .warning { color: red; font-weight: bold; }
-    .calc-details { margin-top: 10px; font-size: 0.95em; background: #f6faff; padding: 8px; border-left: 3px solid #339; }
-  </style>
-</head>
-<body>
-
-<h2>Pediatric Drug Calculator</h2>
-
-<label>Chief Complaint</label><br>
-<select id="complaintSelect">
-  <option value="">-- Select --</option>
-</select>
-
-<div class="input-group">
-  <input type="number" id="ageValue" class="input-short" placeholder=" " min="0">
-  <select id="ageUnit" class="input-short">
-    <option value="years">Years</option>
-    <option value="months">Months</option>
-    <option value="days">Days</option>
-  </select>
-</div>
-
-<label>Weight</label><br>
-<div class="input-group">
-  <input type="number" id="weightValue" class="input-short" placeholder="Auto-estimated" step="0.1">
-  <select id="weightUnit" class="input-short">
-    <option value="kg">kg</option>
-    <option value="lb">lb</option>
-  </select>
-</div>
-
-<button onclick="loadMedications()">Find Medications</button>
-
-<div id="medList" class="section"></div>
-
-<script>
-let allMeds = {};
-
-fetch("./medications_by_complaint_with_age_first.json")
-  .then(res => res.json())
-  .then(data => {
-    allMeds = data;
-    const complaintSelect = document.getElementById("complaintSelect");
-    Object.keys(data).forEach(complaint => {
-      const option = document.createElement("option");
-      option.value = complaint;
-      option.textContent = complaint;
-      complaintSelect.appendChild(option);
-    });
-  });
-
-function convertAgeToYears(age, unit) {
-  if (unit === "days") return age / 365;
-  if (unit === "months") return age / 12;
-  return age;
-}
-
-function estimateWeight(age, unit) {
-  let kg = 10;
-  if (unit === "years") kg = 2 * age + 8;
-  else if (unit === "months") kg = (age / 2) + 4;
-  else if (unit === "days") kg = (age / 365) * 10 + 3;
-  document.getElementById("weightValue").value = kg.toFixed(1);
-}
-
-document.getElementById("ageValue").addEventListener("input", () => {
-  const age = parseFloat(document.getElementById("ageValue").value) || 0;
-  const unit = document.getElementById("ageUnit").value;
-  estimateWeight(age, unit);
-});
-document.getElementById("ageUnit").addEventListener("change", () => {
-  const age = parseFloat(document.getElementById("ageValue").value) || 0;
-  const unit = document.getElementById("ageUnit").value;
-  estimateWeight(age, unit);
-});
-
-function loadMedications() {
-  const complaint = document.getElementById("complaintSelect").value;
-  const ageVal = parseFloat(document.getElementById("ageValue").value);
-  const ageUnit = document.getElementById("ageUnit").value;
-  const ageY = convertAgeToYears(ageVal || 0, ageUnit);
-  const medList = document.getElementById("medList");
-  medList.innerHTML = "";
-
-  if (!complaint || !allMeds[complaint]) {
-    medList.innerHTML = "<div class='warning'>Please select a chief complaint and enter age.</div>";
-    return;
-  }
-
-  const matches = allMeds[complaint].filter(med => {
-    const range = med.age_range.toLowerCase();
-    return (
-      range.includes("all") ||
-      (range.includes("adult") && ageY >= 18) ||
-      (range.includes("pediatric") && ageY < 18) ||
-      (range.includes("<") && ageY < parseInt(range.match(/\d+/))) ||
-      (range.includes(">") && ageY > parseInt(range.match(/\d+/))) ||
-      (range.includes("-") && ageY >= parseInt(range.split("-")[0]) && ageY <= parseInt(range.split("-")[1]))
-    );
-  });
-
-  if (matches.length === 0) {
-    medList.innerHTML = "<div class='warning'>No medications found for this age and complaint.</div>";
-    return;
-  }
-
-  const weight = parseFloat(document.getElementById("weightValue").value);
-  const weightUnit = document.getElementById("weightUnit").value;
-  const weightInKg = weightUnit === "lb" ? weight / 2.2046 : weight;
-
-  matches.forEach(med => {
-    let calcHtml = '';
-    if (med.dose.includes("mg/kg") || med.dose.includes("mcg/kg")) {
-      const perKg = parseFloat(med.dose.match(/[\d\.]+/)[0]);
-      const isMcg = med.dose.includes("mcg");
-      const doseMg = isMcg ? (perKg * weightInKg) / 1000 : perKg * weightInKg;
-      const conc = parseFloat(med.concentration.match(/[\d\.]+/));
-      const volume = doseMg / conc;
-
-      calcHtml = `
-        <div class="calc-details">
-          <strong>Calculation Details:</strong><br>
-          Dose = weight × dose/kg<br>
-          ${weightInKg.toFixed(1)} kg × ${perKg}${isMcg ? " mcg/kg" : " mg/kg"} = ${doseMg.toFixed(2)} mg<br><br>
-          Volume = Dose ÷ Concentration<br>
-          ${doseMg.toFixed(2)} mg ÷ ${conc} = ${volume.toFixed(2)} mL
-        </div>
-      `;
+{
+  "Pain Management": [
+    {
+      "Medication": "Fentanyl",
+      "Indication": "Moderate to severe pain",
+      "Contraindication": "Respiratory depression, hypotension",
+      "Route": "IN/IV/IM",
+      "Dose": "1\u20132 mcg/kg",
+      "Age Range": "All",
+      "Concentration": "50 mcg/mL",
+      "Max Dose": "3 mcg/kg (adult), 4 mcg/kg (IN)",
+      "Max # of Doses": "2",
+      "Call-In": "Yes if exceeding max",
+      "Drip Setup": "N/A"
+    },
+    {
+      "Medication": "Ketamine (Pain Management)",
+      "Indication": "Severe pain not controlled by opioids",
+      "Contraindication": "Schizophrenia, elevated ICP",
+      "Route": "IV/IM",
+      "Dose": "0.1\u20130.3 mg/kg",
+      "Age Range": "Adult",
+      "Concentration": "50 mg/mL",
+      "Max Dose": "30 mg",
+      "Max # of Doses": "1",
+      "Call-In": "Yes",
+      "Drip Setup": "N/A"
     }
-
-    const wrapper = document.createElement("details");
-    wrapper.className = "dropdown";
-    wrapper.innerHTML = `
-      <summary>${med.medication} (${med.route})</summary>
-      <div class="details">
-        <strong>Age Range:</strong> ${med.age_range}<br>
-        <strong>Indication:</strong> ${med.indication}<br>
-        <strong>Dose:</strong> ${med.dose}<br>
-        <strong>Concentration:</strong> ${med.concentration}<br>
-        <strong>Max Dose:</strong> ${med.max_dose}<br>
-        <strong>Max Doses:</strong> ${med.max_doses}<br>
-        <strong>Call-In:</strong> ${med.call_in}<br>
-        <strong>Contraindication:</strong> ${med.contraindication}<br>
-        ${med.drip_setup && med.drip_setup !== "N/A" ? `<strong>Drip Setup:</strong> ${med.drip_setup}<br>` : ""}
-        ${calcHtml}
-      </div>
-    `;
-    medList.appendChild(wrapper);
-  });
+  ],
+  "Cardiac Arrest": [
+    {
+      "Medication": "Epinephrine 1:10,000",
+      "Indication": "Pulseless arrest (asystole, PEA, VF, VT)",
+      "Contraindication": "None in cardiac arrest",
+      "Route": "IV",
+      "Dose": "1 mg IV every 3\u20135 min (adult)",
+      "Age Range": "All",
+      "Concentration": "0.1 mg/mL",
+      "Max Dose": "1 mg/dose",
+      "Max # of Doses": "Repeat PRN",
+      "Call-In": "No",
+      "Drip Setup": "N/A"
+    },
+    {
+      "Medication": "Amiodarone",
+      "Indication": "Shock-refractory VF/VT",
+      "Contraindication": "2nd/3rd degree AV block, iodine allergy",
+      "Route": "IV",
+      "Dose": "300 mg initial, 150 mg repeat",
+      "Age Range": "Adult",
+      "Concentration": "150 mg/3 mL",
+      "Max Dose": "450 mg",
+      "Max # of Doses": "2",
+      "Call-In": "No",
+      "Drip Setup": "150 mg in 100 mL over 10 min"
+    }
+  ],
+  "Seizure/Sedation": [
+    {
+      "Medication": "Midazolam",
+      "Indication": "Seizures, sedation, agitation",
+      "Contraindication": "Respiratory depression, hypotension",
+      "Route": "IN/IV/IM",
+      "Dose": "0.1\u20130.2 mg/kg",
+      "Age Range": "All",
+      "Concentration": "5 mg/mL",
+      "Max Dose": "10 mg",
+      "Max # of Doses": "2",
+      "Call-In": "Yes if >2 doses",
+      "Drip Setup": "N/A"
+    }
+  ],
+  "Allergic Reaction": [
+    {
+      "Medication": "Epinephrine 1:1,000",
+      "Indication": "Severe allergic reaction, anaphylaxis",
+      "Contraindication": "None in emergency setting",
+      "Route": "IM",
+      "Dose": "0.3 mg IM (adult), 0.15 mg IM (peds)",
+      "Age Range": "All",
+      "Concentration": "1 mg/mL",
+      "Max Dose": "0.3 mg (adult)",
+      "Max # of Doses": "Repeat every 5\u201315 min",
+      "Call-In": "No",
+      "Drip Setup": "N/A"
+    },
+    {
+      "Medication": "Benadryl",
+      "Indication": "Allergic reaction, anaphylaxis",
+      "Contraindication": "Acute asthma, glaucoma",
+      "Route": "IV/IM/PO",
+      "Dose": "25\u201350 mg",
+      "Age Range": "Adult",
+      "Concentration": "50 mg/mL (inj), 25 mg/tab",
+      "Max Dose": "50 mg",
+      "Max # of Doses": "1",
+      "Call-In": "No",
+      "Drip Setup": "N/A"
+    },
+    {
+      "Medication": "Solumedrol",
+      "Indication": "Severe allergic reaction, asthma/COPD exacerbation",
+      "Contraindication": "Systemic fungal infection",
+      "Route": "IV/IM",
+      "Dose": "125 mg",
+      "Age Range": "Adult",
+      "Concentration": "125 mg vial",
+      "Max Dose": "125 mg",
+      "Max # of Doses": "1",
+      "Call-In": "No",
+      "Drip Setup": "N/A"
+    }
+  ],
+  "Respiratory Distress": [
+    {
+      "Medication": "Albuterol",
+      "Indication": "Bronchospasm (asthma, COPD, allergic reaction)",
+      "Contraindication": "Known hypersensitivity",
+      "Route": "NEB/MDI",
+      "Dose": "2.5 mg via NEB or 90 mcg via MDI",
+      "Age Range": "All",
+      "Concentration": "2.5 mg/3 mL",
+      "Max Dose": "None",
+      "Max # of Doses": "Repeat PRN",
+      "Call-In": "No",
+      "Drip Setup": "N/A"
+    },
+    {
+      "Medication": "Atrovent",
+      "Indication": "Bronchospasm (asthma, COPD)",
+      "Contraindication": "Allergy to atropine or ipratropium",
+      "Route": "NEB",
+      "Dose": "0.5 mg",
+      "Age Range": "Adult",
+      "Concentration": "0.5 mg/2.5 mL",
+      "Max Dose": "0.5 mg",
+      "Max # of Doses": "1",
+      "Call-In": "No",
+      "Drip Setup": "N/A"
+    }
+  ]
 }
-</script>
-
-</body>
-</html>
