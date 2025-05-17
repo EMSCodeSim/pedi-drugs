@@ -1,0 +1,54 @@
+[
+  {
+    "Medication": "Epinephrine 1:1,000",
+    "Indication": "Severe allergic reaction, anaphylaxis",
+    "Contraindication": "None in emergency setting",
+    "Route": "IM",
+    "Dose": "0.3 mg IM",
+    "Age Range": "ADULT",
+    "Concentration": "1 mg/mL",
+    "Max Dose": "0.3 mg (adult)",
+    "Max # of Doses": "Repeat every 5\u201315 min",
+    "Call-In": "No",
+    "Drip Setup": "N/A"
+  },
+  {
+    "Medication": "Epinephrine 1:1,000",
+    "Indication": "Severe allergic reaction, anaphylaxis",
+    "Contraindication": "None in emergency setting",
+    "Route": "IM",
+    "Dose": "0.15 mg IM (peds)",
+    "Age Range": "1-12",
+    "Concentration": "1 mg/mL",
+    "Max Dose": "0.15",
+    "Max # of Doses": "Repeat every 5\u201315 min",
+    "Call-In": "No",
+    "Drip Setup": "N/A"
+  },
+  {
+    "Medication": "Benadryl",
+    "Indication": "Allergic reaction, anaphylaxis",
+    "Contraindication": "Acute asthma, glaucoma",
+    "Route": "IV/IM/PO",
+    "Dose": "25\u201350 mg",
+    "Age Range": "Adult",
+    "Concentration": "50 mg/mL (inj), 25 mg/tab",
+    "Max Dose": "50 mg",
+    "Max # of Doses": "1",
+    "Call-In": "No",
+    "Drip Setup": "N/A"
+  },
+  {
+    "Medication": "Solumedrol",
+    "Indication": "Severe allergic reaction, asthma/COPD exacerbation",
+    "Contraindication": "Systemic fungal infection",
+    "Route": "IV/IM",
+    "Dose": "125 mg",
+    "Age Range": "Adult",
+    "Concentration": "125 mg vial",
+    "Max Dose": "125 mg",
+    "Max # of Doses": "1",
+    "Call-In": "No",
+    "Drip Setup": "N/A"
+  }
+]

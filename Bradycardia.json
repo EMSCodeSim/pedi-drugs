@@ -1,0 +1,15 @@
+[
+  {
+    "Medication": "Atropine",
+    "Indication": "Symptomatic bradycardia",
+    "Contraindication": "None in emergency use",
+    "Route": "IV",
+    "Dose": "0.5 mg every 3\u20135 min",
+    "Age Range": "Adult",
+    "Concentration": "1 mg/10 mL",
+    "Max Dose": "3 mg",
+    "Max # of Doses": "6",
+    "Call-In": "No",
+    "Drip Setup": "N/A"
+  }
+]

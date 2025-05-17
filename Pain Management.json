@@ -1,0 +1,28 @@
+[
+  {
+    "Medication": "Fentanyl",
+    "Indication": "Moderate to severe pain",
+    "Contraindication": "Respiratory depression, hypotension",
+    "Route": "IN/IV/IM/IO",
+    "Dose": "1\u20132 mcg/kg",
+    "Age Range": "ALL",
+    "Concentration": "50 mcg/mL",
+    "Max Dose": "3 mcg/kg (IN,IV,IM), 4 mcg/kg (IN)",
+    "Max # of Doses": "2",
+    "Call-In": "Yes if exceeding max, Base required <1 year",
+    "Drip Setup": "N/A"
+  },
+  {
+    "Medication": "Ketamine (Pain Management)",
+    "Indication": "Severe pain not controlled by opioids",
+    "Contraindication": "Avoid if penetrating eye trauma, elevated ICP",
+    "Route": "IV/IO drip over 5-10 minutes",
+    "Dose": "0.25\u20130 mg/kg",
+    "Age Range": "Adult",
+    "Concentration": "100 mg/mL",
+    "Max Dose": "30 mg",
+    "Max # of Doses": "2",
+    "Call-In": "No",
+    "Drip Setup": "Mix in 50-100cc NS bag over 5-10 minutes"
+  }
+]

@@ -1,0 +1,15 @@
+[
+  {
+    "Medication": "Dextrose 10%",
+    "Indication": "Blood glucose < 60 mg/dL",
+    "Contraindication": "None in emergency",
+    "Route": "IV",
+    "Dose": "100 mL (25 g)",
+    "Age Range": "Adult",
+    "Concentration": "10 g/100 mL",
+    "Max Dose": "25 g",
+    "Max # of Doses": "Repeat PRN",
+    "Call-In": "No",
+    "Drip Setup": "N/A"
+  }
+]

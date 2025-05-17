@@ -1,0 +1,15 @@
+[
+  {
+    "Medication": "Aspirin",
+    "Indication": "Suspected cardiac chest pain",
+    "Contraindication": "Allergy, active GI bleed, recent surgery",
+    "Route": "PO",
+    "Dose": "324 mg (4 x 81 mg)",
+    "Age Range": "Adult",
+    "Concentration": "81 mg/tab",
+    "Max Dose": "324 mg",
+    "Max # of Doses": "1",
+    "Call-In": "No",
+    "Drip Setup": "N/A"
+  }
+]

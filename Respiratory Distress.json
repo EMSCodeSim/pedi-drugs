@@ -1,0 +1,28 @@
+[
+  {
+    "Medication": "Albuterol",
+    "Indication": "Bronchospasm (asthma, COPD, allergic reaction)",
+    "Contraindication": "Known hypersensitivity",
+    "Route": "NEB/MDI",
+    "Dose": "2.5 mg via NEB or 90 mcg via MDI",
+    "Age Range": "All",
+    "Concentration": "2.5 mg/3 mL",
+    "Max Dose": "None",
+    "Max # of Doses": "Repeat PRN",
+    "Call-In": "No",
+    "Drip Setup": "N/A"
+  },
+  {
+    "Medication": "Atrovent",
+    "Indication": "Bronchospasm (asthma, COPD)",
+    "Contraindication": "Allergy to atropine or ipratropium",
+    "Route": "NEB",
+    "Dose": "0.5 mg",
+    "Age Range": "Adult",
+    "Concentration": "0.5 mg/2.5 mL",
+    "Max Dose": "0.5 mg",
+    "Max # of Doses": "1",
+    "Call-In": "No",
+    "Drip Setup": "N/A"
+  }
+]
