@@ -81,7 +81,7 @@
       "Drip Setup": "150 mg in 100 mL over 10 min"
     }
   ],
-  "Seizure_Sedation": [
+  "Seizure": [
     {
       "Medication": "Midazolam IN/IM",
       "Indication": "Seizures",
@@ -144,7 +144,7 @@
       "Dose": "0.3 mg IM",
       "Age Range": "ADULT",
       "Concentration": "1 mg/mL",
-      "Max Dose": "0.3 mg (adult)",
+      "Max Dose": "0.3 mg (12-120)",
       "Max # of Doses": "Repeat every 5–15 min",
       "Call-In": "No",
       "Drip Setup": "N/A"
@@ -155,7 +155,7 @@
       "Contraindication": "None in emergency setting",
       "Route": "IM",
       "Dose": "0.15 mg IM (peds)",
-      "Age Range": ".3-12",
+      "Age Range": ".3-11",
       "Concentration": "1 mg/mL",
       "Max Dose": "0.15",
       "Max # of Doses": "Repeat every 5–15 min",
@@ -167,8 +167,8 @@
       "Indication": "Severe allergic reaction, anaphylaxis",
       "Contraindication": "None in emergency setting",
       "Route": "IM",
-      "Dose": "0.15 mg IM (peds)",
-      "Age Range": "0-3 months",
+      "Dose": "0.1 mg IM (peds)",
+      "Age Range": "0-.3",
       "Concentration": "1 mg/mL",
       "Max Dose": "0.15",
       "Max # of Doses": "Repeat every 5–15 min",
@@ -382,14 +382,27 @@
       "Medication": "Dextrose 10%",
       "Indication": "Blood glucose < 60 mg/dL",
       "Contraindication": "None in emergency",
-      "Route": "IV",
-      "Dose": "100 mL (25 g)",
-      "Age Range": "Adult",
+      "Route": "IV/IO",
+      "Dose": "250 mL D10%(25 g)",
+      "Age Range": "14-120",
       "Concentration": "10 g/100 mL",
-      "Max Dose": "25 g",
-      "Max # of Doses": "Repeat PRN",
-      "Call-In": "No",
-      "Drip Setup": "N/A"
+      "Max Dose": "250 ml",
+      "Max # of Doses": "1",
+      "Call-In": "IV drip infusion",
+      "Drip Setup": ""
+    },
+   {
+      "Medication": "Dextrose 10%",
+      "Indication": "Blood glucose < 60 mg/dL",
+      "Contraindication": "None in emergency",
+      "Route": "IV/IO",
+      "Dose": "5 ml/kg",
+      "Age Range": "0-13",
+      "Concentration": "10 g/100 mL",
+      "Max Dose": "250 ml",
+      "Max # of Doses": "1",
+      "Call-In": "IV drip infusion",
+      "Drip Setup": ""
     }
   ],
   "Chest Pain": [
@@ -399,7 +412,7 @@
       "Contraindication": "Allergy, active GI bleed, recent surgery",
       "Route": "PO",
       "Dose": "324 mg (4 x 81 mg)",
-      "Age Range": "Adult",
+      "Age Range": "16-120",
       "Concentration": "81 mg/tab",
       "Max Dose": "324 mg",
       "Max # of Doses": "1",
