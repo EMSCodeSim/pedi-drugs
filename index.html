@@ -12,21 +12,27 @@
 <label>Chief Complaint:</label>
 <select id="complaintSelect"><option value="">-- Select Complaint --</option></select>
 
-<br><label>Age:</label>
-<input type="number" id="ageValue" placeholder="Age" />
-<select id="ageUnit">
-  <option value="years">Years</option>
-  <option value="months">Months</option>
-  <option value="days">Days</option>
-</select>
+<!-- Age input row -->
+<div class="input-row">
+  <label for="ageValue">Age:</label>
+  <input type="number" id="ageValue" placeholder="Age" />
+  <select id="ageUnit">
+    <option value="years">Years</option>
+    <option value="months">Months</option>
+    <option value="days">Days</option>
+  </select>
+</div>
 
-<br><label>Weight:</label>
-<input type="number" id="weightValue" />
-<select id="weightUnit">
-  <option value="kg">kg</option>
-  <option value="lb">lb</option>
-</select>
-<select id="broselowColor" style="display:none;"></select>
+<!-- Weight input row -->
+<div class="input-row">
+  <label for="weightValue">Weight:</label>
+  <input type="number" id="weightValue" />
+  <select id="weightUnit">
+    <option value="kg">kg</option>
+    <option value="lb">lb</option>
+  </select>
+  <select id="broselowColor" style="display:none;"></select>
+</div>
 
 <div class="button-row">
   <button id="findBtn">Find Medications</button>
