@@ -321,6 +321,32 @@
       "Max # of Doses": "1",
       "Call-In": "No",
       "Drip Setup": "N/A"
+    },
+  {
+      "Medication": "Atropine",
+      "Indication": "Organophosphate poisoning",
+      "Contraindication": "None in emergency use",
+      "Route": "IV/IO",
+      "Dose": "2 mg if 40 Kg and up",
+      "Age Range": "12-120",
+      "Concentration": "1 mg/10 mL",
+      "Max Dose": "2 mg",
+      "Max # of Doses": "1",
+      "Call-In": "Contact base for addiitional doses",
+      "Drip Setup": "N/A"
+    },
+    {
+      "Medication": "Atropine",
+      "Indication": "Organophosphate poisoning",
+      "Contraindication": "None in emergency use",
+      "Route": "IV/IO",
+      "Dose": "0.02mg/kg",
+      "Age Range": "0-11",
+      "Concentration": "1 mg/10 mL",
+      "Max Dose": "2 mg",
+      "Max # of Doses": "1",
+      "Call-In": "Contact base for additional doses",
+      "Drip Setup": "N/A"
     }
   ],
   "Bradycardia": [
@@ -328,7 +354,7 @@
       "Medication": "Atropine",
       "Indication": "Symptomatic bradycardia",
       "Contraindication": "None in emergency use",
-      "Route": "IV",
+      "Route": "IV/IO",
       "Dose": "1 mg every 3–5 min",
       "Age Range": "12-120",
       "Concentration": "1 mg/10 mL",
@@ -341,7 +367,7 @@
       "Medication": "Atropine",
       "Indication": "Symptomatic bradycardia",
       "Contraindication": "None in emergency use",
-      "Route": "IV",
+      "Route": "IV/IO",
       "Dose": "0.02mg/kg MInimum 0,1mg max .5mg",
       "Age Range": "0-11",
       "Concentration": "1 mg/10 mL",
