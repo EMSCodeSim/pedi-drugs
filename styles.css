@@ -1,5 +1,5 @@
 body {
-  font-family: 'Segoe UI', sans-serif;
+  font-family: 'Segoe UI', Arial, sans-serif;
   padding: 1rem;
   background: #f0faff;
   margin: 0;
@@ -7,25 +7,38 @@ body {
 }
 
 label {
-  display: block;
-  margin-top: 1rem;
   font-weight: bold;
+  margin-right: 0.5rem;
 }
 
-input, select {
-  width: 100%;
-  padding: 0.75rem;
-  margin-top: 0.25rem;
-  margin-bottom: 1rem;
-  border: 1px solid #ccc;
-  border-radius: 8px;
+.input-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.7rem;
+  margin-top: 0.7rem;
+}
+
+input[type="number"] {
+  width: 65px;
+  padding: 0.6rem;
   font-size: 1rem;
+  border-radius: 8px;
+  border: 1px solid #ccc;
+}
+
+select {
+  min-width: 70px;
+  padding: 0.6rem;
+  font-size: 1rem;
+  border-radius: 8px;
+  border: 1px solid #ccc;
 }
 
 .button-row {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 12px;
   margin-bottom: 20px;
 }
 
@@ -34,9 +47,10 @@ button {
   color: white;
   border: none;
   border-radius: 8px;
-  padding: 0.75rem;
+  padding: 0.9rem;
   font-size: 1rem;
   cursor: pointer;
+  width: 100%;
 }
 
 button:hover {
@@ -62,7 +76,7 @@ button:hover {
 .dropdown-body {
   display: none;
   padding: 1rem;
-  font-size: 0.95rem;
+  font-size: 0.97rem;
   line-height: 1.4;
 }
 
@@ -77,5 +91,20 @@ button:hover {
   color: #cc0000;
   font-weight: bold;
   margin-top: 10px;
-  font-size: 0.9rem;
+  font-size: 0.98rem;
+}
+
+@media (max-width: 600px) {
+  body {
+    padding: 0.5rem;
+    font-size: 1rem;
+  }
+  .input-row {
+    gap: 0.4rem;
+    margin-bottom: 0.6rem;
+  }
+  h2 { font-size: 1.25rem; }
+  label { font-size: 0.98rem; }
+  button { font-size: 1rem; padding: 0.75rem; }
+  .dropdown-body { padding: 0.7rem; font-size: 0.98rem; }
 }
