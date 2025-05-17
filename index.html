@@ -97,6 +97,7 @@ function getVitalsByAge(ageY) {
   if (ageY <= 12) return { hr: "60–100", rr: "18–24", sbp: "90–120" };
   return null;
 }
+
 function getAgeInYears() {
   const val = parseFloat(document.getElementById("ageValue").value);
   const unit = document.getElementById("ageUnit").value;
