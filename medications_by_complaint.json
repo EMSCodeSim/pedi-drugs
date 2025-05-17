@@ -83,14 +83,53 @@
   ],
   "Seizure/Sedation": [
     {
-      "Medication": "Midazolam",
-      "Indication": "Seizures, sedation, agitation",
+      "Medication": "Midazolam IN/IM",
+      "Indication": "Seizures",
+      "Contraindication": "Respiratory depression, hypotension",
+      "Route": "IN/IM",
+      "Dose": "10mg",
+      "Age Range": "ADULT",
+      "Concentration": "5 mg/mL",
+      "Max Dose": "10 mg",
+      "Max # of Doses": "2",
+      "Call-In": "Yes if >2 doses",
+      "Drip Setup": "N/A"
+    }
+    {
+      "Medication": "Midazolam IV/IO",
+      "Indication": "Seizures",
+      "Contraindication": "Respiratory depression, hypotension",
+      "Route": "IV/IO",
+      "Dose": "5mg",
+      "Age Range": "ADULT",
+      "Concentration": "5 mg/mL",
+      "Max Dose": "5 mg",
+      "Max # of Doses": "2",
+      "Call-In": "Yes if >2 doses",
+      "Drip Setup": "N/A"
+    }
+    {
+      "Medication": "Midazolam Pedi  IN/IM",
+      "Indication": "Seizures",
       "Contraindication": "Respiratory depression, hypotension",
       "Route": "IN/IV/IM",
-      "Dose": "0.1–0.2 mg/kg",
+      "Dose": "0.2 mg/kg",
       "Age Range": "All",
       "Concentration": "5 mg/mL",
       "Max Dose": "10 mg",
+      "Max # of Doses": "2",
+      "Call-In": "Yes if >2 doses",
+      "Drip Setup": "N/A"
+    }
+    {
+      "Medication": "Midazolam Pedi IV/IO",
+      "Indication": "Seizures, sedation, agitation",
+      "Contraindication": "Respiratory depression, hypotension",
+      "Route": "IN/IV/IM",
+      "Dose": "0.1 mg/kg",
+      "Age Range": "All",
+      "Concentration": "5 mg/mL",
+      "Max Dose": "5 mg",
       "Max # of Doses": "2",
       "Call-In": "Yes if >2 doses",
       "Drip Setup": "N/A"
