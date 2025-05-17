@@ -89,15 +89,6 @@ function updateEstimate() {
   }
 }
 
-function getVitalsByAge(ageY) {
-  if (ageY <= 1) return { hr: "100–160", rr: "30–60", sbp: "70–100" };
-  if (ageY <= 3) return { hr: "90–150", rr: "24–40", sbp: "80–110" };
-  if (ageY <= 5) return { hr: "80–140", rr: "22–34", sbp: "80–110" };
-  if (ageY <= 8) return { hr: "70–120", rr: "18–30", sbp: "85–115" };
-  if (ageY <= 12) return { hr: "60–100", rr: "18–24", sbp: "90–120" };
-  return null;
-}
-
 function getAgeInYears() {
   const val = parseFloat(document.getElementById("ageValue").value);
   const unit = document.getElementById("ageUnit").value;
@@ -111,10 +102,23 @@ function getWeightInKg() {
 }
 
 function isMedInAgeRange(med, ageY) {
-  const range = med["Age Range"]?.toLowerCase() || "";
-  return range.includes("all") || (range.includes("adult") && ageY >= 18) || (range.includes("pediatric") && ageY < 18);
-}
+  const range = (med["Age Range"] || "").toLowerCase();
 
+  if (range.includes("all")) return true;
+  if (range.includes("adult")) return ageY >= 18;
+  if (range.includes("pediatric")) return ageY < 18;
+
+  if (range.includes("-")) {
+    const [min, max] = range.split("-").map(Number);
+    return ageY >= min && ageY <= max;
+  }
+  if (range.includes("+")) {
+    const min = parseFloat(range);
+    return ageY >= min;
+  }
+
+  return false;
+}
 function loadMedications() {
   const ageY = getAgeInYears();
   const weightInKg = getWeightInKg();
@@ -140,18 +144,16 @@ function displayMedications(meds, ageY, weightInKg) {
   meds.forEach((med, index) => {
     const wrapper = document.createElement("div");
     wrapper.className = "dropdown";
-
     const header = document.createElement("div");
     header.className = "dropdown-header";
     header.textContent = `${med.Medication} (${med.Route})`;
-
     const body = document.createElement("div");
     body.className = "dropdown-body";
 
     const concentrationKey = `${med.Medication}_${index}`;
     let concentration = editableConcentrations[concentrationKey] || med.Concentration;
-
     let calcHtml = "";
+
     if (med.Dose?.toLowerCase().includes("mg/kg") || med.Dose?.toLowerCase().includes("mcg/kg")) {
       const perKg = parseFloat(med.Dose.match(/\\d+\\.?\\d*/)[0]);
       const isMcg = med.Dose.includes("mcg");
@@ -190,7 +192,6 @@ function displayMedications(meds, ageY, weightInKg) {
     header.onclick = () => {
       body.style.display = body.style.display === "block" ? "none" : "block";
     };
-
     wrapper.appendChild(header);
     wrapper.appendChild(body);
     medList.appendChild(wrapper);
