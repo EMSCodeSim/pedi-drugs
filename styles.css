@@ -1,10 +1,81 @@
-body { font-family: Arial; padding: 20px; background: #eef9ff; }
-select, input, button {
-  padding: 10px; margin: 5px 5px 10px 0; font-size: 1rem;
+body {
+  font-family: 'Segoe UI', sans-serif;
+  padding: 1rem;
+  background: #f0faff;
+  margin: 0;
+  font-size: 1rem;
 }
-.dropdown { border: 1px solid #007; margin-top: 10px; background: #f5faff; border-radius: 5px; }
-.dropdown-header { background: #007; color: white; padding: 10px; cursor: pointer; font-weight: bold; }
-.dropdown-body { display: none; padding: 10px; }
-.highlight { background-color: yellow; font-weight: bold; }
-.button-row { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 15px; }
-.warning { color: red; font-weight: bold; margin-top: 10px; }
+
+label {
+  display: block;
+  margin-top: 1rem;
+  font-weight: bold;
+}
+
+input, select {
+  width: 100%;
+  padding: 0.75rem;
+  margin-top: 0.25rem;
+  margin-bottom: 1rem;
+  border: 1px solid #ccc;
+  border-radius: 8px;
+  font-size: 1rem;
+}
+
+.button-row {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: 20px;
+}
+
+button {
+  background-color: #0077cc;
+  color: white;
+  border: none;
+  border-radius: 8px;
+  padding: 0.75rem;
+  font-size: 1rem;
+  cursor: pointer;
+}
+
+button:hover {
+  background-color: #005fa3;
+}
+
+.dropdown {
+  border: 1px solid #007;
+  background: #ffffff;
+  border-radius: 8px;
+  margin-bottom: 15px;
+}
+
+.dropdown-header {
+  background: #0077cc;
+  color: white;
+  padding: 0.75rem;
+  font-weight: bold;
+  border-radius: 8px 8px 0 0;
+  cursor: pointer;
+}
+
+.dropdown-body {
+  display: none;
+  padding: 1rem;
+  font-size: 0.95rem;
+  line-height: 1.4;
+}
+
+.highlight {
+  background-color: #ffff88;
+  padding: 0 4px;
+  border-radius: 4px;
+  font-weight: bold;
+}
+
+.warning {
+  color: #cc0000;
+  font-weight: bold;
+  margin-top: 10px;
+  font-size: 0.9rem;
+}
