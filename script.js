@@ -1,11 +1,4 @@
-
 let allMeds = {};
-let editableConcentrations = {};
-
-const broselowMap = {
-  "Gray": 3, "Pink": 5, "Red": 8, "Purple": 10, "Yellow": 12,
-  "White": 14, "Blue": 18, "Orange": 22, "Green": 26, "Lt Green": 30
-};
 
 document.getElementById("ageValue").addEventListener("input", updateEstimate);
 document.getElementById("ageUnit").addEventListener("change", updateEstimate);
@@ -27,6 +20,10 @@ function updateEstimate() {
     weightBox.value = estWeight.toFixed(1);
     document.getElementById("weightUnit").value = "kg";
 
+    const broselowMap = {
+      "Gray": 3, "Pink": 5, "Red": 8, "Purple": 10, "Yellow": 12,
+      "White": 14, "Blue": 18, "Orange": 22, "Green": 26, "Lt Green": 30
+    };
     for (let color in broselowMap) {
       const option = document.createElement("option");
       option.value = broselowMap[color];
@@ -41,19 +38,12 @@ function updateEstimate() {
   }
 }
 
-function getVitalsByAge(ageY) {
-  if (ageY <= 1) return { hr: "100–160", rr: "30–60", sbp: "70–100" };
-  if (ageY <= 3) return { hr: "90–150", rr: "24–40", sbp: "80–110" };
-  if (ageY <= 5) return { hr: "80–140", rr: "22–34", sbp: "80–110" };
-  if (ageY <= 8) return { hr: "70–120", rr: "18–30", sbp: "85–115" };
-  if (ageY <= 12) return { hr: "60–100", rr: "18–24", sbp: "90–120" };
-  return null;
-}
-
 function getAgeInYears() {
   const val = parseFloat(document.getElementById("ageValue").value);
   const unit = document.getElementById("ageUnit").value;
-  return unit === "months" ? val / 12 : unit === "days" ? val / 365 : val;
+  if (unit === "months") return val / 12;
+  if (unit === "days") return val / 365;
+  return val;
 }
 
 function getWeightInKg() {
@@ -63,22 +53,41 @@ function getWeightInKg() {
 }
 
 function isMedInAgeRange(med, ageY) {
-  const range = (med["Age Range"] || "").toLowerCase();
-
-  if (range.includes("all")) return true;
-  if (range.includes("adult")) return ageY >= 18;
-  if (range.includes("pediatric")) return ageY < 18;
-
+  // Adult = 12+ years (user definition)
+  const range = (med["Age Range"] || "").toLowerCase().replace(/\s+/g, "");
+  if (range === "all") return true;
+  if (range === "adult") return ageY >= 12;
+  if (range === "pediatric") return ageY < 12;
+  if (/^\d+\+\s*(years)?$/.test(range)) {
+    const min = parseFloat(range);
+    return ageY >= min;
+  }
+  // Accept 0-11, 1-12, 0-3months, etc
+  if (range.includes("months")) {
+    // e.g. "0-3months"
+    let [min, max] = range.replace("months", "").split("-");
+    min = parseFloat(min); max = parseFloat(max);
+    const userMonths = getUserMonths();
+    return userMonths >= min && userMonths <= max;
+  }
+  if (range.includes("years")) {
+    let [min, max] = range.replace("years", "").split("-");
+    min = parseFloat(min); max = parseFloat(max);
+    return ageY >= min && ageY <= max;
+  }
   if (range.includes("-")) {
     const [min, max] = range.split("-").map(Number);
     return ageY >= min && ageY <= max;
   }
-  if (range.includes("+")) {
-    const min = parseFloat(range);
-    return ageY >= min;
-  }
-
   return false;
+}
+
+function getUserMonths() {
+  const val = parseFloat(document.getElementById("ageValue").value);
+  const unit = document.getElementById("ageUnit").value;
+  if (unit === "years") return val * 12;
+  if (unit === "days") return val / 30.44;
+  return val;
 }
 
 function loadMedications() {
@@ -108,48 +117,17 @@ function displayMedications(meds, ageY, weightInKg) {
     wrapper.className = "dropdown";
     const header = document.createElement("div");
     header.className = "dropdown-header";
-    header.textContent = `${med.Medication} (${med.Route})`;
+    header.textContent = `${med.Medication || "Medication"}${med.Route ? " (" + med.Route + ")" : ""}`;
+
     const body = document.createElement("div");
     body.className = "dropdown-body";
 
-    const concentrationKey = `${med.Medication}_${index}`;
-    let concentration = editableConcentrations[concentrationKey] || med.Concentration;
-    let calcHtml = "";
-
-    if (med.Dose?.toLowerCase().includes("mg/kg") || med.Dose?.toLowerCase().includes("mcg/kg")) {
-      const perKg = parseFloat(med.Dose.match(/\d+\.?\d*/)[0]);
-      const isMcg = med.Dose.includes("mcg");
-      const doseMg = isMcg ? (perKg * weightInKg) / 1000 : perKg * weightInKg;
-      const conc = parseFloat(concentration.match(/\d+\.?\d*/));
-      const volume = doseMg / conc;
-
-      calcHtml = `
-        <br><strong>Calculation:</strong><br>
-        ${weightInKg.toFixed(1)} kg × ${perKg}${isMcg ? " mcg/kg" : " mg/kg"} =
-        <span class="highlight">${doseMg.toFixed(2)} mg</span><br>
-        ${doseMg.toFixed(2)} mg ÷ ${conc} =
-        <span class="highlight">${volume.toFixed(2)} mL</span><br>
-        <button onclick="editConcentration('${concentrationKey}', '${med.Concentration}')">Edit Concentration</button>
-        <div class="warning">⚠️ Confirm all calculations before administering medications.</div>
-      `;
-    }
-
-    const vitals = getVitalsByAge(ageY);
-    const vitalsHtml = vitals ? `
-      <br><strong>Normal Vitals:</strong><br>
-      Pulse: ${vitals.hr} bpm<br>
-      Respiratory Rate: ${vitals.rr}<br>
-      Systolic BP: ${vitals.sbp} mmHg
-    ` : "";
-
-    body.innerHTML = `
-      <strong>Indication:</strong> ${med.Indication}<br>
-      <strong>Dose:</strong> ${med.Dose}<br>
-      <strong>Concentration:</strong> <span id="conc_${concentrationKey}">${concentration}</span><br>
-      <strong>Contraindication:</strong> ${med.Contraindication}<br>
-      ${calcHtml}
-      ${vitalsHtml}
-    `;
+    // Display all fields
+    let allFields = '';
+    Object.entries(med).forEach(([key, value]) => {
+      allFields += `<div><strong>${key.replace(/_/g, " ")}:</strong> ${value}</div>`;
+    });
+    body.innerHTML = allFields;
 
     header.onclick = () => {
       body.style.display = body.style.display === "block" ? "none" : "block";
@@ -160,23 +138,20 @@ function displayMedications(meds, ageY, weightInKg) {
   });
 }
 
-function editConcentration(key, originalConc) {
-  const newConc = prompt("Enter new concentration:", originalConc);
-  if (newConc) {
-    editableConcentrations[key] = newConc;
-    loadMedications();
-  }
-}
-
+// Load JSON file
 fetch("./medications_by_complaint.json")
   .then(res => res.json())
   .then(data => {
     allMeds = data;
     const select = document.getElementById("complaintSelect");
+    select.innerHTML = `<option value="">-- Select Complaint --</option>`;
     Object.keys(data).forEach(k => {
       const opt = document.createElement("option");
       opt.value = k;
-      opt.textContent = k;
+      opt.textContent = k.replace(/_/g, " ");
       select.appendChild(opt);
     });
+  })
+  .catch(err => {
+    document.getElementById("complaintSelect").innerHTML = `<option value="">No Data</option>`;
   });
