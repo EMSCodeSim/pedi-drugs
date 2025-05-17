@@ -29,15 +29,15 @@
     {
       "Medication": "Ketamine (Pain Management)",
       "Indication": "Severe pain not controlled by opioids",
-      "Contraindication": "Schizophrenia, elevated ICP",
-      "Route": "IV/IM",
-      "Dose": "0.1\u20130.3 mg/kg",
+      "Contraindication": "Avoid if penetrating eye trauma, elevated ICP",
+      "Route": "IV/IO drip over 5-10 minutes",
+      "Dose": "0.25\u20130.3 mg/kg",
       "Age Range": "Adult",
-      "Concentration": "50 mg/mL",
+      "Concentration": "100 mg/mL",
       "Max Dose": "30 mg",
-      "Max # of Doses": "1",
-      "Call-In": "Yes",
-      "Drip Setup": "N/A"
+      "Max # of Doses": "2",
+      "Call-In": "No",
+      "Drip Setup": "Mix in 50-100cc NS bag over 5-10 minutes"
     }
   ],
   "Cardiac Arrest": [
