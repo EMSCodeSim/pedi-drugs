@@ -25,7 +25,7 @@
       "Max # of Doses": "2",
       "Call-In": "No",
       "Drip Setup": "Mix in 50-100cc NS bag over 5-10 minutes"
-    }
+    },
   ],
   "Cardiac Arrest": [
     {
@@ -79,7 +79,7 @@
       "Max # of Doses": "1",
       "Call-In": "Contact Base for additional doses",
       "Drip Setup": "150 mg in 100 mL over 10 min"
-    }
+    },
   ],
   "Seizure/Sedation": [
     {
@@ -94,7 +94,7 @@
       "Max # of Doses": "2",
       "Call-In": "Yes if >2 doses",
       "Drip Setup": "N/A"
-    }
+    },
     {
       "Medication": "Midazolam IV/IO",
       "Indication": "Seizures",
@@ -107,7 +107,7 @@
       "Max # of Doses": "2",
       "Call-In": "Yes if >2 doses",
       "Drip Setup": "N/A"
-    }
+    },
     {
       "Medication": "Midazolam Pedi  IN/IM",
       "Indication": "Seizures",
@@ -120,7 +120,7 @@
       "Max # of Doses": "2",
       "Call-In": "Yes if >2 doses",
       "Drip Setup": "N/A"
-    }
+    },
     {
       "Medication": "Midazolam Pedi IV/IO",
       "Indication": "Seizures, sedation, agitation",
@@ -133,7 +133,7 @@
       "Max # of Doses": "2",
       "Call-In": "Yes if >2 doses",
       "Drip Setup": "N/A"
-    }
+    },
   ],
   "Allergic Reaction": [
     {
