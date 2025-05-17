@@ -34,7 +34,7 @@
       "Contraindication": "None in cardiac arrest",
       "Route": "IV",
       "Dose": "1 mg IV every 3 minutes",
-      "Age Range": "All",
+      "Age Range": "ADULT",
       "Concentration": "0.1 mg/mL",
       "Max Dose": "1 mg/dose",
       "Max # of Doses": "3",
@@ -65,6 +65,19 @@
       "Max Dose": "450 mg",
       "Max # of Doses": "2",
       "Call-In": "No",
+      "Drip Setup": "150 mg in 100 mL over 10 min"
+    }
+      {
+      "Medication": "Amiodarone",
+      "Indication": "Shock-refractory VF/VT",
+      "Contraindication": "2nd/3rd degree AV block, iodine allergy",
+      "Route": "IV",
+      "Dose": "5\u20130 mg/kg IV bolus",
+      "Age Range": "0-11",
+      "Concentration": "150 mg/3 mL",
+      "Max Dose": "450 mg",
+      "Max # of Doses": "1",
+      "Call-In": "Contact Base for additional doses",
       "Drip Setup": "150 mg in 100 mL over 10 min"
     }
   ],
