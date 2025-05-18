@@ -15,7 +15,7 @@ function updateEstimate() {
   const broselowBox = document.getElementById("broselowColor");
   broselowBox.innerHTML = "";
 
-  if (ageY > 0 && ageY <= 12) {
+  if (ageY > 0 && ageY < 12) {
     const estWeight = 2 * ageY + 8;
     weightBox.value = estWeight.toFixed(1);
     document.getElementById("weightUnit").value = "kg";
@@ -53,7 +53,6 @@ function getWeightInKg() {
 }
 
 function isMedInAgeRange(med, ageY) {
-  // Adult = 12+ years (user definition)
   const range = (med["Age Range"] || "").toLowerCase().replace(/\s+/g, "");
   if (range === "all") return true;
   if (range === "adult") return ageY >= 12;
@@ -62,9 +61,7 @@ function isMedInAgeRange(med, ageY) {
     const min = parseFloat(range);
     return ageY >= min;
   }
-  // Accept 0-11, 1-12, 0-3months, etc
   if (range.includes("months")) {
-    // e.g. "0-3months"
     let [min, max] = range.replace("months", "").split("-");
     min = parseFloat(min); max = parseFloat(max);
     const userMonths = getUserMonths();
@@ -90,23 +87,36 @@ function getUserMonths() {
   return val;
 }
 
-function loadMedications() {
-  const ageY = getAgeInYears();
-  const weightInKg = getWeightInKg();
-  const complaint = document.getElementById("complaintSelect").value;
-  if (!complaint || !allMeds[complaint]) return;
-  const meds = allMeds[complaint].filter(med => isMedInAgeRange(med, ageY));
-  displayMedications(meds, ageY, weightInKg);
+function parseDosePerKg(doseStr) {
+  // Match e.g., "1-2 mcg/kg" or "0.1 mg/kg"
+  const match = doseStr.match(/([\d\.\-]+)\s*(mcg|mg)\/kg/i);
+  if (match) {
+    let [val, unit] = [match[1], match[2]];
+    // If range (e.g. 1-2), take average
+    if (val.includes('-')) {
+      let [low, high] = val.split('-').map(Number);
+      val = (low + high) / 2;
+    }
+    return { val: parseFloat(val), unit: unit };
+  }
+  return null;
 }
 
-function loadAllMedications() {
-  const ageY = getAgeInYears();
-  const weightInKg = getWeightInKg();
-  const allMatches = [];
-  for (let section in allMeds) {
-    allMatches.push(...allMeds[section].filter(med => isMedInAgeRange(med, ageY)));
+function parseConcentration(concStr) {
+  // Match e.g., "50 mcg/mL", "1 mg/mL"
+  const match = concStr.match(/([\d\.]+)\s*(mcg|mg)\/?m?L?/i);
+  if (match) {
+    return { val: parseFloat(match[1]), unit: match[2].toLowerCase() };
   }
-  displayMedications(allMatches, ageY, weightInKg);
+  return null;
+}
+
+function convertDoseToConcUnits(dose, doseUnit, concUnit) {
+  // Only support mcg <-> mg <-> mcg
+  if (doseUnit === concUnit) return dose;
+  if (doseUnit === "mg" && concUnit === "mcg") return dose * 1000;
+  if (doseUnit === "mcg" && concUnit === "mg") return dose / 1000;
+  return dose;
 }
 
 function displayMedications(meds, ageY, weightInKg) {
@@ -122,12 +132,53 @@ function displayMedications(meds, ageY, weightInKg) {
     const body = document.createElement("div");
     body.className = "dropdown-body";
 
-    // Display all fields
+    // All fields display
     let allFields = '';
     Object.entries(med).forEach(([key, value]) => {
       allFields += `<div><strong>${key.replace(/_/g, " ")}:</strong> ${value}</div>`;
     });
-    body.innerHTML = allFields;
+
+    // Weight-based calculation (any med with /kg in Dose)
+    let calcHtml = '';
+    if (med.Dose && med.Concentration && /\/kg/i.test(med.Dose) && weightInKg > 0) {
+      let doseInfo = parseDosePerKg(med.Dose);
+      let concInfo = parseConcentration(med.Concentration);
+      if (doseInfo && concInfo) {
+        let { val: dosePerKg, unit: doseUnit } = doseInfo;
+        let { val: concVal, unit: concUnit } = concInfo;
+        let doseTotal = dosePerKg * weightInKg;
+        // Convert dose to same unit as concentration if needed
+        let doseInConcUnits = convertDoseToConcUnits(doseTotal, doseUnit, concUnit);
+        // Setup editable concentration
+        const concId = `concInput_${index}`;
+        const mlAnsId = `mlAns_${index}`;
+
+        calcHtml += `
+          <div style="margin-top:10px;">
+            <strong>Calculation:</strong>
+            <div>
+              Dose = <span class="highlight">${dosePerKg} ${doseUnit}/kg × ${weightInKg.toFixed(1)} kg = 
+                <span class="highlight">${doseTotal.toFixed(2)} ${doseUnit}</span>
+              </span>
+            </div>
+            <div>
+              Volume = <span class="highlight">
+                ${doseInConcUnits.toFixed(2)} ${concUnit} ÷ 
+                <input type="number" step="any" value="${concVal}" id="${concId}" style="width:65px;"> ${concUnit}/mL = 
+                <span id="${mlAnsId}" class="highlight">${(doseInConcUnits / concVal).toFixed(2)} mL</span>
+              </span>
+            </div>
+            <button style="margin-top:6px;" onclick="
+              document.getElementById('${mlAnsId}').innerText = 
+                ((${doseInConcUnits.toFixed(5)}) / parseFloat(document.getElementById('${concId}').value || 1)).toFixed(2)
+              ">Update mL</button>
+            <div class="warning">Confirm all calculations before giving medication.</div>
+          </div>
+        `;
+      }
+    }
+
+    body.innerHTML = allFields + calcHtml;
 
     header.onclick = () => {
       body.style.display = body.style.display === "block" ? "none" : "block";
