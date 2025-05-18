@@ -425,12 +425,12 @@
   "Contraindication": "Hypotension, use of phosphodiesterase inhibitors within 48 hours, right-sided MI",
   "Route": "SL (sublingual)",
   "Dose": "0.4 mg",
-  "Age Range": "12+",
+  "Age Range": "12-120",
   "Concentration": "0.4 mg/tab",
   "Max Dose": ".4 mg",
   "Max # of Doses": "3",
   "Call-in": "Yes (for pediatric, hypotension, or unclear cases)"
-  "Srip Setup": "N/A"
+  "Drip Setup": "N/A"
 }
 
   ]
