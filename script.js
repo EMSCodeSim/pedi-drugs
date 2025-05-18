@@ -1,6 +1,4 @@
 let allMeds = {};
-let editableConcentrations = {};
-
 const broselowMap = {
   "Gray": 3, "Pink": 5, "Red": 8, "Purple": 10, "Yellow": 12,
   "White": 14, "Blue": 18, "Orange": 22, "Green": 26, "Lt Green": 30
@@ -64,7 +62,7 @@ function isMedInAgeRange(med, ageY) {
   const range = (med["Age Range"] || "").toLowerCase();
 
   if (range.includes("all")) return true;
-  if (range.includes("adult")) return ageY >= 12; // NOTE: Changed to 12 for EMS/adult split
+  if (range.includes("adult")) return ageY >= 12;
   if (range.includes("pediatric")) return ageY < 12;
 
   if (range.includes("-")) {
@@ -124,6 +122,9 @@ function displayMedications(meds, ageY, weightInKg) {
     let doseMatch = med.Dose && med.Dose.match(/([\d\.\-]+)\s*(mg|mcg)\/kg/i);
     let concMatch = concentration && concentration.match(/([\d\.]+)\s*(mg|mcg)\/?m?L?/i);
 
+    const concInputId = `concInput_${index}`;
+    const mlAnsId = `mlAns_${index}`;
+
     if (doseMatch && concMatch && weightInKg > 0) {
       let dosePerKg = doseMatch[1].includes('-') ? 
           (doseMatch[1].split('-').map(Number).reduce((a,b)=>a+b,0)/2) : 
@@ -132,7 +133,6 @@ function displayMedications(meds, ageY, weightInKg) {
       let concVal = parseFloat(concMatch[1]);
       let concUnit = concMatch[2].toLowerCase();
 
-      // Convert everything to the same unit (mg <-> mcg)
       let totalDose = dosePerKg * weightInKg;
       let totalDoseDisplay = totalDose.toFixed(2) + " " + doseUnit;
 
@@ -149,21 +149,16 @@ function displayMedications(meds, ageY, weightInKg) {
       calcHtml = `
         <br><strong>Calculation:</strong><br>
         Dose = <span class="highlight">${dosePerKg} ${doseUnit}/kg × ${weightInKg.toFixed(1)} kg = <span class="highlight">${totalDoseDisplay}</span></span><br>
-        Volume = <span class="highlight">${doseForMl.toFixed(2)} ${concUnit} ÷ ${concVal} ${concUnit}/mL = <span class="highlight">${volumeDisplay} mL</span></span><br>
+        Volume = <span class="highlight">
+          ${doseForMl.toFixed(2)} ${concUnit} ÷ 
+          <input type="number" min="0" step="any" id="${concInputId}" value="${concVal}" style="width:65px;"> ${concUnit}/mL =
+          <span id="${mlAnsId}" class="highlight">${volumeDisplay} mL</span>
+        </span><br>
         <div class="warning">⚠️ Confirm all calculations before administering medications.</div>
       `;
     }
 
-    // Pediatric normal vitals
-    const vitals = getVitalsByAge(ageY);
-    const vitalsHtml = vitals ? `
-      <br><strong>Normal Vitals:</strong><br>
-      Pulse: ${vitals.hr} bpm<br>
-      Respiratory Rate: ${vitals.rr}<br>
-      Systolic BP: ${vitals.sbp} mmHg
-    ` : "";
-
-    body.innerHTML = allFields + calcHtml + vitalsHtml;
+    body.innerHTML = allFields + calcHtml;
 
     header.onclick = () => {
       body.style.display = body.style.display === "block" ? "none" : "block";
@@ -171,6 +166,31 @@ function displayMedications(meds, ageY, weightInKg) {
     wrapper.appendChild(header);
     wrapper.appendChild(body);
     medList.appendChild(wrapper);
+
+    // Attach live update handler for concentration field
+    if (doseMatch && concMatch && weightInKg > 0) {
+      setTimeout(() => {
+        const input = document.getElementById(concInputId);
+        if (input) {
+          input.addEventListener("input", function () {
+            let dosePerKg = doseMatch[1].includes('-') ? 
+              (doseMatch[1].split('-').map(Number).reduce((a,b)=>a+b,0)/2) : 
+              parseFloat(doseMatch[1]);
+            let doseUnit = doseMatch[2].toLowerCase();
+            let concUnit = concMatch[2].toLowerCase();
+            let totalDose = dosePerKg * weightInKg;
+            let doseForMl = totalDose;
+            if (doseUnit !== concUnit) {
+              if (doseUnit === "mg" && concUnit === "mcg") doseForMl = totalDose * 1000;
+              if (doseUnit === "mcg" && concUnit === "mg") doseForMl = totalDose / 1000;
+            }
+            let concValNew = parseFloat(input.value);
+            let volume = concValNew > 0 ? doseForMl / concValNew : 0;
+            document.getElementById(mlAnsId).textContent = isNaN(volume) ? "?" : volume.toFixed(2) + " mL";
+          });
+        }
+      }, 50);
+    }
   });
 }
 
