@@ -418,6 +418,20 @@
       "Max # of Doses": "1",
       "Call-In": "No",
       "Drip Setup": "N/A"
-    }
+    },
+    {
+  "Medication": "Nitroglycerin",
+  "Indication": "Chest pain suspected to be of cardiac origin, pulmonary edema with hypertension",
+  "Contraindication": "Hypotension, use of phosphodiesterase inhibitors within 48 hours, right-sided MI",
+  "Route": "SL (sublingual)",
+  "Dose": "0.4 mg",
+  "Age Range": "12+",
+  "Concentration": "0.4 mg/tab",
+  "Max Dose": ".4 mg",
+  "Max # of Doses": "3",
+  "Call-in": "Yes (for pediatric, hypotension, or unclear cases)"
+  "Srip Setup": "N/A"
+}
+
   ]
 }
