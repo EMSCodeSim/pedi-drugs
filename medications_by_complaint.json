@@ -92,6 +92,19 @@
       "Max # of Doses": "1",
       "Call-In": "Contact required for asthma, not for torsades",
       "Drip Setup": "Dilute in 50-100 mL D5W or NS over 10–20 min"
+    },
+    {
+      "Medication": "Sodium Bicarbonate",
+      "Indication": "Cardiac arrest (certain cases), TCA overdose, known hyperkalemia",
+      "Contraindication": "None in cardiac arrest, use caution in CHF/renal failure",
+      "Route": "IV/IO",
+      "Dose": "1 mEq/kg IV/IO",
+      "Age Range": "All",
+      "Concentration": "1 mEq/mL (8.4% or 4.2% peds)",
+      "Max Dose": "100 mEq",
+      "Max # of Doses": "1",
+      "Call-In": "No",
+      "Drip Setup": "N/A"
     }
   ],
   "Tachycardia": [
@@ -334,6 +347,19 @@
       "Max # of Doses": "1",
       "Call-In": "No",
       "Drip Setup": "N/A"
+    },
+    {
+      "Medication": "Racemic Epinephrine",
+      "Indication": "Stridor at rest, croup, airway edema",
+      "Contraindication": "None in emergency",
+      "Route": "NEB",
+      "Dose": "0.5 mL of 2.25% solution in 3 mL NS",
+      "Age Range": "0-11",
+      "Concentration": "2.25% (22.5 mg/mL)",
+      "Max Dose": "1 dose",
+      "Max # of Doses": "1",
+      "Call-In": "No",
+      "Drip Setup": "N/A"
     }
   ],
   "Nausea/Vomiting": [
@@ -348,6 +374,19 @@
       "Max Dose": "4 mg",
       "Max # of Doses": "1",
       "Call-In": "No",
+      "Drip Setup": "N/A"
+    },
+    {
+      "Medication": "Droperidol",
+      "Indication": "Nausea/vomiting, acute agitation",
+      "Contraindication": "Hypersensitivity, prolonged QT interval, Parkinson’s, severe hypotension",
+      "Route": "IV/IM",
+      "Dose": "0.625–2.5 mg IV/IM",
+      "Age Range": "12-120",
+      "Concentration": "2.5 mg/mL",
+      "Max Dose": "2.5 mg",
+      "Max # of Doses": "1",
+      "Call-In": "Yes if >2.5 mg or pedi",
       "Drip Setup": "N/A"
     }
   ],
@@ -402,6 +441,19 @@
       "Max Dose": "2 mg",
       "Max # of Doses": "1",
       "Call-In": "Contact base for additional doses",
+      "Drip Setup": "N/A"
+    },
+    {
+      "Medication": "Sodium Bicarbonate",
+      "Indication": "Cardiac arrest (certain cases), TCA overdose, known hyperkalemia",
+      "Contraindication": "None in cardiac arrest, use caution in CHF/renal failure",
+      "Route": "IV/IO",
+      "Dose": "1 mEq/kg IV/IO",
+      "Age Range": "All",
+      "Concentration": "1 mEq/mL (8.4% or 4.2% peds)",
+      "Max Dose": "100 mEq",
+      "Max # of Doses": "1",
+      "Call-In": "No",
       "Drip Setup": "N/A"
     }
   ],
@@ -459,6 +511,19 @@
       "Max # of Doses": "1",
       "Call-In": "IV drip infusion",
       "Drip Setup": ""
+    },
+    {
+      "Medication": "Oral Glucose",
+      "Indication": "Conscious patient with hypoglycemia able to swallow",
+      "Contraindication": "Altered mental status, unable to swallow, unprotected airway",
+      "Route": "PO",
+      "Dose": "15–30 g PO",
+      "Age Range": "All",
+      "Concentration": "15 g/tube",
+      "Max Dose": "30 g",
+      "Max # of Doses": "2",
+      "Call-In": "No",
+      "Drip Setup": "N/A"
     }
   ],
   "Chest Pain": [
@@ -486,6 +551,36 @@
       "Max Dose": ".4 mg",
       "Max # of Doses": "3",
       "Call-In": "Yes (for pediatric, hypotension, or unclear cases)",
+      "Drip Setup": "N/A"
+    }
+  ],
+  "Epistaxis": [
+    {
+      "Medication": "Phenylephrine (Neo-synephrine)",
+      "Indication": "Topical vasoconstrictor for epistaxis or prior to nasal procedures",
+      "Contraindication": "Hypersensitivity, hypertension, bradycardia, ventricular tachycardia",
+      "Route": "IN (nasal spray)",
+      "Dose": "2 sprays per affected nostril",
+      "Age Range": "All",
+      "Concentration": "0.5% solution",
+      "Max Dose": "2 sprays per nostril",
+      "Max # of Doses": "1",
+      "Call-In": "No",
+      "Drip Setup": "N/A"
+    }
+  ],
+  "Eye Injury": [
+    {
+      "Medication": "Tetracaine",
+      "Indication": "Ocular pain for eye irrigation/foreign body removal",
+      "Contraindication": "Penetrating eye injury, allergy",
+      "Route": "Ophthalmic drops",
+      "Dose": "1–2 drops per affected eye",
+      "Age Range": "All",
+      "Concentration": "0.5% solution",
+      "Max Dose": "2 drops per eye",
+      "Max # of Doses": "1",
+      "Call-In": "No",
       "Drip Setup": "N/A"
     }
   ]
