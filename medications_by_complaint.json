@@ -432,7 +432,7 @@
       "Medication": "Ondansetron",
       "Indication": "Nausea and/or vomiting",
       "Contraindication": "Hypersensitivity to ondansetron, congenital long QT syndrome",
-      "Route": "IV/IM/PO/ODT",
+      "Route": "IV/IM/ODT",
       "Dose": "0.15 mg/kg IV/IM (max 4 mg); 4 mg ODT PO",
       "Age Range": "0-18",
       "Concentration": "2 mg/mL",
@@ -443,7 +443,7 @@
     },
     {
       "Medication": "Droperidol",
-      "Indication": "Nausea/vomiting, acute agitation",
+      "Indication": "Acute agitation",
       "Contraindication": "Hypersensitivity, prolonged QT interval, Parkinson’s, severe hypotension",
       "Route": "IV/IM",
       "Dose": "0.625–2.5 mg IV/IM",
