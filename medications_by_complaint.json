@@ -57,7 +57,7 @@
     {
       "Medication": "Amiodarone",
       "Indication": "Shock-refractory VF/VT",
-      "Contraindication": "2nd/3rd degree AV block, iodine allergy",
+      "Contraindication": "2nd/3rd degree AV block, Cardiogenic shock",
       "Route": "IV/IO",
       "Dose": "300 mg initial, 150 mg repeat",
       "Age Range": "12-120",
@@ -70,7 +70,7 @@
     {
       "Medication": "Amiodarone",
       "Indication": "Shock-refractory VF/VT",
-      "Contraindication": "2nd/3rd degree AV block, iodine allergy",
+      "Contraindication": "2nd/3rd degree AV block, Cardiogenic shock",
       "Route": "IV/IO",
       "Dose": "5 mg/kg IV bolus",
       "Age Range": "0-11",
@@ -82,9 +82,9 @@
     },
     {
       "Medication": "Magnesium Sulfate",
-      "Indication": "Torsades de Pointes, Hemodynsmicallu unstable/peri-arrest",
+      "Indication": "Torsades de Pointes, unstable/peri-arrest",
       "Contraindication": "Renal failure, heart block, hypermagnesemia",
-      "Route": "IV/IO infusion",
+      "Route": "IV/IO",
       "Dose": "2 gm IV/IO push over 2 minutes",
       "Age Range": "12-120",
       "Concentration": "500 mg/mL",
@@ -95,9 +95,9 @@
     },
       {
       "Medication": "Magnesium Sulfate",
-      "Indication": "Torsades de Pointes, Hemodynsmicallu unstable/peri-arrest",
+      "Indication": "Torsades de Pointes, unstable/peri-arrest",
       "Contraindication": "Renal failure, heart block, hypermagnesemia",
-      "Route": "IV/IO infusion",
+      "Route": "IV/IO",
       "Dose": "25 mg/kg IV/IO push over 2 minutes",
       "Age Range": "0-11",
       "Concentration": "500 mg/mL",
@@ -108,8 +108,8 @@
     },
     {
       "Medication": "Sodium Bicarbonate",
-      "Indication": "Cardiac arrest (certain cases), TCA overdose, known hyperkalemia",
-      "Contraindication": "None in cardiac arrest, use caution in CHF/renal failure",
+      "Indication": "Cardiac arrest suspected hyperkalemic",
+      "Contraindication": "Metabolic alkalosis, Hypocalcemia, Hypokalemia",
       "Route": "IV/IO",
       "Dose": "1 mEq/kg IV/IO",
       "Age Range": "All",
@@ -124,7 +124,7 @@
      {
       "Medication": "Amiodarone",
       "Indication": "Stable wide complex tachycardia",
-      "Contraindication": "2nd/3rd degree AV block, iodine allergy",
+      "Contraindication": "2nd/3rd degree AV block, Cardiogenic shock",
       "Route": "IV/IO",
       "Dose": "150 mg IV over 10 minutes",
       "Age Range": "12-120",
@@ -160,19 +160,6 @@
   "Max Number of Doses": "2",
   "Call-in Requirement": "Yes"
 },
-     {
-      "Medication": "Amiodarone",
-      "Indication": "Stable wide complex tachycardia",
-      "Contraindication": "2nd/3rd degree AV block, iodine allergy",
-      "Route": "IV/IO",
-      "Dose": "150 mg IV over 10 minutes",
-      "Age Range": "12-120",
-      "Concentration": "150 mg/3 mL",
-      "Max Dose": "450 mg",
-      "Max # of Doses": "2",
-      "Call-In": "Yes",
-      "Drip Setup": "150 mg in 100 mL over 10 min"
-    },
     {
       "Medication": "Magnesium Sulfate",
       "Indication": "Intermitten Torsades de Pointes, Hemodynamically stable ",
@@ -321,7 +308,7 @@
       "Drip Setup": "N/A"
     },
     {
-      "Medication": "Solumedrol Peds",
+      "Medication": "Solumedrol",
       "Indication": "Severe allergic reaction, asthma/COPD exacerbation",
       "Contraindication": "Systemic fungal infection",
       "Route": "IV/IO",
@@ -388,7 +375,7 @@
       "Drip Setup": "N/A"
     },
     {
-      "Medication": "Solumedrol Peds",
+      "Medication": "Solumedrol",
       "Indication": "Severe allergic reaction, asthma/COPD exacerbation",
       "Contraindication": "Systemic fungal infection",
       "Route": "IV/IM",
@@ -402,7 +389,7 @@
     },
     {
       "Medication": "Racemic Epinephrine",
-      "Indication": "Stridor at rest, croup, airway edema",
+      "Indication": "Stridor at rest",
       "Contraindication": "None in emergency",
       "Route": "NEB",
       "Dose": "0.5 mL of 2.25% solution in 3 mL NS",
@@ -523,14 +510,14 @@
     },
     {
       "Medication": "Sodium Bicarbonate",
-      "Indication": "Cardiac arrest (certain cases), TCA overdose, known hyperkalemia",
+      "Indication": "TCA overdose, known hyperkalemia",
       "Contraindication": "None in cardiac arrest, use caution in CHF/renal failure",
       "Route": "IV/IO",
       "Dose": "1 mEq/kg IV/IO",
       "Age Range": "All",
       "Concentration": "1 mEq/mL (8.4% or 4.2% peds)",
       "Max Dose": "100 mEq",
-      "Max # of Doses": "1",
+      "Max # of Doses": "2",
       "Call-In": "No",
       "Drip Setup": "N/A"
     }
@@ -592,10 +579,10 @@
     },
     {
       "Medication": "Oral Glucose",
-      "Indication": "Conscious patient with hypoglycemia able to swallow",
-      "Contraindication": "Altered mental status, unable to swallow, unprotected airway",
+      "Indication": "Known or suspected hypoglycemia and able to swallow",
+      "Contraindication": "Unable to swallow, unprotected airway",
       "Route": "PO",
-      "Dose": "15–30 g PO",
+      "Dose": "One full tube 15 g",
       "Age Range": "All",
       "Concentration": "15 g/tube",
       "Max Dose": "30 g",
@@ -620,11 +607,11 @@
     },
     {
       "Medication": "Nitroglycerin",
-      "Indication": "Chest pain suspected to be of cardiac origin, pulmonary edema with hypertension",
-      "Contraindication": "Hypotension, use of phosphodiesterase inhibitors within 48 hours, right-sided MI",
-      "Route": "SL (sublingual)",
+      "Indication": "Chest pain suspected to be of cardiac origin, pulmonary edema due to CHF",
+      "Contraindication": "Hypotension SBP<100, Recenr use of ED, right-sided MI",
+      "Route": "SL",
       "Dose": "0.4 mg",
-      "Age Range": "12-120",
+      "Age Range": "8-120",
       "Concentration": "0.4 mg/tab",
       "Max Dose": ".4 mg",
       "Max # of Doses": "3",
@@ -634,9 +621,9 @@
   ],
   "Epistaxis": [
     {
-      "Medication": "Phenylephrine (Neo-synephrine)",
-      "Indication": "Topical vasoconstrictor for epistaxis or prior to nasal procedures",
-      "Contraindication": "Hypersensitivity, hypertension, bradycardia, ventricular tachycardia",
+      "Medication": "Neo-synephrine",
+      "Indication": "Prior to nasal intubation, Nosebleed",
+      "Contraindication": "Hypersensitivity",
       "Route": "IN (nasal spray)",
       "Dose": "2 sprays per affected nostril",
       "Age Range": "All",
@@ -651,9 +638,9 @@
     {
       "Medication": "Tetracaine",
       "Indication": "Ocular pain for eye irrigation/foreign body removal",
-      "Contraindication": "Penetrating eye injury, allergy",
+      "Contraindication": "Globe laceration or rupture, allergy",
       "Route": "Ophthalmic drops",
-      "Dose": "1–2 drops per affected eye",
+      "Dose": "2 drops per affected eye",
       "Age Range": "All",
       "Concentration": "0.5% solution",
       "Max Dose": "2 drops per eye",
