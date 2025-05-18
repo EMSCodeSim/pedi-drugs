@@ -159,9 +159,8 @@
   "Max Dose": "12 mg",
   "Max Number of Doses": "2",
   "Call-in Requirement": "Yes"
-}
-
-         {
+},
+     {
       "Medication": "Amiodarone",
       "Indication": "Stable wide complex tachycardia",
       "Contraindication": "2nd/3rd degree AV block, iodine allergy",
