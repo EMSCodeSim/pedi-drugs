@@ -79,6 +79,47 @@
       "Max # of Doses": "1",
       "Call-In": "Contact Base for additional doses",
       "Drip Setup": "150 mg in 100 mL over 10 min"
+    },
+    {
+      "Medication": "Magnesium Sulfate",
+      "Indication": "Torsades de Pointes, refractory VF/VT",
+      "Contraindication": "Renal failure, heart block, hypermagnesemia",
+      "Route": "IV/IO infusion",
+      "Dose": "25-50 mg/kg IV/IO over 10–20 min (max 2 g)",
+      "Age Range": "0-18",
+      "Concentration": "500 mg/mL",
+      "Max Dose": "2 g",
+      "Max # of Doses": "1",
+      "Call-In": "Contact required for asthma, not for torsades",
+      "Drip Setup": "Dilute in 50-100 mL D5W or NS over 10–20 min"
+    }
+  ],
+  "Tachycardia": [
+    {
+      "Medication": "Adenosine",
+      "Indication": "Stable narrow-complex SVT unresponsive to vagal maneuvers",
+      "Contraindication": "Second or third-degree AV block, sick sinus syndrome, known hypersensitivity, irregular or polymorphic wide-complex tachycardia",
+      "Route": "IV/IO rapid push",
+      "Dose": "0.1 mg/kg (max 6 mg) 1st dose, 0.2 mg/kg (max 12 mg) 2nd dose",
+      "Age Range": "0-18",
+      "Concentration": "3 mg/mL",
+      "Max Dose": "6 mg first dose, 12 mg second dose",
+      "Max # of Doses": "2",
+      "Call-In": "No",
+      "Drip Setup": "Rapid IV/IO push followed by flush"
+    },
+    {
+      "Medication": "Magnesium Sulfate",
+      "Indication": "Torsades de Pointes, refractory SVT (rare peds), or severe asthma",
+      "Contraindication": "Renal failure, heart block, hypermagnesemia",
+      "Route": "IV/IO infusion",
+      "Dose": "25-50 mg/kg IV/IO over 10–20 min (max 2 g)",
+      "Age Range": "0-18",
+      "Concentration": "500 mg/mL",
+      "Max Dose": "2 g",
+      "Max # of Doses": "1",
+      "Call-In": "Contact required for asthma, not for torsades",
+      "Drip Setup": "Dilute in 50-100 mL D5W or NS over 10–20 min"
     }
   ],
   "Seizure": [
@@ -188,7 +229,7 @@
       "Call-In": "No",
       "Drip Setup": "N/A"
     }, 
-      {
+    {
       "Medication": "Benadryl",
       "Indication": "Allergic reaction, anaphylaxis",
       "Contraindication": "Acute asthma, glaucoma",
@@ -255,7 +296,7 @@
       "Call-In": "No",
       "Drip Setup": "N/A"
     },
-      {
+    {
       "Medication": "Atrovent",
       "Indication": "Bronchospasm (asthma, COPD)",
       "Contraindication": "Allergy to atropine or ipratropium",
@@ -295,6 +336,21 @@
       "Drip Setup": "N/A"
     }
   ],
+  "Nausea/Vomiting": [
+    {
+      "Medication": "Ondansetron",
+      "Indication": "Nausea and/or vomiting",
+      "Contraindication": "Hypersensitivity to ondansetron, congenital long QT syndrome",
+      "Route": "IV/IM/PO/ODT",
+      "Dose": "0.15 mg/kg IV/IM (max 4 mg); 4 mg ODT PO",
+      "Age Range": "0-18",
+      "Concentration": "2 mg/mL",
+      "Max Dose": "4 mg",
+      "Max # of Doses": "1",
+      "Call-In": "No",
+      "Drip Setup": "N/A"
+    }
+  ],
   "Overdose": [
     {
       "Medication": "Naloxone (Narcan)",
@@ -309,7 +365,7 @@
       "Call-In": "No",
       "Drip Setup": "N/A"
     },
-        {
+    {
       "Medication": "Naloxone (Narcan)",
       "Indication": "Suspected opioid overdose with respiratory depression",
       "Contraindication": "Hypersensitivity",
@@ -322,7 +378,7 @@
       "Call-In": "No",
       "Drip Setup": "N/A"
     },
-  {
+    {
       "Medication": "Atropine",
       "Indication": "Organophosphate poisoning",
       "Contraindication": "None in emergency use",
@@ -391,7 +447,7 @@
       "Call-In": "IV drip infusion",
       "Drip Setup": ""
     },
-   {
+    {
       "Medication": "Dextrose 10%",
       "Indication": "Blood glucose < 60 mg/dL",
       "Contraindication": "None in emergency",
@@ -420,17 +476,17 @@
       "Drip Setup": "N/A"
     },
     {
-  "Medication": "Nitroglycerin",
-  "Indication": "Chest pain suspected to be of cardiac origin, pulmonary edema with hypertension",
-  "Contraindication": "Hypotension, use of phosphodiesterase inhibitors within 48 hours, right-sided MI",
-  "Route": "SL (sublingual)",
-  "Dose": "0.4 mg",
-  "Age Range": "12-120",
-  "Concentration": "0.4 mg/tab",
-  "Max Dose": ".4 mg",
-  "Max # of Doses": "3",
-  "Call-in": "Yes (for pediatric, hypotension, or unclear cases)"
-  "Drip Setup": "N/A"
-}
-  ],
+      "Medication": "Nitroglycerin",
+      "Indication": "Chest pain suspected to be of cardiac origin, pulmonary edema with hypertension",
+      "Contraindication": "Hypotension, use of phosphodiesterase inhibitors within 48 hours, right-sided MI",
+      "Route": "SL (sublingual)",
+      "Dose": "0.4 mg",
+      "Age Range": "12-120",
+      "Concentration": "0.4 mg/tab",
+      "Max Dose": ".4 mg",
+      "Max # of Doses": "3",
+      "Call-In": "Yes (for pediatric, hypotension, or unclear cases)",
+      "Drip Setup": "N/A"
+    }
+  ]
 }
