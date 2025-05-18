@@ -1,6 +1,5 @@
 let allMeds = {};
 let editableConcentrations = {};
-
 const broselowMap = {
   "Gray": 3, "Pink": 5, "Red": 8, "Purple": 10, "Yellow": 12,
   "White": 14, "Blue": 18, "Orange": 22, "Green": 26, "Lt Green": 30
@@ -10,6 +9,7 @@ document.getElementById("ageValue").addEventListener("input", updateEstimate);
 document.getElementById("ageUnit").addEventListener("change", updateEstimate);
 document.getElementById("findBtn").addEventListener("click", loadMedications);
 document.getElementById("allBtn").addEventListener("click", loadAllMedications);
+document.getElementById("showVitalsBtn").addEventListener("click", showVitals);
 
 function updateEstimate() {
   const age = parseFloat(document.getElementById("ageValue").value);
@@ -48,6 +48,24 @@ function getVitalsByAge(ageY) {
   return null;
 }
 
+function showVitals() {
+  const ageY = getAgeInYears();
+  const vitals = getVitalsByAge(ageY);
+  const box = document.getElementById("vitalsBox");
+  if (vitals) {
+    box.innerHTML = `
+      <strong>Normal Vitals for Age ${ageY.toFixed(1)}:</strong><br>
+      Pulse: ${vitals.hr} bpm<br>
+      Respiratory Rate: ${vitals.rr}<br>
+      Systolic BP: ${vitals.sbp} mmHg
+    `;
+    box.style.display = "block";
+  } else {
+    box.innerHTML = `<span style="color:red">No pediatric vitals for this age.</span>`;
+    box.style.display = "block";
+  }
+}
+
 function getAgeInYears() {
   const val = parseFloat(document.getElementById("ageValue").value);
   const unit = document.getElementById("ageUnit").value;
@@ -64,7 +82,7 @@ function isMedInAgeRange(med, ageY) {
   const range = (med["Age Range"] || "").toLowerCase();
 
   if (range.includes("all")) return true;
-  if (range.includes("adult")) return ageY >= 12; // NOTE: Changed to 12 for EMS/adult split
+  if (range.includes("adult")) return ageY >= 12;
   if (range.includes("pediatric")) return ageY < 12;
 
   if (range.includes("-")) {
@@ -110,35 +128,30 @@ function displayMedications(meds, ageY, weightInKg) {
     const body = document.createElement("div");
     body.className = "dropdown-body";
 
-    // Show all fields in the order present in JSON
+    // Show all fields
     let allFields = "";
     for (let key in med) {
       allFields += `<strong>${key.replace(/_/g, " ")}:</strong> ${med[key]}<br>`;
     }
 
     // Weight-based calculation
-    const concentrationKey = `${med.Medication}_${index}`;
-    let concentration = editableConcentrations[concentrationKey] || med.Concentration;
+    let doseMatch = med.Dose && med.Dose.match(/([\d\.\-]+)\s*(mg|mcg)\/kg/i);
+    let concMatch = med.Concentration && med.Concentration.match(/([\d\.]+)\s*(mg|mcg)\/?m?L?/i);
     let calcHtml = "";
 
-    // Check if the dose is weight-based (mg/kg or mcg/kg)
-    let doseMatch = med.Dose && med.Dose.match(/([\d\.\-]+)\s*(mg|mcg)\/kg/i);
-    let concMatch = concentration && concentration.match(/([\d\.]+)\s*(mg|mcg)\/?m?L?/i);
-
     if (doseMatch && concMatch && weightInKg > 0) {
-      let dosePerKg = doseMatch[1].includes('-') ? 
-          (doseMatch[1].split('-').map(Number).reduce((a,b)=>a+b,0)/2) : 
+      let dosePerKg = doseMatch[1].includes('-') ?
+          (doseMatch[1].split('-').map(Number).reduce((a,b)=>a+b,0)/2) :
           parseFloat(doseMatch[1]);
       let doseUnit = doseMatch[2].toLowerCase();
       let concVal = parseFloat(concMatch[1]);
       let concUnit = concMatch[2].toLowerCase();
 
-      // Convert everything to the same unit (mg <-> mcg)
       let totalDose = dosePerKg * weightInKg;
       let totalDoseDisplay = totalDose.toFixed(2) + " " + doseUnit;
-
       let doseForMl = totalDose;
-      // Convert dose unit to match conc unit for mL calculation
+
+      // Convert dose unit to match conc unit
       if (doseUnit !== concUnit) {
         if (doseUnit === "mg" && concUnit === "mcg") doseForMl = totalDose * 1000;
         if (doseUnit === "mcg" && concUnit === "mg") doseForMl = totalDose / 1000;
@@ -150,22 +163,12 @@ function displayMedications(meds, ageY, weightInKg) {
       calcHtml = `
         <br><strong>Calculation:</strong><br>
         Dose = <span class="highlight">${dosePerKg} ${doseUnit}/kg × ${weightInKg.toFixed(1)} kg = <span class="highlight">${totalDoseDisplay}</span></span><br>
-        Volume = <span class="highlight">${doseForMl.toFixed(2)} ${concUnit} ÷ <input type="number" step="any" value="${concVal}" id="conc_${concentrationKey}" style="width:65px;"> ${concUnit}/mL = <span id="mlAns_${concentrationKey}" class="highlight">${volumeDisplay} mL</span></span><br>
-        <button onclick="editConcentration('${concentrationKey}', '${concentration}')">Edit Concentration</button>
+        Volume = <span class="highlight">${doseForMl.toFixed(2)} ${concUnit} ÷ ${concVal} ${concUnit}/mL = <span class="highlight">${volumeDisplay} mL</span></span><br>
         <div class="warning">⚠️ Confirm all calculations before administering medications.</div>
       `;
     }
 
-    // Pediatric normal vitals
-    const vitals = getVitalsByAge(ageY);
-    const vitalsHtml = vitals ? `
-      <br><strong>Normal Vitals:</strong><br>
-      Pulse: ${vitals.hr} bpm<br>
-      Respiratory Rate: ${vitals.rr}<br>
-      Systolic BP: ${vitals.sbp} mmHg
-    ` : "";
-
-    body.innerHTML = allFields + calcHtml + vitalsHtml;
+    body.innerHTML = allFields + calcHtml;
 
     header.onclick = () => {
       body.style.display = body.style.display === "block" ? "none" : "block";
@@ -173,35 +176,16 @@ function displayMedications(meds, ageY, weightInKg) {
     wrapper.appendChild(header);
     wrapper.appendChild(body);
     medList.appendChild(wrapper);
-
-    // Add live concentration update handler after element is rendered
-    setTimeout(() => {
-      const input = document.getElementById(`conc_${concentrationKey}`);
-      if (input) {
-        input.addEventListener("change", function() {
-          editableConcentrations[concentrationKey] = input.value + " " + concMatch[2] + "/mL";
-          loadMedications();
-        });
-      }
-    }, 50);
   });
 }
 
-function editConcentration(key, originalConc) {
-  const newConc = prompt("Enter new concentration (e.g., 50 mcg/mL, 1 mg/mL):", originalConc);
-  if (newConc) {
-    editableConcentrations[key] = newConc;
-    loadMedications();
-  }
-}
-
-// Make sure path is correct for your setup!
+// Adjust the fetch path if needed!
 fetch("./medications_by_complaint.json")
   .then(res => res.json())
   .then(data => {
     allMeds = data;
     const select = document.getElementById("complaintSelect");
-    select.innerHTML = ""; // clear previous
+    select.innerHTML = "";
     Object.keys(data).forEach(k => {
       const opt = document.createElement("option");
       opt.value = k;
