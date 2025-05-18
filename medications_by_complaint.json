@@ -82,16 +82,29 @@
     },
     {
       "Medication": "Magnesium Sulfate",
-      "Indication": "Torsades de Pointes, refractory VF/VT",
+      "Indication": "Torsades de Pointes, Hemodynsmicallu unstable/peri-arrest",
       "Contraindication": "Renal failure, heart block, hypermagnesemia",
       "Route": "IV/IO infusion",
-      "Dose": "25-50 mg/kg IV/IO over 10–20 min (max 2 g)",
-      "Age Range": "0-18",
+      "Dose": "2 gm IV/IO push over 2 minutes",
+      "Age Range": "12-120",
       "Concentration": "500 mg/mL",
       "Max Dose": "2 g",
       "Max # of Doses": "1",
-      "Call-In": "Contact required for asthma, not for torsades",
-      "Drip Setup": "Dilute in 50-100 mL D5W or NS over 10–20 min"
+      "Call-In": "not required for Torsades de Points",
+      "Drip Setup": "N/A"
+    },
+      {
+      "Medication": "Magnesium Sulfate",
+      "Indication": "Torsades de Pointes, Hemodynsmicallu unstable/peri-arrest",
+      "Contraindication": "Renal failure, heart block, hypermagnesemia",
+      "Route": "IV/IO infusion",
+      "Dose": "25 mg/kg IV/IO push over 2 minutes",
+      "Age Range": "0-11",
+      "Concentration": "500 mg/mL",
+      "Max Dose": "2 g",
+      "Max # of Doses": "1",
+      "Call-In": "not required for Torsades de Points",
+      "Drip Setup": "N/A"
     },
     {
       "Medication": "Sodium Bicarbonate",
@@ -123,16 +136,16 @@
     },
     {
       "Medication": "Magnesium Sulfate",
-      "Indication": "Torsades de Pointes, refractory SVT (rare peds), or severe asthma",
+      "Indication": "Intermitten Torsades de Pointes, Hemodynamically stable ",
       "Contraindication": "Renal failure, heart block, hypermagnesemia",
       "Route": "IV/IO infusion",
-      "Dose": "25-50 mg/kg IV/IO over 10–20 min (max 2 g)",
+      "Dose": "2 gm in 50 ml of NS IV/IO drip over 15 min",
       "Age Range": "0-18",
       "Concentration": "500 mg/mL",
       "Max Dose": "2 g",
       "Max # of Doses": "1",
       "Call-In": "Contact required for asthma, not for torsades",
-      "Drip Setup": "Dilute in 50-100 mL D5W or NS over 10–20 min"
+      "Drip Setup": "Dilute in 50 mLNS over 15 min"
     }
   ],
   "Seizure": [
@@ -360,6 +373,32 @@
       "Max # of Doses": "1",
       "Call-In": "No",
       "Drip Setup": "N/A"
+    },
+     {
+      "Medication": "Magnesium Sulfate",
+      "Indication": "Severe Bronchospasm",
+      "Contraindication": "Renal failure, heart block, hypermagnesemia",
+      "Route": "IV/IO infusion",
+      "Dose": "2 gm in 50 ml of NS IV/IO drip over 15 min",
+      "Age Range": "12-120",
+      "Concentration": "500 mg/mL",
+      "Max Dose": "2 g",
+      "Max # of Doses": "1",
+      "Call-In": "Contact required for asthma, not for torsades",
+      "Drip Setup": "Dilute in 50 mLNS over 15 min"
+    },
+     {
+      "Medication": "Magnesium Sulfate",
+      "Indication": "Intermitten Torsades de Pointes, Hemodynamically stable ",
+      "Contraindication": "Renal failure, heart block, hypermagnesemia",
+      "Route": "IV/IO infusion",
+      "Dose": "50 mg/kg IV/IO drip over 30 minutes",
+      "Age Range": "0-11",
+      "Concentration": "500 mg/mL",
+      "Max Dose": "2 g",
+      "Max # of Doses": "1",
+      "Call-In": "Contact required for asthma, not for torsades",
+      "Drip Setup": "Dilute in 50 mLNS over 30 min"
     }
   ],
   "Nausea/Vomiting": [
