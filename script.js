@@ -31,7 +31,6 @@ function updateEstimate() {
       if (Math.abs(estWeight - broselowMap[color]) < 2) option.selected = true;
       broselowBox.appendChild(option);
     }
-
     broselowBox.style.display = "inline-block";
   } else {
     broselowBox.style.display = "none";
@@ -92,7 +91,6 @@ function parseDosePerKg(doseStr) {
   const match = doseStr.match(/([\d\.\-]+)\s*(mcg|mg)\/kg/i);
   if (match) {
     let [val, unit] = [match[1], match[2]];
-    // If range (e.g. 1-2), take average
     if (val.includes('-')) {
       let [low, high] = val.split('-').map(Number);
       val = (low + high) / 2;
@@ -112,7 +110,6 @@ function parseConcentration(concStr) {
 }
 
 function convertDoseToConcUnits(dose, doseUnit, concUnit) {
-  // Only support mcg <-> mg <-> mcg
   if (doseUnit === concUnit) return dose;
   if (doseUnit === "mg" && concUnit === "mcg") return dose * 1000;
   if (doseUnit === "mcg" && concUnit === "mg") return dose / 1000;
@@ -132,13 +129,11 @@ function displayMedications(meds, ageY, weightInKg) {
     const body = document.createElement("div");
     body.className = "dropdown-body";
 
-    // All fields display
     let allFields = '';
     Object.entries(med).forEach(([key, value]) => {
       allFields += `<div><strong>${key.replace(/_/g, " ")}:</strong> ${value}</div>`;
     });
 
-    // Weight-based calculation (any med with /kg in Dose)
     let calcHtml = '';
     if (med.Dose && med.Concentration && /\/kg/i.test(med.Dose) && weightInKg > 0) {
       let doseInfo = parseDosePerKg(med.Dose);
@@ -147,12 +142,9 @@ function displayMedications(meds, ageY, weightInKg) {
         let { val: dosePerKg, unit: doseUnit } = doseInfo;
         let { val: concVal, unit: concUnit } = concInfo;
         let doseTotal = dosePerKg * weightInKg;
-        // Convert dose to same unit as concentration if needed
         let doseInConcUnits = convertDoseToConcUnits(doseTotal, doseUnit, concUnit);
-        // Setup editable concentration
         const concId = `concInput_${index}`;
         const mlAnsId = `mlAns_${index}`;
-
         calcHtml += `
           <div style="margin-top:10px;">
             <strong>Calculation:</strong>
@@ -189,8 +181,9 @@ function displayMedications(meds, ageY, weightInKg) {
   });
 }
 
-// Load JSON file
+// USE THE CORRECT FETCH PATH HERE based on your file placement:
 fetch("./medications_by_complaint.json")
+// fetch("./data/medications_by_complaint.json")
   .then(res => res.json())
   .then(data => {
     allMeds = data;
