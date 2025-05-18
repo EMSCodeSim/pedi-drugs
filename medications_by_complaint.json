@@ -121,18 +121,58 @@
     }
   ],
   "Tachycardia": [
-    {
-      "Medication": "Adenosine",
-      "Indication": "Stable narrow-complex SVT unresponsive to vagal maneuvers",
-      "Contraindication": "Second or third-degree AV block, sick sinus syndrome, known hypersensitivity, irregular or polymorphic wide-complex tachycardia",
-      "Route": "IV/IO rapid push",
-      "Dose": "0.1 mg/kg (max 6 mg) 1st dose, 0.2 mg/kg (max 12 mg) 2nd dose",
-      "Age Range": "0-18",
-      "Concentration": "3 mg/mL",
-      "Max Dose": "6 mg first dose, 12 mg second dose",
+     {
+      "Medication": "Amiodarone",
+      "Indication": "Stable wide complex tachycardia",
+      "Contraindication": "2nd/3rd degree AV block, iodine allergy",
+      "Route": "IV/IO",
+      "Dose": "150 mg IV over 10 minutes",
+      "Age Range": "12-120",
+      "Concentration": "150 mg/3 mL",
+      "Max Dose": "450 mg",
       "Max # of Doses": "2",
-      "Call-In": "No",
-      "Drip Setup": "Rapid IV/IO push followed by flush"
+      "Call-In": "Yes",
+      "Drip Setup": "150 mg in 100 mL over 10 min"
+    },
+    {
+  "Medication": "Adenosine",
+  "Chief Complaint": "Tachycardia",
+  "Indication": "Stable regular SVT after a 12 lead",
+  "Contraindication": "Irregular tachycardia or wide-complex tachycardia",
+  "Route": "IV/IO rapid push",
+  "Dose": "12 mg rapid IV/IO push followed by plush",
+  "Age Range": "12-120",
+  "Concentration": "3 mg/mL",
+  "Max Dose": "12 mg",
+  "Max Number of Doses": "2",
+  "Call-in Requirement": "No"
+},
+       {
+  "Medication": "Adenosine",
+  "Chief Complaint": "Tachycardia",
+  "Indication": "Stable regular SVT after a 12 lead, transport preferred over intervention",
+  "Contraindication": "Irregular tachycardia or wide-complex tachycardia",
+  "Route": "IV/IO rapid push",
+  "Dose": ".1 mg/kg first .2mg/kg secod",
+  "Age Range": "0-11",
+  "Concentration": "3 mg/mL",
+  "Max Dose": "12 mg",
+  "Max Number of Doses": "2",
+  "Call-in Requirement": "Yes"
+}
+
+         {
+      "Medication": "Amiodarone",
+      "Indication": "Stable wide complex tachycardia",
+      "Contraindication": "2nd/3rd degree AV block, iodine allergy",
+      "Route": "IV/IO",
+      "Dose": "150 mg IV over 10 minutes",
+      "Age Range": "12-120",
+      "Concentration": "150 mg/3 mL",
+      "Max Dose": "450 mg",
+      "Max # of Doses": "2",
+      "Call-In": "Yes",
+      "Drip Setup": "150 mg in 100 mL over 10 min"
     },
     {
       "Medication": "Magnesium Sulfate",
