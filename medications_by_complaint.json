@@ -166,7 +166,7 @@
       "Contraindication": "Renal failure, heart block, hypermagnesemia",
       "Route": "IV/IO infusion",
       "Dose": "2 gm in 50 ml of NS IV/IO drip over 15 min",
-      "Age Range": "0-18",
+      "Age Range": "12-120",
       "Concentration": "500 mg/mL",
       "Max Dose": "2 g",
       "Max # of Doses": "1",
@@ -229,7 +229,7 @@
     }
   ],
   "Allergic Reaction": [
-    {
+    {Medication
       "Medication": "Epinephrine 1:1,000",
       "Indication": "Severe allergic reaction, anaphylaxis",
       "Contraindication": "None in emergency setting",
@@ -358,6 +358,44 @@
       "Concentration": "0.5 mg/2.5 mL",
       "Max Dose": "0.25 mg",
       "Max # of Doses": "1",
+      "Call-In": "No",
+      "Drip Setup": "N/A"
+    },
+          "Medication": "Epinephrine 1:1,000",
+      "Indication": "Severe allergic reaction, anaphylaxis",
+      "Contraindication": "None in emergency setting",
+      "Route": "IM",
+      "Dose": "0.3 mg IM",
+      "Age Range": "ADULT",
+      "Concentration": "1 mg/mL",
+      "Max Dose": "0.3 mg (12-120)",
+      "Max # of Doses": "Repeat x2 every 5 min",
+      "Call-In": "No",
+      "Drip Setup": "N/A"
+    },
+    {
+      "Medication": "Epinephrine 1:1,000",
+      "Indication": "Severe allergic reaction, anaphylaxis",
+      "Contraindication": "None in emergency setting",
+      "Route": "IM",
+      "Dose": "0.15 mg IM (peds)",
+      "Age Range": ".3-11",
+      "Concentration": "1 mg/mL",
+      "Max Dose": "0.15",
+      "Max # of Doses": "Repeat x2 every 5 min",
+      "Call-In": "No",
+      "Drip Setup": "N/A"
+    },
+    {
+      "Medication": "Epinephrine 1:1,000",
+      "Indication": "Severe allergic reaction, anaphylaxis",
+      "Contraindication": "None in emergency setting",
+      "Route": "IM",
+      "Dose": "0.1 mg IM (peds)",
+      "Age Range": "0-.3",
+      "Concentration": "1 mg/mL",
+      "Max Dose": "0.1",
+      "Max # of Doses": "Repeat x2 every 5 min",
       "Call-In": "No",
       "Drip Setup": "N/A"
     },
