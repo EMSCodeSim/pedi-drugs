@@ -229,7 +229,7 @@
     }
   ],
   "Allergic Reaction": [
-    {Medication
+    {
       "Medication": "Epinephrine 1:1,000",
       "Indication": "Severe allergic reaction, anaphylaxis",
       "Contraindication": "None in emergency setting",
