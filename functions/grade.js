@@ -1,8 +1,7 @@
-
 const { OpenAI } = require("openai");
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
-exports.handler = async (event, context) => {
+exports.handler = async (event) => {
   if (event.httpMethod !== "POST") {
     return { statusCode: 405, body: "Method Not Allowed" };
   }
@@ -12,18 +11,36 @@ exports.handler = async (event, context) => {
     return { statusCode: 400, body: JSON.stringify({ error: "No transcript provided." }) };
   }
 
-  const prompt = `You are an NREMT instructor grading an EMT-B student handoff report.
-The student gave the following verbal handoff:
-"""
-${transcript}
-"""
-Grade it based on this 40-point rubric (2 points per correct item):
-1. Patient age, sex, time of call, LOC, position found, general impression
-2. Chief complaint, duration, OPQRST, SAMPLE, pertinent negatives, context
-3. Assessment: findings, focused exam, vitals, skin, mental status
-4. Interventions: oxygen, meds, CPR, ECG, reassess, med control, consent, documentation
-5. Communication: condition during transport, clear structure, ED follow-up questions, answers provided, professional tone, under 60 sec
-Give the total score out of 40. List what was done well and what was missed. Provide 2 improvement tips.`;
+  const prompt = `You are an NREMT instructor. Grade this handoff report from a student:
+"${transcript}"
+
+Score the student using the following categories. Each category is worth 8 points for a total of 40. 
+For each category, respond with pass or fail, and describe the reason if failed.
+
+Categories:
+1. Demographics: age, sex, LOC, impression
+2. History: chief complaint, OPQRST, SAMPLE
+3. Assessment: vitals, skin, mental status
+4. Interventions: oxygen, meds, CPR, ECG
+5. Communication: time of call, clarity, follow-up, under 60 seconds
+
+Then give:
+- Total score out of 40
+- 2 improvement tips
+
+Respond with JSON in this format:
+{
+  "score": 36,
+  "items": [
+    { "category": "Demographics", "desc": "Age, sex, LOC, impression", "status": "pass" },
+    { "category": "History", "desc": "Chief complaint, OPQRST, SAMPLE", "status": "fail", "reason": "Did not include SAMPLE" },
+    ...
+  ],
+  "tips": [
+    "Include SAMPLE history next time.",
+    "State the time of call clearly at the beginning."
+  ]
+}`;
 
   try {
     const response = await openai.chat.completions.create({
@@ -34,9 +51,13 @@ Give the total score out of 40. List what was done well and what was missed. Pro
       ]
     });
 
+    const jsonStart = response.choices[0].message.content.indexOf('{');
+    const jsonContent = response.choices[0].message.content.slice(jsonStart);
+    const parsed = JSON.parse(jsonContent);
+
     return {
       statusCode: 200,
-      body: JSON.stringify({ feedback: response.choices[0].message.content })
+      body: JSON.stringify(parsed)
     };
   } catch (error) {
     console.error("Grading error:", error);
