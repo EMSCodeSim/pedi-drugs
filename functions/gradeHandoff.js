@@ -1,12 +1,18 @@
-const express = require('express');
-const { OpenAI } = require('openai');
-const router = express.Router();
+
+const { OpenAI } = require("openai");
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
-router.post('/grade', async (req, res) => {
-  const { transcript } = req.body;
-  if (!transcript) return res.status(400).json({ error: 'No transcript provided' });
-  const gradingPrompt = `You are an NREMT instructor grading an EMT-B student handoff report.
+exports.handler = async (event, context) => {
+  if (event.httpMethod !== "POST") {
+    return { statusCode: 405, body: "Method Not Allowed" };
+  }
+
+  const { transcript } = JSON.parse(event.body || '{}');
+  if (!transcript) {
+    return { statusCode: 400, body: JSON.stringify({ error: "No transcript provided." }) };
+  }
+
+  const prompt = `You are an NREMT instructor grading an EMT-B student handoff report.
 The student gave the following verbal handoff:
 """
 ${transcript}
@@ -21,18 +27,22 @@ Give the total score out of 40. List what was done well and what was missed. Pro
 
   try {
     const response = await openai.chat.completions.create({
-      model: 'gpt-4-turbo',
+      model: "gpt-4-turbo",
       messages: [
-        { role: 'system', content: 'You are an EMT instructor grading reports.' },
-        { role: 'user', content: gradingPrompt }
+        { role: "system", content: "You are an EMT instructor grading reports." },
+        { role: "user", content: prompt }
       ]
     });
-    const feedback = response.choices[0].message.content;
-    res.json({ feedback });
-  } catch (error) {
-    console.error('Grading error:', error);
-    res.status(500).json({ error: 'Grading failed' });
-  }
-});
 
-module.exports = router;
+    return {
+      statusCode: 200,
+      body: JSON.stringify({ feedback: response.choices[0].message.content })
+    };
+  } catch (error) {
+    console.error("Grading error:", error);
+    return {
+      statusCode: 500,
+      body: JSON.stringify({ error: "Grading failed." })
+    };
+  }
+};
