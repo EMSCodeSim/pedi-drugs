@@ -1,11 +1,22 @@
 const express = require('express');
 const multer = require('multer');
 const fs = require('fs');
+const path = require('path');
 const { OpenAI } = require('openai');
 const router = express.Router();
 
-const upload = multer({ dest: 'uploads/' });
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+
+// Set multer to store with .wav extension
+const storage = multer.diskStorage({
+  destination: 'uploads/',
+  filename: (req, file, cb) => {
+    const filename = `audio_${Date.now()}.wav`;
+    cb(null, filename);
+  }
+});
+
+const upload = multer({ storage });
 
 router.post('/transcribe', upload.single('audio'), async (req, res) => {
   try {
