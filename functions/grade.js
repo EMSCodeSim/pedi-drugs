@@ -28,7 +28,7 @@ Then give:
 - Total score out of 40
 - 2 improvement tips
 
-Respond with JSON in this format:
+Respond ONLY with JSON in this format:
 {
   "score": 36,
   "items": [
@@ -51,19 +51,26 @@ Respond with JSON in this format:
       ]
     });
 
-    const jsonStart = response.choices[0].message.content.indexOf('{');
-    const jsonContent = response.choices[0].message.content.slice(jsonStart);
-    const parsed = JSON.parse(jsonContent);
+    const content = response.choices[0].message.content;
+
+    // Extract first valid JSON object from GPT response
+    const jsonMatch = content.match(/\{[\s\S]*\}/);
+    if (!jsonMatch) {
+      throw new Error("No valid JSON block found in GPT response.");
+    }
+
+    const parsed = JSON.parse(jsonMatch[0]);
 
     return {
       statusCode: 200,
       body: JSON.stringify(parsed)
     };
+
   } catch (error) {
     console.error("Grading error:", error);
     return {
       statusCode: 500,
-      body: JSON.stringify({ error: "Grading failed." })
+      body: JSON.stringify({ error: "Grading failed. GPT may not have returned clean JSON." })
     };
   }
 };
