@@ -2,41 +2,41 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>EMS Code Sim - Tools Hub</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>EMS Training Tools</title>
   <style>
     body {
-      font-family: sans-serif;
-      background: #e0f7fa;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      padding: 50px;
-    }
-    h1 {
-      margin-bottom: 30px;
+      font-family: Arial, sans-serif;
+      background: #f2f7fa;
+      padding: 20px;
+      text-align: center;
     }
     .tool-button {
-      width: 300px;
-      margin: 15px;
-      padding: 15px;
-      font-size: 1.2em;
-      text-align: center;
-      background-color: teal;
+      padding: 15px 30px;
+      font-size: 18px;
+      margin: 10px;
+      background-color: #0077cc;
       color: white;
-      border-radius: 10px;
-      text-decoration: none;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
     }
     .tool-button:hover {
-      background-color: #00796b;
+      background-color: #005fa3;
     }
   </style>
 </head>
 <body>
-  <h1>🚑 EMS Code Sim Tools</h1>
-  <a class="tool-button" href="pedi-cards/index.html">📋 Pediatric Drug Cards</a>
-  <a class="tool-button" href="call-in-reports/index.html">📞 Call-In Reports</a>
-  <a class="tool-button" href="handoff-reports/index.html">🏥 Hospital Handoff Reports</a>
-  <a class="tool-button" href="#">➕ Add More</a>
+  <h1>🚑 EMS Training Portal</h1>
+  <p>Select a tool below:</p>
+
+  <a href="pedi-cards/index.html">
+    <button class="tool-button">Pediatric Drug Calculator</button>
+  </a>
+
+  <a href="handoff/handoff.html">
+    <button class="tool-button">Hospital Hand Off Reports</button>
+  </a>
+
 </body>
 </html>
