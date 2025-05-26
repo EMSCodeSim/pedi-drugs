@@ -1,9 +1,7 @@
 {
-  "name": "netlify-functions",
-  "version": "1.0.0",
   "type": "module",
   "dependencies": {
     "openai": "^4.0.0",
-    "multiparty": "^4.2.2"
+    "formidable": "^3.5.0"
   }
 }
