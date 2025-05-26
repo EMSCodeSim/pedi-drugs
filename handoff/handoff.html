@@ -21,6 +21,7 @@
     th, td { border: 1px solid #ccc; padding: 10px; text-align: left; }
     .pass { color: green; font-weight: bold; }
     .fail { color: red; font-weight: bold; }
+    #timer { font-size: 16px; font-weight: bold; color: #cc0000; margin-top: 10px; }
   </style>
 </head>
 <body>
@@ -35,6 +36,7 @@
     <button class="mic-btn" onclick="startRecording()">🎤 Start Recording</button>
     <button class="submit-btn" onclick="submitReport()">Submit Report for Grading</button>
 
+    <div id="timer"></div>
     <div id="transcription" style="margin-top: 15px;"></div>
 
     <div id="score-section" style="display: none;">
@@ -53,6 +55,7 @@
   <script>
     let mediaRecorder;
     let audioChunks = [];
+    let timerInterval;
 
     async function startRecording() {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -62,6 +65,8 @@
       mediaRecorder.ondataavailable = event => audioChunks.push(event.data);
 
       mediaRecorder.onstop = async () => {
+        clearInterval(timerInterval);
+        document.getElementById('timer').innerText = '';
         const audioBlob = new Blob(audioChunks, { type: 'audio/wav' });
         const formData = new FormData();
         formData.append('audio', audioBlob, 'recording.wav');
@@ -78,7 +83,22 @@
       };
 
       mediaRecorder.start();
-      setTimeout(() => mediaRecorder.stop(), 20000);
+      startTimer(60); // 60-second countdown
+      setTimeout(() => mediaRecorder.stop(), 60000);
+    }
+
+    function startTimer(seconds) {
+      let remaining = seconds;
+      const timer = document.getElementById('timer');
+      timer.innerText = `⏱️ Time Left: ${remaining}s`;
+
+      timerInterval = setInterval(() => {
+        remaining--;
+        timer.innerText = `⏱️ Time Left: ${remaining}s`;
+        if (remaining <= 0) {
+          clearInterval(timerInterval);
+        }
+      }, 1000);
     }
 
     async function submitReport() {
