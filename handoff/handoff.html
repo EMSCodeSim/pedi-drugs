@@ -13,8 +13,18 @@
       padding: 10px 20px; font-size: 16px; margin-right: 10px;
       border: none; border-radius: 5px; cursor: pointer;
     }
-    .mic-btn { background: #00bfa6; color: white; }
-    .submit-btn { background: #0077cc; color: white; }
+    .mic-btn {
+      background: #00bfa6; color: white;
+    }
+    .mic-btn.recording {
+      background: #cc0000;
+    }
+    .submit-btn {
+      background: #0077cc; color: white;
+    }
+    .gray-btn {
+      background: #888; color: white;
+    }
     #score-section { margin-top: 20px; padding: 15px; background: #f4f4f4;
       border-left: 4px solid #00bfa6; }
     table { width: 100%; border-collapse: collapse; margin-top: 10px; }
@@ -33,11 +43,14 @@
     </textarea>
 
     <h3>Give Your Handoff Report</h3>
-    <button class="mic-btn" onclick="startRecording()">🎤 Start Recording</button>
-    <button class="submit-btn" onclick="submitReport()">Submit Report for Grading</button>
+    <button id="recordBtn" class="mic-btn" onclick="toggleRecording()">🎤 Start Recording</button>
+    <span id="timer"></span>
 
-    <div id="timer"></div>
-    <div id="transcription" style="margin-top: 15px;"></div>
+    <div id="transcription" style="margin-top: 20px; display: none;"></div>
+    <div id="actionButtons" style="display: none; margin-top: 15px;">
+      <button class="gray-btn" onclick="toggleRecording(true)">Re-record</button>
+      <button class="submit-btn" onclick="submitReport()">Submit Report for Grading</button>
+    </div>
 
     <div id="score-section" style="display: none;">
       <h4>Score Report</h4>
@@ -55,18 +68,38 @@
   <script>
     let mediaRecorder;
     let audioChunks = [];
+    let recording = false;
     let timerInterval;
 
-    async function startRecording() {
+    async function toggleRecording(forceStop = false) {
+      const button = document.getElementById('recordBtn');
+
+      if (recording || forceStop) {
+        mediaRecorder?.stop();
+        clearInterval(timerInterval);
+        button.classList.remove('recording');
+        button.innerText = '🎤 Start Recording';
+        recording = false;
+        return;
+      }
+
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       mediaRecorder = new MediaRecorder(stream);
       audioChunks = [];
+      recording = true;
+
+      button.classList.add('recording');
+      button.innerText = '■ Stop Recording';
 
       mediaRecorder.ondataavailable = event => audioChunks.push(event.data);
 
       mediaRecorder.onstop = async () => {
         clearInterval(timerInterval);
         document.getElementById('timer').innerText = '';
+        button.classList.remove('recording');
+        button.innerText = '🎤 Start Recording';
+        recording = false;
+
         const audioBlob = new Blob(audioChunks, { type: 'audio/wav' });
         const formData = new FormData();
         formData.append('audio', audioBlob, 'recording.wav');
@@ -77,14 +110,16 @@
         });
 
         const result = await response.json();
+        document.getElementById('transcription').style.display = 'block';
         document.getElementById('transcription').innerHTML =
           `<p><strong>Transcription:</strong> ${result.transcript}</p>`;
         sessionStorage.setItem('handoffTranscript', result.transcript);
+        document.getElementById('actionButtons').style.display = 'block';
       };
 
       mediaRecorder.start();
-      startTimer(60); // 60-second countdown
-      setTimeout(() => mediaRecorder.stop(), 60000);
+      startTimer(60);
+      setTimeout(() => mediaRecorder.stop(), 60000); // 60 seconds max
     }
 
     function startTimer(seconds) {
@@ -95,9 +130,7 @@
       timerInterval = setInterval(() => {
         remaining--;
         timer.innerText = `⏱️ Time Left: ${remaining}s`;
-        if (remaining <= 0) {
-          clearInterval(timerInterval);
-        }
+        if (remaining <= 0) clearInterval(timerInterval);
       }, 1000);
     }
 
