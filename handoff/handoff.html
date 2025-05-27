@@ -1,174 +1,85 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>EMT-B Handoff Report Practice</title>
-  <style>
-    body { font-family: Arial, sans-serif; background: #eef6f9; padding: 20px; }
-    .container { max-width: 700px; margin: auto; background: white; padding: 20px;
-      border-radius: 10px; box-shadow: 0 0 10px rgba(0,0,0,0.1); }
-    textarea { width: 100%; height: 150px; margin-bottom: 15px; }
-    button {
-      padding: 10px 20px; font-size: 16px; margin-right: 10px;
-      border: none; border-radius: 5px; cursor: pointer;
-    }
-    .mic-btn {
-      background: #00bfa6; color: white;
-    }
-    .mic-btn.recording {
-      background: #cc0000;
-    }
-    .submit-btn {
-      background: #0077cc; color: white;
-    }
-    .gray-btn {
-      background: #888; color: white;
-    }
-    #score-section { margin-top: 20px; padding: 15px; background: #f4f4f4;
-      border-left: 4px solid #00bfa6; }
-    table { width: 100%; border-collapse: collapse; margin-top: 10px; }
-    th, td { border: 1px solid #ccc; padding: 10px; text-align: left; }
-    .pass { color: green; font-weight: bold; }
-    .fail { color: red; font-weight: bold; }
-    #timer { font-size: 16px; font-weight: bold; color: #cc0000; margin-top: 10px; }
-  </style>
-</head>
-<body>
-  <div class="container">
-    <h2>EMT-B Handoff Report Practice</h2>
+const { OpenAI } = require("openai");
+const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
-    <textarea id="scenario" readonly>
-56-year-old male, chest pain started while mowing lawn, 6/10 pressure radiating to jaw, A&O x3, BP 148/90, HR 98, RR 18, SpO2 95% RA, lungs clear, aspirin given, NRB 15L applied, ECG shows ST elevation in II, III, aVF.
-    </textarea>
+exports.handler = async (event) => {
+  if (event.httpMethod !== "POST") {
+    return { statusCode: 405, body: "Method Not Allowed" };
+  }
 
-    <h3>Give Your Handoff Report</h3>
-    <button id="recordBtn" class="mic-btn" onclick="toggleRecording()">🎤 Start Recording</button>
-    <span id="timer"></span>
+  const { transcript } = JSON.parse(event.body || '{}');
+  if (!transcript) {
+    return { statusCode: 400, body: JSON.stringify({ error: "No transcript provided." }) };
+  }
 
-    <div id="transcription" style="margin-top: 20px; display: none;"></div>
-    <div id="actionButtons" style="display: none; margin-top: 15px;">
-      <button class="gray-btn" onclick="toggleRecording(true)">Re-record</button>
-      <button class="submit-btn" onclick="submitReport()">Submit Report for Grading</button>
-    </div>
+  const basePrompt = `You are an NREMT instructor. Grade this handoff report from a student:
+"${transcript}"
 
-    <div id="score-section" style="display: none;">
-      <h4>Score Report</h4>
-      <div id="score-summary"></div>
-      <table id="score-table">
-        <thead>
-          <tr><th>Category</th><th>Description</th><th>Status</th></tr>
-        </thead>
-        <tbody></tbody>
-      </table>
-      <div id="tips"></div>
-    </div>
-  </div>
+Score the student using the following categories. Each category is worth 8 points for a total of 40. 
+For each category, respond with pass or fail, and describe the reason if failed.
 
-  <script>
-    let mediaRecorder;
-    let audioChunks = [];
-    let recording = false;
-    let timerInterval;
+Categories:
+1. Demographics: age, sex, LOC, impression
+2. History: chief complaint, OPQRST, SAMPLE
+3. Assessment: vitals, skin, mental status
+4. Interventions: oxygen, meds, CPR, ECG
+5. Communication: time of call, clarity, follow-up, under 60 seconds
 
-    async function toggleRecording(forceStop = false) {
-      const button = document.getElementById('recordBtn');
+Then give:
+- Total score out of 40
+- 2 improvement tips
 
-      if (recording || forceStop) {
-        mediaRecorder?.stop();
-        clearInterval(timerInterval);
-        button.classList.remove('recording');
-        button.innerText = '🎤 Start Recording';
-        recording = false;
-        return;
+Respond ONLY with JSON in this format:
+{
+  "score": 36,
+  "items": [
+    { "category": "Demographics", "desc": "Age, sex, LOC, impression", "status": "pass" },
+    { "category": "History", "desc": "Chief complaint, OPQRST, SAMPLE", "status": "fail", "reason": "Did not include SAMPLE" }
+  ],
+  "tips": [
+    "Include SAMPLE history next time.",
+    "State the time of call clearly at the beginning."
+  ]
+}`;
+
+  try {
+    // First try GPT-3.5 for cost-saving
+    const response = await openai.chat.completions.create({
+      model: "gpt-3.5-turbo",
+      messages: [
+        { role: "system", content: "You are an EMT instructor grading reports." },
+        { role: "user", content: basePrompt }
+      ]
+    });
+
+    let content = response.choices[0].message.content;
+    let jsonMatch = content.match(/\{[\s\S]*\}/);
+
+    if (!jsonMatch) {
+      // Escalate to GPT-4 Turbo if GPT-3.5 output is bad or missing
+      const fallback = await openai.chat.completions.create({
+        model: "gpt-4-turbo",
+        messages: [
+          { role: "system", content: "You are an EMT instructor grading reports." },
+          { role: "user", content: basePrompt }
+        ]
+      });
+
+      content = fallback.choices[0].message.content;
+      jsonMatch = content.match(/\{[\s\S]*\}/);
+
+      if (!jsonMatch) {
+        throw new Error("No valid JSON from GPT-4 either.");
       }
-
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      mediaRecorder = new MediaRecorder(stream);
-      audioChunks = [];
-      recording = true;
-
-      button.classList.add('recording');
-      button.innerText = '■ Stop Recording';
-
-      mediaRecorder.ondataavailable = event => audioChunks.push(event.data);
-
-      mediaRecorder.onstop = async () => {
-        clearInterval(timerInterval);
-        document.getElementById('timer').innerText = '';
-        button.classList.remove('recording');
-        button.innerText = '🎤 Start Recording';
-        recording = false;
-
-        const audioBlob = new Blob(audioChunks, { type: 'audio/wav' });
-        const formData = new FormData();
-        formData.append('audio', audioBlob, 'recording.wav');
-
-        const response = await fetch('/api/transcribe', {
-          method: 'POST',
-          body: formData
-        });
-
-        const result = await response.json();
-        document.getElementById('transcription').style.display = 'block';
-        document.getElementById('transcription').innerHTML =
-          `<p><strong>Transcription:</strong> ${result.transcript}</p>`;
-        sessionStorage.setItem('handoffTranscript', result.transcript);
-        document.getElementById('actionButtons').style.display = 'block';
-      };
-
-      mediaRecorder.start();
-      startTimer(60);
-      setTimeout(() => mediaRecorder.stop(), 60000); // 60 seconds max
     }
 
-    function startTimer(seconds) {
-      let remaining = seconds;
-      const timer = document.getElementById('timer');
-      timer.innerText = `⏱️ Time Left: ${remaining}s`;
+    const parsed = JSON.parse(jsonMatch[0]);
+    return { statusCode: 200, body: JSON.stringify(parsed) };
 
-      timerInterval = setInterval(() => {
-        remaining--;
-        timer.innerText = `⏱️ Time Left: ${remaining}s`;
-        if (remaining <= 0) clearInterval(timerInterval);
-      }, 1000);
-    }
-
-    async function submitReport() {
-      const transcript = sessionStorage.getItem('handoffTranscript');
-      if (!transcript) return alert('No transcription found. Please record your report.');
-
-      const response = await fetch('/api/grade', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ transcript })
-      });
-
-      const result = await response.json();
-
-      document.getElementById('score-section').style.display = 'block';
-      document.getElementById('score-summary').innerHTML = `<strong>Total Score:</strong> ${result.score}/40`;
-
-      const tableBody = document.querySelector("#score-table tbody");
-      tableBody.innerHTML = "";
-
-      result.items.forEach(item => {
-        const row = document.createElement("tr");
-        row.innerHTML = `
-          <td>${item.category}</td>
-          <td>${item.desc}</td>
-          <td class="${item.status === 'pass' ? 'pass' : 'fail'}">
-            ${item.status === 'pass' ? '✅ Pass' : '❌ ' + (item.reason || 'Fail')}
-          </td>
-        `;
-        tableBody.appendChild(row);
-      });
-
-      document.getElementById('tips').innerHTML = `
-        <h4>Improvement Tips:</h4>
-        <ul>${result.tips.map(t => `<li>${t}</li>`).join('')}</ul>
-      `;
-    }
-  </script>
-</body>
-</html>
+  } catch (error) {
+    console.error("Grading error:", error);
+    return {
+      statusCode: 500,
+      body: JSON.stringify({ error: "Grading failed. GPT may not have returned clean JSON." })
+    };
+  }
+};
