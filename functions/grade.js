@@ -11,7 +11,7 @@ exports.handler = async (event) => {
     return { statusCode: 400, body: JSON.stringify({ error: "No transcript provided." }) };
   }
 
-  const prompt = `You are an NREMT instructor. Grade this handoff report from a student:
+  const basePrompt = `You are an NREMT instructor. Grade this handoff report from a student:
 "${transcript}"
 
 Score the student using the following categories. Each category is worth 8 points for a total of 40. 
@@ -33,8 +33,7 @@ Respond ONLY with JSON in this format:
   "score": 36,
   "items": [
     { "category": "Demographics", "desc": "Age, sex, LOC, impression", "status": "pass" },
-    { "category": "History", "desc": "Chief complaint, OPQRST, SAMPLE", "status": "fail", "reason": "Did not include SAMPLE" },
-    ...
+    { "category": "History", "desc": "Chief complaint, OPQRST, SAMPLE", "status": "fail", "reason": "Did not include SAMPLE" }
   ],
   "tips": [
     "Include SAMPLE history next time.",
@@ -43,28 +42,38 @@ Respond ONLY with JSON in this format:
 }`;
 
   try {
+    // First try GPT-3.5 for cost-saving
     const response = await openai.chat.completions.create({
-      model: "gpt-4-turbo",
+      model: "gpt-3.5-turbo",
       messages: [
         { role: "system", content: "You are an EMT instructor grading reports." },
-        { role: "user", content: prompt }
+        { role: "user", content: basePrompt }
       ]
     });
 
-    const content = response.choices[0].message.content;
+    let content = response.choices[0].message.content;
+    let jsonMatch = content.match(/\{[\s\S]*\}/);
 
-    // Extract first valid JSON object from GPT response
-    const jsonMatch = content.match(/\{[\s\S]*\}/);
     if (!jsonMatch) {
-      throw new Error("No valid JSON block found in GPT response.");
+      // Escalate to GPT-4 Turbo if GPT-3.5 output is bad or missing
+      const fallback = await openai.chat.completions.create({
+        model: "gpt-4-turbo",
+        messages: [
+          { role: "system", content: "You are an EMT instructor grading reports." },
+          { role: "user", content: basePrompt }
+        ]
+      });
+
+      content = fallback.choices[0].message.content;
+      jsonMatch = content.match(/\{[\s\S]*\}/);
+
+      if (!jsonMatch) {
+        throw new Error("No valid JSON from GPT-4 either.");
+      }
     }
 
     const parsed = JSON.parse(jsonMatch[0]);
-
-    return {
-      statusCode: 200,
-      body: JSON.stringify(parsed)
-    };
+    return { statusCode: 200, body: JSON.stringify(parsed) };
 
   } catch (error) {
     console.error("Grading error:", error);
