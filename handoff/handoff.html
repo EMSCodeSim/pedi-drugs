@@ -3,103 +3,74 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>EMT-B Handoff Report Practice</title>
+  <title>Fire Scene Size-Up</title>
   <style>
-    body { font-family: Arial, sans-serif; background: #eef6f9; padding: 20px; }
-    .container { max-width: 700px; margin: auto; background: white; padding: 20px;
-      border-radius: 10px; box-shadow: 0 0 10px rgba(0,0,0,0.1); }
-    textarea { width: 100%; height: 380px; margin-bottom: 15px; white-space: pre-wrap; font-family: monospace; }
-    button {
-      padding: 10px 20px; font-size: 16px; margin-right: 10px;
-      border: none; border-radius: 5px; cursor: pointer;
+    body {
+      font-family: Arial, sans-serif;
+      background: #eef6f9;
+      padding: 20px;
+      text-align: center;
     }
-    .mic-btn { background: #00bfa6; color: white; }
-    .mic-btn.recording { background: #cc0000; }
-    .submit-btn { background: #0077cc; color: white; }
-    .gray-btn { background: #888; color: white; }
-    #score-section { margin-top: 20px; padding: 15px; background: #f4f4f4;
-      border-left: 4px solid #00bfa6; }
-    table { width: 100%; border-collapse: collapse; margin-top: 10px; }
-    th, td { border: 1px solid #ccc; padding: 10px; text-align: left; }
-    .pass { color: green; font-weight: bold; }
-    .fail { color: red; font-weight: bold; }
-    #timer { font-size: 16px; font-weight: bold; color: #cc0000; margin-top: 10px; }
+    .container {
+      max-width: 700px;
+      margin: auto;
+      background: white;
+      padding: 20px;
+      border-radius: 10px;
+      box-shadow: 0 0 10px rgba(0,0,0,0.1);
+    }
+    #scene-photo {
+      width: 100%;
+      max-width: 640px;
+      border: 4px solid #444;
+      margin-bottom: 20px;
+    }
+    button {
+      padding: 10px 20px;
+      font-size: 16px;
+      margin: 10px 5px;
+      border: none;
+      border-radius: 5px;
+      cursor: pointer;
+    }
+    .mic-btn {
+      background: #00bfa6;
+      color: white;
+    }
+    .mic-btn.recording {
+      background: #cc0000;
+    }
+    .gray-btn {
+      background: #888;
+      color: white;
+    }
+    #timer {
+      font-size: 16px;
+      font-weight: bold;
+      color: #cc0000;
+      margin-top: 10px;
+    }
+    #transcription {
+      margin-top: 20px;
+      display: none;
+      background: #f9f9f9;
+      padding: 15px;
+      border-radius: 10px;
+    }
   </style>
 </head>
 <body>
   <div class="container">
-    <h2>EMT-B Handoff Report Practice</h2>
+    <h2>Fire Scene Size-Up Practice</h2>
 
-    <textarea id="scenario" readonly>
-🚑 DISPATCH:
-You are dispatched Code 2 to a residence for a 56-year-old male with chest pain.
+    <img id="scene-photo" src="scene_photos/house_fire_1.jpg" alt="Fire Scene Photo" />
 
-🧍‍♂️ SCENE DESCRIPTION:
-You arrive to find the patient seated on his front porch in mild distress. It’s a clear afternoon. The scene is safe. Bystanders are family.
-
-🩺 CHIEF COMPLAINT:
-Chest pressure rated 6/10 that began 15 minutes ago while mowing the lawn.
-
-🕒 ONSET:
-Started suddenly while performing physical activity.
-
-📈 PROVOCATION:
-Worse with exertion, slightly relieved with rest.
-
-📍 QUALITY:
-Described as pressure, not sharp or stabbing.
-
-📏 RADIATION:
-Radiates to jaw and left arm.
-
-⏱️ SEVERITY:
-6 out of 10 on the pain scale.
-
-🕰️ TIME:
-Began 15 minutes prior to EMS arrival.
-
-💬 SAMPLE HISTORY:
-- S: Chest pain with radiation to jaw
-- A: No known allergies
-- M: Daily aspirin, lisinopril
-- P: Hypertension
-- L: Light lunch ~2 hours ago
-- E: Mowing lawn before onset
-
-📊 VITAL SIGNS:
-- BP: 148/90 mmHg
-- Pulse: 98 bpm, regular
-- Respirations: 18
-- SpO2: 95% on room air
-- Skin: Warm, slightly pale
-- LOC: Alert and oriented x3
-
-🧾 TREATMENT:
-- 324mg chewable aspirin given prior to arrival
-- NRB mask at 15 LPM applied
-- 12-lead ECG shows ST elevation in II, III, aVF
-    </textarea>
-
-    <h3>Give Your Handoff Report</h3>
-    <button id="recordBtn" class="mic-btn" onclick="toggleRecording()">🎤 Start Recording</button>
+    <button id="recordBtn" class="mic-btn" onclick="toggleRecording()">🎤 Start Size-Up</button>
     <span id="timer"></span>
 
-    <div id="transcription" style="margin-top: 20px; display: none;"></div>
-    <div id="actionButtons" style="display: none; margin-top: 15px;">
+    <div id="transcription"></div>
+    <div id="actionButtons" style="display: none;">
       <button class="gray-btn" onclick="toggleRecording(true)">Re-record</button>
-      <button class="submit-btn" onclick="submitReport()">Submit Report for Grading</button>
-    </div>
-
-    <div id="score-section" style="display: none;">
-      <h4>Score Report</h4>
-      <div id="score-summary"></div>
-      <table id="score-table">
-        <thead>
-          <tr><th>Category</th><th>Description</th><th>Status</th></tr>
-        </thead>
-        <tbody></tbody>
-      </table>
-      <div id="tips"></div>
     </div>
   </div>
 
@@ -111,12 +82,15 @@ Began 15 minutes prior to EMS arrival.
 
     async function toggleRecording(forceStop = false) {
       const button = document.getElementById('recordBtn');
+      const timer = document.getElementById('timer');
+      const transcription = document.getElementById('transcription');
+      const actionButtons = document.getElementById('actionButtons');
 
       if (recording || forceStop) {
         mediaRecorder?.stop();
         clearInterval(timerInterval);
         button.classList.remove('recording');
-        button.innerText = '🎤 Start Recording';
+        button.innerText = '🎤 Start Size-Up';
         recording = false;
         return;
       }
@@ -127,15 +101,15 @@ Began 15 minutes prior to EMS arrival.
       recording = true;
 
       button.classList.add('recording');
-      button.innerText = '■ Stop Recording';
+      button.innerText = '■ Stop';
 
       mediaRecorder.ondataavailable = event => audioChunks.push(event.data);
 
       mediaRecorder.onstop = async () => {
         clearInterval(timerInterval);
-        document.getElementById('timer').innerText = '';
+        timer.innerText = '';
         button.classList.remove('recording');
-        button.innerText = '🎤 Start Recording';
+        button.innerText = '🎤 Start Size-Up';
         recording = false;
 
         const audioBlob = new Blob(audioChunks, { type: 'audio/wav' });
@@ -148,16 +122,14 @@ Began 15 minutes prior to EMS arrival.
         });
 
         const result = await response.json();
-        document.getElementById('transcription').style.display = 'block';
-        document.getElementById('transcription').innerHTML =
-          `<p><strong>Transcription:</strong> ${result.transcript}</p>`;
-        sessionStorage.setItem('handoffTranscript', result.transcript);
-        document.getElementById('actionButtons').style.display = 'block';
+        transcription.style.display = 'block';
+        transcription.innerHTML = `<p><strong>Transcription:</strong> ${result.transcript}</p>`;
+        actionButtons.style.display = 'block';
       };
 
       mediaRecorder.start();
-      startTimer(120);
-      setTimeout(() => mediaRecorder.stop(), 120000); // 2 minutes
+      startTimer(60); // 60-second timer
+      setTimeout(() => mediaRecorder.stop(), 60000); // auto stop after 60s
     }
 
     function startTimer(seconds) {
@@ -170,42 +142,6 @@ Began 15 minutes prior to EMS arrival.
         timer.innerText = `⏱️ Time Left: ${remaining}s`;
         if (remaining <= 0) clearInterval(timerInterval);
       }, 1000);
-    }
-
-    async function submitReport() {
-      const transcript = sessionStorage.getItem('handoffTranscript');
-      if (!transcript) return alert('No transcription found. Please record your report.');
-
-      const response = await fetch('/api/grade', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ transcript })
-      });
-
-      const result = await response.json();
-
-      document.getElementById('score-section').style.display = 'block';
-      document.getElementById('score-summary').innerHTML = `<strong>Total Score:</strong> ${result.score}/40`;
-
-      const tableBody = document.querySelector("#score-table tbody");
-      tableBody.innerHTML = "";
-
-      result.items.forEach(item => {
-        const row = document.createElement("tr");
-        row.innerHTML = `
-          <td>${item.category}</td>
-          <td>${item.desc}</td>
-          <td class="${item.status === 'pass' ? 'pass' : 'fail'}">
-            ${item.status === 'pass' ? '✅ Pass' : '❌ ' + (item.reason || 'Fail')}
-          </td>
-        `;
-        tableBody.appendChild(row);
-      });
-
-      document.getElementById('tips').innerHTML = `
-        <h4>Improvement Tips:</h4>
-        <ul>${result.tips.map(t => `<li>${t}</li>`).join('')}</ul>
-      `;
     }
   </script>
 </body>
