@@ -7,81 +7,142 @@
   <style>
     body {
       font-family: Arial, sans-serif;
-      background: #eef2f7;
+      background: #eef6f9;
       padding: 20px;
       text-align: center;
     }
+    .container {
+      max-width: 700px;
+      margin: auto;
+      background: white;
+      padding: 20px;
+      border-radius: 10px;
+      box-shadow: 0 0 10px rgba(0,0,0,0.1);
+    }
     #scene-photo {
-      width: 90%;
-      max-width: 600px;
+      width: 100%;
+      max-width: 640px;
       border: 4px solid #444;
       margin-bottom: 20px;
     }
-    #mic-btn {
-      padding: 15px 25px;
-      font-size: 18px;
-      background-color: #007bff;
-      color: white;
+    button {
+      padding: 10px 20px;
+      font-size: 16px;
+      margin: 10px 5px;
       border: none;
-      border-radius: 10px;
+      border-radius: 5px;
       cursor: pointer;
     }
-    #mic-btn.recording {
-      background-color: #dc3545;
+    .mic-btn {
+      background: #00bfa6;
+      color: white;
     }
-    #transcript-display {
-      margin-top: 30px;
-      background-color: white;
+    .mic-btn.recording {
+      background: #cc0000;
+    }
+    .gray-btn {
+      background: #888;
+      color: white;
+    }
+    #timer {
+      font-size: 16px;
+      font-weight: bold;
+      color: #cc0000;
+      margin-top: 10px;
+    }
+    #transcription {
+      margin-top: 20px;
+      display: none;
+      background: #f9f9f9;
       padding: 15px;
       border-radius: 10px;
-      max-width: 700px;
-      margin-left: auto;
-      margin-right: auto;
-      box-shadow: 0 0 10px rgba(0,0,0,0.1);
     }
   </style>
 </head>
 <body>
+  <div class="container">
+    <h2>Fire Scene Size-Up Practice</h2>
 
-  <h1>Fire Scene Size-Up</h1>
+    <img id="scene-photo" src="scene_photos/house_fire_1.jpg" alt="Fire Scene Photo" />
 
-  <img id="scene-photo" src="scene_photos/house_fire_1.jpg" alt="Fire Scene" />
+    <button id="recordBtn" class="mic-btn" onclick="toggleRecording()">🎤 Start Size-Up</button>
+    <span id="timer"></span>
 
-  <div>
-    <button id="mic-btn">🎤 Start Size-Up</button>
+    <div id="transcription"></div>
+    <div id="actionButtons" style="display: none;">
+      <button class="gray-btn" onclick="toggleRecording(true)">Re-record</button>
+    </div>
   </div>
 
-  <div id="transcript-display" style="display:none;">
-    <h3>Transcribed Size-Up:</h3>
-    <p id="transcript-text"></p>
-  </div>
-
-  <script src="whisper_transcribe.js"></script>
   <script>
-    const micBtn = document.getElementById('mic-btn');
-    const transcriptDisplay = document.getElementById('transcript-display');
-    const transcriptText = document.getElementById('transcript-text');
+    let mediaRecorder;
+    let audioChunks = [];
+    let recording = false;
+    let timerInterval;
 
-    let isRecording = false;
+    async function toggleRecording(forceStop = false) {
+      const button = document.getElementById('recordBtn');
+      const timer = document.getElementById('timer');
+      const transcription = document.getElementById('transcription');
+      const actionButtons = document.getElementById('actionButtons');
 
-    micBtn.addEventListener('click', async () => {
-      if (!isRecording) {
-        isRecording = true;
-        micBtn.classList.add('recording');
-        micBtn.textContent = '🛑 Stop Recording';
-
-        const transcript = await whisperTranscribe(); // Reuse existing function
-        isRecording = false;
-        micBtn.classList.remove('recording');
-        micBtn.textContent = '🎤 Start Size-Up';
-
-        if (transcript && transcript.length > 0) {
-          transcriptText.textContent = transcript;
-          transcriptDisplay.style.display = 'block';
-        }
+      if (recording || forceStop) {
+        mediaRecorder?.stop();
+        clearInterval(timerInterval);
+        button.classList.remove('recording');
+        button.innerText = '🎤 Start Size-Up';
+        recording = false;
+        return;
       }
-    });
-  </script>
 
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      mediaRecorder = new MediaRecorder(stream);
+      audioChunks = [];
+      recording = true;
+
+      button.classList.add('recording');
+      button.innerText = '■ Stop';
+
+      mediaRecorder.ondataavailable = event => audioChunks.push(event.data);
+
+      mediaRecorder.onstop = async () => {
+        clearInterval(timerInterval);
+        timer.innerText = '';
+        button.classList.remove('recording');
+        button.innerText = '🎤 Start Size-Up';
+        recording = false;
+
+        const audioBlob = new Blob(audioChunks, { type: 'audio/wav' });
+        const formData = new FormData();
+        formData.append('audio', audioBlob, 'recording.wav');
+
+        const response = await fetch('/api/transcribe', {
+          method: 'POST',
+          body: formData
+        });
+
+        const result = await response.json();
+        transcription.style.display = 'block';
+        transcription.innerHTML = `<p><strong>Transcription:</strong> ${result.transcript}</p>`;
+        actionButtons.style.display = 'block';
+      };
+
+      mediaRecorder.start();
+      startTimer(60); // 60-second timer
+      setTimeout(() => mediaRecorder.stop(), 60000); // auto stop after 60s
+    }
+
+    function startTimer(seconds) {
+      let remaining = seconds;
+      const timer = document.getElementById('timer');
+      timer.innerText = `⏱️ Time Left: ${remaining}s`;
+
+      timerInterval = setInterval(() => {
+        remaining--;
+        timer.innerText = `⏱️ Time Left: ${remaining}s`;
+        if (remaining <= 0) clearInterval(timerInterval);
+      }, 1000);
+    }
+  </script>
 </body>
 </html>
