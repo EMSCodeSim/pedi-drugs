@@ -12,7 +12,7 @@
       text-align: center;
     }
     .container {
-      max-width: 700px;
+      max-width: 750px;
       margin: auto;
       background: white;
       padding: 20px;
@@ -33,38 +33,22 @@
       border-radius: 5px;
       cursor: pointer;
     }
-    .mic-btn {
-      background: #00bfa6;
-      color: white;
-    }
-    .mic-btn.recording {
-      background: #cc0000;
-    }
-    .gray-btn {
-      background: #888;
-      color: white;
-    }
-    #timer {
-      font-size: 16px;
-      font-weight: bold;
-      color: #cc0000;
-      margin-top: 10px;
-    }
-    #transcription {
-      margin-top: 20px;
-      display: none;
-      background: #f9f9f9;
-      padding: 15px;
-      border-radius: 10px;
-    }
+    .mic-btn { background: #00bfa6; color: white; }
+    .mic-btn.recording { background: #cc0000; }
+    .gray-btn { background: #888; color: white; }
+    #timer { font-size: 16px; font-weight: bold; color: #cc0000; margin-top: 10px; }
+    #transcription, #score-section { margin-top: 20px; display: none; }
+    #score-section { padding: 15px; background: #f4f4f4; border-left: 4px solid #00bfa6; }
+    table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+    th, td { border: 1px solid #ccc; padding: 10px; text-align: left; }
+    .pass { color: green; font-weight: bold; }
+    .fail { color: red; font-weight: bold; }
   </style>
 </head>
 <body>
   <div class="container">
     <h2>Fire Scene Size-Up Practice</h2>
-
     <img id="scene-photo" src="scene_photos/house_fire_1.png" alt="Fire Scene Photo" />
-
 
     <button id="recordBtn" class="mic-btn" onclick="toggleRecording()">🎤 Start Size-Up</button>
     <span id="timer"></span>
@@ -72,6 +56,19 @@
     <div id="transcription"></div>
     <div id="actionButtons" style="display: none;">
       <button class="gray-btn" onclick="toggleRecording(true)">Re-record</button>
+      <button class="mic-btn" onclick="submitSizeup()">Submit for Grading</button>
+    </div>
+
+    <div id="score-section">
+      <h4>Score Report</h4>
+      <div id="score-summary"></div>
+      <table id="score-table">
+        <thead>
+          <tr><th>Category</th><th>Status</th></tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+      <div id="tips"></div>
     </div>
   </div>
 
@@ -86,6 +83,8 @@
       const timer = document.getElementById('timer');
       const transcription = document.getElementById('transcription');
       const actionButtons = document.getElementById('actionButtons');
+      transcription.innerHTML = '';
+      document.getElementById('score-section').style.display = 'none';
 
       if (recording || forceStop) {
         mediaRecorder?.stop();
@@ -103,6 +102,7 @@
 
       button.classList.add('recording');
       button.innerText = '■ Stop';
+      transcription.style.display = 'none';
 
       mediaRecorder.ondataavailable = event => audioChunks.push(event.data);
 
@@ -125,12 +125,13 @@
         const result = await response.json();
         transcription.style.display = 'block';
         transcription.innerHTML = `<p><strong>Transcription:</strong> ${result.transcript}</p>`;
+        sessionStorage.setItem('sceneSizeupTranscript', result.transcript);
         actionButtons.style.display = 'block';
       };
 
       mediaRecorder.start();
-      startTimer(60); // 60-second timer
-      setTimeout(() => mediaRecorder.stop(), 60000); // auto stop after 60s
+      startTimer(60);
+      setTimeout(() => mediaRecorder.stop(), 60000);
     }
 
     function startTimer(seconds) {
@@ -143,6 +144,41 @@
         timer.innerText = `⏱️ Time Left: ${remaining}s`;
         if (remaining <= 0) clearInterval(timerInterval);
       }, 1000);
+    }
+
+    async function submitSizeup() {
+      const transcript = sessionStorage.getItem('sceneSizeupTranscript');
+      if (!transcript) return alert('No transcription found. Please record first.');
+
+      const response = await fetch('/api/grade-sizeup', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ transcript })
+      });
+
+      const result = await response.json();
+
+      document.getElementById('score-section').style.display = 'block';
+      document.getElementById('score-summary').innerHTML = `<strong>Total Score:</strong> ${result.score}/${result.maxScore}`;
+
+      const tableBody = document.querySelector("#score-table tbody");
+      tableBody.innerHTML = "";
+
+      result.breakdown.forEach(item => {
+        const row = document.createElement("tr");
+        row.innerHTML = `
+          <td>${item.category}</td>
+          <td class="${item.status === 'pass' ? 'pass' : 'fail'}">
+            ${item.status === 'pass' ? '✅ Pass' : '❌ Missed'}
+          </td>
+        `;
+        tableBody.appendChild(row);
+      });
+
+      document.getElementById('tips').innerHTML = `
+        <h4>Improvement Tips:</h4>
+        <ul>${result.tips.map(t => `<li>${t}</li>`).join('')}</ul>
+      `;
     }
   </script>
 </body>
