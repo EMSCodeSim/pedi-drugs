@@ -1,3 +1,9 @@
+console.log("🔥 grade-sizeup function triggered");
+
+exports.handler = async (event) => {
+  console.log("📨 Request Body:", event.body);
+  ...
+
 // functions/grade-sizeup.js
 
 exports.handler = async (event) => {
