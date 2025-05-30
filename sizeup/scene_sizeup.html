@@ -5,61 +5,42 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>Fire Scene Size-Up</title>
   <style>
-    body {
-      font-family: Arial, sans-serif;
-      background: #eef6f9;
-      padding: 20px;
-      text-align: center;
-    }
-    .container {
-      max-width: 750px;
-      margin: auto;
-      background: white;
-      padding: 20px;
-      border-radius: 10px;
-      box-shadow: 0 0 10px rgba(0,0,0,0.1);
-    }
-    #scene-photo {
-      width: 100%;
-      max-width: 640px;
-      border: 4px solid #444;
-      margin-bottom: 20px;
-    }
+    body { font-family: Arial, sans-serif; background: #eef6f9; padding: 20px; }
+    .container { max-width: 700px; margin: auto; background: white; padding: 20px;
+      border-radius: 10px; box-shadow: 0 0 10px rgba(0,0,0,0.1); }
     button {
-      padding: 10px 20px;
-      font-size: 16px;
-      margin: 10px 5px;
-      border: none;
-      border-radius: 5px;
-      cursor: pointer;
+      padding: 10px 20px; font-size: 16px; margin-right: 10px;
+      border: none; border-radius: 5px; cursor: pointer;
     }
     .mic-btn { background: #00bfa6; color: white; }
     .mic-btn.recording { background: #cc0000; }
+    .submit-btn { background: #0077cc; color: white; }
     .gray-btn { background: #888; color: white; }
-    #timer { font-size: 16px; font-weight: bold; color: #cc0000; margin-top: 10px; }
-    #transcription, #score-section { margin-top: 20px; display: none; }
-    #score-section { padding: 15px; background: #f4f4f4; border-left: 4px solid #00bfa6; }
+    #score-section { margin-top: 20px; padding: 15px; background: #f4f4f4;
+      border-left: 4px solid #00bfa6; }
     table { width: 100%; border-collapse: collapse; margin-top: 10px; }
     th, td { border: 1px solid #ccc; padding: 10px; text-align: left; }
     .pass { color: green; font-weight: bold; }
     .fail { color: red; font-weight: bold; }
+    #timer { font-size: 16px; font-weight: bold; color: #cc0000; margin-top: 10px; }
   </style>
 </head>
 <body>
   <div class="container">
     <h2>Fire Scene Size-Up Practice</h2>
-    <img id="scene-photo" src="scene_photos/house_fire_1.jpg" alt="Fire Scene Photo" />
+
+    <img src="scene_photos/house_fire_1.jpg" alt="Fire Scene Photo" style="width: 100%; border: 4px solid #444; margin-bottom: 20px;" />
 
     <button id="recordBtn" class="mic-btn" onclick="toggleRecording()">🎤 Start Size-Up</button>
     <span id="timer"></span>
 
-    <div id="transcription"></div>
-    <div id="actionButtons" style="display: none;">
+    <div id="transcription" style="margin-top: 20px; display: none;"></div>
+    <div id="actionButtons" style="display: none; margin-top: 15px;">
       <button class="gray-btn" onclick="toggleRecording(true)">Re-record</button>
-      <button class="mic-btn" onclick="submitSizeup()">Submit for Grading</button>
+      <button class="submit-btn" onclick="submitSizeup()">Submit for Grading</button>
     </div>
 
-    <div id="score-section">
+    <div id="score-section" style="display: none;">
       <h4>Score Report</h4>
       <div id="score-summary"></div>
       <table id="score-table">
@@ -80,11 +61,6 @@
 
     async function toggleRecording(forceStop = false) {
       const button = document.getElementById('recordBtn');
-      const timer = document.getElementById('timer');
-      const transcription = document.getElementById('transcription');
-      const actionButtons = document.getElementById('actionButtons');
-      transcription.innerHTML = '';
-      document.getElementById('score-section').style.display = 'none';
 
       if (recording || forceStop) {
         mediaRecorder?.stop();
@@ -101,14 +77,13 @@
       recording = true;
 
       button.classList.add('recording');
-      button.innerText = '■ Stop';
-      transcription.style.display = 'none';
+      button.innerText = '■ Stop Recording';
 
       mediaRecorder.ondataavailable = event => audioChunks.push(event.data);
 
       mediaRecorder.onstop = async () => {
         clearInterval(timerInterval);
-        timer.innerText = '';
+        document.getElementById('timer').innerText = '';
         button.classList.remove('recording');
         button.innerText = '🎤 Start Size-Up';
         recording = false;
@@ -123,10 +98,11 @@
         });
 
         const result = await response.json();
-        transcription.style.display = 'block';
-        transcription.innerHTML = `<p><strong>Transcription:</strong> ${result.transcript}</p>`;
+        document.getElementById('transcription').style.display = 'block';
+        document.getElementById('transcription').innerHTML =
+          `<p><strong>Transcription:</strong> ${result.transcript}</p>`;
         sessionStorage.setItem('sceneSizeupTranscript', result.transcript);
-        actionButtons.style.display = 'block';
+        document.getElementById('actionButtons').style.display = 'block';
       };
 
       mediaRecorder.start();
@@ -148,7 +124,7 @@
 
     async function submitSizeup() {
       const transcript = sessionStorage.getItem('sceneSizeupTranscript');
-      if (!transcript) return alert('No transcription found. Please record first.');
+      if (!transcript) return alert('No transcription found. Please record your report.');
 
       const response = await fetch('/api/grade-sizeup', {
         method: 'POST',
