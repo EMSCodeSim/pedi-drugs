@@ -30,6 +30,14 @@
       background: #0077cc;
       color: white;
     }
+    .record-btn {
+      background: #28a745;
+      color: white;
+    }
+    .stop-btn {
+      background: #dc3545;
+      color: white;
+    }
     #score-section {
       margin-top: 20px;
       padding: 15px;
@@ -59,7 +67,7 @@
 <body>
   <div class="container">
     <h1>Fire Scene Size-Up Grading</h1>
-    <img id="photo" src="scene_photos/house_fire_1.jpg" alt="Fire Scene">
+    <img id="photo" src="/sizeup/scene_photos/house_fire_1.jpg" alt="Fire Scene">
 
     <p>Speak or enter your fire scene size-up below:</p>
 
@@ -67,13 +75,18 @@
     <br><br>
 
     <button class="submit-btn" id="submit-btn">Submit for Grading</button>
-    <button id="record-btn">🎙️ Record</button>
+    <button class="record-btn" id="record-btn">🎙️ Start Recording</button>
+    <button class="stop-btn" id="stop-btn" style="display:none;">⏹️ Stop Recording</button>
 
     <div id="score-section"></div>
   </div>
 
   <script>
-    // Submit button logic
+    let mediaRecorder;
+    let audioChunks = [];
+    let stream;
+    let autoStopTimeout;
+
     document.getElementById("submit-btn").addEventListener("click", async () => {
       const transcript = document.getElementById("transcript").value.trim();
       if (!transcript) {
@@ -111,17 +124,15 @@
       }
     });
 
-    // Audio recording logic (basic Whisper mic handler)
     document.getElementById("record-btn").addEventListener("click", async () => {
-      const recordBtn = document.getElementById("record-btn");
-      recordBtn.textContent = "Recording... ⏺️";
-
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const mediaRecorder = new MediaRecorder(stream);
-      const audioChunks = [];
+      stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      mediaRecorder = new MediaRecorder(stream);
+      audioChunks = [];
 
       mediaRecorder.ondataavailable = e => audioChunks.push(e.data);
+
       mediaRecorder.onstop = async () => {
+        clearTimeout(autoStopTimeout);
         const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
         const formData = new FormData();
         formData.append('audio', audioBlob, 'sizeup.webm');
@@ -129,16 +140,35 @@
         const response = await fetch('/api/transcribe', { method: 'POST', body: formData });
         const result = await response.json();
         document.getElementById("transcript").value = result.transcript || "(Transcription failed)";
-        recordBtn.textContent = "🎙️ Record";
+
+        // Reset UI
+        document.getElementById("record-btn").style.display = "inline-block";
+        document.getElementById("stop-btn").style.display = "none";
       };
 
       mediaRecorder.start();
+      document.getElementById("record-btn").style.display = "none";
+      document.getElementById("stop-btn").style.display = "inline-block";
 
-      setTimeout(() => {
-        mediaRecorder.stop();
-        stream.getTracks().forEach(track => track.stop());
-      }, 60000); // stop after 60 sec
+      autoStopTimeout = setTimeout(() => {
+        stopRecording();
+      }, 40000); // Auto-stop at 40 seconds
     });
+
+    document.getElementById("stop-btn").addEventListener("click", () => {
+      stopRecording();
+    });
+
+    function stopRecording() {
+      if (mediaRecorder && mediaRecorder.state === "recording") {
+        mediaRecorder.stop();
+      }
+      if (stream) {
+        stream.getTracks().forEach(track => track.stop());
+      }
+      document.getElementById("record-btn").style.display = "inline-block";
+      document.getElementById("stop-btn").style.display = "none";
+    }
   </script>
 </body>
 </html>
