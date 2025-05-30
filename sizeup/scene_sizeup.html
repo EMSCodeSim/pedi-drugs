@@ -5,157 +5,98 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>Fire Scene Size-Up</title>
   <style>
-    body { font-family: Arial, sans-serif; background: #eef6f9; padding: 20px; }
-    .container { max-width: 700px; margin: auto; background: white; padding: 20px;
-      border-radius: 10px; box-shadow: 0 0 10px rgba(0,0,0,0.1); }
-    button {
-      padding: 10px 20px; font-size: 16px; margin-right: 10px;
-      border: none; border-radius: 5px; cursor: pointer;
+    body {
+      font-family: Arial, sans-serif;
+      background: #eef6f9;
+      padding: 20px;
     }
-    .mic-btn { background: #00bfa6; color: white; }
-    .mic-btn.recording { background: #cc0000; }
-    .submit-btn { background: #0077cc; color: white; }
-    .gray-btn { background: #888; color: white; }
-    #score-section { margin-top: 20px; padding: 15px; background: #f4f4f4;
-      border-left: 4px solid #00bfa6; }
-    table { width: 100%; border-collapse: collapse; margin-top: 10px; }
-    th, td { border: 1px solid #ccc; padding: 10px; text-align: left; }
-    .pass { color: green; font-weight: bold; }
-    .fail { color: red; font-weight: bold; }
-    #timer { font-size: 16px; font-weight: bold; color: #cc0000; margin-top: 10px; }
+    .container {
+      max-width: 700px;
+      margin: auto;
+      background: white;
+      padding: 20px;
+      border-radius: 10px;
+      box-shadow: 0 0 10px rgba(0,0,0,0.1);
+    }
+    button {
+      padding: 10px 20px;
+      font-size: 16px;
+      margin-right: 10px;
+      border: none;
+      border-radius: 5px;
+      cursor: pointer;
+    }
+    .submit-btn {
+      background: #0077cc;
+      color: white;
+    }
+    #score-section {
+      margin-top: 20px;
+      padding: 15px;
+      background: #f4f4f4;
+      border-left: 4px solid #00bfa6;
+    }
+    textarea {
+      width: 100%;
+      height: 150px;
+      font-size: 16px;
+      padding: 10px;
+      border-radius: 5px;
+      border: 1px solid #ccc;
+      margin-top: 10px;
+      box-sizing: border-box;
+    }
   </style>
 </head>
 <body>
   <div class="container">
-    <h2>Fire Scene Size-Up Practice</h2>
+    <h1>Fire Scene Size-Up Grading</h1>
+    <p>Enter or dictate your fire scene size-up below. Click "Submit for Grading" when ready.</p>
 
-    <img src="scene_photos/house_fire_1.jpg" alt="Fire Scene Photo" style="width: 100%; border: 4px solid #444; margin-bottom: 20px;" />
+    <textarea id="transcript" placeholder="Example: Engine 3 on scene of a two-story residential structure, heavy fire showing from the rear..."></textarea>
+    <br><br>
+    <button class="submit-btn" id="submit-btn">Submit for Grading</button>
 
-    <button id="recordBtn" class="mic-btn" onclick="toggleRecording()">🎤 Start Size-Up</button>
-    <span id="timer"></span>
-
-    <div id="transcription" style="margin-top: 20px; display: none;"></div>
-    <div id="actionButtons" style="display: none; margin-top: 15px;">
-      <button class="gray-btn" onclick="toggleRecording(true)">Re-record</button>
-      <button class="submit-btn" onclick="submitSizeup()">Submit for Grading</button>
-    </div>
-
-    <div id="score-section" style="display: none;">
-      <h4>Score Report</h4>
-      <div id="score-summary"></div>
-      <table id="score-table">
-        <thead>
-          <tr><th>Category</th><th>Status</th></tr>
-        </thead>
-        <tbody></tbody>
-      </table>
-      <div id="tips"></div>
-    </div>
+    <div id="score-section"></div>
   </div>
 
   <script>
-    let mediaRecorder;
-    let audioChunks = [];
-    let recording = false;
-    let timerInterval;
-
-    async function toggleRecording(forceStop = false) {
-      const button = document.getElementById('recordBtn');
-
-      if (recording || forceStop) {
-        mediaRecorder?.stop();
-        clearInterval(timerInterval);
-        button.classList.remove('recording');
-        button.innerText = '🎤 Start Size-Up';
-        recording = false;
+    document.getElementById("submit-btn").addEventListener("click", async () => {
+      const transcript = document.getElementById("transcript").value.trim();
+      if (!transcript) {
+        alert("Please enter a size-up before submitting.");
         return;
       }
 
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      mediaRecorder = new MediaRecorder(stream);
-      audioChunks = [];
-      recording = true;
-
-      button.classList.add('recording');
-      button.innerText = '■ Stop Recording';
-
-      mediaRecorder.ondataavailable = event => audioChunks.push(event.data);
-
-      mediaRecorder.onstop = async () => {
-        clearInterval(timerInterval);
-        document.getElementById('timer').innerText = '';
-        button.classList.remove('recording');
-        button.innerText = '🎤 Start Size-Up';
-        recording = false;
-
-        const audioBlob = new Blob(audioChunks, { type: 'audio/wav' });
-        const formData = new FormData();
-        formData.append('audio', audioBlob, 'recording.wav');
-
-        const response = await fetch('/api/transcribe', {
-          method: 'POST',
-          body: formData
+      try {
+        const response = await fetch("/api/grade_sizeup", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ transcript })
         });
 
         const result = await response.json();
-        document.getElementById('transcription').style.display = 'block';
-        document.getElementById('transcription').innerHTML =
-          `<p><strong>Transcription:</strong> ${result.transcript}</p>`;
-        sessionStorage.setItem('sceneSizeupTranscript', result.transcript);
-        document.getElementById('actionButtons').style.display = 'block';
-      };
 
-      mediaRecorder.start();
-      startTimer(60);
-      setTimeout(() => mediaRecorder.stop(), 60000);
-    }
+        if (result.error) {
+          document.getElementById("score-section").innerHTML = `<p style="color:red;">Error: ${result.error}</p>`;
+          return;
+        }
 
-    function startTimer(seconds) {
-      let remaining = seconds;
-      const timer = document.getElementById('timer');
-      timer.innerText = `⏱️ Time Left: ${remaining}s`;
+        let html = `<h3>Total Score: ${result.score}/10</h3><table><tr><th>Category</th><th>Status</th><th>Notes</th></tr>`;
+        result.items.forEach(item => {
+          html += `<tr><td>${item.category}</td><td>${item.status}</td><td>${item.reason || item.desc}</td></tr>`;
+        });
+        html += "</table><h4>Improvement Tips</h4><ul>";
+        result.tips.forEach(tip => html += `<li>${tip}</li>`);
+        html += "</ul>";
 
-      timerInterval = setInterval(() => {
-        remaining--;
-        timer.innerText = `⏱️ Time Left: ${remaining}s`;
-        if (remaining <= 0) clearInterval(timerInterval);
-      }, 1000);
-    }
+        document.getElementById("score-section").innerHTML = html;
 
-    async function submitSizeup() {
-      const transcript = sessionStorage.getItem('sceneSizeupTranscript');
-      if (!transcript) return alert('No transcription found. Please record your report.');
-
-      const response = await fetch('/api/grade-sizeup', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ transcript })
-      });
-
-      const result = await response.json();
-
-      document.getElementById('score-section').style.display = 'block';
-      document.getElementById('score-summary').innerHTML = `<strong>Total Score:</strong> ${result.score}/${result.maxScore}`;
-
-      const tableBody = document.querySelector("#score-table tbody");
-      tableBody.innerHTML = "";
-
-      result.breakdown.forEach(item => {
-        const row = document.createElement("tr");
-        row.innerHTML = `
-          <td>${item.category}</td>
-          <td class="${item.status === 'pass' ? 'pass' : 'fail'}">
-            ${item.status === 'pass' ? '✅ Pass' : '❌ Missed'}
-          </td>
-        `;
-        tableBody.appendChild(row);
-      });
-
-      document.getElementById('tips').innerHTML = `
-        <h4>Improvement Tips:</h4>
-        <ul>${result.tips.map(t => `<li>${t}</li>`).join('')}</ul>
-      `;
-    }
+      } catch (error) {
+        console.error("Grading error:", error);
+        document.getElementById("score-section").innerHTML = `<p style="color:red;">An error occurred while grading your size-up. Please try again.</p>`;
+      }
+    });
   </script>
 </body>
 </html>
