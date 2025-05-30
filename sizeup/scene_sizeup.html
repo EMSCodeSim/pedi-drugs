@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Fire Scene Size-Up</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background: #eef2f7;
+      padding: 20px;
+      text-align: center;
+    }
+    #scene-photo {
+      width: 90%;
+      max-width: 600px;
+      border: 4px solid #444;
+      margin-bottom: 20px;
+    }
+    #mic-btn {
+      padding: 15px 25px;
+      font-size: 18px;
+      background-color: #007bff;
+      color: white;
+      border: none;
+      border-radius: 10px;
+      cursor: pointer;
+    }
+    #mic-btn.recording {
+      background-color: #dc3545;
+    }
+    #transcript-display {
+      margin-top: 30px;
+      background-color: white;
+      padding: 15px;
+      border-radius: 10px;
+      max-width: 700px;
+      margin-left: auto;
+      margin-right: auto;
+      box-shadow: 0 0 10px rgba(0,0,0,0.1);
+    }
+  </style>
+</head>
+<body>
+
+  <h1>Fire Scene Size-Up</h1>
+
+  <img id="scene-photo" src="scene_photos/house_fire_1.jpg" alt="Fire Scene" />
+
+  <div>
+    <button id="mic-btn">🎤 Start Size-Up</button>
+  </div>
+
+  <div id="transcript-display" style="display:none;">
+    <h3>Transcribed Size-Up:</h3>
+    <p id="transcript-text"></p>
+  </div>
+
+  <script src="whisper_transcribe.js"></script>
+  <script>
+    const micBtn = document.getElementById('mic-btn');
+    const transcriptDisplay = document.getElementById('transcript-display');
+    const transcriptText = document.getElementById('transcript-text');
+
+    let isRecording = false;
+
+    micBtn.addEventListener('click', async () => {
+      if (!isRecording) {
+        isRecording = true;
+        micBtn.classList.add('recording');
+        micBtn.textContent = '🛑 Stop Recording';
+
+        const transcript = await whisperTranscribe(); // Reuse existing function
+        isRecording = false;
+        micBtn.classList.remove('recording');
+        micBtn.textContent = '🎤 Start Size-Up';
+
+        if (transcript && transcript.length > 0) {
+          transcriptText.textContent = transcript;
+          transcriptDisplay.style.display = 'block';
+        }
+      }
+    });
+  </script>
+
+</body>
+</html>
