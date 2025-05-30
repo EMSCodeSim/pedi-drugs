@@ -1,101 +1,89 @@
-console.log("🔥 grade-sizeup function triggered");
+const { OpenAI } = require("openai");
+const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
 exports.handler = async (event) => {
-  console.log("📨 Request Body:", event.body);
-  ...
-
-// functions/grade-sizeup.js
-
-exports.handler = async (event) => {
-  if (event.httpMethod !== 'POST') {
-    return { statusCode: 405, body: 'Method Not Allowed' };
+  if (event.httpMethod !== "POST") {
+    return { statusCode: 405, body: "Method Not Allowed" };
   }
 
-  const { transcript } = JSON.parse(event.body);
+  const { transcript } = JSON.parse(event.body || '{}');
   if (!transcript) {
-    return { statusCode: 400, body: 'Missing transcript' };
+    return { statusCode: 400, body: JSON.stringify({ error: "No transcript provided." }) };
   }
 
-  const lowerText = transcript.toLowerCase();
+  const basePrompt = `You are a fire officer instructor grading a fire scene size-up report:
+"${transcript}"
 
-  const gradingRubric = [
-    {
-      category: "Identification & Command",
-      keywordMatch: ["on scene", "assuming command", "has command"],
-      tip: "Start your report by identifying your unit and assuming command."
-    },
-    {
-      category: "Structure Description",
-      keywordMatch: ["residential", "commercial", "story", "apartment", "single family"],
-      tip: "Include number of stories, construction type, and occupancy."
-    },
-    {
-      category: "Smoke/Fire Conditions",
-      keywordMatch: ["smoke", "flames", "fire showing", "heavy", "light"],
-      tip: "Clearly describe smoke/fire location and severity."
-    },
-    {
-      category: "Action Plan",
-      keywordMatch: ["offensive", "defensive", "interior attack", "alpha side", "stretching a line"],
-      tip: "State your initial strategy and entry point."
-    },
-    {
-      category: "Additional Resources",
-      keywordMatch: ["request", "additional", "second alarm", "ladder", "ems"],
-      tip: "Request more units if needed — engines, ladders, EMS, etc."
-    },
-    {
-      category: "Life Hazards/Victims",
-      keywordMatch: ["trapped", "rescued", "occupant", "search", "victim"],
-      tip: "Always note the presence or absence of known victims."
-    },
-    {
-      category: "Water Supply",
-      keywordMatch: ["hydrant", "water supply", "tanker", "relay"],
-      tip: "Describe how you're getting water to the scene."
-    },
-    {
-      category: "Radio Communications",
-      keywordMatch: ["ops channel", "operations channel", "command channel", "tactical channel"],
-      tip: "State that you’ve switched or requested an operations channel."
-    },
-    {
-      category: "Exposures and Hazards",
-      keywordMatch: ["power lines", "propane", "collapse", "hazard", "exposure"],
-      tip: "Mention major hazards like power lines or nearby exposures."
-    },
-    {
-      category: "Incident Naming",
-      keywordMatch: ["command", "main street command", "incident name", "oak street"],
-      tip: "Assign a name to the incident for communication clarity."
+Grade the student using the following 10 categories. Each category is worth 1 point for a total of 10 points. 
+For each category, respond with pass or fail, and describe the reason if failed.
+
+Categories:
+1. Identification & Command: unit ID and command assumed
+2. Structure Description: type, occupancy, # of stories
+3. Smoke/Fire Conditions: location, severity, visibility
+4. Action Plan: offensive/defensive, side, crew actions
+5. Additional Resources: mutual aid, ladder, EMS
+6. Life Hazards/Victims: victim status or searches
+7. Water Supply: source, relay, hydrant
+8. Radio Comms: requests or confirms ops channel
+9. Hazards & Exposures: power lines, collapse, propane, other risks
+10. Incident Naming: assigns a name for command
+
+Then give:
+- Total score out of 10
+- 2 improvement tips
+
+Respond ONLY with JSON in this format:
+{
+  "score": 9,
+  "items": [
+    { "category": "Identification & Command", "desc": "Unit ID and command stated", "status": "pass" },
+    { "category": "Hazards & Exposures", "desc": "Mentioned power lines or collapse risk", "status": "fail", "reason": "No mention of hazards or exposures" }
+  ],
+  "tips": [
+    "Mention scene hazards like power lines or propane tanks.",
+    "Assign a name to the incident for better communication clarity."
+  ]
+}`;
+
+  try {
+    const response = await openai.chat.completions.create({
+      model: "gpt-3.5-turbo",
+      messages: [
+        { role: "system", content: "You are a fire scene instructor grading scene size-ups." },
+        { role: "user", content: basePrompt }
+      ]
+    });
+
+    let content = response.choices[0].message.content;
+    let jsonMatch = content.match(/\{[\s\S]*\}/);
+
+    if (!jsonMatch) {
+      // Escalate to GPT-4 if 3.5 fails to return clean JSON
+      const fallback = await openai.chat.completions.create({
+        model: "gpt-4-turbo",
+        messages: [
+          { role: "system", content: "You are a fire scene instructor grading scene size-ups." },
+          { role: "user", content: basePrompt }
+        ]
+      });
+
+      content = fallback.choices[0].message.content;
+      jsonMatch = content.match(/\{[\s\S]*\}/);
+
+      if (!jsonMatch) {
+        throw new Error("No valid JSON returned from GPT-4 fallback.");
+      }
     }
-  ];
 
-  let score = 0;
-  const missedItems = [];
-  const tips = [];
-  const breakdown = [];
+    const parsed = JSON.parse(jsonMatch[0]);
+    return { statusCode: 200, body: JSON.stringify(parsed) };
 
-  gradingRubric.forEach(item => {
-    const found = item.keywordMatch.some(keyword => lowerText.includes(keyword));
-    if (found) {
-      score += 1;
-      breakdown.push({ category: item.category, status: "pass" });
-    } else {
-      missedItems.push(item.category);
-      tips.push(item.tip);
-      breakdown.push({ category: item.category, status: "fail" });
-    }
-  });
-
-  return {
-    statusCode: 200,
-    body: JSON.stringify({
-      score,
-      maxScore: gradingRubric.length,
-      missedItems,
-      tips,
-      breakdown
-    })
-  };
+  } catch (error) {
+    console.error("Grading error:", error);
+    return {
+      statusCode: 500,
+      body: JSON.stringify({ error: "Grading failed. GPT may not have returned clean JSON." })
+    };
+  }
 };
