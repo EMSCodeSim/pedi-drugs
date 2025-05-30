@@ -46,21 +46,34 @@
       margin-top: 10px;
       box-sizing: border-box;
     }
+    #photo {
+      width: 100%;
+      max-height: 300px;
+      object-fit: cover;
+      margin-bottom: 15px;
+      border-radius: 8px;
+      border: 2px solid #ccc;
+    }
   </style>
 </head>
 <body>
   <div class="container">
     <h1>Fire Scene Size-Up Grading</h1>
-    <p>Enter or dictate your fire scene size-up below. Click "Submit for Grading" when ready.</p>
+    <img id="photo" src="scene_photos/house_fire_1.jpg" alt="Fire Scene">
+
+    <p>Speak or enter your fire scene size-up below:</p>
 
     <textarea id="transcript" placeholder="Example: Engine 3 on scene of a two-story residential structure, heavy fire showing from the rear..."></textarea>
     <br><br>
+
     <button class="submit-btn" id="submit-btn">Submit for Grading</button>
+    <button id="record-btn">🎙️ Record</button>
 
     <div id="score-section"></div>
   </div>
 
   <script>
+    // Submit button logic
     document.getElementById("submit-btn").addEventListener("click", async () => {
       const transcript = document.getElementById("transcript").value.trim();
       if (!transcript) {
@@ -96,6 +109,35 @@
         console.error("Grading error:", error);
         document.getElementById("score-section").innerHTML = `<p style="color:red;">An error occurred while grading your size-up. Please try again.</p>`;
       }
+    });
+
+    // Audio recording logic (basic Whisper mic handler)
+    document.getElementById("record-btn").addEventListener("click", async () => {
+      const recordBtn = document.getElementById("record-btn");
+      recordBtn.textContent = "Recording... ⏺️";
+
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const mediaRecorder = new MediaRecorder(stream);
+      const audioChunks = [];
+
+      mediaRecorder.ondataavailable = e => audioChunks.push(e.data);
+      mediaRecorder.onstop = async () => {
+        const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
+        const formData = new FormData();
+        formData.append('audio', audioBlob, 'sizeup.webm');
+
+        const response = await fetch('/api/transcribe', { method: 'POST', body: formData });
+        const result = await response.json();
+        document.getElementById("transcript").value = result.transcript || "(Transcription failed)";
+        recordBtn.textContent = "🎙️ Record";
+      };
+
+      mediaRecorder.start();
+
+      setTimeout(() => {
+        mediaRecorder.stop();
+        stream.getTracks().forEach(track => track.stop());
+      }, 60000); // stop after 60 sec
     });
   </script>
 </body>
