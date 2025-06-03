@@ -1,8 +1,6 @@
 const { OpenAI } = require("openai");
-const busboy = require("busboy");
+const multiparty = require("multiparty");
 const fs = require("fs");
-const os = require("os");
-const path = require("path");
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
@@ -14,24 +12,46 @@ exports.handler = async (event) => {
     };
   }
 
+  // Netlify passes binary data as base64, so decode it
+  const bodyBuffer = Buffer.from(event.body, event.isBase64Encoded ? "base64" : "utf8");
+
+  // Create a readable stream from the buffer for multiparty to parse
+  // Simulate req with headers and body
+  const req = {
+    headers: event.headers,
+    // Simulate stream interface
+    pipe: (dest) => {
+      dest.end(bodyBuffer);
+    },
+    on: () => {}, // Dummy for multiparty
+  };
+
+  // Parse the FormData
+  const form = new multiparty.Form();
+
   return new Promise((resolve, reject) => {
-    const bb = busboy({ headers: event.headers });
-    let filepath;
-
-    bb.on("file", (_, file, info) => {
-      const tmpPath = path.join(os.tmpdir(), info.filename);
-      filepath = tmpPath;
-      const writeStream = fs.createWriteStream(tmpPath);
-      file.pipe(writeStream);
-    });
-
-    bb.on("finish", async () => {
+    form.parse(req, async (err, fields, files) => {
+      if (err) {
+        console.error("Form parse error:", err);
+        resolve({
+          statusCode: 500,
+          body: JSON.stringify({ error: "Form parse error" }),
+        });
+        return;
+      }
+      const audioFile = files.audio && files.audio[0];
+      if (!audioFile) {
+        resolve({
+          statusCode: 400,
+          body: JSON.stringify({ error: "No audio file provided" }),
+        });
+        return;
+      }
       try {
         const response = await openai.audio.transcriptions.create({
-          file: fs.createReadStream(filepath),
+          file: fs.createReadStream(audioFile.path),
           model: "whisper-1",
         });
-
         resolve({
           statusCode: 200,
           body: JSON.stringify({ transcript: response.text }),
@@ -44,8 +64,5 @@ exports.handler = async (event) => {
         });
       }
     });
-
-    const buffer = Buffer.from(event.body, "base64");
-    bb.end(buffer);
   });
 };
