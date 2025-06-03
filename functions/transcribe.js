@@ -27,12 +27,10 @@ exports.handler = async (event) => {
     let uploadedMimetype = "";
 
     busboy.on("file", (fieldname, file, filename, encoding, mimetype) => {
-      // Log filename and mimetype for debugging
       uploadedFilename = filename;
       uploadedMimetype = mimetype;
       console.log("UPLOAD FILE:", filename, mimetype);
 
-      // Write uploaded audio to a temp file
       const tmpPath = path.join(os.tmpdir(), `${Date.now()}-${filename}`);
       audioFilePath = tmpPath;
       audioFileStream = fs.createWriteStream(tmpPath);
@@ -48,7 +46,6 @@ exports.handler = async (event) => {
         return;
       }
       try {
-        // Log again after file is saved
         console.log("Saved file:", audioFilePath, "as", uploadedFilename, "type", uploadedMimetype);
 
         const transcription = await openai.audio.transcriptions.create({
