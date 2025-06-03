@@ -70,11 +70,11 @@
     let extUsed = "webm";
 
     function getSupportedMimeType() {
-      // Prefer mp4/m4a on Apple devices
+      // Prefer wav > mp4/m4a > webm
       const isApple = /iPad|iPhone|iPod|Macintosh/.test(navigator.userAgent) && !window.MSStream;
       const types = isApple
-        ? ['audio/mp4', 'audio/m4a', 'audio/webm;codecs=opus', 'audio/webm']
-        : ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4', 'audio/m4a'];
+        ? ['audio/wav', 'audio/mp4', 'audio/m4a', 'audio/webm;codecs=opus', 'audio/webm']
+        : ['audio/wav', 'audio/webm;codecs=opus', 'audio/webm', 'audio/mp4', 'audio/m4a'];
       for (const type of types) {
         if (MediaRecorder.isTypeSupported(type)) return type;
       }
@@ -82,10 +82,10 @@
     }
 
     function getExtensionForMimeType(mime) {
+      if (mime.includes('wav')) return 'wav';
       if (mime.includes('mp4')) return 'mp4';
       if (mime.includes('m4a')) return 'm4a';
       if (mime.includes('mp3')) return 'mp3';
-      if (mime.includes('wav')) return 'wav';
       return 'webm';
     }
 
