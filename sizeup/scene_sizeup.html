@@ -2,23 +2,24 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>One-Click Voice Dictation</title>
+  <title>All-Platform Voice to Text + OpenAI</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <style>
     body { font-family: Arial, sans-serif; background: #f7faff; padding: 2em; }
-    button { padding: 1em 2em; font-size: 1.3em; background: #1976d2; color: #fff; border: none; border-radius: 6px; margin-right: 1em; }
+    button { padding: 1em 2em; font-size: 1.2em; background: #1976d2; color: #fff; border: none; border-radius: 6px; margin-right: 1em; }
     button:active { background: #0c3872; }
-    #output { margin-top: 2em; font-size: 1.1em; background: #fff; border-radius: 6px; padding: 1em; box-shadow: 0 2px 6px #0001; min-height: 2em; }
+    #output, #openai { margin-top: 1.2em; font-size: 1.1em; background: #fff; border-radius: 6px; padding: 1em; box-shadow: 0 2px 6px #0001; min-height: 2em; }
     #status { font-weight: bold; color: #1976d2; margin-left: 1em; }
     #warning { color: #c62828; margin-top: 1em; }
   </style>
 </head>
 <body>
-  <h1>One-Click Voice Dictation</h1>
+  <h1>One-Click Voice Dictation with OpenAI Analysis</h1>
   <button id="startBtn">🎤 Start Dictation</button>
   <button id="stopBtn" disabled>Stop</button>
   <span id="status"></span>
   <div id="output"></div>
+  <div id="openai"></div>
   <div id="warning"></div>
 
   <script>
@@ -27,6 +28,7 @@
     const stopBtn = document.getElementById('stopBtn');
     const status = document.getElementById('status');
     const output = document.getElementById('output');
+    const openai = document.getElementById('openai');
     const warning = document.getElementById('warning');
 
     function isIOS() {
@@ -43,7 +45,9 @@
 
     startBtn.onclick = function() {
       output.textContent = '';
+      openai.textContent = '';
       status.textContent = "Listening...";
+      warning.textContent = '';
       startBtn.disabled = true;
       stopBtn.disabled = false;
 
@@ -61,13 +65,28 @@
 
       recognition.onresult = function(event) {
         status.textContent = "";
-        output.textContent = event.results[0][0].transcript;
-        startBtn.disabled = false;
+        const transcript = event.results[0][0].transcript;
+        output.textContent = "You said: " + transcript;
         stopBtn.disabled = true;
+        startBtn.disabled = false;
+        // --- Now send to OpenAI GPT (your backend) ---
+        openai.textContent = "Analyzing with OpenAI...";
+        fetch('/.netlify/functions/openai_gpt', { // <-- replace if needed
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ input: transcript })
+        })
+        .then(res => res.json())
+        .then(data => {
+          openai.textContent = data.result || data.error || "No OpenAI response.";
+        }).catch(err => {
+          openai.textContent = "OpenAI/network error: " + err.message;
+        });
       };
       recognition.onerror = function(event) {
         status.textContent = "";
         output.textContent = "";
+        openai.textContent = "";
         warning.textContent = "Speech recognition error: " + event.error;
         startBtn.disabled = false;
         stopBtn.disabled = true;
