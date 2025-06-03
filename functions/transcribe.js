@@ -14,7 +14,6 @@ exports.handler = async (event) => {
   // Netlify passes body as base64 string if binary
   const buffer = Buffer.from(event.body, event.isBase64Encoded ? "base64" : "utf8");
 
-  // Parse multipart form-data using Busboy
   return new Promise((resolve, reject) => {
     const busboy = Busboy({
       headers: {
