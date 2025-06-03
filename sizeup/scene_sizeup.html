@@ -2,175 +2,91 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>Fire Scene Size-up Voice Recorder</title>
+  <title>One-Click Voice Dictation</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <style>
-    body {
-      font-family: Arial, sans-serif;
-      padding: 2em;
-      background: #f6f9fc;
-    }
-    #controls {
-      margin-bottom: 1em;
-    }
-    #status {
-      margin-top: 0.5em;
-      font-weight: bold;
-      color: #1976d2;
-    }
-    #transcript {
-      margin-top: 1.5em;
-      background: #fff;
-      padding: 1em;
-      border-radius: 6px;
-      box-shadow: 0 2px 6px #0001;
-      min-height: 2em;
-    }
-    button {
-      padding: 0.8em 1.4em;
-      font-size: 1.1em;
-      border: none;
-      border-radius: 6px;
-      background: #1976d2;
-      color: #fff;
-      cursor: pointer;
-      margin-right: 1em;
-      transition: background 0.2s;
-    }
-    button:active {
-      background: #105295;
-    }
-    #stopBtn {
-      background: #c62828;
-    }
-    #stopBtn:active {
-      background: #8b1a1a;
-    }
-    #transcriptTitle {
-      margin-bottom: 0.3em;
-      font-weight: bold;
-      color: #444;
-    }
+    body { font-family: Arial, sans-serif; background: #f7faff; padding: 2em; }
+    button { padding: 1em 2em; font-size: 1.3em; background: #1976d2; color: #fff; border: none; border-radius: 6px; margin-right: 1em; }
+    button:active { background: #0c3872; }
+    #output { margin-top: 2em; font-size: 1.1em; background: #fff; border-radius: 6px; padding: 1em; box-shadow: 0 2px 6px #0001; min-height: 2em; }
+    #status { font-weight: bold; color: #1976d2; margin-left: 1em; }
+    #warning { color: #c62828; margin-top: 1em; }
   </style>
 </head>
 <body>
-  <h1>Fire Scene Size-Up Voice Recorder</h1>
-  <div id="controls">
-    <button id="recordBtn">🎤 Start Recording</button>
-    <button id="stopBtn" disabled>Stop</button>
-    <span id="status"></span>
-  </div>
-  <div id="transcriptTitle" style="display:none;">Transcript:</div>
-  <div id="transcript"></div>
+  <h1>One-Click Voice Dictation</h1>
+  <button id="startBtn">🎤 Start Dictation</button>
+  <button id="stopBtn" disabled>Stop</button>
+  <span id="status"></span>
+  <div id="output"></div>
+  <div id="warning"></div>
 
   <script>
-    let mediaRecorder;
-    let audioChunks = [];
-    let mimeTypeUsed = "audio/webm";
-    let extUsed = "webm";
+    let recognition;
+    const startBtn = document.getElementById('startBtn');
+    const stopBtn = document.getElementById('stopBtn');
+    const status = document.getElementById('status');
+    const output = document.getElementById('output');
+    const warning = document.getElementById('warning');
 
-    function getSupportedMimeType() {
-      // Prefer wav > mp4/m4a > webm
-      const isApple = /iPad|iPhone|iPod|Macintosh/.test(navigator.userAgent) && !window.MSStream;
-      const types = isApple
-        ? ['audio/wav', 'audio/mp4', 'audio/m4a', 'audio/webm;codecs=opus', 'audio/webm']
-        : ['audio/wav', 'audio/webm;codecs=opus', 'audio/webm', 'audio/mp4', 'audio/m4a'];
-      for (const type of types) {
-        if (MediaRecorder.isTypeSupported(type)) return type;
+    function isIOS() {
+      return /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+    }
+    function isSafari() {
+      return /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
+    }
+
+    if (isIOS() && isSafari()) {
+      warning.textContent = "🚫 Sorry, voice dictation is not supported on iPhone/iPad Safari. Please use Chrome or another browser on iOS, or any browser on desktop/Android.";
+      startBtn.disabled = true;
+    }
+
+    startBtn.onclick = function() {
+      output.textContent = '';
+      status.textContent = "Listening...";
+      startBtn.disabled = true;
+      stopBtn.disabled = false;
+
+      window.SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+      if (!window.SpeechRecognition) {
+        warning.textContent = "🚫 Speech recognition not supported in this browser.";
+        status.textContent = "";
+        return;
       }
-      return '';
-    }
 
-    function getExtensionForMimeType(mime) {
-      if (mime.includes('wav')) return 'wav';
-      if (mime.includes('mp4')) return 'mp4';
-      if (mime.includes('m4a')) return 'm4a';
-      if (mime.includes('mp3')) return 'mp3';
-      return 'webm';
-    }
+      recognition = new window.SpeechRecognition();
+      recognition.lang = 'en-US';
+      recognition.interimResults = false;
+      recognition.maxAlternatives = 1;
 
-    const recordBtn = document.getElementById("recordBtn");
-    const stopBtn = document.getElementById("stopBtn");
-    const statusSpan = document.getElementById("status");
-    const transcriptDiv = document.getElementById("transcript");
-    const transcriptTitle = document.getElementById("transcriptTitle");
-
-    recordBtn.onclick = async () => {
-      // Request permission and start recording
-      try {
-        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-        let mimeType = getSupportedMimeType();
-        if (!mimeType) mimeType = '';
-
-        mediaRecorder = mimeType
-          ? new MediaRecorder(stream, { mimeType })
-          : new MediaRecorder(stream);
-
-        mimeTypeUsed = mediaRecorder.mimeType || "audio/webm";
-        extUsed = getExtensionForMimeType(mimeTypeUsed);
-
-        audioChunks = [];
-        mediaRecorder.ondataavailable = (event) => {
-          if (event.data.size > 0) audioChunks.push(event.data);
-        };
-
-        mediaRecorder.onstart = () => {
-          statusSpan.textContent = "Recording... Speak your scene size-up.";
-          recordBtn.disabled = true;
-          stopBtn.disabled = false;
-          transcriptTitle.style.display = "none";
-          transcriptDiv.textContent = "";
-        };
-
-        mediaRecorder.onstop = async () => {
-          statusSpan.textContent = "Processing audio...";
-          recordBtn.disabled = false;
-          stopBtn.disabled = true;
-
-          const audioBlob = new Blob(audioChunks, { type: mimeTypeUsed });
-          console.log("Blob type:", audioBlob.type, "Name:", `audio.${extUsed}`);
-          const formData = new FormData();
-          formData.append("audio", audioBlob, `audio.${extUsed}`);
-
-          // Upload to your Netlify function endpoint
-          try {
-            const res = await fetch("/.netlify/functions/transcribe", {
-              method: "POST",
-              body: formData
-            });
-            const data = await res.json();
-            if (data.transcript) {
-              transcriptTitle.style.display = "block";
-              transcriptDiv.textContent = data.transcript;
-              statusSpan.textContent = "Transcription complete.";
-            } else if (data.error) {
-              transcriptTitle.style.display = "none";
-              transcriptDiv.textContent = "";
-              statusSpan.textContent = "Transcription failed: " + data.error;
-            } else {
-              transcriptTitle.style.display = "none";
-              transcriptDiv.textContent = "";
-              statusSpan.textContent = "Unknown error during transcription.";
-            }
-          } catch (err) {
-            transcriptTitle.style.display = "none";
-            transcriptDiv.textContent = "";
-            statusSpan.textContent = "Network error: " + err.message;
-          }
-        };
-
-        mediaRecorder.start();
-      } catch (err) {
-        statusSpan.textContent = "Mic error: " + (err.message || err);
-        recordBtn.disabled = false;
+      recognition.onresult = function(event) {
+        status.textContent = "";
+        output.textContent = event.results[0][0].transcript;
+        startBtn.disabled = false;
         stopBtn.disabled = true;
-      }
+      };
+      recognition.onerror = function(event) {
+        status.textContent = "";
+        output.textContent = "";
+        warning.textContent = "Speech recognition error: " + event.error;
+        startBtn.disabled = false;
+        stopBtn.disabled = true;
+      };
+      recognition.onend = function() {
+        status.textContent = "";
+        startBtn.disabled = false;
+        stopBtn.disabled = true;
+      };
+
+      recognition.start();
     };
 
-    stopBtn.onclick = () => {
-      if (mediaRecorder && mediaRecorder.state !== "inactive") {
-        mediaRecorder.stop();
-        statusSpan.textContent = "Recording stopped. Transcribing...";
+    stopBtn.onclick = function() {
+      if (recognition) {
+        recognition.stop();
+        status.textContent = "";
+        startBtn.disabled = false;
+        stopBtn.disabled = true;
       }
     };
   </script>
