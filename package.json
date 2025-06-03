@@ -1,7 +1,8 @@
 {
   "type": "commonjs",
   "dependencies": {
-    "openai": "^4.0.0",
-    "busboy": "^1.6.0"
+    "openai": "^4.6.0",
+    "busboy": "^1.6.0",
+    "multiparty": "^4.2.3"
   }
 }
