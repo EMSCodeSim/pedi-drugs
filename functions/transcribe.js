@@ -23,8 +23,15 @@ exports.handler = async (event) => {
 
     let audioFilePath = null;
     let audioFileStream = null;
+    let uploadedFilename = "";
+    let uploadedMimetype = "";
 
     busboy.on("file", (fieldname, file, filename, encoding, mimetype) => {
+      // Log filename and mimetype for debugging
+      uploadedFilename = filename;
+      uploadedMimetype = mimetype;
+      console.log("UPLOAD FILE:", filename, mimetype);
+
       // Write uploaded audio to a temp file
       const tmpPath = path.join(os.tmpdir(), `${Date.now()}-${filename}`);
       audioFilePath = tmpPath;
@@ -41,6 +48,9 @@ exports.handler = async (event) => {
         return;
       }
       try {
+        // Log again after file is saved
+        console.log("Saved file:", audioFilePath, "as", uploadedFilename, "type", uploadedMimetype);
+
         const transcription = await openai.audio.transcriptions.create({
           file: fs.createReadStream(audioFilePath),
           model: "whisper-1",
@@ -53,7 +63,10 @@ exports.handler = async (event) => {
         console.error("Whisper failed:", err);
         resolve({
           statusCode: 500,
-          body: JSON.stringify({ error: "Whisper transcription failed." }),
+          body: JSON.stringify({
+            error: "Whisper transcription failed.",
+            debug: { filename: uploadedFilename, mimetype: uploadedMimetype }
+          }),
         });
       } finally {
         fs.unlink(audioFilePath, () => {});
