@@ -2,112 +2,173 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>All-Platform Voice to Text + OpenAI</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Fire Scene Size-Up</title>
   <style>
-    body { font-family: Arial, sans-serif; background: #f7faff; padding: 2em; }
-    button { padding: 1em 2em; font-size: 1.2em; background: #1976d2; color: #fff; border: none; border-radius: 6px; margin-right: 1em; }
-    button:active { background: #0c3872; }
-    #output, #openai { margin-top: 1.2em; font-size: 1.1em; background: #fff; border-radius: 6px; padding: 1em; box-shadow: 0 2px 6px #0001; min-height: 2em; }
-    #status { font-weight: bold; color: #1976d2; margin-left: 1em; }
-    #warning { color: #c62828; margin-top: 1em; }
+    body {
+      font-family: Arial, sans-serif;
+      background: #eef6f9;
+      padding: 20px;
+    }
+    .container {
+      max-width: 700px;
+      margin: auto;
+      background: white;
+      padding: 20px;
+      border-radius: 10px;
+      box-shadow: 0 0 10px rgba(0,0,0,0.1);
+    }
+    button {
+      padding: 10px 20px;
+      font-size: 16px;
+      margin-right: 10px;
+      border: none;
+      border-radius: 5px;
+      cursor: pointer;
+    }
+    .submit-btn {
+      background: #0077cc;
+      color: white;
+    }
+    .record-btn {
+      background: #28a745;
+      color: white;
+    }
+    .stop-btn {
+      background: #dc3545;
+      color: white;
+    }
+    #score-section {
+      margin-top: 20px;
+      padding: 15px;
+      background: #f4f4f4;
+      border-left: 4px solid #00bfa6;
+    }
+    textarea {
+      width: 100%;
+      height: 150px;
+      font-size: 16px;
+      padding: 10px;
+      border-radius: 5px;
+      border: 1px solid #ccc;
+      margin-top: 10px;
+      box-sizing: border-box;
+    }
+    #photo {
+      width: 100%;
+      max-height: 300px;
+      object-fit: cover;
+      margin-bottom: 15px;
+      border-radius: 8px;
+      border: 2px solid #ccc;
+    }
   </style>
 </head>
 <body>
-  <h1>One-Click Voice Dictation with OpenAI Analysis</h1>
-  <button id="startBtn">🎤 Start Dictation</button>
-  <button id="stopBtn" disabled>Stop</button>
-  <span id="status"></span>
-  <div id="output"></div>
-  <div id="openai"></div>
-  <div id="warning"></div>
+  <div class="container">
+    <h1>Fire Scene Size-Up Grading</h1>
+    <img id="photo" src="/sizeup/scene_photos/house_fire_1.jpg" alt="Fire Scene">
+
+    <p>Speak or enter your fire scene size-up below:</p>
+
+    <textarea id="transcript" placeholder="Example: Engine 3 on scene of a two-story residential structure, heavy fire showing from the rear..."></textarea>
+    <br><br>
+
+    <button class="submit-btn" id="submit-btn">Submit for Grading</button>
+    <button class="record-btn" id="record-btn">🎙️ Start Recording</button>
+    <button class="stop-btn" id="stop-btn" style="display:none;">⏹️ Stop Recording</button>
+
+    <div id="score-section"></div>
+  </div>
 
   <script>
-    let recognition;
-    const startBtn = document.getElementById('startBtn');
-    const stopBtn = document.getElementById('stopBtn');
-    const status = document.getElementById('status');
-    const output = document.getElementById('output');
-    const openai = document.getElementById('openai');
-    const warning = document.getElementById('warning');
+    let mediaRecorder;
+    let audioChunks = [];
+    let stream;
+    let autoStopTimeout;
 
-    function isIOS() {
-      return /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
-    }
-    function isSafari() {
-      return /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
-    }
-
-    if (isIOS() && isSafari()) {
-      warning.textContent = "🚫 Sorry, voice dictation is not supported on iPhone/iPad Safari. Please use Chrome or another browser on iOS, or any browser on desktop/Android.";
-      startBtn.disabled = true;
-    }
-
-    startBtn.onclick = function() {
-      output.textContent = '';
-      openai.textContent = '';
-      status.textContent = "Listening...";
-      warning.textContent = '';
-      startBtn.disabled = true;
-      stopBtn.disabled = false;
-
-      window.SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-      if (!window.SpeechRecognition) {
-        warning.textContent = "🚫 Speech recognition not supported in this browser.";
-        status.textContent = "";
+    document.getElementById("submit-btn").addEventListener("click", async () => {
+      const transcript = document.getElementById("transcript").value.trim();
+      if (!transcript) {
+        alert("Please enter a size-up before submitting.");
         return;
       }
 
-      recognition = new window.SpeechRecognition();
-      recognition.lang = 'en-US';
-      recognition.interimResults = false;
-      recognition.maxAlternatives = 1;
-
-      recognition.onresult = function(event) {
-        status.textContent = "";
-        const transcript = event.results[0][0].transcript;
-        output.textContent = "You said: " + transcript;
-        stopBtn.disabled = true;
-        startBtn.disabled = false;
-        // --- Now send to OpenAI GPT (your backend) ---
-        openai.textContent = "Analyzing with OpenAI...";
-        fetch('/.netlify/functions/openai_gpt', { // <-- replace if needed
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ input: transcript })
-        })
-        .then(res => res.json())
-        .then(data => {
-          openai.textContent = data.result || data.error || "No OpenAI response.";
-        }).catch(err => {
-          openai.textContent = "OpenAI/network error: " + err.message;
+      try {
+        const response = await fetch("/api/grade_sizeup", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ transcript })
         });
-      };
-      recognition.onerror = function(event) {
-        status.textContent = "";
-        output.textContent = "";
-        openai.textContent = "";
-        warning.textContent = "Speech recognition error: " + event.error;
-        startBtn.disabled = false;
-        stopBtn.disabled = true;
-      };
-      recognition.onend = function() {
-        status.textContent = "";
-        startBtn.disabled = false;
-        stopBtn.disabled = true;
-      };
 
-      recognition.start();
-    };
+        const result = await response.json();
 
-    stopBtn.onclick = function() {
-      if (recognition) {
-        recognition.stop();
-        status.textContent = "";
-        startBtn.disabled = false;
-        stopBtn.disabled = true;
+        if (result.error) {
+          document.getElementById("score-section").innerHTML = `<p style="color:red;">Error: ${result.error}</p>`;
+          return;
+        }
+
+        let html = `<h3>Total Score: ${result.score}/10</h3><table><tr><th>Category</th><th>Status</th><th>Notes</th></tr>`;
+        result.items.forEach(item => {
+          html += `<tr><td>${item.category}</td><td>${item.status}</td><td>${item.reason || item.desc}</td></tr>`;
+        });
+        html += "</table><h4>Improvement Tips</h4><ul>";
+        result.tips.forEach(tip => html += `<li>${tip}</li>`);
+        html += "</ul>";
+
+        document.getElementById("score-section").innerHTML = html;
+
+      } catch (error) {
+        console.error("Grading error:", error);
+        document.getElementById("score-section").innerHTML = `<p style="color:red;">An error occurred while grading your size-up. Please try again.</p>`;
       }
-    };
+    });
+
+    document.getElementById("record-btn").addEventListener("click", async () => {
+      stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      mediaRecorder = new MediaRecorder(stream);
+      audioChunks = [];
+
+      mediaRecorder.ondataavailable = e => audioChunks.push(e.data);
+
+      mediaRecorder.onstop = async () => {
+        clearTimeout(autoStopTimeout);
+        const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
+        const formData = new FormData();
+        formData.append('audio', audioBlob, 'sizeup.webm');
+
+        const response = await fetch('/api/transcribe', { method: 'POST', body: formData });
+        const result = await response.json();
+        document.getElementById("transcript").value = result.transcript || "(Transcription failed)";
+
+        // Reset UI
+        document.getElementById("record-btn").style.display = "inline-block";
+        document.getElementById("stop-btn").style.display = "none";
+      };
+
+      mediaRecorder.start();
+      document.getElementById("record-btn").style.display = "none";
+      document.getElementById("stop-btn").style.display = "inline-block";
+
+      autoStopTimeout = setTimeout(() => {
+        stopRecording();
+      }, 40000); // Auto-stop at 40 seconds
+    });
+
+    document.getElementById("stop-btn").addEventListener("click", () => {
+      stopRecording();
+    });
+
+    function stopRecording() {
+      if (mediaRecorder && mediaRecorder.state === "recording") {
+        mediaRecorder.stop();
+      }
+      if (stream) {
+        stream.getTracks().forEach(track => track.stop());
+      }
+      document.getElementById("record-btn").style.display = "inline-block";
+      document.getElementById("stop-btn").style.display = "none";
+    }
   </script>
 </body>
 </html>
