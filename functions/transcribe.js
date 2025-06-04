@@ -1,5 +1,5 @@
 const { OpenAI } = require("openai");
-const Busboy = require("busboy");
+const busboy = require("busboy");
 const fs = require("fs");
 const os = require("os");
 const path = require("path");
@@ -8,68 +8,44 @@ const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
 exports.handler = async (event) => {
   if (event.httpMethod !== "POST") {
-    return { statusCode: 405, body: "Method Not Allowed" };
+    return {
+      statusCode: 405,
+      body: "Method Not Allowed",
+    };
   }
 
-  // Netlify passes body as base64 string if binary
-  const buffer = Buffer.from(event.body, event.isBase64Encoded ? "base64" : "utf8");
-
   return new Promise((resolve, reject) => {
-    const busboy = Busboy({
-      headers: {
-        "content-type": event.headers["content-type"] || event.headers["Content-Type"],
-      },
+    const bb = busboy({ headers: event.headers });
+    let filepath;
+
+    bb.on("file", (_, file, info) => {
+      const tmpPath = path.join(os.tmpdir(), info.filename);
+      filepath = tmpPath;
+      const writeStream = fs.createWriteStream(tmpPath);
+      file.pipe(writeStream);
     });
 
-    let audioFilePath = null;
-    let audioFileStream = null;
-    let uploadedFilename = "";
-    let uploadedMimetype = "";
-
-    busboy.on("file", (fieldname, file, filename, encoding, mimetype) => {
-      uploadedFilename = filename;
-      uploadedMimetype = mimetype;
-      console.log("UPLOAD FILE:", filename, mimetype);
-
-      const tmpPath = path.join(os.tmpdir(), `${Date.now()}-${filename}`);
-      audioFilePath = tmpPath;
-      audioFileStream = fs.createWriteStream(tmpPath);
-      file.pipe(audioFileStream);
-    });
-
-    busboy.on("finish", async () => {
-      if (!audioFilePath) {
-        resolve({
-          statusCode: 400,
-          body: JSON.stringify({ error: "No audio file found." }),
-        });
-        return;
-      }
+    bb.on("finish", async () => {
       try {
-        console.log("Saved file:", audioFilePath, "as", uploadedFilename, "type", uploadedMimetype);
-
-        const transcription = await openai.audio.transcriptions.create({
-          file: fs.createReadStream(audioFilePath),
+        const response = await openai.audio.transcriptions.create({
+          file: fs.createReadStream(filepath),
           model: "whisper-1",
         });
+
         resolve({
           statusCode: 200,
-          body: JSON.stringify({ transcript: transcription.text }),
+          body: JSON.stringify({ transcript: response.text }),
         });
-      } catch (err) {
-        console.error("Whisper failed:", err);
+      } catch (error) {
+        console.error("Whisper error:", error);
         resolve({
           statusCode: 500,
-          body: JSON.stringify({
-            error: "Whisper transcription failed.",
-            debug: { filename: uploadedFilename, mimetype: uploadedMimetype }
-          }),
+          body: JSON.stringify({ error: "Whisper failed." }),
         });
-      } finally {
-        fs.unlink(audioFilePath, () => {});
       }
     });
 
-    busboy.end(buffer);
+    const buffer = Buffer.from(event.body, "base64");
+    bb.end(buffer);
   });
 };
