@@ -5,78 +5,144 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>Fire Scene Size-Up</title>
   <style>
+    * {
+      box-sizing: border-box;
+    }
+
     body {
+      margin: 0;
       font-family: Arial, sans-serif;
-      background: #eef6f9;
-      padding: 20px;
+      background: #f2f8fa;
+      color: #333;
     }
+
     .container {
-      max-width: 700px;
+      display: flex;
+      flex-direction: column;
+      max-width: 800px;
       margin: auto;
+      padding: 16px;
       background: white;
-      padding: 20px;
-      border-radius: 10px;
-      box-shadow: 0 0 10px rgba(0,0,0,0.1);
+      border-radius: 12px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.1);
     }
+
+    .photo-wrapper {
+      width: 100%;
+      overflow: hidden;
+      border-radius: 10px;
+      border: 2px solid #ccc;
+      margin-bottom: 20px;
+    }
+
+    #photo {
+      width: 100%;
+      height: auto;
+      display: block;
+    }
+
+    h1 {
+      text-align: center;
+      margin-top: 10px;
+    }
+
+    textarea {
+      width: 100%;
+      min-height: 150px;
+      font-size: 16px;
+      padding: 12px;
+      margin-top: 12px;
+      border: 1px solid #ccc;
+      border-radius: 6px;
+      resize: vertical;
+    }
+
+    .button-group {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      margin-top: 16px;
+    }
+
     button {
+      margin: 6px;
       padding: 10px 20px;
       font-size: 16px;
-      margin-right: 10px;
       border: none;
-      border-radius: 5px;
+      border-radius: 6px;
       cursor: pointer;
     }
+
     .submit-btn {
       background: #0077cc;
       color: white;
     }
+
     .record-btn {
       background: #28a745;
       color: white;
     }
+
     .stop-btn {
       background: #dc3545;
       color: white;
     }
+
     #score-section {
-      margin-top: 20px;
-      padding: 15px;
-      background: #f4f4f4;
+      margin-top: 24px;
+      padding: 16px;
+      background: #f9f9f9;
       border-left: 4px solid #00bfa6;
+      border-radius: 6px;
     }
-    textarea {
+
+    table {
       width: 100%;
-      height: 150px;
-      font-size: 16px;
-      padding: 10px;
-      border-radius: 5px;
+      border-collapse: collapse;
+      margin-top: 12px;
+    }
+
+    table, th, td {
       border: 1px solid #ccc;
-      margin-top: 10px;
-      box-sizing: border-box;
     }
-    #photo {
-      width: 100%;
-      max-height: 300px;
-      object-fit: cover;
-      margin-bottom: 15px;
-      border-radius: 8px;
-      border: 2px solid #ccc;
+
+    th, td {
+      padding: 8px;
+      text-align: left;
+    }
+
+    ul {
+      margin-top: 12px;
+    }
+
+    @media screen and (max-width: 600px) {
+      .button-group {
+        flex-direction: column;
+        align-items: stretch;
+      }
+
+      button {
+        width: 100%;
+      }
     }
   </style>
 </head>
 <body>
   <div class="container">
-    <h1>Fire Scene Size-Up Grading</h1>
-    <img id="photo" src="/sizeup/photo1.png" alt="Fire Scene">
+    <h1>Fire Scene Size-Up</h1>
 
-    <p>Speak or enter your fire scene size-up below:</p>
+    <div class="photo-wrapper">
+      <img id="photo" src="house_fire_scene.png" alt="Fire Scene">
+    </div>
 
-    <textarea id="transcript" placeholder="Example: Engine 3 on scene of a two-story residential structure, heavy fire showing from the rear..."></textarea>
-    <br><br>
+    <label for="transcript">Speak or enter your fire scene size-up below:</label>
+    <textarea id="transcript" placeholder="Example: Engine 3 on scene of a one-story residential structure, smoke and flame showing from the B-side window..."></textarea>
 
-    <button class="submit-btn" id="submit-btn">Submit for Grading</button>
-    <button class="record-btn" id="record-btn">🎙️ Start Recording</button>
-    <button class="stop-btn" id="stop-btn" style="display:none;">⏹️ Stop Recording</button>
+    <div class="button-group">
+      <button class="submit-btn" id="submit-btn">Submit for Grading</button>
+      <button class="record-btn" id="record-btn">🎙️ Start Recording</button>
+      <button class="stop-btn" id="stop-btn" style="display:none;">⏹️ Stop Recording</button>
+    </div>
 
     <div id="score-section"></div>
   </div>
@@ -141,7 +207,6 @@
         const result = await response.json();
         document.getElementById("transcript").value = result.transcript || "(Transcription failed)";
 
-        // Reset UI
         document.getElementById("record-btn").style.display = "inline-block";
         document.getElementById("stop-btn").style.display = "none";
       };
@@ -152,7 +217,7 @@
 
       autoStopTimeout = setTimeout(() => {
         stopRecording();
-      }, 40000); // Auto-stop at 40 seconds
+      }, 40000);
     });
 
     document.getElementById("stop-btn").addEventListener("click", () => {
