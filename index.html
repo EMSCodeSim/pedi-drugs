@@ -1,44 +1,161 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>EMS Training Tools</title>
+  <meta charset="UTF-8">
+  <title>EMS Code Sim</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
   <style>
     body {
-      font-family: Arial, sans-serif;
-      background: #f2f7fa;
-      padding: 20px;
-      text-align: center;
+      background: #f6fafd;
+      font-family: 'Segoe UI', Arial, sans-serif;
+      margin: 0;
+      padding: 0;
     }
-    .tool-button {
-      padding: 15px 30px;
-      font-size: 18px;
-      margin: 10px;
-      background-color: #0077cc;
-      color: white;
-      border: none;
+    #main {
+      max-width: 520px;
+      margin: 30px auto 0 auto;
+      background: #fff;
+      border-radius: 16px;
+      box-shadow: 0 4px 24px 0 rgba(40,80,120,0.10), 0 1.5px 3px #c1e0f5;
+      padding: 30px 20px 24px 20px;
+      min-height: 680px;
+      display: flex;
+      flex-direction: column;
+    }
+    #chat-box {
+      flex: 1 1 auto;
+      min-height: 360px;
+      max-height: 390px;
+      overflow-y: auto;
+      margin-bottom: 22px;
+      background: #f3f8fc;
+      border-radius: 12px;
+      padding: 18px 10px 12px 10px;
+      box-shadow: 0 1.5px 4px #c1e0f533;
+    }
+    .chat-bubble {
+      padding: 11px 16px;
+      margin-bottom: 13px;
+      border-radius: 17px;
+      display: inline-block;
+      font-size: 1rem;
+      max-width: 93%;
+      box-shadow: 0 1px 4px #b8d6ea22;
+      word-break: break-word;
+    }
+    .user-bubble {
+      background: #e2f4fa;
+      align-self: flex-end;
+      margin-left: 18%;
+    }
+    .patient-bubble {
+      background: #fffde9;
+      color: #413c0c;
+    }
+    .proctor-bubble {
+      background: #f7f6fd;
+      color: #433a6c;
+      border-left: 3px solid #cabffd;
+    }
+    .dispatch-bubble {
+      background: #eef4fa;
+      color: #286698;
+      border-left: 3px solid #b9d7f5;
+    }
+    .system-bubble {
+      background: #f0f0f0;
+      color: #4d5358;
+      border-left: 3px solid #e0e0e0;
+    }
+    #controls {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 14px;
+      flex-wrap: wrap;
+    }
+    #user-input {
+      flex: 1 1 auto;
+      padding: 11px 13px;
+      font-size: 1rem;
       border-radius: 8px;
-      cursor: pointer;
+      border: 1px solid #c2e4f7;
+      background: #fbfdff;
+      margin-right: 6px;
     }
-    .tool-button:hover {
-      background-color: #005fa3;
+    .send-btn, .start-btn, .handoff-btn, .mic-btn {
+      font-size: 1rem;
+      border-radius: 6px;
+      padding: 10px 22px;
+      border: none;
+      cursor: pointer;
+      font-weight: 500;
+      transition: background 0.17s;
+      margin-left: 0;
+    }
+    .start-btn {
+      background: #00b6e9;
+      color: #fff;
+    }
+    .start-btn:hover { background: #028ec2; }
+    .handoff-btn {
+      background: #0077cc;
+      color: white;
+      margin-left: 0;
+    }
+    .handoff-btn:hover {
+      background: #005fa3;
+    }
+    .mic-btn {
+      background: #fff0b5;
+      color: #6d5e00;
+      font-size: 1.15rem;
+      padding: 10px 14px;
+    }
+    .mic-btn:hover { background: #ffe675; }
+    .send-btn {
+      background: #005fa3;
+      color: #fff;
+    }
+    .send-btn:hover { background: #224a8c; }
+    #loading-spinner {
+      display: none;
+      margin: 16px auto;
+      width: 54px;
+      height: 54px;
+      border: 6px solid #c7eaff;
+      border-top: 6px solid #21b3ea;
+      border-radius: 50%;
+      animation: spin 1.1s linear infinite;
+    }
+    @keyframes spin {
+      0% { transform: rotate(0deg);}
+      100% { transform: rotate(360deg);}
+    }
+    @media (max-width: 700px) {
+      #main { max-width: 100vw; min-height: 100vh; margin: 0; border-radius: 0; padding: 14px 2vw;}
+      #chat-box { min-height: 290px; max-height: 340px;}
     }
   </style>
 </head>
 <body>
-  <h1>🚑 Fire Ops SIM</h1>
-  <p>Select a tool below:</p>
-
-  <a href="sizeup/scene_sizeup.html">
-    <button class="tool-button">Scene Sizeup</button>
-  </a>
-
-  <a href="handoff/handoff.html">
-    <button class="tool-button">Hospital Hand Off Reports</button>
-  </a>
-
-
-
+  <div id="main">
+    <h2 style="text-align:center;margin-bottom:18px;color:#0077cc;">EMS Code Sim</h2>
+    <div id="loading-spinner"></div>
+    <div id="chat-box"></div>
+    <div id="controls">
+      <button id="start-scenario" class="start-btn">Start Scenario</button>
+      <button id="handoff-btn" class="handoff-btn">Give Handoff Report</button>
+      <!-- <button id="end-scenario" class="end-btn">End Scenario</button> -->
+      <button id="mic-button" class="mic-btn">🎤</button>
+      <button id="send-button" class="send-btn">Send</button>
+    </div>
+    <div style="display:flex;align-items:center;">
+      <input type="text" id="user-input" placeholder="Type your question here..." autocomplete="off" />
+    </div>
+    <!-- If you have a live skill sheet/checklist, add the container below here -->
+    <div id="skill-checklist" style="margin-top:24px;"></div>
+  </div>
+  <script type="module" src="scripts/app.js"></script>
 </body>
 </html>
