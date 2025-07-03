@@ -1,8 +1,11 @@
-// grade_sizeup.js (for Netlify or Express)
-module.exports = async (req, res) => {
-  const { transcript } = req.body;
+exports.handler = async function(event, context) {
+  const body = JSON.parse(event.body || '{}');
+  const transcript = body.transcript;
   if (!transcript) {
-    return res.json({ error: "No transcript provided." });
+    return {
+      statusCode: 400,
+      body: JSON.stringify({ error: "No transcript provided." })
+    };
   }
 
   const lower = transcript.toLowerCase();
@@ -60,14 +63,14 @@ module.exports = async (req, res) => {
     }
   });
 
-  // Improvement tips for missed items
-  const tips = items
-    .filter(i => i.status === "❌")
-    .map(i => "Tip: " + i.reason);
+  const tips = items.filter(i => i.status === "❌").map(i => "Tip: " + i.reason);
 
-  return res.json({
-    score,
-    items,
-    tips
-  });
+  return {
+    statusCode: 200,
+    body: JSON.stringify({
+      score,
+      items,
+      tips
+    })
+  };
 };
