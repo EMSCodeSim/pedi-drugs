@@ -1,217 +1,118 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>MVA Scene Size-Up</title>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Scene Size-Up Grading</title>
   <style>
-    * { box-sizing: border-box; }
     body {
-      margin: 0;
       font-family: Arial, sans-serif;
-      background: #e9f4fb;
-      color: #333;
-    }
-    .container {
-      max-width: 800px;
-      margin: auto;
+      background: #f0f8ff;
+      margin: 0;
       padding: 20px;
-      background: white;
-      border-radius: 12px;
-      box-shadow: 0 4px 10px rgba(0,0,0,0.1);
     }
     h1 {
-      text-align: center;
-      margin-bottom: 10px;
+      color: #004080;
     }
-    .instructions {
-      background: #f0f8ff;
-      border-left: 5px solid #0077cc;
-      padding: 12px 16px;
-      margin-bottom: 20px;
-      border-radius: 6px;
-    }
-    .photo-wrapper {
-      width: 100%;
-      overflow: hidden;
+    .container {
+      max-width: 600px;
+      margin: auto;
+      background: white;
+      padding: 20px;
       border-radius: 10px;
-      border: 2px solid #ccc;
-      margin-bottom: 20px;
-    }
-    #photo {
-      width: 100%;
-      height: auto;
-      display: block;
+      box-shadow: 0 0 10px #ccc;
     }
     textarea {
       width: 100%;
-      min-height: 160px;
+      height: 120px;
       font-size: 16px;
-      padding: 12px;
-      border: 1px solid #ccc;
-      border-radius: 6px;
-      resize: vertical;
-      margin-bottom: 16px;
-    }
-    .button-group {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 10px;
-      justify-content: center;
-      margin-bottom: 20px;
+      padding: 10px;
     }
     button {
-      flex: 1 1 140px;
-      padding: 10px;
+      padding: 10px 20px;
       font-size: 16px;
-      border: none;
-      border-radius: 6px;
+      margin-top: 10px;
       cursor: pointer;
     }
-    .submit-btn { background: #0077cc; color: white; }
-    .record-btn { background: #28a745; color: white; }
-    .stop-btn { background: #dc3545; color: white; }
-    #score-section {
-      background: #f9f9f9;
-      border-left: 4px solid #00bfa6;
-      border-radius: 6px;
-      padding: 16px;
-      margin-top: 16px;
+    #micButton.recording {
+      background-color: red;
+      color: white;
     }
-    table {
-      width: 100%;
-      border-collapse: collapse;
-      margin-top: 12px;
+    #feedback {
+      margin-top: 20px;
+      white-space: pre-wrap;
     }
-    table, th, td { border: 1px solid #ccc; }
-    th, td {
-      padding: 8px;
-      text-align: left;
-    }
-    ul {
-      margin-top: 12px;
-      padding-left: 20px;
-    }
-    @media (max-width: 600px) {
-      .button-group { flex-direction: column; }
-      button { width: 100%; }
+    .instructions {
+      background: #e7f3ff;
+      padding: 10px;
+      margin-bottom: 10px;
+      border-left: 5px solid #2196F3;
     }
   </style>
 </head>
 <body>
   <div class="container">
-    <h1>MVA Scene Size-Up</h1>
-
-    <div class="instructions">
-      <p><strong>Instructions:</strong></p>
+    <h1>🚑 Scene Size-Up</h1>
+    <div id="instructions" class="instructions">
+      👋 Welcome! To complete your scene size-up:
       <ul>
-        <li>Use the microphone or type your scene size-up report in the box below.</li>
-        <li>Describe what you see at the scene of a motor vehicle accident (MVA).</li>
-        <li>Click <strong>Submit for Grading</strong> to receive feedback and a score.</li>
-        <li><strong>Grading Criteria (8 Points):</strong> Unit ID, # of vehicles, damage, hazards, # of patients, extra resources, initial actions, command declared.</li>
+        <li>State your unit ID and arrival</li>
+        <li>Describe the incident type (e.g. 2-car MVA)</li>
+        <li>Mention patients, safety, and resources</li>
       </ul>
+      When ready, click the mic to speak or type in the box. Click **Submit for Grading** to check your work.
     </div>
 
-    <div class="photo-wrapper">
-      <img id="photo" src="photo1.png" alt="MVA Scene">
-    </div>
+    <label><strong>Your Scene Size-Up:</strong></label><br>
+    <textarea id="transcript" placeholder="Example: Medic 14A on scene of a 2-vehicle head-on collision..."></textarea><br>
+    <button onclick="submitSizeup()">📤 Submit for Grading</button>
+    <button id="micButton" onclick="toggleMic()">🎤 Start Recording</button>
 
-    <label for="transcript"><strong>Your Scene Size-Up:</strong></label>
-    <textarea id="transcript" placeholder="Example: Engine 3 on scene of a 2-car MVA, front-end damage, 3 patients, leaking fuel, requesting ambulance and tow..."></textarea>
-
-    <div class="button-group">
-      <button class="submit-btn" id="submit-btn">📤 Submit for Grading</button>
-      <button class="record-btn" id="record-btn">🎙️ Start Recording</button>
-      <button class="stop-btn" id="stop-btn" style="display:none;">⏹️ Stop Recording</button>
-    </div>
-
-    <div id="score-section"></div>
+    <div id="feedback"></div>
   </div>
 
   <script>
-    let mediaRecorder;
-    let audioChunks = [];
-    let stream;
-    let autoStopTimeout;
+    let isRecording = false;
 
-    document.getElementById("submit-btn").addEventListener("click", async () => {
-      const transcript = document.getElementById("transcript").value.trim();
-      if (!transcript) {
-        alert("Please enter a size-up before submitting.");
-        return;
+    function toggleMic() {
+      const btn = document.getElementById("micButton");
+      isRecording = !isRecording;
+      btn.classList.toggle("recording", isRecording);
+      btn.textContent = isRecording ? "🔴 Stop Recording" : "🎤 Start Recording";
+      if (isRecording) {
+        simulateMicInput(); // Replace this with real mic if available
       }
+    }
+
+    function simulateMicInput() {
+      // Placeholder: Replace with actual mic/Whisper logic
+      setTimeout(() => {
+        document.getElementById("transcript").value = "Medic 14A on scene of a 2-vehicle collision with 3 patients, scene is safe.";
+        toggleMic();
+      }, 3000);
+    }
+
+    async function submitSizeup() {
+      const transcript = document.getElementById("transcript").value.trim();
+      if (!transcript) return alert("Please enter or record your scene size-up first.");
+
+      document.getElementById("instructions").style.display = "none";
+      document.getElementById("feedback").innerText = "⏳ Grading...";
 
       try {
-        const response = await fetch("/.netlify/functions/grade_sizeup", {
+        const res = await fetch("/.netlify/functions/grade_sizeup", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ transcript })
         });
+        const data = await res.json();
 
-        const result = await response.json();
+        if (data.error) throw new Error(data.error);
 
-        if (result.error) {
-          document.getElementById("score-section").innerHTML = `<p style="color:red;">Error: ${result.error}</p>`;
-          return;
-        }
-
-        let html = `<h3>Total Score: ${result.score}/8</h3><table><tr><th>Category</th><th>Status</th><th>Notes</th></tr>`;
-        result.items.forEach(item => {
-          html += `<tr><td>${item.category}</td><td>${item.status}</td><td>${item.reason || item.desc}</td></tr>`;
-        });
-        html += "</table><h4>Improvement Tips</h4><ul>";
-        result.tips.forEach(tip => html += `<li>${tip}</li>`);
-        html += "</ul>";
-
-        document.getElementById("score-section").innerHTML = html;
-
-      } catch (error) {
-        console.error("Grading error:", error);
-        document.getElementById("score-section").innerHTML = `<p style="color:red;">An error occurred while grading your size-up. Please try again.</p>`;
+        document.getElementById("feedback").innerText = data.feedback;
+      } catch (err) {
+        document.getElementById("feedback").innerText = "❌ Error grading your size-up. Please try again.\n" + err.message;
       }
-    });
-
-    document.getElementById("record-btn").addEventListener("click", async () => {
-      stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      mediaRecorder = new MediaRecorder(stream);
-      audioChunks = [];
-
-      mediaRecorder.ondataavailable = e => audioChunks.push(e.data);
-
-      mediaRecorder.onstop = async () => {
-        clearTimeout(autoStopTimeout);
-        const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
-        const formData = new FormData();
-        formData.append('audio', audioBlob, 'sizeup.webm');
-
-        const response = await fetch('/api/transcribe', { method: 'POST', body: formData });
-        const result = await response.json();
-        document.getElementById("transcript").value = result.transcript || "(Transcription failed)";
-
-        document.getElementById("record-btn").style.display = "inline-block";
-        document.getElementById("stop-btn").style.display = "none";
-      };
-
-      mediaRecorder.start();
-      document.getElementById("record-btn").style.display = "none";
-      document.getElementById("stop-btn").style.display = "inline-block";
-
-      autoStopTimeout = setTimeout(() => stopRecording(), 40000);
-    });
-
-    document.getElementById("stop-btn").addEventListener("click", () => {
-      stopRecording();
-    });
-
-    function stopRecording() {
-      if (mediaRecorder && mediaRecorder.state === "recording") {
-        mediaRecorder.stop();
-      }
-      if (stream) {
-        stream.getTracks().forEach(track => track.stop());
-      }
-      document.getElementById("record-btn").style.display = "inline-block";
-      document.getElementById("stop-btn").style.display = "none";
     }
   </script>
 </body>
