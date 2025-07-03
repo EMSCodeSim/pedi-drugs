@@ -1,3 +1,6 @@
+
+const { ChatGPTAPI } = require("chatgpt");
+
 exports.handler = async function(event, context) {
   const body = JSON.parse(event.body || '{}');
   const transcript = body.transcript;
@@ -65,12 +68,20 @@ exports.handler = async function(event, context) {
 
   const tips = items.filter(i => i.status === "❌").map(i => "Tip: " + i.reason);
 
+  // GPT-style explanation
+  const feedback = `You completed ${score} out of ${checks.length} critical MVA scene size-up components.
+${items.map(i => i.status === "✅" ? `✅ ${i.category}: ${i.desc}` : `❌ ${i.category}: ${i.reason}`).join("\n")}
+\n
+Here are improvement tips to focus on:
+${tips.join("\n")}`;
+
   return {
     statusCode: 200,
     body: JSON.stringify({
       score,
       items,
-      tips
+      tips,
+      feedback
     })
   };
 };
