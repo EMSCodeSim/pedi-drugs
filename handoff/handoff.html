@@ -5,90 +5,141 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>EMT-B Handoff Report Practice</title>
   <style>
-    body { font-family: Arial, sans-serif; background: #eef6f9; padding: 20px; }
-    .container { max-width: 700px; margin: auto; background: white; padding: 20px;
-      border-radius: 10px; box-shadow: 0 0 10px rgba(0,0,0,0.1); }
-    textarea { width: 100%; height: 380px; margin-bottom: 15px; white-space: pre-wrap; font-family: monospace; }
-    button {
-      padding: 10px 20px; font-size: 16px; margin-right: 10px;
-      border: none; border-radius: 5px; cursor: pointer;
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: Arial, sans-serif;
+      background: #e9f4fb;
+      color: #333;
     }
-    .mic-btn { background: #00bfa6; color: white; }
+    .container {
+      max-width: 800px;
+      margin: auto;
+      padding: 20px;
+      background: white;
+      border-radius: 12px;
+      box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+    }
+    h1 {
+      text-align: center;
+      margin-bottom: 10px;
+    }
+    .instructions {
+      background: #f0f8ff;
+      border-left: 5px solid #0077cc;
+      padding: 12px 16px;
+      margin-bottom: 20px;
+      border-radius: 6px;
+    }
+    textarea {
+      width: 100%;
+      min-height: 300px;
+      font-size: 14px;
+      padding: 12px;
+      border: 1px solid #ccc;
+      border-radius: 6px;
+      resize: vertical;
+      margin-bottom: 16px;
+      background: #fcfcfc;
+    }
+    .button-group {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      justify-content: center;
+      margin-bottom: 20px;
+    }
+    button {
+      flex: 1 1 160px;
+      padding: 10px;
+      font-size: 16px;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+    }
+    .mic-btn { background: #28a745; color: white; }
     .mic-btn.recording { background: #cc0000; }
     .submit-btn { background: #0077cc; color: white; }
     .gray-btn { background: #888; color: white; }
-    #score-section { margin-top: 20px; padding: 15px; background: #f4f4f4;
-      border-left: 4px solid #00bfa6; }
-    table { width: 100%; border-collapse: collapse; margin-top: 10px; }
-    th, td { border: 1px solid #ccc; padding: 10px; text-align: left; }
+    #score-section {
+      background: #f9f9f9;
+      border-left: 4px solid #00bfa6;
+      border-radius: 6px;
+      padding: 16px;
+      margin-top: 16px;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 12px;
+    }
+    table, th, td { border: 1px solid #ccc; }
+    th, td {
+      padding: 8px;
+      text-align: left;
+    }
     .pass { color: green; font-weight: bold; }
     .fail { color: red; font-weight: bold; }
-    #timer { font-size: 16px; font-weight: bold; color: #cc0000; margin-top: 10px; }
+    #timer {
+      font-size: 16px;
+      font-weight: bold;
+      color: #cc0000;
+      text-align: center;
+      margin-bottom: 10px;
+    }
+    @media (max-width: 600px) {
+      .button-group { flex-direction: column; }
+      button { width: 100%; }
+    }
   </style>
 </head>
 <body>
   <div class="container">
-    <h2>EMT-B Handoff Report Practice</h2>
+    <h1>Handoff Report Practice</h1>
+
+    <div class="instructions">
+      <p><strong>Instructions:</strong></p>
+      <ul>
+        <li>Review the patient scenario below.</li>
+        <li>Click the 🎤 <strong>Start Recording</strong> button and give your handoff verbally as if speaking to a receiving hospital.</li>
+        <li>Use the <strong>MIST format</strong>: <em>Mechanism/Complaint, Injuries/Assessment, Signs (vitals), Treatment</em>.</li>
+        <li>Click <strong>Submit Report for Grading</strong> to get a score and feedback.</li>
+        <li>You will be scored on a 40-point scale using the NREMT Handoff Rubric.</li>
+      </ul>
+    </div>
 
     <textarea id="scenario" readonly>
 🚑 DISPATCH:
 You are dispatched Code 2 to a residence for a 56-year-old male with chest pain.
 
 🧍‍♂️ SCENE DESCRIPTION:
-You arrive to find the patient seated on his front porch in mild distress. It’s a clear afternoon. The scene is safe. Bystanders are family.
+You arrive to find the patient seated on his front porch in mild distress. Scene is safe. Family present.
 
 🩺 CHIEF COMPLAINT:
 Chest pressure rated 6/10 that began 15 minutes ago while mowing the lawn.
 
-🕒 ONSET:
-Started suddenly while performing physical activity.
+📈 Provoked by exertion, relieved with rest
+📍 Radiates to jaw and left arm
+🕒 6/10 severity, began 15 minutes prior
 
-📈 PROVOCATION:
-Worse with exertion, slightly relieved with rest.
-
-📍 QUALITY:
-Described as pressure, not sharp or stabbing.
-
-📏 RADIATION:
-Radiates to jaw and left arm.
-
-⏱️ SEVERITY:
-6 out of 10 on the pain scale.
-
-🕰️ TIME:
-Began 15 minutes prior to EMS arrival.
-
-💬 SAMPLE HISTORY:
-- S: Chest pain with radiation to jaw
-- A: No known allergies
-- M: Daily aspirin, lisinopril
-- P: Hypertension
-- L: Light lunch ~2 hours ago
-- E: Mowing lawn before onset
-
-📊 VITAL SIGNS:
-- BP: 148/90 mmHg
-- Pulse: 98 bpm, regular
-- Respirations: 18
-- SpO2: 95% on room air
-- Skin: Warm, slightly pale
-- LOC: Alert and oriented x3
+📊 VITALS:
+BP 148/90, Pulse 98, Resp 18, SpO2 95% RA, Skin: Warm, pale, AOx3
 
 🧾 TREATMENT:
-- 324mg chewable aspirin given prior to arrival
-- NRB mask at 15 LPM applied
-- 12-lead ECG shows ST elevation in II, III, aVF
+- 324mg ASA
+- NRB 15 LPM
+- 12-lead: ST elevation II, III, aVF
     </textarea>
 
-    <h3>Give Your Handoff Report</h3>
-    <button id="recordBtn" class="mic-btn" onclick="toggleRecording()">🎤 Start Recording</button>
-    <span id="timer"></span>
+    <div id="timer"></div>
 
-    <div id="transcription" style="margin-top: 20px; display: none;"></div>
-    <div id="actionButtons" style="display: none; margin-top: 15px;">
-      <button class="gray-btn" onclick="toggleRecording(true)">Re-record</button>
-      <button class="submit-btn" onclick="submitReport()">Submit Report for Grading</button>
+    <div class="button-group">
+      <button class="mic-btn" id="recordBtn" onclick="toggleRecording()">🎤 Start Recording</button>
+      <button class="gray-btn" onclick="toggleRecording(true)">⏹️ Re-record</button>
+      <button class="submit-btn" onclick="submitReport()">📤 Submit Report for Grading</button>
     </div>
+
+    <div id="transcription" style="margin-top: 10px;"></div>
 
     <div id="score-section" style="display: none;">
       <h4>Score Report</h4>
@@ -148,11 +199,9 @@ Began 15 minutes prior to EMS arrival.
         });
 
         const result = await response.json();
-        document.getElementById('transcription').style.display = 'block';
         document.getElementById('transcription').innerHTML =
           `<p><strong>Transcription:</strong> ${result.transcript}</p>`;
         sessionStorage.setItem('handoffTranscript', result.transcript);
-        document.getElementById('actionButtons').style.display = 'block';
       };
 
       mediaRecorder.start();
