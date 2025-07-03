@@ -1,6 +1,4 @@
 
-const { ChatGPTAPI } = require("chatgpt");
-
 exports.handler = async function(event, context) {
   const body = JSON.parse(event.body || '{}');
   const transcript = body.transcript;
@@ -17,42 +15,42 @@ exports.handler = async function(event, context) {
     {
       category: "Unit Identification",
       pass: /(engine|ladder|truck|rescue|battalion)\s*\d+.*on scene/.test(lower),
-      desc: "States unit and confirms arrival (e.g., 'Engine 3 on scene')"
+      desc: "States unit ID and confirms arrival"
     },
     {
-      category: "Number of Vehicles Involved",
+      category: "Vehicle Count",
       pass: /(one|two|three|multiple|\d+)\s+(vehicle|car|auto|SUV|truck)/.test(lower),
       desc: "Mentions number of vehicles involved"
     },
     {
-      category: "Vehicle Condition Description",
-      pass: /(front-end|rear-end|side|rollover|severe|moderate|minor|damage)/.test(lower),
-      desc: "Describes visible damage to vehicles"
+      category: "Damage Description",
+      pass: /(front-end|rear-end|side|rollover|head-on|t-bone|totaled|moderate|minor|severe|damage)/.test(lower),
+      desc: "Describes vehicle damage type/severity"
     },
     {
-      category: "Scene Safety Hazards",
-      pass: /(leaking fuel|down(ed)? power line|traffic|hazard|fire|smoke|debris|fluid)/.test(lower),
-      desc: "Mentions scene hazards such as fluids, traffic, wires, or fire"
+      category: "Scene Hazards",
+      pass: /(leaking|fuel|fire|traffic|power line|hazard|smoke|debris|fluid|live wire)/.test(lower),
+      desc: "Mentions hazards (fire, fluid, traffic, etc.)"
     },
     {
-      category: "Number & Status of Patients",
-      pass: /(one|two|three|multiple|\d+)\s+(patient|victim|occupant)/.test(lower),
-      desc: "Mentions how many patients and their conditions"
+      category: "Patient Info",
+      pass: /(\d+|one|two|three|multiple)\s+(occupants|patients|people|victims)/.test(lower),
+      desc: "States number and/or condition of occupants"
     },
     {
-      category: "Need for Additional Resources",
-      pass: /(request|need|call).*?(ambulance|rescue|PD|police|tow|hazmat)/.test(lower),
-      desc: "Requests or mentions other units needed"
+      category: "Resource Requests",
+      pass: /(request|need|call).*?(ambulance|rescue|PD|police|tow|hazmat|additional)/.test(lower),
+      desc: "Requests for support units (PD, EMS, tow)"
     },
     {
-      category: "Initial Actions Taken",
-      pass: /(triage|extrication|stabilize|hazard control|hazard mitigation|assign command|patient care)/.test(lower),
-      desc: "Mentions any immediate actions taken"
+      category: "Initial Actions",
+      pass: /(triage|extrication|stabilize|hazard control|assign command|scene secure|scene size-up)/.test(lower),
+      desc: "Mentions initial actions like triage, stabilization, or command"
     },
     {
-      category: "Command Declaration",
-      pass: /(command).*(established|assumed)/.test(lower),
-      desc: "Declares or assumes incident command"
+      category: "Command Establishment",
+      pass: /command.*(established|assumed|initiated)/.test(lower),
+      desc: "Declares command established or assumed"
     }
   ];
 
@@ -62,25 +60,22 @@ exports.handler = async function(event, context) {
       score++;
       return { category: c.category, status: "✅", desc: c.desc };
     } else {
-      return { category: c.category, status: "❌", reason: "Missing or unclear: " + c.desc };
+      return { category: c.category, status: "❌", reason: "Missing: " + c.desc };
     }
   });
 
-  const tips = items.filter(i => i.status === "❌").map(i => "Tip: " + i.reason);
+  const feedbackTips = items.filter(i => i.status === "❌").map(i => `• ${i.reason}`);
+  const summary = `✅ ${score} of ${checks.length} key size-up elements completed.\n\n`;
 
-  // GPT-style explanation
-  const feedback = `You completed ${score} out of ${checks.length} critical MVA scene size-up components.
-${items.map(i => i.status === "✅" ? `✅ ${i.category}: ${i.desc}` : `❌ ${i.category}: ${i.reason}`).join("\n")}
-\n
-Here are improvement tips to focus on:
-${tips.join("\n")}`;
+  const feedback = summary + (feedbackTips.length
+    ? "Suggested improvements:\n" + feedbackTips.join("\n")
+    : "Excellent job covering all essential elements.");
 
   return {
     statusCode: 200,
     body: JSON.stringify({
       score,
       items,
-      tips,
       feedback
     })
   };
