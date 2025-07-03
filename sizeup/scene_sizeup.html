@@ -189,7 +189,7 @@
       document.getElementById("score-section").innerHTML = "⏳ Grading...";
 
       try {
-        const response = await fetch("/.netlify/functions/grade_sizeup", {
+        const response = await fetch("/.functions/grade_sizeup", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ transcript })
