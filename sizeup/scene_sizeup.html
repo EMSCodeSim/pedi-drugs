@@ -3,30 +3,34 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Fire Scene Size-Up</title>
+  <title>MVA Scene Size-Up</title>
   <style>
-    * {
-      box-sizing: border-box;
-    }
-
+    * { box-sizing: border-box; }
     body {
       margin: 0;
       font-family: Arial, sans-serif;
-      background: #f2f8fa;
+      background: #e9f4fb;
       color: #333;
     }
-
     .container {
-      display: flex;
-      flex-direction: column;
       max-width: 800px;
       margin: auto;
-      padding: 16px;
+      padding: 20px;
       background: white;
       border-radius: 12px;
-      box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+      box-shadow: 0 4px 10px rgba(0,0,0,0.1);
     }
-
+    h1 {
+      text-align: center;
+      margin-bottom: 10px;
+    }
+    .instructions {
+      background: #f0f8ff;
+      border-left: 5px solid #0077cc;
+      padding: 12px 16px;
+      margin-bottom: 20px;
+      border-radius: 6px;
+    }
     .photo-wrapper {
       width: 100%;
       overflow: hidden;
@@ -34,112 +38,89 @@
       border: 2px solid #ccc;
       margin-bottom: 20px;
     }
-
     #photo {
       width: 100%;
       height: auto;
       display: block;
     }
-
-    h1 {
-      text-align: center;
-      margin-top: 10px;
-    }
-
     textarea {
       width: 100%;
-      min-height: 150px;
+      min-height: 160px;
       font-size: 16px;
       padding: 12px;
-      margin-top: 12px;
       border: 1px solid #ccc;
       border-radius: 6px;
       resize: vertical;
+      margin-bottom: 16px;
     }
-
     .button-group {
       display: flex;
       flex-wrap: wrap;
+      gap: 10px;
       justify-content: center;
-      margin-top: 16px;
+      margin-bottom: 20px;
     }
-
     button {
-      margin: 6px;
-      padding: 10px 20px;
+      flex: 1 1 140px;
+      padding: 10px;
       font-size: 16px;
       border: none;
       border-radius: 6px;
       cursor: pointer;
     }
-
-    .submit-btn {
-      background: #0077cc;
-      color: white;
-    }
-
-    .record-btn {
-      background: #28a745;
-      color: white;
-    }
-
-    .stop-btn {
-      background: #dc3545;
-      color: white;
-    }
-
+    .submit-btn { background: #0077cc; color: white; }
+    .record-btn { background: #28a745; color: white; }
+    .stop-btn { background: #dc3545; color: white; }
     #score-section {
-      margin-top: 24px;
-      padding: 16px;
       background: #f9f9f9;
       border-left: 4px solid #00bfa6;
       border-radius: 6px;
+      padding: 16px;
+      margin-top: 16px;
     }
-
     table {
       width: 100%;
       border-collapse: collapse;
       margin-top: 12px;
     }
-
-    table, th, td {
-      border: 1px solid #ccc;
-    }
-
+    table, th, td { border: 1px solid #ccc; }
     th, td {
       padding: 8px;
       text-align: left;
     }
-
     ul {
       margin-top: 12px;
+      padding-left: 20px;
     }
-
-    @media screen and (max-width: 600px) {
-      .button-group {
-        flex-direction: column;
-        align-items: stretch;
-      }
-
-      button {
-        width: 100%;
-      }
+    @media (max-width: 600px) {
+      .button-group { flex-direction: column; }
+      button { width: 100%; }
     }
   </style>
 </head>
 <body>
   <div class="container">
-    <h1>Fire Scene Size-Up</h1>
+    <h1>MVA Scene Size-Up</h1>
 
-    <div class="photo-wrapper">
-      <img id="photo" src="photo1.png" alt="Fire Scene">
+    <div class="instructions">
+      <p><strong>Instructions:</strong></p>
+      <ul>
+        <li>Use the microphone or type your scene size-up report in the box below.</li>
+        <li>Describe what you see at the scene of a motor vehicle accident (MVA).</li>
+        <li>Click <strong>Submit for Grading</strong> to receive feedback and a score.</li>
+        <li><strong>Grading Criteria (8 Points):</strong> Unit ID, # of vehicles, damage, hazards, # of patients, extra resources, initial actions, command declared.</li>
+      </ul>
     </div>
 
-    <label for="transcript">Speak or enter your fire scene size-up below:</label>
-    <textarea id="transcript" placeholder="Example: Engine 3 on scene of a one-story residential structure, smoke and flame showing from the B-side window..."></textarea>
+    <div class="photo-wrapper">
+      <img id="photo" src="photo1.png" alt="MVA Scene">
+    </div>
+
+    <label for="transcript"><strong>Your Scene Size-Up:</strong></label>
+    <textarea id="transcript" placeholder="Example: Engine 3 on scene of a 2-car MVA, front-end damage, 3 patients, leaking fuel, requesting ambulance and tow..."></textarea>
 
     <div class="button-group">
-      <button class="submit-btn" id="submit-btn">Submit for Grading</button>
+      <button class="submit-btn" id="submit-btn">📤 Submit for Grading</button>
       <button class="record-btn" id="record-btn">🎙️ Start Recording</button>
       <button class="stop-btn" id="stop-btn" style="display:none;">⏹️ Stop Recording</button>
     </div>
@@ -161,7 +142,7 @@
       }
 
       try {
-        const response = await fetch("/api/grade_sizeup", {
+        const response = await fetch("/.netlify/functions/grade_sizeup", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ transcript })
@@ -174,7 +155,7 @@
           return;
         }
 
-        let html = `<h3>Total Score: ${result.score}/10</h3><table><tr><th>Category</th><th>Status</th><th>Notes</th></tr>`;
+        let html = `<h3>Total Score: ${result.score}/8</h3><table><tr><th>Category</th><th>Status</th><th>Notes</th></tr>`;
         result.items.forEach(item => {
           html += `<tr><td>${item.category}</td><td>${item.status}</td><td>${item.reason || item.desc}</td></tr>`;
         });
@@ -215,9 +196,7 @@
       document.getElementById("record-btn").style.display = "none";
       document.getElementById("stop-btn").style.display = "inline-block";
 
-      autoStopTimeout = setTimeout(() => {
-        stopRecording();
-      }, 40000);
+      autoStopTimeout = setTimeout(() => stopRecording(), 40000);
     });
 
     document.getElementById("stop-btn").addEventListener("click", () => {
