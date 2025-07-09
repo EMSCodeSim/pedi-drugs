@@ -13,7 +13,7 @@ exports.handler = async (event) => {
     const { transcript } = JSON.parse(event.body);
     const text = transcript.toLowerCase();
 
-    // Fallback keywords for backup scoring
+    // Fallback keyword scoring setup
     const checklist = {
       unitArrival: ["on scene", "arrived", "ambulance on scene", "medic on scene"],
       vehicleCount: ["2 car", "multiple vehicle", "single vehicle", "head-on", "rear-end", "rollover"],
@@ -23,7 +23,7 @@ exports.handler = async (event) => {
       command: ["establish command", "assuming command", "incident command", "medical command"],
     };
 
-    // Attempt GPT Grading
+    // GPT request
     const gpt = await openai.chat.completions.create({
       model: "gpt-4-turbo",
       messages: [
@@ -54,14 +54,14 @@ Then summarize with:
 - Total score out of 6
 - 2–3 improvement tips
 
-Respond ONLY in JSON like this:
+Respond ONLY in this exact JSON format:
 {
   "items": [
-    { "category": "Unit Arrival", "status": "pass", "desc": "Crew confirmed arrival", "reason": "" },
+    { "category": "Unit Arrival", "status": "pass", "desc": "Confirmed arrival", "reason": "" },
     ...
   ],
   "score": 5,
-  "tips": ["Use clearer description of vehicle damage", "Mention hazards explicitly"]
+  "tips": ["Use clearer hazard language", "State patient condition"]
 }
           `,
         },
@@ -70,13 +70,12 @@ Respond ONLY in JSON like this:
     });
 
     const raw = gpt.choices?.[0]?.message?.content?.trim();
+    console.log("GPT response raw:", raw); // Log what GPT said
 
-    // Validate response content
     if (!raw || !raw.startsWith("{")) {
       throw new Error("GPT did not return valid JSON");
     }
 
-    // Attempt safe JSON parse
     let parsed;
     try {
       parsed = JSON.parse(raw);
@@ -90,21 +89,21 @@ Respond ONLY in JSON like this:
     };
 
   } catch (err) {
-    console.warn("⚠️ GPT Grading failed. Falling back. Reason:", err.message);
+    console.error("Error in grade_sizeup:", err.message);
 
-    // Fallback grading if GPT fails
+    // Fallback keyword scoring
     const fallbackResult = {
       items: [],
       score: 0,
       tips: [
-        "Use clear language for unit arrival and hazards.",
-        "Be specific about number of vehicles and patients.",
-        "Mention if you're assuming command or need resources."
+        "Use clear language for vehicle type and damage.",
+        "Mention number and condition of patients.",
+        "Say whether you’re assuming command or requesting help."
       ],
     };
 
     for (const [category, keywords] of Object.entries(checklist)) {
-      const found = keywords.some(k => text.includes(k));
+      const found = keywords.some(k => transcript.toLowerCase().includes(k));
       fallbackResult.items.push({
         category,
         status: found ? "pass" : "fail",
