@@ -71,6 +71,8 @@
     .submit-btn { background: #0077cc; color: white; }
     .record-btn { background: #28a745; color: white; }
     .recording { background-color: red !important; }
+    .pass { color: green; font-weight: bold; }
+    .fail { color: red; font-weight: bold; }
     #score-section {
       background: #f9f9f9;
       border-left: 4px solid #00bfa6;
@@ -99,121 +101,130 @@
   </style>
 </head>
 <body>
-  <div class="container">
-    <h1>MVA Scene Size-Up</h1>
+<div class="container">
+  <h1>MVA Scene Size-Up</h1>
 
-    <div class="instructions">
-      <p><strong>Instructions:</strong></p>
-      <ul>
-        <li>Use the microphone or type your scene size-up report in the box below.</li>
-        <li>Describe what you see at the scene of a motor vehicle accident (MVA).</li>
-        <li>Click <strong>Submit for Grading</strong> to receive feedback and a score.</li>
-        <li><strong>Grading Criteria:</strong> Unit ID, # of vehicles, vehicle damage, hazards, # of patients, extra resources, initial actions, command declared.</li>
-      </ul>
-    </div>
-
-    <div class="photo-wrapper">
-      <img id="photo" src="photo1.png" alt="MVA Scene">
-    </div>
-
-    <label for="transcript"><strong>Your Scene Size-Up:</strong></label>
-    <textarea id="transcript" placeholder="Example: Medic 2 on scene of a 2-car MVA, visible front-end damage, 3 patients, scene is safe, requesting additional ambulance..."></textarea>
-
-    <div class="button-group">
-      <button class="submit-btn" id="submit-btn">📤 Submit for Grading</button>
-      <button class="record-btn" id="record-btn">🎙️ Start Recording</button>
-    </div>
-
-    <div id="score-section"></div>
+  <div class="instructions">
+    <p><strong>Instructions:</strong></p>
+    <ul>
+      <li>Use the microphone or type your scene size-up report in the box below.</li>
+      <li>Describe what you see at the scene of a motor vehicle accident (MVA).</li>
+      <li>Click <strong>Submit for Grading</strong> to receive feedback and a score.</li>
+      <li><strong>Grading Criteria:</strong> Realistic radio format: unit arrival, vehicles, hazards, patients, resources, command.</li>
+    </ul>
   </div>
 
-  <script>
-    let mediaRecorder;
-    let audioChunks = [];
-    let stream;
-    let autoStopTimeout;
+  <div class="photo-wrapper">
+    <img id="photo" src="photo1.png" alt="MVA Scene">
+  </div>
 
-    const recordBtn = document.getElementById("record-btn");
+  <label for="transcript"><strong>Your Scene Size-Up:</strong></label>
+  <textarea id="transcript" placeholder="Example: Medic 2 on scene of a 2-car MVA, visible front-end damage, 3 patients, scene is safe, requesting additional ambulance..."></textarea>
 
-    recordBtn.addEventListener("click", async () => {
-      if (recordBtn.classList.contains("recording")) {
-        stopRecording();
+  <div class="button-group">
+    <button class="submit-btn" id="submit-btn">📤 Submit for Grading</button>
+    <button class="record-btn" id="record-btn">🎙️ Start Recording</button>
+  </div>
+
+  <div id="score-section"></div>
+</div>
+
+<script>
+  let mediaRecorder;
+  let audioChunks = [];
+  let stream;
+  let autoStopTimeout;
+
+  const recordBtn = document.getElementById("record-btn");
+
+  recordBtn.addEventListener("click", async () => {
+    if (recordBtn.classList.contains("recording")) {
+      stopRecording();
+      return;
+    }
+
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      mediaRecorder = new MediaRecorder(stream);
+      audioChunks = [];
+
+      mediaRecorder.ondataavailable = e => audioChunks.push(e.data);
+
+      mediaRecorder.onstop = async () => {
+        clearTimeout(autoStopTimeout);
+        const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
+        const formData = new FormData();
+        formData.append('audio', audioBlob, 'sizeup.webm');
+
+        const response = await fetch('/api/transcribe', { method: 'POST', body: formData });
+        const result = await response.json();
+        document.getElementById("transcript").value = result.transcript || "(Transcription failed)";
+
+        recordBtn.classList.remove("recording");
+        recordBtn.innerText = "🎙️ Start Recording";
+      };
+
+      mediaRecorder.start();
+      recordBtn.classList.add("recording");
+      recordBtn.innerText = "🔴 Stop Recording";
+
+      autoStopTimeout = setTimeout(() => stopRecording(), 40000);
+
+    } catch (err) {
+      alert("Microphone access is required.");
+    }
+  });
+
+  function stopRecording() {
+    if (mediaRecorder && mediaRecorder.state === "recording") {
+      mediaRecorder.stop();
+    }
+    if (stream) {
+      stream.getTracks().forEach(track => track.stop());
+    }
+  }
+
+  document.getElementById("submit-btn").addEventListener("click", async () => {
+    const transcript = document.getElementById("transcript").value.trim();
+    if (!transcript) return alert("Please enter or record your scene size-up first.");
+
+    document.getElementById("score-section").innerHTML = "⏳ Grading...";
+
+    try {
+      const response = await fetch("/.functions/grade_sizeup", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ transcript })
+      });
+
+      const result = await response.json();
+      if (result.error) {
+        document.getElementById("score-section").innerHTML = `<p style="color:red;">Error: ${result.error}</p>`;
         return;
       }
 
-      try {
-        stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-        mediaRecorder = new MediaRecorder(stream);
-        audioChunks = [];
+      let html = `<h3>Total Score: ${result.score}/6</h3><table><tr><th>Category</th><th>Status</th><th>Reason</th></tr>`;
+      result.items.forEach(item => {
+        html += `<tr>
+          <td>${item.category}</td>
+          <td class="${item.status === 'pass' ? 'pass' : 'fail'}">
+            ${item.status === 'pass' ? '✅ Pass' : '❌ Fail'}
+          </td>
+          <td>${item.reason || ''}</td>
+        </tr>`;
+      });
+      html += "</table><h4>Improvement Tips</h4><ul>";
+      result.tips.forEach(tip => {
+        html += `<li>${tip}</li>`;
+      });
+      html += "</ul>";
 
-        mediaRecorder.ondataavailable = e => audioChunks.push(e.data);
+      document.getElementById("score-section").innerHTML = html;
 
-        mediaRecorder.onstop = async () => {
-          clearTimeout(autoStopTimeout);
-          const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
-          const formData = new FormData();
-          formData.append('audio', audioBlob, 'sizeup.webm');
-
-          const response = await fetch('/api/transcribe', { method: 'POST', body: formData });
-          const result = await response.json();
-          document.getElementById("transcript").value = result.transcript || "(Transcription failed)";
-
-          recordBtn.classList.remove("recording");
-          recordBtn.innerText = "🎙️ Start Recording";
-        };
-
-        mediaRecorder.start();
-        recordBtn.classList.add("recording");
-        recordBtn.innerText = "🔴 Stop Recording";
-
-        autoStopTimeout = setTimeout(() => stopRecording(), 40000);
-
-      } catch (err) {
-        alert("Microphone access is required.");
-      }
-    });
-
-    function stopRecording() {
-      if (mediaRecorder && mediaRecorder.state === "recording") {
-        mediaRecorder.stop();
-      }
-      if (stream) {
-        stream.getTracks().forEach(track => track.stop());
-      }
+    } catch (err) {
+      document.getElementById("score-section").innerHTML = `<p style='color:red;'>❌ Error grading: ${err.message}</p>`;
     }
-
-    document.getElementById("submit-btn").addEventListener("click", async () => {
-      const transcript = document.getElementById("transcript").value.trim();
-      if (!transcript) return alert("Please enter or record your scene size-up first.");
-
-      document.getElementById("score-section").innerHTML = "⏳ Grading...";
-
-      try {
-        const response = await fetch("/.functions/grade_sizeup", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ transcript })
-        });
-
-        const result = await response.json();
-
-        if (result.error) {
-          document.getElementById("score-section").innerHTML = `<p style="color:red;">Error: ${result.error}</p>`;
-          return;
-        }
-
-        let html = `<h3>Total Score: ${result.score}/${result.outOf}</h3><table><tr><th>Category</th><th>Status</th></tr>`;
-        for (const [key, passed] of Object.entries(result.detailed)) {
-          html += `<tr><td>${key}</td><td>${passed ? "✅" : "❌"}</td></tr>`;
-        }
-        html += "</table><h4>Feedback</h4><p>" + result.feedback.replace(/\n/g, "<br>") + "</p>";
-
-        document.getElementById("score-section").innerHTML = html;
-
-      } catch (err) {
-        document.getElementById("score-section").innerHTML = `<p style="color:red;">❌ Error grading: ${err.message}</p>`;
-      }
-    });
-  </script>
+  });
+</script>
 </body>
 </html>
