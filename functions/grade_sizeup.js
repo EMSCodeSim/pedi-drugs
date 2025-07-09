@@ -13,7 +13,7 @@ exports.handler = async (event) => {
     const { transcript } = JSON.parse(event.body);
     const text = transcript.toLowerCase();
 
-    // Fallback checklist for keyword backup
+    // Fallback keywords for backup scoring
     const checklist = {
       unitArrival: ["on scene", "arrived", "ambulance on scene", "medic on scene"],
       vehicleCount: ["2 car", "multiple vehicle", "single vehicle", "head-on", "rear-end", "rollover"],
@@ -23,7 +23,7 @@ exports.handler = async (event) => {
       command: ["establish command", "assuming command", "incident command", "medical command"],
     };
 
-    // GPT attempt
+    // Attempt GPT Grading
     const gpt = await openai.chat.completions.create({
       model: "gpt-4-turbo",
       messages: [
@@ -54,7 +54,7 @@ Then summarize with:
 - Total score out of 6
 - 2–3 improvement tips
 
-Respond in this JSON format:
+Respond ONLY in JSON like this:
 {
   "items": [
     { "category": "Unit Arrival", "status": "pass", "desc": "Crew confirmed arrival", "reason": "" },
@@ -63,7 +63,7 @@ Respond in this JSON format:
   "score": 5,
   "tips": ["Use clearer description of vehicle damage", "Mention hazards explicitly"]
 }
-        `,
+          `,
         },
       ],
       temperature: 0.3,
@@ -71,43 +71,48 @@ Respond in this JSON format:
 
     const raw = gpt.choices?.[0]?.message?.content?.trim();
 
-    // Validate if response starts with expected JSON
+    // Validate response content
     if (!raw || !raw.startsWith("{")) {
-      throw new Error("GPT response was not JSON");
+      throw new Error("GPT did not return valid JSON");
     }
 
-    const parsed = JSON.parse(raw);
+    // Attempt safe JSON parse
+    let parsed;
+    try {
+      parsed = JSON.parse(raw);
+    } catch (jsonErr) {
+      throw new Error("Invalid JSON returned from GPT: " + jsonErr.message);
+    }
+
     return {
       statusCode: 200,
       body: JSON.stringify(parsed),
     };
 
   } catch (err) {
-    console.warn("GPT failed or invalid JSON. Falling back. Error:", err.message);
+    console.warn("⚠️ GPT Grading failed. Falling back. Reason:", err.message);
 
-    // Fallback grading logic
+    // Fallback grading if GPT fails
     const fallbackResult = {
       items: [],
       score: 0,
-      tips: [],
+      tips: [
+        "Use clear language for unit arrival and hazards.",
+        "Be specific about number of vehicles and patients.",
+        "Mention if you're assuming command or need resources."
+      ],
     };
 
     for (const [category, keywords] of Object.entries(checklist)) {
-      const found = keywords.some(keyword => text.includes(keyword));
+      const found = keywords.some(k => text.includes(k));
       fallbackResult.items.push({
         category,
         status: found ? "pass" : "fail",
-        desc: `Check for ${category}`,
-        reason: found ? "" : `Expected phrase like "${keywords[0]}"`,
+        desc: `Expected mention of ${category}`,
+        reason: found ? "" : `Example: "${keywords[0]}"`
       });
       if (found) fallbackResult.score++;
     }
-
-    fallbackResult.tips = [
-      "Use clear radio language to describe vehicles and hazards.",
-      "State if additional help is needed.",
-      "Always confirm you're on scene at the start of your report."
-    ];
 
     return {
       statusCode: 200,
