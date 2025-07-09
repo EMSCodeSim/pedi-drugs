@@ -13,7 +13,7 @@ exports.handler = async (event) => {
     const { transcript } = JSON.parse(event.body);
     const text = transcript.toLowerCase();
 
-    // Fallback keyword-based categories
+    // Fallback checklist for keyword backup
     const checklist = {
       unitArrival: ["on scene", "arrived", "ambulance on scene", "medic on scene"],
       vehicleCount: ["2 car", "multiple vehicle", "single vehicle", "head-on", "rear-end", "rollover"],
@@ -23,8 +23,8 @@ exports.handler = async (event) => {
       command: ["establish command", "assuming command", "incident command", "medical command"],
     };
 
-    // Attempt GPT grading
-    const gptResponse = await openai.chat.completions.create({
+    // GPT attempt
+    const gpt = await openai.chat.completions.create({
       model: "gpt-4-turbo",
       messages: [
         {
@@ -63,23 +63,29 @@ Respond in this JSON format:
   "score": 5,
   "tips": ["Use clearer description of vehicle damage", "Mention hazards explicitly"]
 }
-          `,
+        `,
         },
       ],
       temperature: 0.3,
     });
 
-    const parsed = gptResponse.choices?.[0]?.message?.content;
-    const result = JSON.parse(parsed);
+    const raw = gpt.choices?.[0]?.message?.content?.trim();
 
+    // Validate if response starts with expected JSON
+    if (!raw || !raw.startsWith("{")) {
+      throw new Error("GPT response was not JSON");
+    }
+
+    const parsed = JSON.parse(raw);
     return {
       statusCode: 200,
-      body: JSON.stringify(result),
+      body: JSON.stringify(parsed),
     };
-  } catch (err) {
-    console.warn("GPT grading failed, falling back to keywords. Error:", err.message);
 
-    // Fallback to keyword grading
+  } catch (err) {
+    console.warn("GPT failed or invalid JSON. Falling back. Error:", err.message);
+
+    // Fallback grading logic
     const fallbackResult = {
       items: [],
       score: 0,
