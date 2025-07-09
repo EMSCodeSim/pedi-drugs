@@ -1,64 +1,111 @@
-exports.handler = async (event) => {
-  try {
-    if (event.httpMethod !== "POST") {
-      return {
-        statusCode: 405,
-        body: "Method Not Allowed",
-      };
-    }
+const { OpenAI } = require("openai");
+const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
+exports.handler = async (event) => {
+  if (event.httpMethod !== "POST") {
+    return {
+      statusCode: 405,
+      body: "Method Not Allowed",
+    };
+  }
+
+  try {
     const { transcript } = JSON.parse(event.body);
     const text = transcript.toLowerCase();
 
+    // Fallback keyword-based categories
     const checklist = {
-      unitId: ["medic", "ambulance", "engine", "rescue", "ems", "squad", "battalion"],
-      incidentType: ["mvc", "mva", "motor vehicle", "collision", "crash", "accident"],
-      numberOfVehicles: ["2 vehicle", "two vehicle", "multiple vehicle", "car vs", "2-car", "head-on", "rear-end"],
-      numberOfPatients: ["1 patient", "2 patient", "multiple patients", "victims", "people in the car"],
-      sceneSafety: ["scene is safe", "scene appears safe", "secured the scene", "no hazards", "scene is secure"],
-      additionalResources: ["request fire", "request police", "need additional units", "backup requested", "hazmat", "air medical"],
-      cspine: ["initiate c-spine", "manual stabilization", "c-spine precautions", "cervical collar"]
+      unitArrival: ["on scene", "arrived", "ambulance on scene", "medic on scene"],
+      vehicleCount: ["2 car", "multiple vehicle", "single vehicle", "head-on", "rear-end", "rollover"],
+      patientInfo: ["1 patient", "2 patients", "multiple patients", "unresponsive", "walking wounded"],
+      hazardMention: ["power lines", "fluid leak", "traffic hazard", "fire", "down lines"],
+      additionalResources: ["request fire", "need pd", "hazmat", "air medical", "backup requested"],
+      command: ["establish command", "assuming command", "incident command", "medical command"],
     };
 
-    const score = {};
-    const feedback = [];
+    // Attempt GPT grading
+    const gptResponse = await openai.chat.completions.create({
+      model: "gpt-4-turbo",
+      messages: [
+        {
+          role: "system",
+          content: "You are a paramedic supervisor grading a real-world radio size-up of an MVA scene.",
+        },
+        {
+          role: "user",
+          content: `
+A crew just gave the following radio size-up:
 
-    for (const [category, keywords] of Object.entries(checklist)) {
-      const found = keywords.some(keyword => text.includes(keyword));
-      score[category] = found;
-      if (!found) {
-        feedback.push(`🟥 Missing ${category.replace(/([A-Z])/g, ' $1')}: expected mention of something like "${keywords[0]}"`);
-      }
-    }
+"${transcript}"
 
-    const totalChecks = Object.keys(checklist).length;
-    const points = Object.values(score).filter(Boolean).length;
-    const percent = Math.round((points / totalChecks) * 100);
+Evaluate this size-up based on:
+1. Confirm unit is on scene
+2. Describe number of vehicles and damage
+3. Mention any scene hazards
+4. State number and condition of patients
+5. Call for needed resources
+6. Assume or confirm command
 
-    const resultText = `
-✅ **Scene Size-Up Grading Complete**
-- You included ${points}/${totalChecks} major items (${percent}%)
+For each item:
+- Mark pass or fail
+- Provide a brief comment (reason)
 
-${feedback.length === 0 ? "🟩 Excellent! All key elements were present." :
-  feedback.join("\n")}
-`;
+Then summarize with:
+- Total score out of 6
+- 2–3 improvement tips
+
+Respond in this JSON format:
+{
+  "items": [
+    { "category": "Unit Arrival", "status": "pass", "desc": "Crew confirmed arrival", "reason": "" },
+    ...
+  ],
+  "score": 5,
+  "tips": ["Use clearer description of vehicle damage", "Mention hazards explicitly"]
+}
+          `,
+        },
+      ],
+      temperature: 0.3,
+    });
+
+    const parsed = gptResponse.choices?.[0]?.message?.content;
+    const result = JSON.parse(parsed);
 
     return {
       statusCode: 200,
-      body: JSON.stringify({
-        score: points,
-        outOf: totalChecks,
-        percent,
-        detailed: score,
-        feedback: resultText.trim()
-      })
+      body: JSON.stringify(result),
+    };
+  } catch (err) {
+    console.warn("GPT grading failed, falling back to keywords. Error:", err.message);
+
+    // Fallback to keyword grading
+    const fallbackResult = {
+      items: [],
+      score: 0,
+      tips: [],
     };
 
-  } catch (err) {
-    console.error("Grading error:", err);
+    for (const [category, keywords] of Object.entries(checklist)) {
+      const found = keywords.some(keyword => text.includes(keyword));
+      fallbackResult.items.push({
+        category,
+        status: found ? "pass" : "fail",
+        desc: `Check for ${category}`,
+        reason: found ? "" : `Expected phrase like "${keywords[0]}"`,
+      });
+      if (found) fallbackResult.score++;
+    }
+
+    fallbackResult.tips = [
+      "Use clear radio language to describe vehicles and hazards.",
+      "State if additional help is needed.",
+      "Always confirm you're on scene at the start of your report."
+    ];
+
     return {
-      statusCode: 500,
-      body: JSON.stringify({ error: "Internal grading error: " + err.message }),
+      statusCode: 200,
+      body: JSON.stringify(fallbackResult),
     };
   }
 };
