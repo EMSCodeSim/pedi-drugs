@@ -3,42 +3,52 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>EMS Training Tools</title>
+  <title>Daily EMS Tools</title>
   <style>
     body {
       font-family: Arial, sans-serif;
-      background: #f2f7fa;
-      padding: 20px;
+      background: #f0f8ff;
       text-align: center;
+      padding: 40px 20px;
     }
+
+    h1 {
+      font-size: 2.2em;
+      margin-bottom: 30px;
+      color: #004466;
+    }
+
     .tool-button {
-      padding: 15px 30px;
+      display: block;
+      width: 90%;
+      max-width: 300px;
+      margin: 20px auto;
+      padding: 16px 24px;
       font-size: 18px;
-      margin: 10px;
-      background-color: #0077cc;
+      background-color: #007acc;
       color: white;
       border: none;
       border-radius: 8px;
       cursor: pointer;
+      transition: background-color 0.3s;
     }
+
     .tool-button:hover {
-      background-color: #005fa3;
+      background-color: #005b99;
     }
   </style>
 </head>
 <body>
-  <h1>🚑 Fire Ops SIM</h1>
-  <p>Select a tool below:</p>
 
-  <a href="sizeup/scene_sizeup.html">
-    <button class="tool-button">Scene Sizeup</button>
+  <h1>🚑 Daily EMS Tools</h1>
+
+  <a href="pediatric_calculator.html">
+    <button class="tool-button">🧒 Pediatric Drug Calculator</button>
   </a>
 
-  <a href="handoff/handoff.html">
-    <button class="tool-button">Hospital Hand Off Reports</button>
+  <a href="bp_simulator.html">
+    <button class="tool-button">🩺 Blood Pressure Simulator</button>
   </a>
-
-
 
 </body>
 </html>
