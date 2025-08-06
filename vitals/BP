@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Manual BP Cuff Simulation</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      text-align: center;
+      background: #eef6fb;
+      padding: 20px;
+    }
+
+    h1 {
+      margin-bottom: 10px;
+    }
+
+    label {
+      margin: 10px;
+      font-size: 18px;
+    }
+
+    input {
+      width: 60px;
+      font-size: 16px;
+    }
+
+    button {
+      padding: 10px 20px;
+      font-size: 16px;
+      margin: 10px;
+      cursor: pointer;
+    }
+
+    #pressureDisplay {
+      font-size: 20px;
+      margin: 10px 0;
+      font-weight: bold;
+    }
+
+    svg {
+      margin-top: 20px;
+    }
+
+    #needle {
+      transition: transform 0.05s linear;
+    }
+  </style>
+</head>
+<body>
+
+  <h1>Manual Blood Pressure Cuff Simulation</h1>
+
+  <label>Systolic:
+    <input type="number" id="sys" value="120" min="50" max="250">
+  </label>
+  <label>Diastolic:
+    <input type="number" id="dia" value="80" min="30" max="200">
+  </label>
+
+  <div id="pressureDisplay">Current Pressure: 0 mmHg</div>
+
+  <button id="pumpBtn" onmousedown="startPumping()" onmouseup="stopPumping()" onmouseleave="stopPumping()" ontouchstart="startPumping()" ontouchend="stopPumping()">Pump Cuff</button>
+  <button onclick="startRelease()">Release Pressure</button>
+
+  <!-- SVG Gauge -->
+  <svg id="bpDial" width="300" height="300" viewBox="0 0 300 300">
+    <circle cx="150" cy="150" r="140" fill="#fdfdfd" stroke="#333" stroke-width="4"/>
+    
+    <!-- Major Ticks -->
+    <g id="ticks">
+      <line x1="150" y1="20" x2="150" y2="40" stroke="black" stroke-width="2" transform="rotate(-135,150,150)" />
+      <line x1="150" y1="20" x2="150" y2="40" stroke="black" stroke-width="2" transform="rotate(-90,150,150)" />
+      <line x1="150" y1="20" x2="150" y2="40" stroke="black" stroke-width="2" transform="rotate(-45,150,150)" />
+      <line x1="150" y1="20" x2="150" y2="40" stroke="black" stroke-width="2" transform="rotate(0,150,150)" />
+      <line x1="150" y1="20" x2="150" y2="40" stroke="black" stroke-width="2" transform="rotate(45,150,150)" />
+      <line x1="150" y1="20" x2="150" y2="40" stroke="black" stroke-width="2" transform="rotate(90,150,150)" />
+      <line x1="150" y1="20" x2="150" y2="40" stroke="black" stroke-width="2" transform="rotate(135,150,150)" />
+    </g>
+
+    <!-- Labels -->
+    <text x="40" y="240" font-size="14">0</text>
+    <text x="40" y="80" font-size="14">80</text>
+    <text x="150" y="40" text-anchor="middle" font-size="14">160</text>
+    <text x="255" y="80" font-size="14">240</text>
+    <text x="250" y="250" font-size="14">280</text>
+
+    <!-- Needle -->
+    <line id="needle" x1="150" y1="150" x2="150" y2="30" stroke="red" stroke-width="4" transform="rotate(-135,150,150)" />
+    <circle cx="150" cy="150" r="6" fill="#333" />
+  </svg>
+
+  <script>
+    let currentPressure = 0;
+    let releaseInterval;
+    let pumpInterval;
+    let isBeating = false;
+    let heartbeatInterval;
+    let audioCtx;
+
+    function unlockAudio() {
+      if (!audioCtx) {
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        const dummy = audioCtx.createOscillator();
+        dummy.connect(audioCtx.destination);
+        dummy.start();
+        dummy.stop();
+      }
+    }
+
+    function bpToAngle(bp) {
+      return ((bp / 280) * 270) - 135;
+    }
+
+    function updateNeedle(bp) {
+      const angle = bpToAngle(bp);
+      document.getElementById("needle").setAttribute("transform", `rotate(${angle},150,150)`);
+      document.getElementById("pressureDisplay").innerText = `Current Pressure: ${bp} mmHg`;
+    }
+
+    function playBeat() {
+      if (!audioCtx) return;
+      const osc = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+      osc.frequency.value = 660;
+      gain.gain.setValueAtTime(1, audioCtx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.1);
+      osc.connect(gain).connect(audioCtx.destination);
+      osc.start(audioCtx.currentTime);
+      osc.stop(audioCtx.currentTime + 0.1);
+    }
+
+    function startHeartbeat() {
+      if (!isBeating) {
+        heartbeatInterval = setInterval(playBeat, 800);
+        isBeating = true;
+      }
+    }
+
+    function stopHeartbeat() {
+      clearInterval(heartbeatInterval);
+      isBeating = false;
+    }
+
+    function startPumping() {
+      unlockAudio();
+      pumpInterval = setInterval(() => {
+        if (currentPressure < 280) {
+          currentPressure += 10;
+          if (currentPressure > 280) currentPressure = 280;
+          updateNeedle(currentPressure);
+        }
+      }, 200);
+    }
+
+    function stopPumping() {
+      clearInterval(pumpInterval);
+    }
+
+    function startRelease() {
+      unlockAudio();
+      const sys = parseInt(document.getElementById("sys").value);
+      const dia = parseInt(document.getElementById("dia").value);
+
+      stopHeartbeat();
+
+      releaseInterval = setInterval(() => {
+        if (currentPressure <= 0) {
+          clearInterval(releaseInterval);
+          stopHeartbeat();
+          currentPressure = 0;
+          updateNeedle(currentPressure);
+          return;
+        }
+
+        currentPressure--;
+        updateNeedle(currentPressure);
+
+        if (currentPressure === sys) startHeartbeat();
+        if (currentPressure === dia) stopHeartbeat();
+      }, 40);
+    }
+  </script>
+</body>
+</html>
