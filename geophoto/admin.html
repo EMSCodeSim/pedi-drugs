@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Geo-Photo Admin</title>
+<title>Geo-Photo Admin (Open Access)</title>
 <style>
   body{font-family:system-ui;margin:0;padding:1rem;max-width:700px}
   header{position:sticky;top:0;background:#0a6370;color:#fff;padding:.75rem 1rem;border-radius:.5rem}
@@ -14,7 +14,7 @@
 </style>
 </head>
 <body>
-<header><h2>Geo-Photo Admin</h2></header>
+<header><h2>Geo-Photo Admin (No Login)</h2></header>
 
 <div class="card">
   <div class="row">
@@ -49,14 +49,12 @@
 </div>
 
 <script type="module">
-  // ---- Firebase (v10) ----
   import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-app.js";
   import { getAnalytics } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-analytics.js";
-  import { getAuth, signInWithEmailAndPassword, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-auth.js";
   import { getFirestore, collection, addDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-firestore.js";
   import { getStorage, ref, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-storage.js";
 
-  // Your config (as provided)
+  // Firebase config (yours)
   const firebaseConfig = {
     apiKey: "AIzaSyDM6DpRSeZueVKRpbyJyDmhf8WY66KyCDk",
     authDomain: "dailyquiz-d5279.firebaseapp.com",
@@ -69,8 +67,7 @@
   };
 
   const app = initializeApp(firebaseConfig);
-  try { getAnalytics(app); } catch(_) {} // safe no-op on unsupported environments
-  const auth = getAuth(app);
+  try { getAnalytics(app); } catch(_) {}
   const db = getFirestore(app);
   const storage = getStorage(app);
 
@@ -78,22 +75,7 @@
   const title = el('title'), radius = el('radius'), lat = el('lat'), lng = el('lng');
   const file = el('file'), preview = el('preview'), msg = el('msg');
 
-  // Simple inline sign-in (replace with your own UI if you prefer)
-  async function ensureSignedIn() {
-    return new Promise(resolve => {
-      onAuthStateChanged(auth, async user => {
-        if (user) return resolve(user);
-        const email = prompt("Admin email:");
-        const pass = prompt("Password:");
-        if (!email || !pass) return alert("Sign-in cancelled.");
-        try {
-          const cred = await signInWithEmailAndPassword(auth, email, pass);
-          resolve(cred.user);
-        } catch(e){ alert("Sign-in failed: " + e.message); }
-      });
-    });
-  }
-
+  // Get current location
   el('btnLoc').onclick = () => {
     navigator.geolocation.getCurrentPosition(
       p => { lat.value = p.coords.latitude.toFixed(6); lng.value = p.coords.longitude.toFixed(6); },
@@ -102,6 +84,7 @@
     );
   };
 
+  // Preview selected file
   file.onchange = e => {
     const f = e.target.files?.[0];
     if (!f) return;
@@ -110,21 +93,19 @@
     r.readAsDataURL(f);
   };
 
+  // Save to Firebase Storage + Firestore
   el('btnSave').onclick = async () => {
     try {
-      await ensureSignedIn();
       msg.textContent = "Uploading...";
       const f = file.files?.[0];
       if (!f) throw new Error("Choose a photo");
       if (!lat.value || !lng.value) throw new Error("Set a location");
 
-      // Upload to Firebase Storage (your bucket domain is firebasestorage.app — that’s correct)
       const path = `photos/${Date.now()}_${f.name.replace(/\s+/g,'_')}`;
       const storageRef = ref(storage, path);
       await uploadBytes(storageRef, f);
       const url = await getDownloadURL(storageRef);
 
-      // Save to Firestore
       await addDoc(collection(db, "spots"), {
         title: title.value || "Untitled",
         lat: parseFloat(lat.value),
