@@ -49,20 +49,27 @@
 </div>
 
 <script type="module">
-  // ---- Firebase init ----
+  // ---- Firebase (v10) ----
   import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-app.js";
+  import { getAnalytics } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-analytics.js";
   import { getAuth, signInWithEmailAndPassword, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-auth.js";
   import { getFirestore, collection, addDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-firestore.js";
   import { getStorage, ref, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-storage.js";
 
+  // Your config (as provided)
   const firebaseConfig = {
-    apiKey: "YOUR_API_KEY",
-    authDomain: "YOUR_APP.firebaseapp.com",
-    projectId: "YOUR_APP",
-    storageBucket: "YOUR_APP.appspot.com",
-    appId: "YOUR_APP_ID"
+    apiKey: "AIzaSyDM6DpRSeZueVKRpbyJyDmhf8WY66KyCDk",
+    authDomain: "dailyquiz-d5279.firebaseapp.com",
+    databaseURL: "https://dailyquiz-d5279-default-rtdb.firebaseio.com",
+    projectId: "dailyquiz-d5279",
+    storageBucket: "dailyquiz-d5279.firebasestorage.app",
+    messagingSenderId: "94577748034",
+    appId: "1:94577748034:web:c032d3a1d72db1313de5db",
+    measurementId: "G-19DVN7NNH7"
   };
+
   const app = initializeApp(firebaseConfig);
+  try { getAnalytics(app); } catch(_) {} // safe no-op on unsupported environments
   const auth = getAuth(app);
   const db = getFirestore(app);
   const storage = getStorage(app);
@@ -71,13 +78,14 @@
   const title = el('title'), radius = el('radius'), lat = el('lat'), lng = el('lng');
   const file = el('file'), preview = el('preview'), msg = el('msg');
 
-  // Simple inline sign-in (replace with your own UI if you have one)
+  // Simple inline sign-in (replace with your own UI if you prefer)
   async function ensureSignedIn() {
     return new Promise(resolve => {
       onAuthStateChanged(auth, async user => {
         if (user) return resolve(user);
         const email = prompt("Admin email:");
         const pass = prompt("Password:");
+        if (!email || !pass) return alert("Sign-in cancelled.");
         try {
           const cred = await signInWithEmailAndPassword(auth, email, pass);
           resolve(cred.user);
@@ -110,11 +118,13 @@
       if (!f) throw new Error("Choose a photo");
       if (!lat.value || !lng.value) throw new Error("Set a location");
 
+      // Upload to Firebase Storage (your bucket domain is firebasestorage.app — that’s correct)
       const path = `photos/${Date.now()}_${f.name.replace(/\s+/g,'_')}`;
       const storageRef = ref(storage, path);
       await uploadBytes(storageRef, f);
       const url = await getDownloadURL(storageRef);
 
+      // Save to Firestore
       await addDoc(collection(db, "spots"), {
         title: title.value || "Untitled",
         lat: parseFloat(lat.value),
