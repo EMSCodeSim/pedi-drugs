@@ -29,14 +29,23 @@
 
 <script type="module">
   import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-app.js";
+  import { getAnalytics } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-analytics.js";
   import { getFirestore, collection, getDocs, query, where } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-firestore.js";
 
+  // Your config (as provided)
   const firebaseConfig = {
-    apiKey: "YOUR_API_KEY",
-    authDomain: "YOUR_APP.firebaseapp.com",
-    projectId: "YOUR_APP",
+    apiKey: "AIzaSyDM6DpRSeZueVKRpbyJyDmhf8WY66KyCDk",
+    authDomain: "dailyquiz-d5279.firebaseapp.com",
+    databaseURL: "https://dailyquiz-d5279-default-rtdb.firebaseio.com",
+    projectId: "dailyquiz-d5279",
+    storageBucket: "dailyquiz-d5279.firebasestorage.app",
+    messagingSenderId: "94577748034",
+    appId: "1:94577748034:web:c032d3a1d72db1313de5db",
+    measurementId: "G-19DVN7NNH7"
   };
+
   const app = initializeApp(firebaseConfig);
+  try { getAnalytics(app); } catch(_) {}
   const db = getFirestore(app);
 
   const status = document.getElementById('status');
