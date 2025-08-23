@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Geo-Photo Viewer</title>
+<style>
+  body{margin:0;font-family:system-ui;background:#0b1e27;color:#fff;display:flex;min-height:100vh}
+  .wrap{margin:auto;max-width:560px;padding:1rem}
+  .card{background:#102b36;border:1px solid #1c3a47;border-radius:.75rem;padding:1rem}
+  .status{opacity:.8;font-size:.95rem;margin:.5rem 0 1rem}
+  img{max-width:100%;border-radius:.5rem;display:block;margin:.5rem 0}
+  .hidden{display:none}
+  .btn{width:100%;padding:.8rem;font-size:1rem;border:0;border-radius:.5rem;background:#2aa3b5;color:#00151b}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="card">
+    <h2>Nearby Photo</h2>
+    <p class="status" id="status">Requesting location…</p>
+    <div id="result" class="hidden">
+      <h3 id="title"></h3>
+      <img id="photo" alt="Location photo">
+      <p class="status" id="detail"></p>
+    </div>
+    <button id="enable" class="btn hidden">Enable Location</button>
+  </div>
+</div>
+
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-app.js";
+  import { getFirestore, collection, getDocs, query, where } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-firestore.js";
+
+  const firebaseConfig = {
+    apiKey: "YOUR_API_KEY",
+    authDomain: "YOUR_APP.firebaseapp.com",
+    projectId: "YOUR_APP",
+  };
+  const app = initializeApp(firebaseConfig);
+  const db = getFirestore(app);
+
+  const status = document.getElementById('status');
+  const result = document.getElementById('result');
+  const title = document.getElementById('title');
+  const photo = document.getElementById('photo');
+  const detail = document.getElementById('detail');
+  const enableBtn = document.getElementById('enable');
+
+  let spots = [];
+  async function loadSpots(){
+    const q = query(collection(db, "spots"), where("active", "==", true));
+    const snap = await getDocs(q);
+    spots = snap.docs.map(d => ({ id:d.id, ...d.data() }));
+  }
+
+  function haversineMeters(lat1, lon1, lat2, lon2) {
+    const toRad = d => d * Math.PI / 180;
+    const R = 6371000;
+    const dLat = toRad(lat2-lat1);
+    const dLon = toRad(lon2-lon1);
+    const a = Math.sin(dLat/2)**2 + Math.cos(toRad(lat1))*Math.cos(toRad(lat2))*Math.sin(dLon/2)**2;
+    return 2 * R * Math.asin(Math.sqrt(a));
+  }
+
+  function findMatch(userLat, userLng){
+    let best = null;
+    for (const s of spots){
+      const dist = haversineMeters(userLat, userLng, s.lat, s.lng);
+      if (dist <= s.radiusMeters){
+        if (!best || dist < best.dist) best = { spot: s, dist };
+      }
+    }
+    return best;
+  }
+
+  function show(spot, dist){
+    result.classList.remove('hidden');
+    title.textContent = spot.title || "Nearby spot";
+    photo.src = spot.imageURL;
+    detail.textContent = `You are ${Math.round(dist)} m from "${spot.title}" (radius ${spot.radiusMeters} m).`;
+  }
+
+  let lastUpdate = 0;
+  const MIN_MS = 4000;
+  function onPosition(pos){
+    const now = Date.now();
+    if (now - lastUpdate < MIN_MS) return;
+    lastUpdate = now;
+
+    const { latitude, longitude, accuracy } = pos.coords;
+    status.textContent = `Lat ${latitude.toFixed(5)}, Lng ${longitude.toFixed(5)} (±${Math.round(accuracy)}m)`;
+    const match = findMatch(latitude, longitude);
+    if (match) show(match.spot, match.dist);
+  }
+
+  function onError(err){
+    status.textContent = `Location error: ${err.message}`;
+    enableBtn.classList.remove('hidden');
+  }
+
+  async function start(){
+    await loadSpots();
+    if (!('geolocation' in navigator)){
+      status.textContent = "Geolocation not supported.";
+      return;
+    }
+    try {
+      navigator.geolocation.watchPosition(onPosition, onError, { enableHighAccuracy:true, maximumAge:2000, timeout:10000 });
+      status.textContent = "Watching your location…";
+    } catch (e){
+      onError(e);
+    }
+  }
+
+  enableBtn.onclick = () => {
+    enableBtn.classList.add('hidden');
+    navigator.geolocation.watchPosition(onPosition, onError, { enableHighAccuracy:true, maximumAge:2000, timeout:10000 });
+  };
+
+  start();
+</script>
+</body>
+</html>
