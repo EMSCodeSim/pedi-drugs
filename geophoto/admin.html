@@ -1,49 +1,152 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Geo-Photo Admin (Diagnostic)</title>
+<style>
+  body{font-family:system-ui;margin:0;padding:1rem;max-width:700px;background:#0b1e27;color:#fff}
+  header{position:sticky;top:0;background:#0a6370;color:#fff;padding:.75rem 1rem;border-radius:.5rem}
+  .card{background:#102b36;border:1px solid #1c3a47;border-radius:.75rem;padding:1rem;margin:1rem 0}
+  label{display:block;margin:.5rem 0 .25rem}
+  input,button{width:100%;padding:.75rem;font-size:1rem}
+  .row{display:grid;grid-template-columns:1fr 1fr;gap:.75rem}
+  .hint{font-size:.9rem;color:#b7d9e4}
+  #error{white-space:pre-wrap;background:#2b1b1b;border:1px solid #4b2a2a;padding:.75rem;border-radius:.5rem;color:#ffd6d6;margin-top:.75rem;display:none}
+</style>
+<noscript><strong>This page requires JavaScript.</strong></noscript>
+</head>
+<body>
+<header><h2>Geo-Photo Admin</h2></header>
+
+<div class="card">
+  <div class="row">
+    <div>
+      <label>Title</label>
+      <input id="title" placeholder="Short label">
+    </div>
+    <div>
+      <label>Radius (meters)</label>
+      <input id="radius" type="number" value="40" min="5" step="5">
+    </div>
+  </div>
+  <div class="row">
+    <div>
+      <label>Latitude</label>
+      <input id="lat" readonly>
+    </div>
+    <div>
+      <label>Longitude</label>
+      <input id="lng" readonly>
+    </div>
+  </div>
+  <button id="btnLoc">Use my current location</button>
+  <p class="hint">Stand at the spot → tap the button above.</p>
+
+  <label>Photo</label>
+  <input id="file" type="file" accept="image/*" capture="environment">
+  <img id="preview" style="display:none;max-width:100%;margin:.5rem 0;border-radius:.5rem"/>
+
+  <button id="btnSave">Save Spot</button>
+  <p id="msg" class="hint"></p>
+  <div id="error"></div>
+</div>
+
 <script type="module">
-import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-app.js";
-import { getDatabase, ref, push, set, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-database.js";
-import { getStorage, ref as sRef, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-storage.js";
+(async () => {
+  const showErr = (e) => {
+    const box = document.getElementById('error');
+    box.style.display = 'block';
+    box.textContent = String(e && e.stack ? e.stack : e);
+    console.error(e);
+  };
 
-const firebaseConfig = {
-  apiKey: "AIzaSyDM6DpRSeZueVKRpbyJyDmhf8WY66KyCDk",
-  authDomain: "dailyquiz-d5279.firebaseapp.com",
-  databaseURL: "https://dailyquiz-d5279-default-rtdb.firebaseio.com",
-  projectId: "dailyquiz-d5279",
-  storageBucket: "dailyquiz-d5279.firebasestorage.app",
-  messagingSenderId: "94577748034",
-  appId: "1:94577748034:web:c032d3a1d72db1313de5db",
-  measurementId: "G-19DVN7NNH7"
-};
+  try {
+    // 1) IMPORTS
+    const [{ initializeApp }] = await Promise.all([
+      import("https://www.gstatic.com/firebasejs/10.12.4/firebase-app.js"),
+    ]);
 
-const app = initializeApp(firebaseConfig);
-const db = getDatabase(app);
-const storage = getStorage(app);
+    const [
+      { getFirestore, collection, addDoc, serverTimestamp },
+      { getStorage, ref: sRef, uploadBytes, getDownloadURL },
+    ] = await Promise.all([
+      import("https://www.gstatic.com/firebasejs/10.12.4/firebase-firestore.js"),
+      import("https://www.gstatic.com/firebasejs/10.12.4/firebase-storage.js"),
+    ]);
 
-document.getElementById("btnSave").onclick = async () => {
-  const title = document.getElementById("title").value || "Untitled";
-  const lat = parseFloat(document.getElementById("lat").value);
-  const lng = parseFloat(document.getElementById("lng").value);
-  const radius = parseInt(document.getElementById("radius").value, 10) || 40;
-  const file = document.getElementById("file").files[0];
+    // 2) CONFIG (yours)
+    const firebaseConfig = {
+      apiKey: "AIzaSyDM6DpRSeZueVKRpbyJyDmhf8WY66KyCDk",
+      authDomain: "dailyquiz-d5279.firebaseapp.com",
+      databaseURL: "https://dailyquiz-d5279-default-rtdb.firebaseio.com",
+      projectId: "dailyquiz-d5279",
+      storageBucket: "dailyquiz-d5279.firebasestorage.app",
+      messagingSenderId: "94577748034",
+      appId: "1:94577748034:web:c032d3a1d72db1313de5db",
+      measurementId: "G-19DVN7NNH7"
+    };
 
-  if (!file || isNaN(lat) || isNaN(lng)) {
-    alert("Missing required data");
-    return;
+    // 3) INIT
+    const app = initializeApp(firebaseConfig);
+    const db = getFirestore(app);
+    const storage = getStorage(app);
+
+    // 4) UI HANDLERS
+    const el = id => document.getElementById(id);
+    const title = el('title'), radius = el('radius'), lat = el('lat'), lng = el('lng');
+    const file = el('file'), preview = el('preview'), msg = el('msg');
+
+    el('btnLoc').onclick = () => {
+      try {
+        navigator.geolocation.getCurrentPosition(
+          p => { lat.value = p.coords.latitude.toFixed(6); lng.value = p.coords.longitude.toFixed(6); },
+          e => { msg.textContent = "Location error: " + e.message; },
+          { enableHighAccuracy:true, timeout:10000, maximumAge:0 }
+        );
+      } catch (e) { showErr(e); }
+    };
+
+    file.onchange = e => {
+      try {
+        const f = e.target.files?.[0];
+        if (!f) return;
+        const r = new FileReader();
+        r.onload = () => { preview.src = r.result; preview.style.display = 'block'; };
+        r.readAsDataURL(f);
+      } catch (e) { showErr(e); }
+    };
+
+    el('btnSave').onclick = async () => {
+      try {
+        msg.textContent = "Uploading...";
+        const f = file.files?.[0];
+        if (!f) throw new Error("Choose a photo");
+        if (!lat.value || !lng.value) throw new Error("Set a location");
+
+        const path = `photos/${Date.now()}_${f.name.replace(/\s+/g,'_')}`;
+        const refImg = sRef(storage, path);
+        await uploadBytes(refImg, f);
+        const url = await getDownloadURL(refImg);
+
+        await addDoc(collection(db, "spots"), {
+          title: title.value || "Untitled",
+          lat: parseFloat(lat.value),
+          lng: parseFloat(lng.value),
+          radiusMeters: Math.max(5, parseInt(radius.value || "25", 10)),
+          imageURL: url,
+          active: true,
+          createdAt: Date.now(),
+          createdAtSrv: serverTimestamp()
+        });
+
+        msg.textContent = "Saved! 🎉";
+        file.value = ""; preview.style.display = "none"; title.value = "";
+      } catch (e) { msg.textContent = "Error"; showErr(e); }
+    };
+  } catch (e) {
+    showErr(e);
   }
-
-  // Upload image
-  const path = `photos/${Date.now()}_${file.name.replace(/\s+/g,'_')}`;
-  const imgRef = sRef(storage, path);
-  await uploadBytes(imgRef, file);
-  const url = await getDownloadURL(imgRef);
-
-  // Save to RTDB
-  const spotsRef = ref(db, "spots");
-  const newSpotRef = push(spotsRef);
-  await set(newSpotRef, {
-    title, lat, lng, radiusMeters: radius,
-    imageURL: url, active: true, createdAt: Date.now()
-  });
-
-  alert("Saved!");
-};
+})();
 </script>
+</body>
+</html>
