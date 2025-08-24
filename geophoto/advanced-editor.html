@@ -1,0 +1,513 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Geo Scenarios — Advanced Editor (Desktop)</title>
+<style>
+  :root{
+    --bg:#0a0f14; --panel:#0f1820; --surface:#0f1820; --muted:#9bc6d2; --text:#eaf7fb; --border:#244656;
+    --accent:#2dd4bf; --accentText:#042e2a; --danger:#ff6b6b; --warn:#ffc857; --br:14px; --shadow:0 8px 28px rgba(0,0,0,.45);
+  }
+  @media (prefers-color-scheme: light){
+    :root{ --bg:#f5fbff; --panel:#ffffff; --surface:#ffffff; --muted:#4f6b78; --text:#0b1e27; --border:#d3e5ec; --shadow:0 8px 28px rgba(0,0,0,.08) }
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{margin:0;background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial}
+  header{padding:10px 14px;border-bottom:1px solid var(--border);background:color-mix(in hsl, var(--bg) 88%, transparent);backdrop-filter:blur(6px)}
+  h1{margin:0;font-size:18px}
+  .app{display:grid;grid-template-columns:320px 1fr 320px;gap:12px;padding:12px;max-height:calc(100vh - 58px)}
+  .col{background:var(--surface);border:1px solid var(--border);border-radius:var(--br);box-shadow:var(--shadow);padding:12px;overflow:auto}
+  label{display:block;margin:8px 0 6px 2px;font-size:12px;color:var(--muted)}
+  select,input,textarea,button{font-size:14px}
+  select,input[type="text"],textarea{
+    width:100%;padding:10px;border-radius:10px;border:1px solid var(--border);background:#0d2430;color:var(--text);outline:none
+  }
+  textarea{min-height:72px;resize:vertical}
+  .btn{appearance:none;border:0;border-radius:10px;padding:10px 12px;background:var(--accent);color:var(--accentText);font-weight:700;cursor:pointer;box-shadow:var(--shadow)}
+  .btn.secondary{background:transparent;color:var(--text);border:2px dashed var(--border)}
+  .btn.warn{background:var(--warn);color:#2a1d00}
+  .btn.danger{background:var(--danger);color:#2a0a0a}
+  .row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+  .thumb{width:56px;height:56px;border-radius:8px;object-fit:cover;border:1px solid var(--border);cursor:pointer}
+  .thumb.active{outline:3px solid var(--accent)}
+  .pill{display:inline-flex;gap:8px;align-items:center;padding:6px 10px;border-radius:999px;border:1px solid var(--border);color:var(--muted)}
+  .spacer{height:10px}
+  .sectionTitle{font-weight:800;margin:6px 0}
+  .canvasWrap{position:relative;background:#061621;border:1px solid var(--border);border-radius:12px;overflow:hidden}
+  #c{display:block;width:100%;height:calc(100vh - 160px);background:transparent}
+  .bar{display:flex;gap:8px;flex-wrap:wrap}
+  .divider{height:1px;background:var(--border);opacity:.6;margin:10px 0}
+  .hidden{display:none}
+  .desktopGate{max-width:740px;margin:48px auto;background:var(--surface);border:1px solid var(--border);border-radius:16px;box-shadow:var(--shadow);padding:18px}
+</style>
+</head>
+<body>
+<header><h1>Geo Scenarios — Advanced Editor (Desktop Only)</h1></header>
+
+<div id="gate" class="desktopGate hidden">
+  <h2 style="margin:0 0 8px">Use a computer to edit</h2>
+  <p>This advanced editor is only available on desktop/laptop. Please open this page on a computer for large-canvas photo editing, crop, and overlays.</p>
+</div>
+
+<div id="app" class="app hidden">
+  <!-- Left: load/select -->
+  <div class="col">
+    <div class="row" style="justify-content:space-between">
+      <div class="pill">Firebase RTDB</div>
+      <button id="refresh" class="btn secondary">Refresh</button>
+    </div>
+    <label>Scenario</label>
+    <select id="scenarioSel"><option value="">Loading…</option></select>
+    <div class="spacer"></div>
+    <div class="row">
+      <div class="pill" id="metaTitle">(title)</div>
+      <div class="pill" id="metaDispatch">Dispatch: (none)</div>
+    </div>
+    <div class="divider"></div>
+    <div class="sectionTitle">Photos in scenario</div>
+    <div id="stopList" class="row"></div>
+    <div class="divider"></div>
+    <div class="sectionTitle">Selected stop meta</div>
+    <label>Title</label><input id="stopTitle" type="text" placeholder="Stop title">
+    <label>Caption</label><textarea id="stopCaption" placeholder="Caption / text"></textarea>
+    <div class="row">
+      <div style="flex:1">
+        <label>Latitude</label><input id="stopLat" type="text" placeholder="e.g. 39.7392">
+      </div>
+      <div style="flex:1">
+        <label>Longitude</label><input id="stopLng" type="text" placeholder="-104.9903">
+      </div>
+    </div>
+    <label>Radius (meters)</label><input id="stopRadius" type="text" placeholder="50">
+    <div class="row" style="margin-top:6px">
+      <button id="useGPS" class="btn secondary">Use my location</button>
+      <button id="saveMeta" class="btn">Save Meta</button>
+    </div>
+    <div id="metaMsg" class="pill" style="margin-top:6px">Ready</div>
+    <div class="divider"></div>
+    <div class="row">
+      <input id="replaceFile" type="file" accept="image/*">
+      <button id="replaceApply" class="btn">Replace Image</button>
+    </div>
+    <div class="row" style="margin-top:6px">
+      <button id="deleteStop" class="btn danger">Delete This Photo</button>
+      <button id="exportPNG" class="btn secondary">Export PNG</button>
+    </div>
+  </div>
+
+  <!-- Center: canvas -->
+  <div class="col">
+    <div class="bar" style="margin-bottom:8px">
+      <button id="fit" class="btn secondary">Fit</button>
+      <button id="zoomIn" class="btn secondary">Zoom +</button>
+      <button id="zoomOut" class="btn secondary">Zoom −</button>
+      <button id="rotateL" class="btn secondary">Rotate ⟲</button>
+      <button id="rotateR" class="btn secondary">Rotate ⟳</button>
+      <button id="flipH" class="btn secondary">Flip H</button>
+      <button id="flipV" class="btn secondary">Flip V</button>
+
+      <span class="pill" id="canvasInfo">Canvas</span>
+      <button id="saveImage" class="btn">Save Image to RTDB</button>
+    </div>
+    <div class="canvasWrap">
+      <canvas id="c"></canvas>
+    </div>
+  </div>
+
+  <!-- Right: crop + overlays -->
+  <div class="col">
+    <div class="sectionTitle">Crop</div>
+    <div class="row">
+      <button id="cropStart" class="btn warn">Start Crop</button>
+      <button id="cropApply" class="btn">Apply</button>
+      <button id="cropCancel" class="btn secondary">Cancel</button>
+    </div>
+    <div class="divider"></div>
+
+    <div class="sectionTitle">Overlays</div>
+    <div class="row">
+      <button class="btn secondary ol" data-type="fire">🔥 Fire</button>
+      <button class="btn secondary ol" data-type="smoke">🌫️ Smoke</button>
+      <button class="btn secondary ol" data-type="person">🧍 Person</button>
+      <button class="btn secondary ol" data-type="car">🚗 Car</button>
+      <button class="btn secondary ol" data-type="hazard">⚠️ Hazard</button>
+    </div>
+    <label style="margin-top:10px">Selected overlay opacity</label>
+    <input id="overlayOpacity" type="range" min="0.05" max="1" step="0.05" value="1">
+    <div class="row" style="margin-top:8px">
+      <button id="bringFront" class="btn secondary">Bring to Front</button>
+      <button id="sendBack" class="btn secondary">Send to Back</button>
+      <button id="deleteObj" class="btn danger">Delete Selected</button>
+    </div>
+    <div class="divider"></div>
+    <div class="sectionTitle">Hints</div>
+    <ul style="margin:6px 0 0 18px; color:var(--muted)">
+      <li>Drag overlays to move; handles to rotate/resize.</li>
+      <li>Use <b>Save Image to RTDB</b> to commit edits.</li>
+      <li>Crop is non-destructive until you click <b>Apply</b>.</li>
+    </ul>
+  </div>
+</div>
+
+<!-- Fabric.js for canvas editing -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/fabric.js/5.3.0/fabric.min.js" integrity="sha512-l8sQf0S0mV3mJu2cQy8X9Qn9qWQmW6T49z9q6b3v0S8ix6h2w5OKXr7bVj5I8x1Xc1xV7mWwFhK8K5Gq8O2ZcA==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+
+<script type="module">
+(async () => {
+  // --- Desktop gate ---
+  const gate=document.getElementById('gate');
+  const app=document.getElementById('app');
+  const isCoarse = matchMedia('(pointer: coarse)').matches;
+  const narrow = window.innerWidth < 960;
+  if (isCoarse || narrow) {
+    gate.classList.remove('hidden');
+    app.classList.add('hidden');
+    return;
+  } else {
+    gate.classList.add('hidden');
+    app.classList.remove('hidden');
+  }
+
+  // --- Firebase RTDB ---
+  const [{ initializeApp }] = await Promise.all([ import("https://www.gstatic.com/firebasejs/10.12.4/firebase-app.js") ]);
+  const [{ getDatabase, ref, onValue, set }] = await Promise.all([ import("https://www.gstatic.com/firebasejs/10.12.4/firebase-database.js") ]);
+  const firebaseConfig = {
+    apiKey:"AIzaSyDM6DpRSeZueVKRpbyJyDmhf8WY66KyCDk",
+    authDomain:"dailyquiz-d5279.firebaseapp.com",
+    databaseURL:"https://dailyquiz-d5279-default-rtdb.firebaseio.com",
+    projectId:"dailyquiz-d5279",
+    appId:"1:94577748034:web:c032d3a1d72db1313de5db",
+    measurementId:"G-19DVN7NNH7"
+  };
+  const appFB = initializeApp(firebaseConfig);
+  const db = getDatabase(appFB);
+
+  // --- DOM refs ---
+  const scenarioSel = document.getElementById('scenarioSel');
+  const stopList = document.getElementById('stopList');
+  const metaTitle = document.getElementById('metaTitle');
+  const metaDispatch = document.getElementById('metaDispatch');
+  const refreshBtn = document.getElementById('refresh');
+
+  const stopTitle = document.getElementById('stopTitle');
+  const stopCaption = document.getElementById('stopCaption');
+  const stopLat = document.getElementById('stopLat');
+  const stopLng = document.getElementById('stopLng');
+  const stopRadius = document.getElementById('stopRadius');
+  const useGPS = document.getElementById('useGPS');
+  const saveMeta = document.getElementById('saveMeta');
+  const metaMsg = document.getElementById('metaMsg');
+
+  const replaceFile = document.getElementById('replaceFile');
+  const replaceApply = document.getElementById('replaceApply');
+  const deleteStop = document.getElementById('deleteStop');
+  const exportPNG = document.getElementById('exportPNG');
+
+  const cInfo = document.getElementById('canvasInfo');
+  const fitBtn = document.getElementById('fit');
+  const zoomIn = document.getElementById('zoomIn');
+  const zoomOut = document.getElementById('zoomOut');
+  const rotateL = document.getElementById('rotateL');
+  const rotateR = document.getElementById('rotateR');
+  const flipH = document.getElementById('flipH');
+  const flipV = document.getElementById('flipV');
+  const saveImage = document.getElementById('saveImage');
+
+  const cropStart = document.getElementById('cropStart');
+  const cropApply = document.getElementById('cropApply');
+  const cropCancel = document.getElementById('cropCancel');
+
+  const overlayOpacity = document.getElementById('overlayOpacity');
+  const bringFront = document.getElementById('bringFront');
+  const sendBack = document.getElementById('sendBack');
+  const deleteObj = document.getElementById('deleteObj');
+  const overlayBtns = Array.from(document.querySelectorAll('.ol'));
+
+  // --- State ---
+  let scenarios=[];
+  let current=null; // {id, ...}
+  let stopIndex=-1; // which stop is loaded
+  let fabricCanvas, baseImage=null, cropRect=null, cropMode=false;
+
+  // --- Fabric canvas ---
+  const canvasEl=document.getElementById('c');
+  fabricCanvas = new fabric.Canvas('c', { backgroundColor:'#061621', preserveObjectStacking:true, selection:true });
+  function fitCanvas(){
+    fabricCanvas.setHeight(window.innerHeight - 160);
+    fabricCanvas.setWidth(document.querySelector('.col:nth-child(2)').clientWidth - 24);
+    fabricCanvas.calcOffset();
+    fabricCanvas.requestRenderAll();
+  }
+  fitCanvas();
+  window.addEventListener('resize', fitCanvas);
+
+  function setBaseImageFromDataURL(dataURL){
+    return new Promise((resolve,reject)=>{
+      fabric.Image.fromURL(dataURL, (img)=>{
+        if (!img) { reject(new Error('Image load failed')); return; }
+        // Remove old base image if any (objects without selectable)
+        if (baseImage) fabricCanvas.remove(baseImage);
+        baseImage = img;
+        baseImage.selectable=false; baseImage.evented=false;
+        // scale to fit canvas
+        const cw=fabricCanvas.getWidth(), ch=fabricCanvas.getHeight();
+        const scale=Math.min(cw/img.width, ch/img.height);
+        baseImage.scale(scale);
+        baseImage.set({ left:(cw - img.width*scale)/2, top:(ch - img.height*scale)/2 });
+        fabricCanvas.add(baseImage);
+        baseImage.moveTo(0);
+        fabricCanvas.requestRenderAll();
+        cInfo.textContent=`Image ${Math.round(img.width)}×${Math.round(img.height)} (scale ${scale.toFixed(2)})`;
+        resolve();
+      }, { crossOrigin:'anonymous' });
+    });
+  }
+
+  function dataURLFromCanvas(){
+    // Export with current canvas size—overlays baked in
+    return fabricCanvas.toDataURL({ format:'png', quality:0.92 });
+  }
+
+  // --- Load scenarios ---
+  function populateList() {
+    scenarioSel.innerHTML = '<option value="">Select scenario…</option>';
+    scenarios.filter(s=>s).forEach(sc=>{
+      const o=document.createElement('option'); o.value=sc.id; o.textContent=sc.title||'(untitled)'; scenarioSel.appendChild(o);
+    });
+  }
+
+  function renderStopsThumbs() {
+    stopList.innerHTML='';
+    if(!current || !current.stops || !current.stops.length){
+      stopList.innerHTML = '<div class="pill">No photos</div>'; return;
+    }
+    current.stops.forEach((s,idx)=>{
+      const img=document.createElement('img');
+      img.className='thumb'+(idx===stopIndex?' active':'');
+      img.src=s.imageData||s.imageURL||'';
+      img.title = s.title||`Stop ${idx+1}`;
+      img.onerror = ()=>{ img.src="data:image/svg+xml;utf8,"+encodeURIComponent("<svg xmlns='http://www.w3.org/2000/svg' width='80' height='80'><rect width='100%' height='100%' fill='#0a2230'/><text x='50%' y='50%' fill='#9ecbd6' font-size='10' text-anchor='middle'>no image</text></svg>"); };
+      img.onclick=()=>loadStop(idx);
+      stopList.appendChild(img);
+    });
+  }
+
+  function updateMetaHeader() {
+    metaTitle.textContent = current ? (current.title||'(untitled)') : '(title)';
+    metaDispatch.textContent = 'Dispatch: ' + (current && current.dispatch ? String(current.dispatch).slice(0,120) : '(none)');
+  }
+
+  // Fetch once and subscribe
+  onValue(ref(db,'scenarios'), snap=>{
+    const val=snap.val()||{};
+    scenarios = Object.entries(val).map(([id,s])=>({id,...s})).sort((a,b)=>(b.createdAt||0)-(a.createdAt||0));
+    populateList();
+    if(current){
+      const fresh = scenarios.find(sc=>sc.id===current.id);
+      if (fresh) { current=fresh; renderStopsThumbs(); updateMetaHeader(); }
+    }
+  });
+  refreshBtn.onclick=populateList;
+
+  scenarioSel.onchange = ()=>{
+    const id = scenarioSel.value;
+    current = scenarios.find(s=>s.id===id) || null;
+    stopIndex = -1;
+    updateMetaHeader();
+    renderStopsThumbs();
+    // clear canvas
+    fabricCanvas.clear();
+    baseImage=null;
+    fitCanvas();
+  };
+
+  // --- Load a stop into canvas ---
+  async function loadStop(idx){
+    if(!current) return;
+    const s=current.stops[idx]; if(!s) return;
+    stopIndex = idx;
+    // UI populate
+    stopTitle.value = s.title||'';
+    stopCaption.value = s.caption||'';
+    stopLat.value = (s.lat ?? '').toString();
+    stopLng.value = (s.lng ?? '').toString();
+    stopRadius.value = (s.radiusMeters ?? 50).toString();
+    Array.from(stopList.children).forEach((n,i)=>n.classList.toggle('active', i===idx));
+    // Canvas
+    fabricCanvas.clear(); baseImage=null; cropRect=null; cropMode=false;
+    const src = s.imageData || s.imageURL;
+    if (!src) { metaMsg.textContent='No image in this stop.'; return; }
+    await setBaseImageFromDataURL(src);
+  }
+
+  // --- Meta save / GPS ---
+  useGPS.onclick=()=>{
+    navigator.geolocation.getCurrentPosition(p=>{
+      stopLat.value = p.coords.latitude.toFixed(6);
+      stopLng.value = p.coords.longitude.toFixed(6);
+      metaMsg.textContent = 'GPS captured.';
+    }, e=>{ metaMsg.textContent='GPS error: '+e.message; }, { enableHighAccuracy:true, timeout:10000 });
+  };
+
+  saveMeta.onclick=async()=>{
+    try{
+      if (!current || stopIndex<0) throw new Error('Select a stop first.');
+      const s = current.stops[stopIndex];
+      s.title = stopTitle.value.trim();
+      s.caption = stopCaption.value.trim();
+      s.lat = parseFloat(stopLat.value);
+      s.lng = parseFloat(stopLng.value);
+      s.radiusMeters = Math.max(5, parseInt(stopRadius.value||'50',10));
+      if (Number.isNaN(s.lat)||Number.isNaN(s.lng)) throw new Error('Invalid GPS coordinates.');
+      const { id, ...payload } = current;
+      await set(ref(db,'scenarios/'+current.id), payload);
+      metaMsg.textContent='Meta saved.';
+    }catch(err){ metaMsg.textContent=String(err.message||err); }
+  };
+
+  // --- Replace image ---
+  function readFileAsDataURL(f){ return new Promise((res,rej)=>{ const r=new FileReader(); r.onload=()=>res(r.result); r.onerror=rej; r.readAsDataURL(f); }); }
+  replaceApply.onclick=async()=>{
+    const f=replaceFile.files?.[0]; if(!f){ metaMsg.textContent='Choose a file first.'; return; }
+    const data=await readFileAsDataURL(f);
+    await setBaseImageFromDataURL(data);
+  };
+
+  // --- Export / Save image to RTDB ---
+  exportPNG.onclick=()=>{
+    const url=dataURLFromCanvas();
+    const a=document.createElement('a'); a.href=url; a.download=(current?.title||'image')+'-edited.png'; a.click();
+  };
+  saveImage.onclick=async()=>{
+    try{
+      if (!current || stopIndex<0) throw new Error('Select a stop first.');
+      const url=dataURLFromCanvas();
+      current.stops[stopIndex].imageData = url;
+      current.stops[stopIndex].imageURL = null;
+      const { id, ...payload } = current;
+      await set(ref(db,'scenarios/'+current.id), payload);
+      metaMsg.textContent='Image saved to RTDB.';
+      renderStopsThumbs();
+    }catch(err){ metaMsg.textContent=String(err.message||err); }
+  };
+
+  // --- Canvas commands ---
+  fitBtn.onclick=()=>{ if(!baseImage) return; setBaseImageFromDataURL(baseImage.toDataURL({})); }; // quick reset positioning
+  zoomIn.onclick=()=>fabricCanvas.setZoom(fabricCanvas.getZoom()*1.1);
+  zoomOut.onclick=()=>fabricCanvas.setZoom(fabricCanvas.getZoom()/1.1);
+  rotateL.onclick=()=>{ if(baseImage){ baseImage.rotate((baseImage.angle||0)-90); fabricCanvas.requestRenderAll(); } };
+  rotateR.onclick=()=>{ if(baseImage){ baseImage.rotate((baseImage.angle||0)+90); fabricCanvas.requestRenderAll(); } };
+  flipH.onclick=()=>{ if(baseImage){ baseImage.toggle('flipX'); fabricCanvas.requestRenderAll(); } };
+  flipV.onclick=()=>{ if(baseImage){ baseImage.toggle('flipY'); fabricCanvas.requestRenderAll(); } };
+
+  // --- Crop workflow ---
+  cropStart.onclick=()=>{
+    if(!baseImage) return;
+    cropMode=true;
+    // add a semi-transparent rect for selection
+    cropRect = new fabric.Rect({
+      left: baseImage.left + 20, top: baseImage.top + 20,
+      width: Math.min(200, baseImage.getScaledWidth()-40),
+      height: Math.min(200, baseImage.getScaledHeight()-40),
+      fill: 'rgba(0,0,0,0.15)', stroke:'#2dd4bf', strokeWidth:2, hasRotatingPoint:false
+    });
+    fabricCanvas.add(cropRect);
+    cropRect.bringToFront();
+    fabricCanvas.setActiveObject(cropRect);
+  };
+  cropCancel.onclick=()=>{
+    cropMode=false;
+    if(cropRect){ fabricCanvas.remove(cropRect); cropRect=null; }
+    fabricCanvas.discardActiveObject(); fabricCanvas.requestRenderAll();
+  };
+  cropApply.onclick=()=>{
+    if(!baseImage || !cropRect) return;
+    // compute crop area relative to base image bitmap
+    const scale = baseImage.scaleX;
+    const bx = baseImage.left;
+    const by = baseImage.top;
+    const rx = cropRect.left - bx;
+    const ry = cropRect.top - by;
+    const rw = cropRect.width * cropRect.scaleX;
+    const rh = cropRect.height * cropRect.scaleY;
+    const sx = rx / scale;
+    const sy = ry / scale;
+    const sw = rw / scale;
+    const sh = rh / scale;
+
+    // export cropped data via offscreen canvas
+    const el = document.createElement('canvas');
+    el.width = Math.max(1, Math.round(sw));
+    el.height = Math.max(1, Math.round(sh));
+    const ctx = el.getContext('2d');
+
+    // draw original base image into offscreen then clip region
+    const base = baseImage.getElement(); // HTMLImageElement
+    // compute source rect in original image space
+    // also account for rotation if present (simplified: if rotated not 0°, we render current canvas instead)
+    const angle = (baseImage.angle||0) % 360;
+    if (angle !== 0) {
+      // Fallback: render current canvas area to image, then crop from that bitmap
+      const fullURL = fabricCanvas.toDataURL({ format:'png', quality:1 });
+      const tmp = new Image(); tmp.onload = ()=>{
+        // Map cropRect bbox to canvas pixels
+        const scaleX = tmp.width / fabricCanvas.getWidth();
+        const scaleY = tmp.height / fabricCanvas.getHeight();
+        ctx.drawImage(tmp, cropRect.left*scaleX, cropRect.top*scaleY, rw*scaleX, rh*scaleY, 0,0, el.width, el.height);
+        const dataURL = el.toDataURL('image/png', 0.95);
+        // replace base image
+        setBaseImageFromDataURL(dataURL).then(()=>{
+          fabricCanvas.remove(cropRect); cropRect=null; cropMode=false; fabricCanvas.requestRenderAll();
+        });
+      };
+      tmp.src = fullURL;
+      return;
+    } else {
+      ctx.drawImage(base, sx, sy, sw, sh, 0, 0, el.width, el.height);
+      const dataURL = el.toDataURL('image/png', 0.95);
+      setBaseImageFromDataURL(dataURL).then(()=>{
+        fabricCanvas.remove(cropRect); cropRect=null; cropMode=false; fabricCanvas.requestRenderAll();
+      });
+    }
+  };
+
+  // --- Overlays ---
+  function addOverlay(type){
+    let obj;
+    // Simple emoji-based overlays for portability; you can swap to SVG paths later.
+    const emojiMap = { fire:'🔥', smoke:'🌫️', person:'🧍', car:'🚗', hazard:'⚠️' };
+    const emoji = emojiMap[type] || '⬤';
+    obj = new fabric.Text(emoji, { fontSize: 80, fill:'#ffffff', left: (fabricCanvas.getWidth()/2)-20, top: (fabricCanvas.getHeight()/2)-20, selectable:true, stroke:'#000', strokeWidth:0.3, shadow:'rgba(0,0,0,0.35) 0 2px 6px' });
+    fabricCanvas.add(obj);
+    fabricCanvas.setActiveObject(obj);
+  }
+  overlayBtns.forEach(b=> b.onclick=()=>addOverlay(b.dataset.type));
+  overlayOpacity.oninput = (e)=>{
+    const o = fabricCanvas.getActiveObject();
+    if (o) { o.set('opacity', parseFloat(e.target.value)); fabricCanvas.requestRenderAll(); }
+  };
+  bringFront.onclick = ()=>{ const o=fabricCanvas.getActiveObject(); if(o){ o.bringToFront(); fabricCanvas.requestRenderAll(); } };
+  sendBack.onclick = ()=>{ const o=fabricCanvas.getActiveObject(); if(o){ o.sendToBack(); if(baseImage) baseImage.sendToBack(); fabricCanvas.requestRenderAll(); } };
+  deleteObj.onclick = ()=>{ const o=fabricCanvas.getActiveObject(); if(o && o!==baseImage){ fabricCanvas.remove(o); fabricCanvas.discardActiveObject(); fabricCanvas.requestRenderAll(); } };
+
+  // --- Delete stop ---
+  deleteStop.onclick=async()=>{
+    try{
+      if (!current || stopIndex<0) return;
+      if (!confirm('Delete this photo from the scenario?')) return;
+      current.stops.splice(stopIndex,1);
+      const { id, ...payload } = current;
+      await set(ref(db,'scenarios/'+current.id), payload);
+      stopIndex = -1;
+      fabricCanvas.clear(); baseImage=null;
+      renderStopsThumbs();
+      metaMsg.textContent='Photo deleted.';
+    }catch(e){ metaMsg.textContent=String(e.message||e); }
+  };
+
+})();
+</script>
+</body>
+</html>
