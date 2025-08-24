@@ -1,550 +1,456 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Geo-Photo Scenarios Admin</title>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>Geo Scenarios — Admin</title>
+<link rel="apple-touch-icon" href="data:,">
 <style>
-  :root{--bg:#0b1e27;--card:#102b36;--border:#1c3a47;--accent:#2aa3b5;--text:#ffffff}
-  body{margin:0;font-family:system-ui,Arial;background:var(--bg);color:var(--text)}
-  .wrap{max-width:1000px;margin:0 auto;padding:16px}
-  header{background:#0a6370;padding:14px 16px;border-radius:12px;margin:12px 0}
-  h2{margin:0}
-  .card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:16px;margin:12px 0}
-  label{display:block;margin:.5rem 0 .25rem}
-  input,textarea,select,button{width:100%;padding:.8rem;font-size:1rem;border-radius:10px;border:1px solid var(--border);background:#0f3542;color:#e7fbff}
-  textarea{min-height:80px;resize:vertical}
-  .row{display:grid;gap:.75rem}
-  .row2{grid-template-columns:1fr 1fr}
-  .row3{grid-template-columns:1fr 1fr 1fr}
-  .btn{background:var(--accent);color:#00151b;border:0;cursor:pointer}
-  .btn-inline{width:auto}
-  .muted{opacity:.8}
-  .small{font-size:.9rem;opacity:.8}
-  img{max-width:100%;display:block;border-radius:12px;margin:.5rem 0}
-  #error{white-space:pre-wrap;background:#2b1b1b;border:1px solid #4b2a2a;padding:.75rem;border-radius:.5rem;color:#ffd6d6;margin-top:.75rem;display:none}
-  .list{display:grid;grid-template-columns:1fr;gap:10px}
-  .scenario{display:flex;gap:10px;align-items:center;background:#0f3542;border:1px solid var(--border);border-radius:10px;padding:10px;cursor:pointer}
-  .thumb{width:92px;height:92px;object-fit:cover;border-radius:8px;background:#0a2230}
-  .stopRow{display:grid;grid-template-columns:92px 1fr auto;gap:10px;align-items:start;background:#0f3542;border:1px solid var(--border);border-radius:10px;padding:10px;margin-top:10px}
-  .stopForm input,.stopForm textarea{width:100%}
-  .btnbar{display:flex;gap:10px;flex-wrap:wrap}
-  .tight{display:flex;gap:8px;align-items:center}
+  /* ===== Mobile-first, high-contrast UI ===== */
+  :root{
+    --bg: #0a0f14; --surface: #0f1820; --panel:#121f2a; --muted:#7fb8c7;
+    --accent:#2dd4bf; --accent-2:#22b2a0; --text:#e6f6fb; --danger:#ff6b6b; --ok:#6ee7b7;
+    --br: 16px; --pad:14px; --gap:12px; --shadow: 0 6px 24px rgba(0,0,0,.45);
+  }
+  @media (prefers-color-scheme: light){
+    :root{ --bg:#f5fbff; --surface:#ffffff; --panel:#ffffff; --text:#0b1e27; --muted:#4f6b78; --shadow: 0 6px 24px rgba(0,0,0,.08) }
+    body{background:linear-gradient(180deg,#eef7fc, #ffffff 30%)}
+  }
+  *{box-sizing:border-box}
+  body{margin:0;font-family:system-ui, -apple-system, Segoe UI, Roboto, Arial; color:var(--text); background:var(--bg)}
+  .wrap{max-width:860px;margin:0 auto;padding:env(safe-area-inset-top) var(--pad) calc(72px + env(safe-area-inset-bottom)) var(--pad)}
+  header.sticky{position:sticky;top:0;z-index:10;backdrop-filter:saturate(1.1) blur(6px);background:color-mix(in hsl, var(--bg) 85%, transparent);padding:10px var(--pad)}
+  .brand{display:flex;align-items:center;gap:10px}
+  .dot{width:12px;height:12px;border-radius:50%;background:var(--accent);box-shadow:0 0 0 6px color-mix(in srgb, var(--accent) 25%, transparent)}
+  h1{font-size:20px;margin:0}
+  .card{background:var(--surface); border:1px solid color-mix(in srgb, var(--surface) 60%, #86a0aa); border-radius:var(--br); padding:var(--pad); box-shadow:var(--shadow); margin:var(--gap) 0}
+  .sectionTitle{margin:0 0 8px 0;font-size:16px;opacity:.95}
+  label{display:block;margin:10px 0 6px 2px;font-size:13px;color:var(--muted)}
+  input, textarea, select{
+    width:100%; border:1px solid color-mix(in srgb, var(--panel) 70%, #9fb5be); background:var(--panel); color:var(--text);
+    padding:14px 12px; border-radius:12px; font-size:16px; outline:none; transition:border .15s ease;
+  }
+  input:focus, textarea:focus, select:focus{border-color:var(--accent)}
+  textarea{min-height:84px; resize:vertical}
+  .grid{display:grid; gap:10px}
+  .g2{grid-template-columns:1fr 1fr}
+  .g3{grid-template-columns:1fr 1fr 1fr}
+  @media (max-width:680px){ .g2,.g3{grid-template-columns:1fr} }
+  .btn{appearance:none; border:0; background:var(--accent); color:#042525; padding:14px 16px; border-radius:12px; font-size:16px; font-weight:600; box-shadow:var(--shadow); cursor:pointer}
+  .btn.secondary{background:#1b2a35; color:var(--text); border:1px solid color-mix(in srgb, #9fb5be 40%, var(--panel))}
+  .btn.ghost{background:transparent; border:1px dashed color-mix(in srgb, #9fb5be 50%, var(--panel)); color:var(--muted)}
+  .btn.danger{background:var(--danger); color:#1a0606}
+  .btnbar{display:flex; gap:10px; flex-wrap:wrap}
+  .hint{color:var(--muted); font-size:13px; margin:8px 2px}
+  .pill{display:inline-flex; align-items:center; gap:8px; padding:6px 10px; border-radius:999px; background:#0f2a2f; border:1px solid #1d3a41; color:var(--muted); font-size:12px}
+  .row{display:flex; align-items:center; gap:10px; flex-wrap:wrap}
+  .thumb{width:84px;height:84px;border-radius:12px;object-fit:cover;background:#0b2130;border:1px solid #204050}
+  .stopRow{display:grid; grid-template-columns:84px 1fr auto; gap:12px; align-items:start; padding:12px; border-radius:14px; background:#0e1d26; border:1px solid #2a4450; margin-top:10px}
+  .stopRow .title{font-weight:700; margin:0 0 4px 0}
+  .stopRow .meta{font-size:12px; color:var(--muted)}
+  .toast{position:fixed; left:16px; right:16px; bottom:calc(16px + env(safe-area-inset-bottom)); background:#0d312b; border:1px solid #1c5a51; color:#baf2e6; padding:12px 14px; border-radius:14px; box-shadow:var(--shadow); display:none; z-index:50}
+  .stickyBar{position:fixed; bottom:0; left:0; right:0; padding:10px var(--pad) calc(10px + env(safe-area-inset-bottom)); background:linear-gradient(180deg, transparent, rgba(0,0,0,.25) 35%, rgba(0,0,0,.55)); backdrop-filter:blur(6px)}
+  .stickyBar .inner{display:flex; gap:10px}
+  .divider{height:1px; background:color-mix(in srgb, #89a9b5 35%, transparent); margin:12px 0}
 </style>
-<noscript><strong>This page requires JavaScript.</strong></noscript>
 </head>
 <body>
+<header class="sticky">
+  <div class="brand"><span class="dot"></span><h1>Geo Scenarios — Admin</h1></div>
+</header>
 <div class="wrap">
-  <header><h2>Geo-Photo Scenarios Admin</h2></header>
 
-  <!-- Mode switch -->
+  <!-- Mode -->
   <div class="card">
-    <div class="tight">
-      <label class="tight"><input type="radio" name="mode" id="modeCreate" checked> <span>&nbsp;Create new scenario</span></label>
-      <label class="tight"><input type="radio" name="mode" id="modeEdit"> <span>&nbsp;Edit existing scenario</span></label>
+    <div class="row">
+      <label class="pill"><input type="radio" name="mode" id="modeCreate" checked> Create new</label>
+      <label class="pill"><input type="radio" name="mode" id="modeEdit"> Edit existing</label>
     </div>
   </div>
 
-  <!-- CREATE MODE -->
+  <!-- CREATE -->
   <div id="createPane" class="card">
-    <h3 style="margin-top:0">Create Scenario</h3>
-    <label>Scenario Title</label>
+    <h3 class="sectionTitle">Create Scenario</h3>
+    <label>Scenario title</label>
     <input id="c_scTitle" placeholder="e.g., Station Tour A">
-    <label>Scenario Notes (optional)</label>
+    <label>Notes (optional)</label>
     <textarea id="c_scNotes" placeholder="What this scenario is about…"></textarea>
     <label>Active?</label>
-    <select id="c_scActive">
-      <option value="true" selected>Yes</option>
-      <option value="false">No</option>
-    </select>
+    <select id="c_scActive"><option value="true" selected>Yes</option><option value="false">No</option></select>
 
-    <hr class="muted" style="margin:16px 0;border:none;border-top:1px solid var(--border)">
+    <div class="divider"></div>
 
-    <h4>Add Location & Photo</h4>
-    <div class="row row2">
+    <h4 class="sectionTitle">Add first location</h4>
+    <div class="grid g2">
       <div>
         <label>Latitude</label>
-        <input id="c_lat" readonly>
+        <input id="c_lat" readonly placeholder="Tap ‘Use my location’">
       </div>
       <div>
         <label>Longitude</label>
         <input id="c_lng" readonly>
       </div>
     </div>
-    <div class="btnbar" style="margin-top:8px">
-      <button id="c_btnLoc" class="btn btn-inline">Use my current location</button>
-    </div>
-    <p class="small muted">Stand where this photo should appear, then tap the button above.</p>
+    <div class="btnbar" style="margin-top:6px"><button id="c_btnLoc" class="btn secondary">Use my location</button></div>
+    <p class="hint">Stand where the photo should appear, then capture your GPS.</p>
 
-    <div class="row row3">
+    <div class="grid g3">
       <div>
         <label>Radius (meters)</label>
         <input id="c_radius" type="number" value="50" min="5" step="5">
       </div>
       <div>
-        <label>Stop Title (optional)</label>
-        <input id="c_stopTitle" placeholder="Short label for this stop">
+        <label>Stop title (optional)</label>
+        <input id="c_stopTitle" placeholder="Short label">
       </div>
       <div>
         <label>Photo file</label>
         <input id="c_file" type="file" accept="image/*" capture="environment">
       </div>
     </div>
-
-    <img id="c_preview" style="display:none" alt="Preview"/>
-    <label class="small">…or paste a public image URL (optional)</label>
-    <input id="c_imageUrl" placeholder="https://… (optional)">
+    <img id="c_preview" class="thumb" style="display:none; width:100%; height:auto;" alt="Preview"/>
+    <label class="hint">…or paste a public image URL (optional)</label>
+    <input id="c_imageUrl" placeholder="https://…">
     <label>Caption / Text (optional)</label>
     <textarea id="c_caption" placeholder="What should the user read at this stop?"></textarea>
-    <p class="small" id="c_sizeInfo"></p>
+    <p id="c_sizeInfo" class="hint"></p>
 
     <div class="btnbar">
-      <button id="c_btnSaveStop" class="btn btn-inline" style="display:none">Save location</button>
-      <button id="c_btnAddAnother" class="btn btn-inline" style="display:none">Add a location</button>
-      <button id="c_btnEndScenario" class="btn btn-inline" style="display:none">End scenario</button>
+      <button id="c_btnSaveStop" class="btn" style="display:none">Save location</button>
+      <button id="c_btnAddAnother" class="btn ghost" style="display:none">Add a location</button>
+      <button id="c_btnEndScenario" class="btn" style="display:none">End scenario</button>
     </div>
-    <p id="c_msg" class="muted"></p>
+    <p id="c_msg" class="hint"></p>
 
-    <h4>Locations in this scenario</h4>
+    <div class="divider"></div>
+    <h4 class="sectionTitle">Locations in this scenario</h4>
     <div id="c_stopsList"></div>
-    <p id="c_countNote" class="small muted">0 stops</p>
+    <p id="c_countNote" class="hint">0 stops</p>
   </div>
 
-  <!-- EDIT MODE -->
+  <!-- EDIT -->
   <div id="editPane" class="card" style="display:none">
-    <h3 style="margin-top:0">Edit Scenario</h3>
+    <h3 class="sectionTitle">Edit Scenario</h3>
     <div id="e_listPane">
-      <p class="muted">Select a scenario to edit:</p>
-      <div id="e_scenarios" class="list"></div>
-      <p id="e_status" class="muted"></p>
+      <p class="hint">Tap a scenario to edit</p>
+      <div id="e_scenarios"></div>
+      <p id="e_status" class="hint"></p>
     </div>
 
     <div id="e_editor" style="display:none">
-      <div class="tight" style="justify-content:space-between;gap:8px">
-        <h4 id="e_titleHeading" style="margin:0">(editing)</h4>
-        <button id="e_back" class="btn btn-inline">Back to list</button>
+      <div class="row" style="justify-content:space-between">
+        <div class="pill" id="e_titleHeading">Editing…</div>
+        <button id="e_back" class="btn secondary">Back to list</button>
       </div>
 
-      <label>Scenario Title</label>
+      <label>Scenario title</label>
       <input id="e_scTitle">
-      <label>Scenario Notes</label>
+      <label>Notes</label>
       <textarea id="e_scNotes"></textarea>
       <label>Active?</label>
-      <select id="e_scActive">
-        <option value="true">Yes</option>
-        <option value="false">No</option>
-      </select>
+      <select id="e_scActive"><option value="true">Yes</option><option value="false">No</option></select>
 
-      <h4 style="margin-top:16px">Locations</h4>
+      <div class="divider"></div>
+      <h4 class="sectionTitle">Locations</h4>
       <div id="e_stops"></div>
 
-      <div class="card" style="background:#0c3a48;margin-top:12px">
-        <h4 style="margin:0 0 8px 0">Add new location</h4>
-        <div class="row row2">
+      <div class="divider"></div>
+      <div class="card" style="background:#0a1620;border-color:#1e3541">
+        <h4 class="sectionTitle" style="margin:0 0 8px 0">Add new location</h4>
+        <div class="grid g2">
           <div><label>Latitude</label><input id="e_new_lat" readonly></div>
           <div><label>Longitude</label><input id="e_new_lng" readonly></div>
         </div>
-        <div class="btnbar" style="margin-top:8px">
-          <button id="e_new_btnLoc" class="btn btn-inline">Use my current location</button>
-        </div>
-        <div class="row row3">
+        <div class="btnbar" style="margin-top:6px"><button id="e_new_btnLoc" class="btn secondary">Use my location</button></div>
+        <div class="grid g3" style="margin-top:6px">
           <div><label>Radius (m)</label><input id="e_new_radius" type="number" value="50" min="5" step="5"></div>
-          <div><label>Stop Title</label><input id="e_new_title"></div>
+          <div><label>Stop title</label><input id="e_new_title"></div>
           <div><label>Photo file</label><input id="e_new_file" type="file" accept="image/*" capture="environment"></div>
         </div>
-        <img id="e_new_preview" style="display:none" alt="Preview"/>
-        <label class="small">…or image URL</label>
+        <img id="e_new_preview" class="thumb" style="display:none; width:100%; height:auto;" alt="Preview"/>
+        <label class="hint">…or image URL</label>
         <input id="e_new_url" placeholder="https://…">
         <label>Caption</label>
         <textarea id="e_new_caption"></textarea>
-        <p class="small" id="e_new_size"></p>
-        <button id="e_add_stop" class="btn btn-inline">Add location</button>
+        <p id="e_new_size" class="hint"></p>
+        <button id="e_add_stop" class="btn">Add location</button>
       </div>
 
-      <div class="btnbar" style="margin-top:12px">
-        <button id="e_save" class="btn btn-inline">Save Scenario Changes</button>
+      <div class="btnbar" style="margin-top:10px">
+        <button id="e_save" class="btn">Save Scenario Changes</button>
       </div>
-      <p id="e_msg" class="muted"></p>
+      <p id="e_msg" class="hint"></p>
     </div>
   </div>
 
-  <div class="card"><div id="error"></div></div>
+  <div id="toast" class="toast"></div>
+</div>
+
+<!-- Bottom sticky quick actions (mobile reach) -->
+<div class="stickyBar">
+  <div class="inner">
+    <button id="quickAdd" class="btn" style="flex:1">+ Quick Add Location</button>
+    <button id="quickSave" class="btn secondary" style="flex:1">Save Scenario</button>
+  </div>
 </div>
 
 <script type="module">
 (async () => {
-  const showErr = (e) => {
-    const box = document.getElementById('error');
-    box.style.display = 'block';
-    box.textContent = String(e && e.stack ? e.stack : e);
-    console.error(e);
+  // ---------- Helpers ----------
+  const $ = id => document.getElementById(id);
+  const toast = (t)=>{ const el=$('toast'); el.textContent=t; el.style.display='block'; clearTimeout(el._t); el._t=setTimeout(()=>el.style.display='none',2000); };
+  async function fileToDataURL(file, maxDim=1280, q=0.72){
+    const img=new Image(), rdr=new FileReader();
+    const data=await new Promise((res,rej)=>{ rdr.onload=()=>res(rdr.result); rdr.onerror=rej; rdr.readAsDataURL(file); });
+    await new Promise((res,rej)=>{ img.onload=res; img.onerror=rej; img.src=data; });
+    let {width:w, height:h}=img;
+    if (w>h && w>maxDim){ h=Math.round(h*(maxDim/w)); w=maxDim; }
+    else if (h>w && h>maxDim){ w=Math.round(w*(maxDim/h)); h=maxDim; }
+    const c=document.createElement('canvas'); c.width=w; c.height=h;
+    c.getContext('2d').drawImage(img,0,0,w,h);
+    return c.toDataURL('image/jpeg', q);
+  }
+
+  // ---------- Firebase (RTDB only) ----------
+  const [{ initializeApp }] = await Promise.all([
+    import("https://www.gstatic.com/firebasejs/10.12.4/firebase-app.js"),
+  ]);
+  const [{ getDatabase, ref, onValue, push, set }] = await Promise.all([
+    import("https://www.gstatic.com/firebasejs/10.12.4/firebase-database.js"),
+  ]);
+
+  const firebaseConfig = {
+    apiKey: "AIzaSyDM6DpRSeZueVKRpbyJyDmhf8WY66KyCDk",
+    authDomain: "dailyquiz-d5279.firebaseapp.com",
+    databaseURL: "https://dailyquiz-d5279-default-rtdb.firebaseio.com",
+    projectId: "dailyquiz-d5279",
+    appId: "1:94577748034:web:c032d3a1d72db1313de5db",
+    measurementId: "G-19DVN7NNH7"
+  };
+  const app = initializeApp(firebaseConfig);
+  const db = getDatabase(app);
+
+  // ---------- Mode toggle ----------
+  const modeCreate = $('modeCreate'), modeEdit=$('modeEdit'), createPane=$('createPane'), editPane=$('editPane');
+  modeCreate.onchange=()=>{ if(modeCreate.checked){ createPane.style.display='block'; editPane.style.display='none'; } };
+  modeEdit.onchange  =()=>{ if(modeEdit.checked){   createPane.style.display='none'; editPane.style.display='block'; } };
+
+  // ---------- CREATE MODE ----------
+  let c_stops=[]; let c_dataURL=null;
+  const c_scTitle=$('c_scTitle'), c_scNotes=$('c_scNotes'), c_scActive=$('c_scActive');
+  const c_lat=$('c_lat'), c_lng=$('c_lng'), c_radius=$('c_radius'), c_stopTitle=$('c_stopTitle');
+  const c_file=$('c_file'), c_imageUrl=$('c_imageUrl'), c_caption=$('c_caption');
+  const c_preview=$('c_preview'), c_sizeInfo=$('c_sizeInfo');
+  const c_btnLoc=$('c_btnLoc'), c_btnSaveStop=$('c_btnSaveStop'), c_btnAddAnother=$('c_btnAddAnother'), c_btnEndScenario=$('c_btnEndScenario');
+  const c_msg=$('c_msg'), c_stopsList=$('c_stopsList'), c_countNote=$('c_countNote');
+
+  c_btnLoc.onclick=()=>navigator.geolocation.getCurrentPosition(
+    p=>{ c_lat.value=p.coords.latitude.toFixed(6); c_lng.value=p.coords.longitude.toFixed(6); toast('GPS captured'); },
+    e=>toast('Location error: '+e.message),
+    {enableHighAccuracy:true, timeout:10000, maximumAge:0}
+  );
+
+  c_file.onchange=async e=>{
+    const f=e.target.files?.[0]; if(!f) return;
+    c_msg.textContent='Compressing image…';
+    c_dataURL=await fileToDataURL(f);
+    c_preview.src=c_dataURL; c_preview.style.display='block';
+    const bytes=Math.ceil((c_dataURL.length-'data:image/jpeg;base64,'.length)*3/4);
+    c_sizeInfo.textContent=`~${Math.round(bytes/1024)} KB`;
+    c_msg.textContent='';
+    showCreateFlowBtns();
+  };
+  c_imageUrl.addEventListener('input', showCreateFlowBtns);
+
+  function showCreateFlowBtns(){
+    const hasImg=!!c_dataURL || !!c_imageUrl.value.trim();
+    c_btnSaveStop.style.display = hasImg ? 'inline-block':'none';
+    const any = c_stops.length>0;
+    c_btnAddAnother.style.display = any ? 'inline-block':'none';
+    c_btnEndScenario.style.display = any ? 'inline-block':'none';
+  }
+  function renderCreateStops(){
+    c_stopsList.innerHTML='';
+    c_stops.forEach((s,i)=>{
+      const row=document.createElement('div'); row.className='stopRow';
+      row.innerHTML=`
+        <img class="thumb" src="${s.imageData||s.imageURL||''}" alt="thumb">
+        <div>
+          <p class="title">${s.title||'(no title)'}</p>
+          <p class="meta">Lat ${s.lat}, Lng ${s.lng} • R ${s.radiusMeters}m</p>
+          <p class="meta">${(s.caption||'').slice(0,140)}</p>
+        </div>
+        <div><button class="btn danger" data-i="${i}">Remove</button></div>`;
+      c_stopsList.appendChild(row);
+    });
+    c_stopsList.querySelectorAll('button[data-i]').forEach(b=>{
+      b.onclick=()=>{ c_stops.splice(parseInt(b.dataset.i),1); renderCreateStops(); showCreateFlowBtns(); };
+    });
+    c_countNote.textContent = `${c_stops.length} stop(s)`;
+  }
+  function captureStop(){
+    const lat=parseFloat(c_lat.value), lng=parseFloat(c_lng.value);
+    const r=Math.max(5, parseInt(c_radius.value||'50',10));
+    const t=c_stopTitle.value.trim(), cap=c_caption.value.trim(), url=c_imageUrl.value.trim();
+    if(Number.isNaN(lat)||Number.isNaN(lng)) throw new Error('Set a location first');
+    if(!c_dataURL && !url) throw new Error('Choose a photo or paste an image URL');
+    return {title:t, caption:cap, lat, lng, radiusMeters:r, active:true, createdAt:Date.now(), imageData:c_dataURL||null, imageURL:url||null};
+  }
+  function clearCreateStop(){
+    c_stopTitle.value=''; c_caption.value=''; c_imageUrl.value=''; c_file.value='';
+    c_dataURL=null; c_preview.style.display='none'; c_sizeInfo.textContent='';
+  }
+
+  c_btnSaveStop.onclick=()=>{
+    try{ const s=captureStop(); c_stops.push(s); renderCreateStops(); clearCreateStop(); showCreateFlowBtns(); toast('Location saved'); c_msg.textContent='Location saved. You can add another or end scenario.';}
+    catch(err){ c_msg.textContent=err.message; toast(err.message); }
+  };
+  c_btnAddAnother.onclick=()=>{ clearCreateStop(); toast('Add the next location'); };
+  c_btnEndScenario.onclick=async()=>{
+    try{
+      if(!c_scTitle.value.trim()) throw new Error('Scenario title is required');
+      if(!c_stops.length) throw new Error('Add at least one location');
+      await set(push(ref(db,'scenarios')),{ title:c_scTitle.value.trim(), notes:c_scNotes.value.trim(), active:(c_scActive.value==='true'), createdAt:Date.now(), stops:c_stops });
+      toast('Scenario saved'); c_scTitle.value=''; c_scNotes.value=''; c_scActive.value='true'; c_stops=[]; renderCreateStops(); clearCreateStop(); showCreateFlowBtns();
+    }catch(err){ toast(err.message); }
   };
 
-  try {
-    // Firebase RTDB only
-    const [{ initializeApp }] = await Promise.all([
-      import("https://www.gstatic.com/firebasejs/10.12.4/firebase-app.js"),
-    ]);
-    const [{ getDatabase, ref, onValue, push, set, update }] = await Promise.all([
-      import("https://www.gstatic.com/firebasejs/10.12.4/firebase-database.js"),
-    ]);
+  renderCreateStops(); showCreateFlowBtns();
 
-    const firebaseConfig = {
-      apiKey: "AIzaSyDM6DpRSeZueVKRpbyJyDmhf8WY66KyCDk",
-      authDomain: "dailyquiz-d5279.firebaseapp.com",
-      databaseURL: "https://dailyquiz-d5279-default-rtdb.firebaseio.com",
-      projectId: "dailyquiz-d5279",
-      appId: "1:94577748034:web:c032d3a1d72db1313de5db",
-      measurementId: "G-19DVN7NNH7"
-    };
-    const app = initializeApp(firebaseConfig);
-    const db = getDatabase(app);
+  // Quick bar
+  $('quickAdd').onclick=()=>c_btnSaveStop.click();
+  $('quickSave').onclick=()=>c_btnEndScenario.click();
 
-    // ---------- UTILITIES ----------
-    async function fileToCompressedDataURL(file, maxDim = 1280, quality = 0.7) {
-      const img = new Image();
-      const reader = new FileReader();
-      const data = await new Promise((res, rej) => { reader.onload = () => res(reader.result); reader.onerror = rej; reader.readAsDataURL(file); });
-      await new Promise((res, rej) => { img.onload = res; img.onerror = rej; img.src = data; });
-      const canvas = document.createElement('canvas');
-      let { width, height } = img;
-      if (width > height && width > maxDim) { height = Math.round(height * (maxDim/width)); width = maxDim; }
-      else if (height > width && height > maxDim) { width = Math.round(width * (maxDim/height)); height = maxDim; }
-      canvas.width = width; canvas.height = height;
-      const ctx = canvas.getContext('2d'); ctx.drawImage(img,0,0,width,height);
-      return canvas.toDataURL('image/jpeg', quality);
-    }
-    const el = id => document.getElementById(id);
+  // ---------- EDIT MODE ----------
+  const e_listPane=$('e_listPane'), e_scenarios=$('e_scenarios'), e_status=$('e_status');
+  const e_editor=$('e_editor'), e_back=$('e_back'), e_titleHeading=$('e_titleHeading');
+  const e_scTitle=$('e_scTitle'), e_scNotes=$('e_scNotes'), e_scActive=$('e_scActive');
+  const e_stops=$('e_stops'), e_new_btnLoc=$('e_new_btnLoc');
+  const e_new_lat=$('e_new_lat'), e_new_lng=$('e_new_lng'), e_new_radius=$('e_new_radius');
+  const e_new_title=$('e_new_title'), e_new_file=$('e_new_file'), e_new_url=$('e_new_url'), e_new_caption=$('e_new_caption');
+  const e_new_preview=$('e_new_preview'), e_new_size=$('e_new_size'), e_add_stop=$('e_add_stop');
+  const e_save=$('e_save'), e_msg=$('e_msg');
+  let scenarios=[]; let editing=null; let e_new_dataURL=null;
 
-    // ---------- MODE TOGGLE ----------
-    const modeCreate = el('modeCreate');
-    const modeEdit   = el('modeEdit');
-    const createPane = el('createPane');
-    const editPane   = el('editPane');
+  onValue(ref(db,'scenarios'), snap=>{
+    const v=snap.val()||{};
+    scenarios=Object.entries(v).map(([id,s])=>({id,...s})).sort((a,b)=>(b.createdAt||0)-(a.createdAt||0));
+    if(modeEdit.checked) renderScenarioList();
+  });
 
-    modeCreate.onchange = () => { if (modeCreate.checked){ createPane.style.display='block'; editPane.style.display='none'; } };
-    modeEdit.onchange   = () => { if (modeEdit.checked){   createPane.style.display='none'; editPane.style.display='block'; } };
-
-    // ---------- CREATE MODE STATE + UI ----------
-    let c_stops = [];
-    let c_dataURL = null;
-
-    const c_scTitle = el('c_scTitle'), c_scNotes = el('c_scNotes'), c_scActive = el('c_scActive');
-    const c_lat = el('c_lat'), c_lng = el('c_lng'), c_radius = el('c_radius'), c_stopTitle = el('c_stopTitle');
-    const c_file = el('c_file'), c_imageUrl = el('c_imageUrl'), c_caption = el('c_caption');
-    const c_preview = el('c_preview'), c_sizeInfo = el('c_sizeInfo');
-    const c_btnLoc = el('c_btnLoc');
-    const c_btnSaveStop = el('c_btnSaveStop'), c_btnAddAnother = el('c_btnAddAnother'), c_btnEndScenario = el('c_btnEndScenario');
-    const c_msg = el('c_msg'), c_stopsList = el('c_stopsList'), c_countNote = el('c_countNote');
-
-    function c_renderStops(){
-      c_stopsList.innerHTML = "";
-      c_stops.forEach((s,i)=>{
-        const row = document.createElement('div');
-        row.className = 'stopRow';
-        const img = document.createElement('img'); img.className='thumb'; img.src = s.imageData || s.imageURL || "";
-        const meta = document.createElement('div');
-        meta.innerHTML = `<div><strong>${s.title || '(no title)'}</strong></div>
-                          <div class="small">Lat ${s.lat}, Lng ${s.lng}, R ${s.radiusMeters}m</div>
-                          <div class="small">${(s.caption||'').slice(0,120)}</div>`;
-        const del = document.createElement('button'); del.className='btn btn-inline'; del.textContent='Remove';
-        del.onclick = () => { c_stops.splice(i,1); c_renderStops(); };
-        row.appendChild(img); row.appendChild(meta); row.appendChild(del);
-        c_stopsList.appendChild(row);
-      });
-      c_countNote.textContent = `${c_stops.length} stop(s)`;
-    }
-
-    function c_showFlowButtons(){
-      const hasImage = !!c_dataURL || !!c_imageUrl.value.trim();
-      c_btnSaveStop.style.display = hasImage ? 'inline-block' : 'none';
-      c_btnAddAnother.style.display = c_stops.length ? 'inline-block' : 'none';
-      c_btnEndScenario.style.display = c_stops.length ? 'inline-block' : 'none';
-    }
-
-    c_btnLoc.onclick = () => {
-      navigator.geolocation.getCurrentPosition(
-        p => { c_lat.value = p.coords.latitude.toFixed(6); c_lng.value = p.coords.longitude.toFixed(6); },
-        e => { c_msg.textContent = "Location error: " + e.message; },
-        { enableHighAccuracy:true, timeout:10000, maximumAge:0 }
-      );
-    };
-
-    c_file.onchange = async (e) => {
-      try {
-        const f = e.target.files?.[0]; if (!f) return;
-        c_msg.textContent = "Compressing image…";
-        c_dataURL = await fileToCompressedDataURL(f, 1280, 0.7);
-        c_preview.src = c_dataURL; c_preview.style.display='block';
-        const bytes = Math.ceil((c_dataURL.length - 'data:image/jpeg;base64,'.length) * 3/4);
-        c_sizeInfo.textContent = `Compressed image ~${Math.round(bytes/1024)} KB`;
-        c_msg.textContent = ""; c_showFlowButtons();
-      } catch(err){ c_msg.textContent="Failed to process image."; }
-    };
-    c_imageUrl.addEventListener('input', c_showFlowButtons);
-
-    function c_captureStopOrThrow(){
-      const lat = parseFloat(c_lat.value), lng = parseFloat(c_lng.value);
-      const r = Math.max(5, parseInt(c_radius.value || "50", 10));
-      const t = c_stopTitle.value.trim();
-      const cap = c_caption.value.trim();
-      const url = c_imageUrl.value.trim();
-      if (Number.isNaN(lat)||Number.isNaN(lng)) throw new Error("Set a location first.");
-      if (!c_dataURL && !url) throw new Error("Choose a photo or paste an image URL.");
-      return { title:t, caption:cap, lat, lng, radiusMeters:r, active:true, createdAt:Date.now(), imageData:c_dataURL||null, imageURL:url||null };
-    }
-
-    function c_clearStopForm(){
-      c_stopTitle.value=""; c_caption.value=""; c_imageUrl.value=""; c_file.value="";
-      c_dataURL=null; c_preview.style.display='none'; c_sizeInfo.textContent=""; c_msg.textContent="";
-      c_showFlowButtons();
-    }
-
-    c_btnSaveStop.onclick = () => {
-      try {
-        const s = c_captureStopOrThrow();
-        c_stops.push(s);
-        c_renderStops();
-        c_clearStopForm();
-        c_btnAddAnother.style.display = 'inline-block';
-        c_btnEndScenario.style.display = 'inline-block';
-        c_msg.textContent = "Location saved. You can add another or end scenario.";
-      } catch(e){ c_msg.textContent = e.message; }
-    };
-
-    c_btnAddAnother.onclick = () => {
-      // Simply clears the form to add next
-      c_clearStopForm();
-      c_msg.textContent = "Add the next location.";
-    };
-
-    c_btnEndScenario.onclick = async () => {
-      try {
-        if (!c_scTitle.value.trim()) throw new Error("Scenario title is required.");
-        if (!c_stops.length) throw new Error("Add at least one location.");
-        c_msg.textContent = "Saving scenario…";
-        const newRef = push(ref(db, "scenarios"));
-        await set(newRef, { title:c_scTitle.value.trim(), notes:c_scNotes.value.trim(), active:(c_scActive.value==="true"), createdAt:Date.now(), stops:c_stops });
-        c_msg.textContent = "Scenario saved! 🎉";
-        // reset builder
-        c_scTitle.value=""; c_scNotes.value=""; c_scActive.value="true"; c_stops=[]; c_renderStops(); c_clearStopForm();
-        c_btnAddAnother.style.display='none'; c_btnEndScenario.style.display='none';
-      } catch(e){ c_msg.textContent = e.message; }
-    };
-
-    c_renderStops(); c_showFlowButtons();
-
-    // ---------- EDIT MODE ----------
-    const e_listPane = el('e_listPane'), e_scenarios = el('e_scenarios'), e_status = el('e_status');
-    const e_editor = el('e_editor'), e_back = el('e_back');
-    const e_titleHeading = el('e_titleHeading');
-    const e_scTitle = el('e_scTitle'), e_scNotes=el('e_scNotes'), e_scActive=el('e_scActive');
-    const e_stops = el('e_stops');
-    const e_msg = el('e_msg'), e_save = el('e_save');
-
-    // add-new (within edit)
-    const e_new_lat=el('e_new_lat'), e_new_lng=el('e_new_lng'), e_new_radius=el('e_new_radius'), e_new_title=el('e_new_title');
-    const e_new_file=el('e_new_file'), e_new_url=el('e_new_url'), e_new_caption=el('e_new_caption');
-    const e_new_preview=el('e_new_preview'), e_new_size=el('e_new_size'), e_new_btnLoc=el('e_new_btnLoc'), e_add_stop=el('e_add_stop');
-
-    let scenarios = [];  // [{id, ...}]
-    let editing = null;  // current scenario object (id + fields)
-    let e_new_dataURL = null;
-
-    onValue(ref(db,"scenarios"), snap => {
-      const val = snap.val() || {};
-      scenarios = Object.entries(val).map(([id,s])=>({id,...s}));
-      scenarios.sort((a,b)=>(b.createdAt||0)-(a.createdAt||0));
-      if (editPane.style.display!=='none') renderScenarioList();
-    }, err=>showErr(err));
-
-    function renderScenarioList(){
-      e_scenarios.innerHTML = "";
-      if (!scenarios.length){ e_status.textContent="No scenarios yet."; return; }
-      e_status.textContent = `${scenarios.length} scenario(s)`;
-      scenarios.forEach(sc=>{
-        const first = (sc.stops && sc.stops[0]) || {};
-        const row = document.createElement('div'); row.className='scenario';
-        const img=document.createElement('img'); img.className='thumb'; img.src=first.imageData||first.imageURL||"";
-        const meta=document.createElement('div'); meta.style.flex='1';
-        meta.innerHTML = `<div><strong>${sc.title||'(untitled)'}</strong></div><div class="small">${(sc.notes||'').slice(0,140)}</div>`;
-        row.appendChild(img); row.appendChild(meta);
-        row.onclick = ()=>openEditor(sc);
-        e_scenarios.appendChild(row);
-      });
-    }
-
-    function openEditor(sc){
-      editing = JSON.parse(JSON.stringify(sc)); // deep copy so we can edit safely
-      e_listPane.style.display='none';
-      e_editor.style.display='block';
-      e_titleHeading.textContent = `Editing: ${editing.title||'(untitled)'}`;
-      e_scTitle.value = editing.title || "";
-      e_scNotes.value = editing.notes || "";
-      e_scActive.value = editing.active ? "true":"false";
-      renderEditStops();
-    }
-
-    e_back.onclick = () => {
-      editing = null;
-      e_editor.style.display='none';
-      e_listPane.style.display='block';
-      e_msg.textContent="";
-    };
-
-    function renderEditStops(){
-      e_stops.innerHTML = "";
-      const stops = editing.stops || [];
-      stops.forEach((s,idx)=>{
-        const row = document.createElement('div'); row.className='stopRow stopForm';
-
-        const img = document.createElement('img'); img.className='thumb'; img.src=s.imageData||s.imageURL||"";
-        const meta = document.createElement('div');
-
-        // build inputs with unique ids per index
-        meta.innerHTML = `
-          <div class="row row2">
-            <div>
-              <label>Title</label>
-              <input id="e_title_${idx}" value="${s.title||''}">
-            </div>
-            <div>
-              <label>Radius (m)</label>
-              <input id="e_radius_${idx}" type="number" value="${s.radiusMeters||50}">
-            </div>
-          </div>
-          <div class="row row2">
-            <div>
-              <label>Latitude</label>
-              <input id="e_lat_${idx}" value="${s.lat}">
-            </div>
-            <div>
-              <label>Longitude</label>
-              <input id="e_lng_${idx}" value="${s.lng}">
-            </div>
-          </div>
-          <div class="row">
-            <label>Caption</label>
-            <textarea id="e_cap_${idx}">${s.caption||''}</textarea>
-          </div>
-          <div class="row row2">
-            <div>
-              <label>Photo file (replace)</label>
-              <input id="e_file_${idx}" type="file" accept="image/*" capture="environment">
-            </div>
-            <div>
-              <label>…or Image URL</label>
-              <input id="e_url_${idx}" value="${s.imageURL||''}">
-            </div>
-          </div>
-          <div class="btnbar" style="margin-top:8px">
-            <button id="e_loc_${idx}" class="btn btn-inline">Use my location</button>
-          </div>
-          <p class="small muted" id="e_info_${idx}"></p>
-        `;
-
-        const right = document.createElement('div');
-        const del = document.createElement('button'); del.className='btn btn-inline'; del.textContent='Remove';
-        del.onclick = () => { editing.stops.splice(idx,1); renderEditStops(); };
-        right.appendChild(del);
-
-        row.appendChild(img); row.appendChild(meta); row.appendChild(right);
-        e_stops.appendChild(row);
-
-        // Hook up file change for this stop
-        const fileInput = document.getElementById(`e_file_${idx}`);
-        const info = document.getElementById(`e_info_${idx}`);
-        fileInput.onchange = async (e)=>{
-          const f = e.target.files?.[0]; if (!f) return;
-          info.textContent = "Compressing…";
-          const dataURL = await fileToCompressedDataURL(f,1280,0.7);
-          editing.stops[idx].imageData = dataURL;
-          editing.stops[idx].imageURL = null;
-          img.src = dataURL;
-          const bytes = Math.ceil((dataURL.length - 'data:image/jpeg;base64,'.length) * 3/4);
-          info.textContent = `New image ~${Math.round(bytes/1024)} KB (not saved yet)`;
-        };
-
-        // Location button
-        document.getElementById(`e_loc_${idx}`).onclick = ()=>{
-          navigator.geolocation.getCurrentPosition(
-            p => {
-              document.getElementById(`e_lat_${idx}`).value = p.coords.latitude.toFixed(6);
-              document.getElementById(`e_lng_${idx}`).value = p.coords.longitude.toFixed(6);
-            },
-            err => { info.textContent = "Location error: "+err.message; },
-            { enableHighAccuracy:true, timeout:10000, maximumAge:0 }
-          );
-        };
-      });
-    }
-
-    // Save scenario changes
-    e_save.onclick = async ()=>{
-      try{
-        if (!editing) return;
-        // Pull values back from inputs into editing.stops
-        (editing.stops||[]).forEach((s,idx)=>{
-          const t = el(`e_title_${idx}`).value.trim();
-          const r = parseFloat(el(`e_radius_${idx}`).value);
-          const la = parseFloat(el(`e_lat_${idx}`).value);
-          const ln = parseFloat(el(`e_lng_${idx}`).value);
-          const cap = el(`e_cap_${idx}`).value.trim();
-          const url = el(`e_url_${idx}`).value.trim();
-          s.title = t; s.radiusMeters = r; s.lat = la; s.lng = ln; s.caption = cap;
-          if (url) { s.imageURL = url; if (!s.imageData) s.imageData = null; } // prefer URL if provided
-        });
-
-        // Update scenario meta
-        editing.title = e_scTitle.value.trim();
-        editing.notes = e_scNotes.value.trim();
-        editing.active = (e_scActive.value==="true");
-
-        // Write back full scenario object
-        const { id, ...payload } = editing;
-        await set(ref(db, `scenarios/${editing.id}`), payload);
-        e_msg.textContent = "Saved changes! 🎉";
-      } catch(err){ e_msg.textContent = String(err.message||err); }
-    };
-
-    // Add new stop (within edit)
-    e_new_btnLoc.onclick = () => {
-      navigator.geolocation.getCurrentPosition(
-        p => { e_new_lat.value = p.coords.latitude.toFixed(6); e_new_lng.value = p.coords.longitude.toFixed(6); },
-        e => { e_new_size.textContent = "Location error: " + e.message; },
-        { enableHighAccuracy:true, timeout:10000, maximumAge:0 }
-      );
-    };
-    e_new_file.onchange = async (e)=>{
-      const f = e.target.files?.[0]; if (!f) return;
-      e_new_size.textContent = "Compressing…";
-      e_new_dataURL = await fileToCompressedDataURL(f,1280,0.7);
-      e_new_preview.src = e_new_dataURL; e_new_preview.style.display='block';
-      const bytes = Math.ceil((e_new_dataURL.length - 'data:image/jpeg;base64,'.length) * 3/4);
-      e_new_size.textContent = `Compressed image ~${Math.round(bytes/1024)} KB`;
-    };
-    e_add_stop.onclick = ()=>{
-      try{
-        if (!editing) return;
-        const la = parseFloat(e_new_lat.value), ln = parseFloat(e_new_lng.value);
-        const r = Math.max(5, parseInt(e_new_radius.value||"50",10));
-        const t = e_new_title.value.trim(), cap = e_new_caption.value.trim();
-        const url = e_new_url.value.trim();
-        if (Number.isNaN(la)||Number.isNaN(ln)) throw new Error("Set a location first.");
-        if (!e_new_dataURL && !url) throw new Error("Choose a photo or paste an image URL.");
-        (editing.stops ||= []).push({
-          title:t, caption:cap, lat:la, lng:ln, radiusMeters:r, active:true, createdAt:Date.now(),
-          imageData: e_new_dataURL || null, imageURL: url || null
-        });
-        // Clear
-        e_new_title.value=""; e_new_caption.value=""; e_new_url.value=""; e_new_file.value="";
-        e_new_dataURL=null; e_new_preview.style.display='none'; e_new_size.textContent="";
-        renderEditStops();
-      } catch(err){ e_msg.textContent = String(err.message||err); }
-    };
-
-  } catch (e) {
-    showErr(e);
+  function renderScenarioList(){
+    e_scenarios.innerHTML='';
+    if(!scenarios.length){ e_status.textContent='No scenarios yet.'; return; }
+    e_status.textContent=`${scenarios.length} scenario(s)`;
+    scenarios.forEach(sc=>{
+      const first=(sc.stops && sc.stops[0])||{};
+      const row=document.createElement('div'); row.className='stopRow'; row.style.cursor='pointer';
+      row.innerHTML=`
+        <img class="thumb" src="${first.imageData||first.imageURL||''}" alt="thumb">
+        <div>
+          <p class="title">${sc.title||'(untitled)'}</p>
+          <p class="meta">${(sc.notes||'').slice(0,140)}</p>
+        </div>
+        <div class="pill">${sc.active?'Active':'Inactive'}</div>`;
+      row.onclick=()=>openEditor(sc);
+      e_scenarios.appendChild(row);
+    });
   }
+
+  function openEditor(sc){
+    editing=JSON.parse(JSON.stringify(sc));
+    e_listPane.style.display='none'; e_editor.style.display='block';
+    e_titleHeading.textContent=`Editing: ${editing.title||'(untitled)'}`;
+    e_scTitle.value=editing.title||''; e_scNotes.value=editing.notes||''; e_scActive.value=editing.active?'true':'false';
+    renderEditStops();
+  }
+  e_back.onclick=()=>{ editing=null; e_editor.style.display='none'; e_listPane.style.display='block'; e_msg.textContent=''; };
+
+  function renderEditStops(){
+    e_stops.innerHTML='';
+    (editing.stops||[]).forEach((s,i)=>{
+      const row=document.createElement('div'); row.className='stopRow';
+      row.innerHTML=`
+        <img class="thumb" id="e_img_${i}" src="${s.imageData||s.imageURL||''}" alt="thumb">
+        <div>
+          <div class="grid g2">
+            <div><label>Title</label><input id="e_title_${i}" value="${s.title||''}"></div>
+            <div><label>Radius (m)</label><input id="e_radius_${i}" type="number" value="${s.radiusMeters||50}"></div>
+          </div>
+          <div class="grid g2">
+            <div><label>Latitude</label><input id="e_lat_${i}" value="${s.lat}"></div>
+            <div><label>Longitude</label><input id="e_lng_${i}" value="${s.lng}"></div>
+          </div>
+          <label>Caption</label><textarea id="e_cap_${i}">${s.caption||''}</textarea>
+          <div class="grid g2">
+            <div><label>Photo file (replace)</label><input id="e_file_${i}" type="file" accept="image/*" capture="environment"></div>
+            <div><label>…or Image URL</label><input id="e_url_${i}" value="${s.imageURL||''}"></div>
+          </div>
+          <div class="btnbar"><button id="e_loc_${i}" class="btn secondary">Use my location</button></div>
+          <p class="hint" id="e_info_${i}"></p>
+        </div>
+        <div><button class="btn danger" id="e_del_${i}">Remove</button></div>`;
+      e_stops.appendChild(row);
+
+      $('e_del_'+i).onclick=()=>{ editing.stops.splice(i,1); renderEditStops(); };
+      $('e_loc_'+i).onclick=()=>navigator.geolocation.getCurrentPosition(
+        p=>{ $('e_lat_'+i).value=p.coords.latitude.toFixed(6); $('e_lng_'+i).value=p.coords.longitude.toFixed(6); toast('GPS captured'); },
+        e=>toast('Location error: '+e.message),
+        {enableHighAccuracy:true, timeout:10000, maximumAge:0}
+      );
+      $('e_file_'+i).onchange=async ev=>{
+        const f=ev.target.files?.[0]; if(!f) return;
+        const info=$('e_info_'+i); info.textContent='Compressing…';
+        const data=await fileToDataURL(f); editing.stops[i].imageData=data; editing.stops[i].imageURL=null;
+        $('e_img_'+i).src=data; const bytes=Math.ceil((data.length-'data:image/jpeg;base64,'.length)*3/4); info.textContent=`~${Math.round(bytes/1024)} KB (not saved yet)`;
+      };
+    });
+  }
+
+  e_new_btnLoc.onclick=()=>navigator.geolocation.getCurrentPosition(
+    p=>{ e_new_lat.value=p.coords.latitude.toFixed(6); e_new_lng.value=p.coords.longitude.toFixed(6); toast('GPS captured'); },
+    e=>toast('Location error: '+e.message),
+    {enableHighAccuracy:true, timeout:10000, maximumAge:0}
+  );
+  e_new_file.onchange=async ev=>{
+    const f=ev.target.files?.[0]; if(!f) return;
+    e_new_size.textContent='Compressing…'; e_new_dataURL=await fileToDataURL(f);
+    e_new_preview.src=e_new_dataURL; e_new_preview.style.display='block';
+    const bytes=Math.ceil((e_new_dataURL.length-'data:image/jpeg;base64,'.length)*3/4); e_new_size.textContent=`~${Math.round(bytes/1024)} KB`;
+  };
+  e_add_stop.onclick=()=>{
+    try{
+      const la=parseFloat(e_new_lat.value), ln=parseFloat(e_new_lng.value);
+      const r=Math.max(5, parseInt(e_new_radius.value||'50',10));
+      const t=e_new_title.value.trim(), cap=e_new_caption.value.trim(), url=e_new_url.value.trim();
+      if(Number.isNaN(la)||Number.isNaN(ln)) throw new Error('Set a location first');
+      if(!e_new_dataURL && !url) throw new Error('Choose a photo or paste an image URL');
+      (editing.stops ||= []).push({ title:t, caption:cap, lat:la, lng:ln, radiusMeters:r, active:true, createdAt:Date.now(), imageData:e_new_dataURL||null, imageURL:url||null });
+      e_new_title.value=''; e_new_caption.value=''; e_new_url.value=''; e_new_file.value=''; e_new_dataURL=null; e_new_preview.style.display='none'; e_new_size.textContent='';
+      renderEditStops(); toast('Location added (not saved yet)');
+    }catch(err){ toast(err.message); }
+  };
+
+  e_save.onclick=async()=>{
+    try{
+      if(!editing) return;
+      (editing.stops||[]).forEach((s,i)=>{
+        s.title = $('e_title_'+i).value.trim();
+        s.radiusMeters = parseFloat($('e_radius_'+i).value);
+        s.lat = parseFloat($('e_lat_'+i).value);
+        s.lng = parseFloat($('e_lng_'+i).value);
+        s.caption = $('e_cap_'+i).value.trim();
+        const url = $('e_url_'+i).value.trim();
+        if(url){ s.imageURL=url; if(!s.imageData) s.imageData=null; }
+      });
+      editing.title = e_scTitle.value.trim();
+      editing.notes = e_scNotes.value.trim();
+      editing.active = (e_scActive.value==='true');
+      const {id, ...payload}=editing;
+      await set(ref(db,'scenarios/'+editing.id), payload);
+      toast('Saved changes');
+    }catch(err){ toast(err.message); }
+  };
 })();
 </script>
 </body>
