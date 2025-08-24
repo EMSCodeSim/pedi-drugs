@@ -17,7 +17,7 @@
   body{margin:0;background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial}
   header{padding:10px 14px;border-bottom:1px solid var(--border);background:color-mix(in hsl, var(--bg) 88%, transparent);backdrop-filter:blur(6px)}
   h1{margin:0;font-size:18px}
-  .app{display:grid;grid-template-columns:320px 1fr 320px;gap:12px;padding:12px;max-height:calc(100vh - 58px)}
+  .app{display:grid;grid-template-columns:320px 1fr 360px;gap:12px;padding:12px;max-height:calc(100vh - 58px)}
   .col{background:var(--surface);border:1px solid var(--border);border-radius:var(--br);box-shadow:var(--shadow);padding:12px;overflow:auto}
   label{display:block;margin:8px 0 6px 2px;font-size:12px;color:var(--muted)}
   select,input,textarea,button{font-size:14px}
@@ -42,11 +42,13 @@
   .hidden{display:none}
   .desktopGate{max-width:740px;margin:48px auto;background:var(--surface);border:1px solid var(--border);border-radius:16px;box-shadow:var(--shadow);padding:18px}
 
+  /* Readability overrides */
   select, input, textarea { color: var(--text) !important; background: var(--panel) !important; border-color: var(--border) !important; }
   select option { color: #0b1e27; }
   @media (prefers-color-scheme: dark){ select option { color:#eaf7fb; background:#0d2430; } }
   ::placeholder { color: color-mix(in srgb, var(--muted) 90%, transparent); opacity: 1; }
 
+  /* Overlay shelf */
   .olThumb {
     width: 100%; aspect-ratio: 1/1; border-radius: 10px; border:1px solid var(--border);
     background:#0b2130; display:flex; align-items:center; justify-content:center; cursor:pointer;
@@ -58,6 +60,7 @@
 <body>
 <header><h1>Geo Scenarios — Advanced Editor (Desktop Only)</h1></header>
 
+<!-- Desktop gate -->
 <div id="gate" class="desktopGate hidden">
   <h2 style="margin:0 0 8px">Use a computer to edit</h2>
   <p>This advanced editor is intended for desktop/laptop. If you’re on a touchscreen laptop or a narrow window, you can still proceed.</p>
@@ -68,7 +71,7 @@
 </div>
 
 <div id="app" class="app hidden">
-  <!-- Left column -->
+  <!-- Left: scenarios + meta -->
   <div class="col" id="leftCol">
     <div class="row" style="justify-content:space-between">
       <div class="pill" id="statusPill">Loading…</div>
@@ -113,7 +116,7 @@
     </div>
   </div>
 
-  <!-- Center column -->
+  <!-- Center: canvas -->
   <div class="col">
     <div class="bar" style="margin-bottom:8px">
       <button id="fit" class="btn secondary">Fit</button>
@@ -126,12 +129,10 @@
       <span class="pill" id="canvasInfo">Canvas</span>
       <button id="saveImage" class="btn">Save Image to RTDB</button>
     </div>
-    <div class="canvasWrap">
-      <canvas id="c"></canvas>
-    </div>
+    <div class="canvasWrap"><canvas id="c"></canvas></div>
   </div>
 
-  <!-- Right column -->
+  <!-- Right: crop + overlays + eraser + overlay rotate -->
   <div class="col">
     <div class="sectionTitle">Crop</div>
     <div class="row">
@@ -139,8 +140,8 @@
       <button id="cropApply" class="btn">Apply</button>
       <button id="cropCancel" class="btn secondary">Cancel</button>
     </div>
-    <div class="divider"></div>
 
+    <div class="divider"></div>
     <div class="sectionTitle">Overlays</div>
     <div class="row" style="gap:6px; flex-wrap:nowrap; overflow:auto">
       <button class="btn secondary ol-tab" data-cat="fire">🔥 Fire</button>
@@ -175,20 +176,22 @@
     <div class="pill" id="eraserStatus" style="margin-top:6px">Eraser: off</div>
 
     <div class="divider"></div>
-    <div class="sectionTitle">Hints</div>
-    <ul style="margin:6px 0 0 18px; color:var(--muted)">
-      <li>Click a PNG in the shelf to add it. Move/resize/rotate with handles.</li>
-      <li>Use Hue + Opacity to tune fire/smoke color and intensity.</li>
-      <li><b>Start Erasing</b> affects only the selected overlay. Finish to exit.</li>
-      <li>Use <b>Save Image to RTDB</b> to bake edits into the scenario.</li>
-    </ul>
+    <div class="sectionTitle">Rotate Overlay</div>
+    <div class="row">
+      <button id="rotSelLeft" class="btn secondary">Rotate −15°</button>
+      <button id="rotSelRight" class="btn secondary">Rotate +15°</button>
+    </div>
+    <label style="margin-top:8px">Angle</label>
+    <input id="rotSelSlider" type="range" min="-180" max="180" step="1" value="0">
   </div>
 </div>
 
+<!-- Fabric 5.x -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/fabric.js/5.3.0/fabric.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+
 <script type="module">
 (async () => {
-  /* ===== Desktop gate (unchanged logic) ===== */
+  /* ===== Desktop gate ===== */
   const gate=document.getElementById('gate');
   const app=document.getElementById('app');
   const gateInfo=document.getElementById('gateInfo');
@@ -197,13 +200,13 @@
   function decideGate(){
     const narrow = window.innerWidth < 1024;
     gateInfo.textContent = `width: ${window.innerWidth}px`;
-    if (urlForce || (!narrow)) { gate.classList.add('hidden'); app.classList.remove('hidden'); return; }
+    if (urlForce || !narrow) { gate.classList.add('hidden'); app.classList.remove('hidden'); return; }
     gate.classList.remove('hidden'); app.classList.add('hidden');
   }
   forceGo.onclick=()=>{ history.replaceState(null,'',location.pathname); app.classList.remove('hidden'); gate.classList.add('hidden'); };
   decideGate(); window.addEventListener('resize', decideGate);
 
-  /* ===== Firebase (unchanged) ===== */
+  /* ===== Firebase RTDB ===== */
   const [{ initializeApp }] = await Promise.all([ import("https://www.gstatic.com/firebasejs/10.12.4/firebase-app.js") ]);
   const [{ getDatabase, ref, onValue, get, set }] = await Promise.all([ import("https://www.gstatic.com/firebasejs/10.12.4/firebase-database.js") ]);
   const firebaseConfig = {
@@ -217,7 +220,7 @@
   const appFB = initializeApp(firebaseConfig);
   const db = getDatabase(appFB);
 
-  /* ===== DOM refs (unchanged) ===== */
+  /* ===== DOM refs ===== */
   const statusPill=document.getElementById('statusPill');
   const scenarioSel=document.getElementById('scenarioSel');
   const stopList=document.getElementById('stopList');
@@ -245,9 +248,11 @@
   const flipH=document.getElementById('flipH');
   const flipV=document.getElementById('flipV');
   const saveImage=document.getElementById('saveImage');
+
   const cropStart=document.getElementById('cropStart');
   const cropApply=document.getElementById('cropApply');
   const cropCancel=document.getElementById('cropCancel');
+
   const overlayShelf=document.getElementById('overlayShelf');
   const tabBtns = Array.from(document.querySelectorAll('.ol-tab'));
   const overlayHue=document.getElementById('overlayHue');
@@ -255,13 +260,18 @@
   const bringFront=document.getElementById('bringFront');
   const sendBack=document.getElementById('sendBack');
   const deleteObj=document.getElementById('deleteObj');
+
   const eraserStart=document.getElementById('eraserStart');
   const eraserDone=document.getElementById('eraserDone');
   const eraserCancel=document.getElementById('eraserCancel');
   const eraserSize=document.getElementById('eraserSize');
   const eraserStatus=document.getElementById('eraserStatus');
 
-  /* ===== State + canvas (old logic kept) ===== */
+  const rotSelLeft=document.getElementById('rotSelLeft');
+  const rotSelRight=document.getElementById('rotSelRight');
+  const rotSelSlider=document.getElementById('rotSelSlider');
+
+  /* ===== State + canvas ===== */
   let scenarios=[], current=null, stopIndex=-1;
   const fabricCanvas = new fabric.Canvas('c', { backgroundColor:'#061621', preserveObjectStacking:true, selection:true });
   let baseImage=null, cropRect=null, erasing=false;
@@ -281,6 +291,7 @@
         if (baseImage) fabricCanvas.remove(baseImage);
         baseImage = img;
         baseImage.selectable=false; baseImage.evented=false;
+        baseImage.set('erasable', false); // NEVER erasable
         const cw=fabricCanvas.getWidth(), ch=fabricCanvas.getHeight();
         const scale=Math.min(cw/img.width, ch/img.height);
         baseImage.scale(scale);
@@ -295,14 +306,13 @@
   }
   const dataURLFromCanvas = () => fabricCanvas.toDataURL({ format:'png', quality:0.92 });
 
-  /* ===== Load scenarios (old logic kept) ===== */
+  /* ===== Scenarios load ===== */
   function showStatus(msg){ statusPill.textContent = msg; }
   function populateList(){
     scenarioSel.innerHTML = '<option value="">Select scenario…</option>';
     scenarios.forEach(sc => {
       const o=document.createElement('option');
-      o.value=sc.id;
-      o.textContent=(sc.title||'(untitled)') + (sc.active? '':' (inactive)');
+      o.value=sc.id; o.textContent=(sc.title||'(untitled)') + (sc.active? '':' (inactive)');
       scenarioSel.appendChild(o);
     });
   }
@@ -335,8 +345,7 @@
         const fresh=scenarios.find(sc=>sc.id===current.id);
         if (fresh){ current=fresh; renderStopsThumbs(); updateMetaHeader(); }
       }
-    }, err => { showStatus('RTDB onValue error: '+(err?.message||err)); });
-
+    }, err => showStatus('RTDB onValue error: '+(err?.message||err)));
     const timeout = new Promise((_,rej)=>setTimeout(()=>rej(new Error('RTDB timeout (8s)')),8000));
     await Promise.race([ get(scenariosRef), timeout ]).then(snap=>{
       if (!snap.exists()) showStatus('Connected but /scenarios is empty.');
@@ -344,7 +353,6 @@
   } catch (e) {
     showStatus('Firebase init/permission error: ' + (e?.message||e));
   }
-
   refreshBtn.onclick = populateList;
 
   scenarioSel.onchange = ()=>{
@@ -373,7 +381,7 @@
     await setBaseImageFromDataURL(src);
   }
 
-  /* ===== Meta save / GPS (old logic kept) ===== */
+  /* ===== Meta save / GPS ===== */
   useGPS.onclick=()=>{
     navigator.geolocation.getCurrentPosition(p=>{
       stopLat.value=p.coords.latitude.toFixed(6);
@@ -397,7 +405,7 @@
     }catch(err){ metaMsg.textContent=String(err.message||err); }
   };
 
-  /* ===== Replace / Export / Save image (old logic kept) ===== */
+  /* ===== Replace / Export / Save image ===== */
   function readFileAsDataURL(f){ return new Promise((res,rej)=>{ const r=new FileReader(); r.onload=()=>res(r.result); r.onerror=rej; r.readAsDataURL(f); }); }
   replaceApply.onclick=async()=>{
     const f=replaceFile.files?.[0]; if(!f){ metaMsg.textContent='Choose a file first.'; return; }
@@ -408,6 +416,7 @@
     const url=dataURLFromCanvas();
     const a=document.createElement('a'); a.href=url; a.download=(current?.title||'image')+'-edited.png'; a.click();
   };
+  const dataURLFromCanvas = () => fabricCanvas.toDataURL({ format:'png', quality:0.92 });
   saveImage.onclick=async()=>{
     try{
       if(!current || stopIndex<0) throw new Error('Select a stop first.');
@@ -421,7 +430,7 @@
     }catch(err){ metaMsg.textContent=String(err.message||err); }
   };
 
-  /* ===== Canvas commands (old logic kept) ===== */
+  /* ===== Canvas commands ===== */
   const rebase = ()=>{ if(!baseImage) return; setBaseImageFromDataURL(baseImage.toDataURL({})); };
   fitBtn.onclick=rebase;
   zoomIn.onclick=()=>fabricCanvas.setZoom(fabricCanvas.getZoom()*1.1);
@@ -431,13 +440,14 @@
   flipH.onclick=()=>{ if(baseImage){ baseImage.toggle('flipX'); fabricCanvas.requestRenderAll(); } };
   flipV.onclick=()=>{ if(baseImage){ baseImage.toggle('flipY'); fabricCanvas.requestRenderAll(); } };
 
-  /* ===== Crop workflow (old logic kept) ===== */
+  /* ===== Crop workflow ===== */
+  let cropRect=null;
   cropStart.onclick=()=>{
     if(!baseImage) return;
     cropRect = new fabric.Rect({
       left: baseImage.left + 20, top: baseImage.top + 20,
-      width: Math.min(200, baseImage.getScaledWidth()-40),
-      height: Math.min(200, baseImage.getScaledHeight()-40),
+      width: Math.min(240, baseImage.getScaledWidth()-40),
+      height: Math.min(240, baseImage.getScaledHeight()-40),
       fill: 'rgba(0,0,0,0.15)', stroke:'#2dd4bf', strokeWidth:2, hasRotatingPoint:false
     });
     fabricCanvas.add(cropRect); cropRect.bringToFront(); fabricCanvas.setActiveObject(cropRect);
@@ -468,31 +478,16 @@
     }
   };
 
-  /* ===== PNG overlays (absolute URLs) ===== */
+  /* ===== PNG overlays (absolute URLs, no SVG) ===== */
   const OVERLAY_BASE = 'https://fireopssim.com/geophoto/overlays/';
   const SPRITES = {
-    fire: [
-      'fire1.png',
-      'fire2.png',
-      'fire_side.png'
-    ],
-    smoke: [
-      'smoke1.png',
-      'smoke2.png',
-      'smoke_ground.png'
-    ],
-    // keep as SVG placeholders (swap to PNG names later if you add them)
-    people: [
-      `data:image/svg+xml;utf8,`+encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 400"><g fill="#e0e0e0"><circle cx="100" cy="55" r="32"/><path d="M70,130 h60 v70 h-16 v120 h-28 v-120 h-16z"/><path d="M70,210 h-28 v-18 h28z"/><path d="M130,210 h28 v-18 h-28z"/></g></svg>`)
-    ],
-    cars: [
-      `data:image/svg+xml;utf8,`+encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 500 220"><rect x="40" y="120" width="420" height="60" rx="20" fill="#90caf9"/><path d="M80,120 c40-50,120-70,220-70 h50 c30,0,50,20,60,70z" fill="#64b5f6"/><circle cx="140" cy="190" r="24" fill="#212121"/><circle cx="360" cy="190" r="24" fill="#212121"/></svg>`)
-    ],
-    hazard: [
-      `data:image/svg+xml;utf8,`+encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 128"><defs><pattern id="diag" width="40" height="40" patternUnits="userSpaceOnUse" patternTransform="skewX(-20)"><rect width="40" height="40" fill="#ffc107"/><path d="M-10,40 0,0 10,0 0,40z M30,40 40,0 50,0 40,40z" fill="#212121" opacity="0.75"/></pattern></defs><rect x="8" y="44" width="496" height="40" fill="url(#diag)" rx="6"/></svg>`)
-    ]
+    fire   : ['fire1.png','fire2.png','fire_side.png'],
+    smoke  : ['smoke1.png','smoke2.png','smoke_ground.png'],
+    people : ['people1.png','people2.png'],
+    cars   : ['car1.png','car2.png'],
+    hazard : ['hazard1.png']
   };
-  function resolveSpritePath(uri){ return uri.startsWith('data:') ? uri : (OVERLAY_BASE + uri); }
+  function resolveSpritePath(uri){ return OVERLAY_BASE + uri; }
 
   function renderShelf(cat){
     overlayShelf.innerHTML = '';
@@ -525,60 +520,74 @@
         top:  ch/2 - (img.height*scale)/2,
         cornerStyle:'circle', transparentCorners:false,
         shadow:'rgba(0,0,0,0.35) 0 6px 16px',
-        erasable:true
+        erasable:true // overlays are erasable
       });
       fabricCanvas.add(img);
       fabricCanvas.setActiveObject(img);
+      rotSelSlider.value = Math.round(img.angle || 0);
       fabricCanvas.requestRenderAll();
     }, { crossOrigin:'anonymous' });
   }
 
-  /* ===== Overlay color + opacity ===== */
+  /* ===== Overlay Hue & Opacity ===== */
   function ensureHueFilter(img){
     img.filters = img.filters || [];
     img.filters = img.filters.filter(f => !(f && f.type === 'HueRotation'));
   }
   overlayHue.oninput = (e)=>{
     const o = fabricCanvas.getActiveObject();
-    if (o && o.type === 'image') {
+    if (o && o.type === 'image' && o !== baseImage) {
       const deg = parseInt(e.target.value,10) || 0;
       ensureHueFilter(o);
       if (deg !== 0) o.filters.push(new fabric.Image.filters.HueRotation({ rotation: deg * Math.PI/180 }));
       o.applyFilters(); fabricCanvas.requestRenderAll();
     }
   };
-  overlayOpacity.oninput = (e)=>{ const o=fabricCanvas.getActiveObject(); if(o){ o.set('opacity', parseFloat(e.target.value)); fabricCanvas.requestRenderAll(); } };
-  bringFront.onclick = ()=>{ const o=fabricCanvas.getActiveObject(); if(o){ o.bringToFront(); fabricCanvas.requestRenderAll(); } };
-  sendBack.onclick  = ()=>{ const o=fabricCanvas.getActiveObject(); if(o){ o.sendToBack(); if(baseImage) baseImage.sendToBack(); fabricCanvas.requestRenderAll(); } };
+  overlayOpacity.oninput = (e)=>{ const o=fabricCanvas.getActiveObject(); if(o && o!==baseImage){ o.set('opacity', parseFloat(e.target.value)); fabricCanvas.requestRenderAll(); } };
+  bringFront.onclick = ()=>{ const o=fabricCanvas.getActiveObject(); if(o && o!==baseImage){ o.bringToFront(); fabricCanvas.requestRenderAll(); } };
+  sendBack.onclick  = ()=>{ const o=fabricCanvas.getActiveObject(); if(o && o!==baseImage){ o.sendToBack(); if(baseImage) baseImage.sendToBack(); fabricCanvas.requestRenderAll(); } };
   deleteObj.onclick = ()=>{ const o=fabricCanvas.getActiveObject(); if(o && o!==baseImage){ fabricCanvas.remove(o); fabricCanvas.discardActiveObject(); fabricCanvas.requestRenderAll(); } };
 
   /* ===== Eraser (selected overlay only) ===== */
-  function setAllErasable(v){ fabricCanvas.getObjects().forEach(o=>o.set('erasable', !!v)); if (baseImage) baseImage.set('erasable', false); }
+  function stopErasing(){
+    fabricCanvas.isDrawingMode = false;
+    erasing=false;
+    eraserStatus.textContent = 'Eraser: off';
+  }
   eraserStart.onclick = ()=>{
     const sel = fabricCanvas.getActiveObject();
-    if (!sel || sel.type !== 'image') { alert('Select an overlay image first.'); return; }
-    setAllErasable(false); sel.set('erasable', true);
+    if (!sel || sel.type !== 'image' || sel===baseImage) { alert('Select an overlay image first.'); return; }
+    // Lock background: never erasable
+    if (baseImage) baseImage.set('erasable', false);
+    // Only selected overlay erasable now
+    fabricCanvas.getObjects().forEach(o => o.set('erasable', false));
+    sel.set('erasable', true);
     fabricCanvas.isDrawingMode = true;
     fabricCanvas.freeDrawingBrush = new fabric.EraserBrush(fabricCanvas);
     fabricCanvas.freeDrawingBrush.width = parseInt(eraserSize.value,10) || 30;
     erasing = true; eraserStatus.textContent = `Eraser: ON (size ${fabricCanvas.freeDrawingBrush.width})`;
   };
   eraserSize.oninput = ()=>{ if (fabricCanvas.freeDrawingBrush) { fabricCanvas.freeDrawingBrush.width = parseInt(eraserSize.value,10)||30; if (erasing) eraserStatus.textContent = `Eraser: ON (size ${fabricCanvas.freeDrawingBrush.width})`; } };
-  function stopErasing(){ fabricCanvas.isDrawingMode = false; erasing=false; eraserStatus.textContent = 'Eraser: off'; }
   eraserDone.onclick = stopErasing;
   eraserCancel.onclick = ()=>{ stopErasing(); fabricCanvas.renderAll(); };
 
-  /* ===== Delete stop (old logic kept) ===== */
-  deleteStop.onclick=async()=>{
-    try{
-      if(!current || stopIndex<0) return;
-      if(!confirm('Delete this photo from the scenario?')) return;
-      current.stops.splice(stopIndex,1);
-      const { id, ...payload } = current;
-      await set(ref(db,'scenarios/'+current.id), payload);
-      stopIndex=-1; fabricCanvas.clear(); baseImage=null; renderStopsThumbs(); metaMsg.textContent='Photo deleted.';
-    }catch(e){ metaMsg.textContent=String(e.message||e); }
+  /* ===== Overlay rotate controls ===== */
+  function rotateSelected(delta){
+    const o=fabricCanvas.getActiveObject();
+    if (!o || o===baseImage) return;
+    o.rotate((o.angle||0)+delta);
+    rotSelSlider.value = Math.round(o.angle||0);
+    fabricCanvas.requestRenderAll();
+  }
+  rotSelLeft.onclick = ()=> rotateSelected(-15);
+  rotSelRight.onclick = ()=> rotateSelected(+15);
+  rotSelSlider.oninput = (e)=>{
+    const o=fabricCanvas.getActiveObject();
+    if (!o || o===baseImage) return;
+    o.rotate(parseInt(e.target.value,10)||0);
+    fabricCanvas.requestRenderAll();
   };
+
 })();
 </script>
 </body>
