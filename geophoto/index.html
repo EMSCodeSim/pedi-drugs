@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Geo-Photo Viewer</title>
+<title>Geo-Photo Viewer (RTDB)</title>
 <style>
   :root{--bg:#0b1e27;--card:#102b36;--border:#1c3a47;--accent:#2aa3b5;--text:#ffffff}
   body{margin:0;font-family:system-ui,Arial;background:var(--bg);color:var(--text);display:flex;min-height:100vh}
@@ -42,40 +42,36 @@
   const setStatus = (t) => document.getElementById('status').textContent = t;
 
   try {
-    // Firebase imports
+    // Firebase (RTDB)
     const [{ initializeApp }] = await Promise.all([
       import("https://www.gstatic.com/firebasejs/10.12.4/firebase-app.js"),
     ]);
-    const [{ getFirestore, collection, getDocs, query, where }] = await Promise.all([
-      import("https://www.gstatic.com/firebasejs/10.12.4/firebase-firestore.js"),
+    const [{ getDatabase, ref, onValue }] = await Promise.all([
+      import("https://www.gstatic.com/firebasejs/10.12.4/firebase-database.js"),
     ]);
 
-    // Your Firebase config (fixed storageBucket even though viewer doesn't use Storage)
+    // Your config
     const firebaseConfig = {
       apiKey: "AIzaSyDM6DpRSeZueVKRpbyJyDmhf8WY66KyCDk",
       authDomain: "dailyquiz-d5279.firebaseapp.com",
       databaseURL: "https://dailyquiz-d5279-default-rtdb.firebaseio.com",
       projectId: "dailyquiz-d5279",
-      storageBucket: "dailyquiz-d5279.appspot.com",
-      messagingSenderId: "94577748034",
       appId: "1:94577748034:web:c032d3a1d72db1313de5db",
       measurementId: "G-19DVN7NNH7"
     };
 
     const app = initializeApp(firebaseConfig);
-    const db = getFirestore(app);
+    const db = getDatabase(app);
 
-    // Load active spots
+    // Live spots
     let spots = [];
-    async function loadSpots(){
-      const q = query(collection(db, "spots"), where("active", "==", true));
-      const snap = await getDocs(q);
-      spots = snap.docs.map(d => ({ id:d.id, ...d.data() }));
+    onValue(ref(db, "spots"), snap => {
+      const val = snap.val() || {};
+      spots = Object.values(val).filter(s => s && s.active);
       if (!spots.length) setStatus("No active spots yet.");
-    }
-    await loadSpots();
+    }, err => showErr(err));
 
-    // Distance helpers
+    // Helpers
     function haversineMeters(lat1, lon1, lat2, lon2) {
       const toRad = d => d * Math.PI / 180;
       const R = 6371000;
@@ -88,15 +84,16 @@
     function findMatch(userLat, userLng){
       let best = null;
       for (const s of spots){
+        if (typeof s.lat !== 'number' || typeof s.lng !== 'number' || typeof s.radiusMeters !== 'number') continue;
         const dist = haversineMeters(userLat, userLng, s.lat, s.lng);
-        if (s.active && typeof s.radiusMeters === 'number' && dist <= s.radiusMeters){
+        if (dist <= s.radiusMeters){
           if (!best || dist < best.dist) best = { spot: s, dist };
         }
       }
       return best;
     }
 
-    // UI refs
+    // UI
     const result = document.getElementById('result');
     const title = document.getElementById('title');
     const photo = document.getElementById('photo');
@@ -106,7 +103,8 @@
     function show(spot, dist){
       result.classList.remove('hidden');
       title.textContent = spot.title || "Nearby spot";
-      photo.src = spot.imageURL;
+      // Prefer embedded data; fallback to URL
+      photo.src = spot.imageData || spot.imageURL || "";
       detail.textContent = `You are ${Math.round(dist)} m from "${spot.title}" (radius ${spot.radiusMeters} m).`;
     }
 
