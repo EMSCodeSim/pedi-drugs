@@ -42,7 +42,7 @@
   .hidden{display:none}
   .desktopGate{max-width:740px;margin:48px auto;background:var(--surface);border:1px solid var(--border);border-radius:16px;box-shadow:var(--shadow);padding:18px}
 
-  /* Readability overrides for inputs/dropdowns/placeholders */
+  /* Readability overrides */
   select, input, textarea { color: var(--text) !important; background: var(--panel) !important; border-color: var(--border) !important; }
   select option { color: #0b1e27; }
   @media (prefers-color-scheme: dark){ select option { color:#eaf7fb; background:#0d2430; } }
@@ -60,6 +60,7 @@
 <body>
 <header><h1>Geo Scenarios — Advanced Editor (Desktop Only)</h1></header>
 
+<!-- Desktop gate -->
 <div id="gate" class="desktopGate hidden">
   <h2 style="margin:0 0 8px">Use a computer to edit</h2>
   <p>This advanced editor is intended for desktop/laptop. If you’re on a touchscreen laptop or a narrow window, you can still proceed.</p>
@@ -70,7 +71,7 @@
 </div>
 
 <div id="app" class="app hidden">
-  <!-- Left: load/select -->
+  <!-- Left: scenarios + meta -->
   <div class="col" id="leftCol">
     <div class="row" style="justify-content:space-between">
       <div class="pill" id="statusPill">Loading…</div>
@@ -128,12 +129,10 @@
       <span class="pill" id="canvasInfo">Canvas</span>
       <button id="saveImage" class="btn">Save Image to RTDB</button>
     </div>
-    <div class="canvasWrap">
-      <canvas id="c"></canvas>
-    </div>
+    <div class="canvasWrap"><canvas id="c"></canvas></div>
   </div>
 
-  <!-- Right: crop + overlays -->
+  <!-- Right: crop + overlays + eraser -->
   <div class="col">
     <div class="sectionTitle">Crop</div>
     <div class="row">
@@ -141,8 +140,8 @@
       <button id="cropApply" class="btn">Apply</button>
       <button id="cropCancel" class="btn secondary">Cancel</button>
     </div>
-    <div class="divider"></div>
 
+    <div class="divider"></div>
     <div class="sectionTitle">Overlays</div>
     <div class="row" style="gap:6px; flex-wrap:nowrap; overflow:auto">
       <button class="btn secondary ol-tab" data-cat="fire">🔥 Fire</button>
@@ -182,17 +181,17 @@
       <li>Click a PNG in the shelf to add it. Move/resize/rotate with handles.</li>
       <li>Use Hue + Opacity to tune fire/smoke color and intensity.</li>
       <li><b>Start Erasing</b> affects only the selected overlay. Finish to exit.</li>
-      <li>Use <b>Save Image to RTDB</b> to bake edits into the scenario.</li>
+      <li>Use <b>Save Image to RTDB</b> to bake edits into the scenario image.</li>
     </ul>
   </div>
 </div>
 
-<!-- Fabric.js (5.x provides EraserBrush) -->
+<!-- Fabric 5.x (includes EraserBrush and filters) -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/fabric.js/5.3.0/fabric.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
 
 <script type="module">
 (async () => {
-  /* ===== Desktop gate (relaxed) ===== */
+  /* -------- Desktop gate -------- */
   const gate=document.getElementById('gate');
   const app=document.getElementById('app');
   const gateInfo=document.getElementById('gateInfo');
@@ -201,13 +200,13 @@
   function decideGate(){
     const narrow = window.innerWidth < 1024;
     gateInfo.textContent = `width: ${window.innerWidth}px`;
-    if (urlForce || (!narrow)) { gate.classList.add('hidden'); app.classList.remove('hidden'); return; }
+    if (urlForce || !narrow) { gate.classList.add('hidden'); app.classList.remove('hidden'); return; }
     gate.classList.remove('hidden'); app.classList.add('hidden');
   }
   forceGo.onclick=()=>{ history.replaceState(null,'',location.pathname); app.classList.remove('hidden'); gate.classList.add('hidden'); };
   decideGate(); window.addEventListener('resize', decideGate);
 
-  /* ===== Firebase (RTDB only) ===== */
+  /* -------- Firebase RTDB -------- */
   const [{ initializeApp }] = await Promise.all([ import("https://www.gstatic.com/firebasejs/10.12.4/firebase-app.js") ]);
   const [{ getDatabase, ref, onValue, get, set }] = await Promise.all([ import("https://www.gstatic.com/firebasejs/10.12.4/firebase-database.js") ]);
   const firebaseConfig = {
@@ -221,7 +220,7 @@
   const appFB = initializeApp(firebaseConfig);
   const db = getDatabase(appFB);
 
-  /* ===== DOM refs ===== */
+  /* -------- DOM refs -------- */
   const statusPill=document.getElementById('statusPill');
   const scenarioSel=document.getElementById('scenarioSel');
   const stopList=document.getElementById('stopList');
@@ -249,11 +248,9 @@
   const flipH=document.getElementById('flipH');
   const flipV=document.getElementById('flipV');
   const saveImage=document.getElementById('saveImage');
-
   const cropStart=document.getElementById('cropStart');
   const cropApply=document.getElementById('cropApply');
   const cropCancel=document.getElementById('cropCancel');
-
   const overlayShelf=document.getElementById('overlayShelf');
   const tabBtns = Array.from(document.querySelectorAll('.ol-tab'));
   const overlayHue=document.getElementById('overlayHue');
@@ -261,20 +258,17 @@
   const bringFront=document.getElementById('bringFront');
   const sendBack=document.getElementById('sendBack');
   const deleteObj=document.getElementById('deleteObj');
-
   const eraserStart=document.getElementById('eraserStart');
   const eraserDone=document.getElementById('eraserDone');
   const eraserCancel=document.getElementById('eraserCancel');
   const eraserSize=document.getElementById('eraserSize');
   const eraserStatus=document.getElementById('eraserStatus');
 
-  /* ===== State ===== */
+  /* -------- State + canvas -------- */
   let scenarios=[], current=null, stopIndex=-1;
-  let fabricCanvas, baseImage=null, cropRect=null;
-  let erasing=false;
+  let fabricCanvas = new fabric.Canvas('c', { backgroundColor:'#061621', preserveObjectStacking:true, selection:true });
+  let baseImage=null, cropRect=null, erasing=false;
 
-  /* ===== Fabric canvas ===== */
-  fabricCanvas = new fabric.Canvas('c', { backgroundColor:'#061621', preserveObjectStacking:true, selection:true });
   function fitCanvas(){
     fabricCanvas.setHeight(window.innerHeight - 160);
     fabricCanvas.setWidth(document.querySelector('.col:nth-child(2)').clientWidth - 24);
@@ -288,14 +282,12 @@
       fabric.Image.fromURL(dataURL, (img)=>{
         if (!img) { reject(new Error('Image load failed')); return; }
         if (baseImage) fabricCanvas.remove(baseImage);
-        baseImage = img;
-        baseImage.selectable=false; baseImage.evented=false;
+        baseImage = img; baseImage.selectable=false; baseImage.evented=false;
         const cw=fabricCanvas.getWidth(), ch=fabricCanvas.getHeight();
         const scale=Math.min(cw/img.width, ch/img.height);
         baseImage.scale(scale);
         baseImage.set({ left:(cw - img.width*scale)/2, top:(ch - img.height*scale)/2 });
-        fabricCanvas.add(baseImage);
-        baseImage.moveTo(0);
+        fabricCanvas.add(baseImage); baseImage.moveTo(0);
         fabricCanvas.requestRenderAll();
         cInfo.textContent=`Image ${Math.round(img.width)}×${Math.round(img.height)} (scale ${scale.toFixed(2)})`;
         resolve();
@@ -304,7 +296,7 @@
   }
   const dataURLFromCanvas = () => fabricCanvas.toDataURL({ format:'png', quality:0.92 });
 
-  /* ===== Load scenarios (robust) ===== */
+  /* -------- Scenarios load (live + one-time) -------- */
   function showStatus(msg){ statusPill.textContent = msg; }
   function populateList(){
     scenarioSel.innerHTML = '<option value="">Select scenario…</option>';
@@ -329,7 +321,7 @@
   }
   function updateMetaHeader(){
     metaTitle.textContent=current ? (current.title||'(untitled)') : '(title)';
-    metaDispatch.textContent='Dispatch: ' + (current?.dispatch ? String(current.dispatch).slice(0,120) : '(none)');
+    metaDispatch.textContent='Dispatch: ' + (current?.dispatch ? String(current.dispatch).slice(0,120) : '(none)';
   }
 
   try {
@@ -343,7 +335,7 @@
         const fresh=scenarios.find(sc=>sc.id===current.id);
         if (fresh){ current=fresh; renderStopsThumbs(); updateMetaHeader(); }
       }
-    }, err => { showStatus('RTDB onValue error: '+(err?.message||err)); });
+    }, err => showStatus('RTDB onValue error: '+(err?.message||err)));
     const timeout = new Promise((_,rej)=>setTimeout(()=>rej(new Error('RTDB timeout (8s)')),8000));
     await Promise.race([ get(scenariosRef), timeout ]).then(snap=>{
       if (!snap.exists()) showStatus('Connected but /scenarios is empty.');
@@ -359,7 +351,7 @@
     stopIndex=-1;
     updateMetaHeader();
     renderStopsThumbs();
-    fabricCanvas.clear(); baseImage=null; cropRect=null;
+    fabricCanvas.clear(); baseImage=null; cropRect=null; erasing=false;
     fitCanvas();
   };
 
@@ -373,13 +365,13 @@
     stopLng.value=(s.lng ?? '').toString();
     stopRadius.value=(s.radiusMeters ?? 50).toString();
     Array.from(stopList.children).forEach((n,i)=>n.classList.toggle('active', i===idx));
-    fabricCanvas.clear(); baseImage=null; cropRect=null;
+    fabricCanvas.clear(); baseImage=null; cropRect=null; erasing=false;
     const src=s.imageData||s.imageURL;
     if(!src){ metaMsg.textContent='No image in this stop.'; return; }
     await setBaseImageFromDataURL(src);
   }
 
-  /* ===== Meta save / GPS ===== */
+  /* -------- Meta & GPS -------- */
   useGPS.onclick=()=>{
     navigator.geolocation.getCurrentPosition(p=>{
       stopLat.value=p.coords.latitude.toFixed(6);
@@ -403,7 +395,7 @@
     }catch(err){ metaMsg.textContent=String(err.message||err); }
   };
 
-  /* ===== Replace / Export / Save image ===== */
+  /* -------- Replace / Export / Save image -------- */
   function readFileAsDataURL(f){ return new Promise((res,rej)=>{ const r=new FileReader(); r.onload=()=>res(r.result); r.onerror=rej; r.readAsDataURL(f); }); }
   replaceApply.onclick=async()=>{
     const f=replaceFile.files?.[0]; if(!f){ metaMsg.textContent='Choose a file first.'; return; }
@@ -427,7 +419,17 @@
     }catch(err){ metaMsg.textContent=String(err.message||err); }
   };
 
-  /* ===== Crop workflow ===== */
+  /* -------- Canvas commands -------- */
+  const rebase = ()=>{ if(!baseImage) return; setBaseImageFromDataURL(baseImage.toDataURL({})); };
+  fitBtn.onclick=rebase;
+  zoomIn.onclick=()=>fabricCanvas.setZoom(fabricCanvas.getZoom()*1.1);
+  zoomOut.onclick=()=>fabricCanvas.setZoom(fabricCanvas.getZoom()/1.1);
+  rotateL.onclick=()=>{ if(baseImage){ baseImage.rotate((baseImage.angle||0)-90); fabricCanvas.requestRenderAll(); } };
+  rotateR.onclick=()=>{ if(baseImage){ baseImage.rotate((baseImage.angle||0)+90); fabricCanvas.requestRenderAll(); } };
+  flipH.onclick=()=>{ if(baseImage){ baseImage.toggle('flipX'); fabricCanvas.requestRenderAll(); } };
+  flipV.onclick=()=>{ if(baseImage){ baseImage.toggle('flipY'); fabricCanvas.requestRenderAll(); } };
+
+  /* -------- Crop workflow -------- */
   cropStart.onclick=()=>{
     if(!baseImage) return;
     cropRect = new fabric.Rect({
@@ -464,40 +466,33 @@
     }
   };
 
-  /* ===== PNG Overlays (Fire/Smoke) + SVG for others ===== */
-  const OVERLAY_BASE = './overlays/'; // <-- change if your PNGs live elsewhere
+  /* -------- PNG overlays (absolute URLs) -------- */
+  const OVERLAY_BASE = 'https://fireopssim.com/geophoto/overlays/';
   const SPRITES = {
     fire: [
-      'fire_1.png',       // small/vertical
-      'fire_2.png',       // medium
-      'fire_side.png'     // horizontal from side of house
+      'fire1.png',        // confirmed
+      'fire2.png',        // optional
+      'fire_side.png'     // horizontal
     ],
     smoke: [
-      'smoke_light.png',
-      'smoke_heavy.png',
+      'smoke1.png',
+      'smoke2.png',
       'smoke_ground.png'
     ],
-    // Keep these as inline SVG (swap to PNG paths if you add PNGs later)
+    // SVG placeholders (swap to PNG names later if you add them)
     people: [
-      `data:image/svg+xml;utf8,` + encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 400"><g fill="#e0e0e0"><circle cx="100" cy="55" r="32"/><path d="M70,130 h60 v70 h-16 v120 h-28 v-120 h-16z"/><path d="M70,210 h-28 v-18 h28z"/><path d="M130,210 h28 v-18 h-28z"/></g></svg>`),
-      `data:image/svg+xml;utf8,` + encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 400"><defs><linearGradient id="v" x1="0" x2="0" y1="0" y2="1"><stop offset="0%" stop-color="#ffea00"/><stop offset="100%" stop-color="#ff6f00"/></linearGradient></defs><g><circle cx="100" cy="58" r="32" fill="#fafafa"/><path d="M60,120 h80 v70 h-24 v120 h-32 v-120 h-24z" fill="url(#v)"/><rect x="86" y="150" width="28" height="26" fill="#212121"/></g></svg>`),
+      `data:image/svg+xml;utf8,`+encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 400"><g fill="#e0e0e0"><circle cx="100" cy="55" r="32"/><path d="M70,130 h60 v70 h-16 v120 h-28 v-120 h-16z"/><path d="M70,210 h-28 v-18 h28z"/><path d="M130,210 h28 v-18 h-28z"/></g></svg>`)
     ],
     cars: [
-      `data:image/svg+xml;utf8,` + encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 500 220"><rect x="40" y="120" width="420" height="60" rx="20" fill="#90caf9"/><path d="M80,120 c40-50,120-70,220-70 h50 c30,0,50,20,60,70z" fill="#64b5f6"/><circle cx="140" cy="190" r="24" fill="#212121"/><circle cx="360" cy="190" r="24" fill="#212121"/></svg>`),
-      `data:image/svg+xml;utf8,` + encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 520 240"><rect x="50" y="120" width="420" height="70" rx="16" fill="#a5d6a7"/><path d="M90,120 c30-60,140-80,240-80 h40 c30,0,60,20,70,80z" fill="#81c784"/><circle cx="150" cy="200" r="26" fill="#263238"/><circle cx="380" cy="200" r="26" fill="#263238"/></svg>`),
+      `data:image/svg+xml;utf8,`+encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 500 220"><rect x="40" y="120" width="420" height="60" rx="20" fill="#90caf9"/><path d="M80,120 c40-50,120-70,220-70 h50 c30,0,50,20,60,70z" fill="#64b5f6"/><circle cx="140" cy="190" r="24" fill="#212121"/><circle cx="360" cy="190" r="24" fill="#212121"/></svg>`)
     ],
     hazard: [
-      `data:image/svg+xml;utf8,` + encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 128"><defs><pattern id="diag" width="40" height="40" patternUnits="userSpaceOnUse" patternTransform="skewX(-20)"><rect width="40" height="40" fill="#ffc107"/><path d="M-10,40 0,0 10,0 0,40z M30,40 40,0 50,0 40,40z" fill="#212121" opacity="0.75"/></pattern></defs><rect x="8" y="44" width="496" height="40" fill="url(#diag)" rx="6"/></svg>`),
-    ],
+      `data:image/svg+xml;utf8,`+encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 128"><defs><pattern id="diag" width="40" height="40" patternUnits="userSpaceOnUse" patternTransform="skewX(-20)"><rect width="40" height="40" fill="#ffc107"/><path d="M-10,40 0,0 10,0 0,40z M30,40 40,0 50,0 40,40z" fill="#212121" opacity="0.75"/></pattern></defs><rect x="8" y="44" width="496" height="40" fill="url(#diag)" rx="6"/></svg>`)
+    ]
   };
+  function resolveSpritePath(uri){ return uri.startsWith('data:') ? uri : (OVERLAY_BASE + uri); }
 
-  function resolveSpritePath(uri){
-    if (uri.startsWith('data:')) return uri;
-    // Treat as PNG path relative to OVERLAY_BASE
-    return OVERLAY_BASE + uri;
-  }
-
-  function renderShelf(cat) {
+  function renderShelf(cat){
     overlayShelf.innerHTML = '';
     const items = SPRITES[cat] || [];
     items.forEach((uri, i) => {
@@ -505,7 +500,7 @@
       div.className = 'olThumb';
       const img = document.createElement('img');
       img.src = resolveSpritePath(uri); img.alt = `${cat}-${i+1}`;
-      img.onerror = () => { div.style.opacity = .5; div.title = 'Missing file: ' + img.src; };
+      img.onerror = () => { div.style.opacity = .5; div.title = 'Missing: ' + img.src; };
       div.appendChild(img);
       div.onclick = () => addOverlayImage(resolveSpritePath(uri));
       overlayShelf.appendChild(div);
@@ -518,29 +513,27 @@
   });
   if (tabBtns[0]) { tabBtns[0].classList.add('active'); renderShelf(tabBtns[0].dataset.cat); }
 
-  function addOverlayImage(src) {
+  function addOverlayImage(src){
     fabric.Image.fromURL(src, img => {
       const cw = fabricCanvas.getWidth(), ch = fabricCanvas.getHeight();
-      const targetW = cw * 0.28; // ~28% canvas width
-      const scale = targetW / img.width;
+      const targetW = cw * 0.28; const scale = targetW / img.width;
       img.scale(scale);
       img.set({
         left: cw/2 - (img.width*scale)/2,
         top:  ch/2 - (img.height*scale)/2,
         cornerStyle:'circle', transparentCorners:false,
         shadow:'rgba(0,0,0,0.35) 0 6px 16px',
-        erasable: true // allow eraser on this object
+        erasable:true
       });
       fabricCanvas.add(img);
       fabricCanvas.setActiveObject(img);
       fabricCanvas.requestRenderAll();
-    }, { crossOrigin:'anonymous' });
+    }, { crossOrigin:'anonymous' }); // keep canvas untainted for export
   }
 
-  /* ===== Overlay color + opacity ===== */
+  /* -------- Overlay Hue & Opacity -------- */
   function ensureHueFilter(img){
     img.filters = img.filters || [];
-    // remove existing HueRotation
     img.filters = img.filters.filter(f => !(f && f.type === 'HueRotation'));
   }
   overlayHue.oninput = (e)=>{
@@ -548,9 +541,7 @@
     if (o && o.type === 'image') {
       const deg = parseInt(e.target.value,10) || 0;
       ensureHueFilter(o);
-      if (deg !== 0) {
-        o.filters.push(new fabric.Image.filters.HueRotation({ rotation: deg * Math.PI/180 }));
-      }
+      if (deg !== 0) o.filters.push(new fabric.Image.filters.HueRotation({ rotation: deg * Math.PI/180 }));
       o.applyFilters(); fabricCanvas.requestRenderAll();
     }
   };
@@ -559,12 +550,8 @@
   sendBack.onclick  = ()=>{ const o=fabricCanvas.getActiveObject(); if(o){ o.sendToBack(); if(baseImage) baseImage.sendToBack(); fabricCanvas.requestRenderAll(); } };
   deleteObj.onclick = ()=>{ const o=fabricCanvas.getActiveObject(); if(o && o!==baseImage){ fabricCanvas.remove(o); fabricCanvas.discardActiveObject(); fabricCanvas.requestRenderAll(); } };
 
-  /* ===== Eraser (selected overlay only) =====
-     Requires Fabric 5.x (we're loading 5.3.0). */
-  function setAllErasable(value){
-    fabricCanvas.getObjects().forEach(obj => obj.set('erasable', !!value));
-    if (baseImage) baseImage.set('erasable', false); // never erase base
-  }
+  /* -------- Eraser (selected overlay only) -------- */
+  function setAllErasable(v){ fabricCanvas.getObjects().forEach(o=>o.set('erasable', !!v)); if (baseImage) baseImage.set('erasable', false); }
   eraserStart.onclick = ()=>{
     const sel = fabricCanvas.getActiveObject();
     if (!sel || sel.type !== 'image') { alert('Select an overlay image first.'); return; }
@@ -575,15 +562,11 @@
     erasing = true; eraserStatus.textContent = `Eraser: ON (size ${fabricCanvas.freeDrawingBrush.width})`;
   };
   eraserSize.oninput = ()=>{ if (fabricCanvas.freeDrawingBrush) { fabricCanvas.freeDrawingBrush.width = parseInt(eraserSize.value,10)||30; if (erasing) eraserStatus.textContent = `Eraser: ON (size ${fabricCanvas.freeDrawingBrush.width})`; } };
-  function stopErasing(){
-    fabricCanvas.isDrawingMode = false; erasing=false;
-    eraserStatus.textContent = 'Eraser: off';
-    // keep erasable true on overlays for future edits, fine.
-  }
+  function stopErasing(){ fabricCanvas.isDrawingMode = false; erasing=false; eraserStatus.textContent = 'Eraser: off'; }
   eraserDone.onclick = stopErasing;
   eraserCancel.onclick = ()=>{ stopErasing(); fabricCanvas.renderAll(); };
 
-  /* ===== Delete stop ===== */
+  /* -------- Delete stop -------- */
   deleteStop.onclick=async()=>{
     try{
       if(!current || stopIndex<0) return;
