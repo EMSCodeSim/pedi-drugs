@@ -2,43 +2,51 @@
 <html lang="en">
 <head>
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Geo-Photo Admin (RTDB, no Storage)</title>
+<title>Geo-Photo Scenario Admin</title>
 <style>
   :root{--bg:#0b1e27;--card:#102b36;--border:#1c3a47;--accent:#2aa3b5;--text:#ffffff}
   body{margin:0;font-family:system-ui,Arial;background:var(--bg);color:var(--text)}
-  .wrap{max-width:720px;margin:0 auto;padding:16px}
+  .wrap{max-width:900px;margin:0 auto;padding:16px}
   header{background:#0a6370;padding:14px 16px;border-radius:12px;margin:12px 0}
   h2{margin:0}
   .card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:16px;margin:12px 0}
   label{display:block;margin:.5rem 0 .25rem}
-  input,button,textarea{width:100%;padding:.8rem;font-size:1rem;border-radius:10px;border:1px solid var(--border);background:#0f3542;color:#e7fbff}
-  input[readonly]{opacity:.85}
-  .row{display:grid;grid-template-columns:1fr 1fr;gap:.75rem}
+  input,textarea,select,button{width:100%;padding:.8rem;font-size:1rem;border-radius:10px;border:1px solid var(--border);background:#0f3542;color:#e7fbff}
+  textarea{min-height:80px;resize:vertical}
+  .row{display:grid;gap:.75rem}
+  .row2{grid-template-columns:1fr 1fr}
+  .row3{grid-template-columns:1fr 1fr 1fr}
   .btn{background:var(--accent);color:#00151b;border:0;cursor:pointer}
   .hint{opacity:.85;font-size:.95rem}
+  .small{opacity:.8;font-size:.9rem}
   img{max-width:100%;display:block;border-radius:12px;margin:.5rem 0}
   #error{white-space:pre-wrap;background:#2b1b1b;border:1px solid #4b2a2a;padding:.75rem;border-radius:.5rem;color:#ffd6d6;margin-top:.75rem;display:none}
-  .small{font-size:.9rem;opacity:.8}
+  .stop{display:grid;grid-template-columns:92px 1fr auto;gap:10px;align-items:center;background:#0f3542;border:1px solid var(--border);border-radius:10px;padding:10px;margin-top:8px}
+  .thumb{width:92px;height:92px;object-fit:cover;border-radius:8px;background:#0a2230}
 </style>
 <noscript><strong>This page requires JavaScript.</strong></noscript>
 </head>
 <body>
 <div class="wrap">
-  <header><h2>Geo-Photo Admin</h2></header>
+  <header><h2>Create Scenario</h2></header>
 
+  <!-- Scenario meta -->
   <div class="card">
-    <div class="row">
-      <div>
-        <label>Title</label>
-        <input id="title" placeholder="Short label">
-      </div>
-      <div>
-        <label>Radius (meters)</label>
-        <input id="radius" type="number" value="50" min="5" step="5">
-      </div>
-    </div>
+    <label>Scenario Title</label>
+    <input id="scTitle" placeholder="e.g., Station Tour A">
+    <label>Scenario Notes (optional)</label>
+    <textarea id="scNotes" placeholder="What this scenario is about…"></textarea>
+    <label>Active?</label>
+    <select id="scActive">
+      <option value="true" selected>Yes</option>
+      <option value="false">No</option>
+    </select>
+  </div>
 
-    <div class="row">
+  <!-- Add a stop -->
+  <div class="card">
+    <h3 style="margin-top:0">Add Stop</h3>
+    <div class="row row2">
       <div>
         <label>Latitude</label>
         <input id="lat" readonly>
@@ -48,21 +56,48 @@
         <input id="lng" readonly>
       </div>
     </div>
+    <button id="btnLoc" class="btn" style="margin-top:8px">Use my current location</button>
+    <p class="small">Stand where this photo should appear, then tap the button above.</p>
 
-    <button id="btnLoc" class="btn">Use my current location</button>
-    <p class="hint">Stand where the photo should appear, then tap the button above.</p>
+    <div class="row row3">
+      <div>
+        <label>Radius (meters)</label>
+        <input id="radius" type="number" value="50" min="5" step="5">
+      </div>
+      <div>
+        <label>Stop Title (optional)</label>
+        <input id="stopTitle" placeholder="Short label for this stop">
+      </div>
+      <div>
+        <label>Photo file</label>
+        <input id="file" type="file" accept="image/*" capture="environment">
+      </div>
+    </div>
 
-    <label>Photo file (we’ll compress to keep it small)</label>
-    <input id="file" type="file" accept="image/*" capture="environment">
     <img id="preview" style="display:none" alt="Preview"/>
 
-    <label class="small">Or paste a public image URL (optional)</label>
+    <label class="small">…or paste a public image URL (optional)</label>
     <input id="imageUrl" placeholder="https://… (optional)">
 
-    <p class="small" id="sizeInfo"></p>
+    <label>Caption / Text shown with the photo (optional)</label>
+    <textarea id="caption" placeholder="What should the user read at this stop?"></textarea>
 
-    <button id="btnSave" class="btn">Save Spot</button>
-    <p id="msg" class="hint"></p>
+    <p class="small" id="sizeInfo"></p>
+    <button id="btnAddStop" class="btn">Add Stop to Scenario</button>
+    <p id="msgAdd" class="hint"></p>
+  </div>
+
+  <!-- Current stops list -->
+  <div class="card">
+    <h3 style="margin-top:0">Stops in this Scenario</h3>
+    <div id="stopsList"></div>
+    <p class="small" id="countNote">0 stops</p>
+  </div>
+
+  <!-- Save -->
+  <div class="card">
+    <button id="btnSaveScenario" class="btn">Save Scenario</button>
+    <p id="msgSave" class="hint"></p>
     <div id="error"></div>
   </div>
 </div>
@@ -77,7 +112,7 @@
   };
 
   try {
-    // Firebase (RTDB only)
+    // Firebase RTDB
     const [{ initializeApp }] = await Promise.all([
       import("https://www.gstatic.com/firebasejs/10.12.4/firebase-app.js"),
     ]);
@@ -85,7 +120,7 @@
       import("https://www.gstatic.com/firebasejs/10.12.4/firebase-database.js"),
     ]);
 
-    // Your Firebase config
+    // Config (RTDB only)
     const firebaseConfig = {
       apiKey: "AIzaSyDM6DpRSeZueVKRpbyJyDmhf8WY66KyCDk",
       authDomain: "dailyquiz-d5279.firebaseapp.com",
@@ -94,98 +129,134 @@
       appId: "1:94577748034:web:c032d3a1d72db1313de5db",
       measurementId: "G-19DVN7NNH7"
     };
-
     const app = initializeApp(firebaseConfig);
     const db = getDatabase(app);
 
-    // UI refs
+    // ---- UI refs
     const el = id => document.getElementById(id);
-    const titleEl = el('title'), radiusEl = el('radius'), latEl = el('lat'), lngEl = el('lng');
-    const fileEl = el('file'), preview = el('preview'), msg = el('msg');
-    const urlEl = el('imageUrl'), sizeInfo = el('sizeInfo');
+    const scTitle = el('scTitle'), scNotes = el('scNotes'), scActive = el('scActive');
+    const latEl = el('lat'), lngEl = el('lng'), radiusEl = el('radius'), stopTitle = el('stopTitle');
+    const fileEl = el('file'), urlEl = el('imageUrl'), captionEl = el('caption');
+    const preview = el('preview'), sizeInfo = el('sizeInfo');
+    const stopsList = el('stopsList'), countNote = el('countNote');
+    const msgAdd = el('msgAdd'), msgSave = el('msgSave');
 
-    // Get current location
-    el('btnLoc').onclick = () => {
-      try {
-        navigator.geolocation.getCurrentPosition(
-          p => { latEl.value = p.coords.latitude.toFixed(6); lngEl.value = p.coords.longitude.toFixed(6); },
-          e => { msg.textContent = "Location error: " + e.message; },
-          { enableHighAccuracy:true, timeout:10000, maximumAge:0 }
-        );
-      } catch (e) { showErr(e); }
-    };
+    // ---- helpers
+    function renderStops() {
+      stopsList.innerHTML = "";
+      stops.forEach((s, i) => {
+        const row = document.createElement('div');
+        row.className = 'stop';
+        const img = document.createElement('img');
+        img.className = 'thumb';
+        img.src = s.imageData || s.imageURL || "";
+        img.alt = 'thumb';
+        const meta = document.createElement('div');
+        meta.innerHTML = `<div><strong>${s.title || '(no title)'}</strong></div>
+                          <div class="small">Lat ${s.lat}, Lng ${s.lng}, R ${s.radiusMeters}m</div>
+                          <div class="small">${(s.caption||'').slice(0,120)}</div>`;
+        const del = document.createElement('button');
+        del.textContent = 'Delete';
+        del.className = 'btn';
+        del.style.width = '90px';
+        del.onclick = () => { stops.splice(i,1); renderStops(); };
+        row.appendChild(img); row.appendChild(meta); row.appendChild(del);
+        stopsList.appendChild(row);
+      });
+      countNote.textContent = `${stops.length} stop(s)`;
+    }
 
-    // Compress the chosen image to a data URL (JPEG, max 1280px, ~0.7 quality)
     async function fileToCompressedDataURL(file, maxDim = 1280, quality = 0.7) {
       const img = new Image();
       const reader = new FileReader();
-      const data = await new Promise((res, rej) => {
-        reader.onload = () => res(reader.result);
-        reader.onerror = rej;
-        reader.readAsDataURL(file);
-      });
+      const data = await new Promise((res, rej) => { reader.onload = () => res(reader.result); reader.onerror = rej; reader.readAsDataURL(file); });
       await new Promise((res, rej) => { img.onload = res; img.onerror = rej; img.src = data; });
-
       const canvas = document.createElement('canvas');
       let { width, height } = img;
-      if (width > height && width > maxDim) {
-        height = Math.round(height * (maxDim / width));
-        width = maxDim;
-      } else if (height > width && height > maxDim) {
-        width = Math.round(width * (maxDim / height));
-        height = maxDim;
-      }
+      if (width > height && width > maxDim) { height = Math.round(height * (maxDim/width)); width = maxDim; }
+      else if (height > width && height > maxDim) { width = Math.round(width * (maxDim/height)); height = maxDim; }
       canvas.width = width; canvas.height = height;
-      const ctx = canvas.getContext('2d');
-      ctx.drawImage(img, 0, 0, width, height);
-      return canvas.toDataURL('image/jpeg', quality); // "data:image/jpeg;base64,..."
+      const ctx = canvas.getContext('2d'); ctx.drawImage(img,0,0,width,height);
+      return canvas.toDataURL('image/jpeg', quality);
     }
 
+    // ---- state
     let dataURL = null;
+    let stops = [];
+
+    // ---- events
+    el('btnLoc').onclick = () => {
+      navigator.geolocation.getCurrentPosition(
+        p => { latEl.value = p.coords.latitude.toFixed(6); lngEl.value = p.coords.longitude.toFixed(6); },
+        e => { msgAdd.textContent = "Location error: " + e.message; },
+        { enableHighAccuracy:true, timeout:10000, maximumAge:0 }
+      );
+    };
+
     fileEl.onchange = async (e) => {
       try {
         const f = e.target.files?.[0];
         if (!f) return;
-        msg.textContent = "Compressing image…";
+        msgAdd.textContent = "Compressing image…";
         dataURL = await fileToCompressedDataURL(f, 1280, 0.7);
         preview.src = dataURL; preview.style.display = 'block';
-        // Approximate bytes
         const bytes = Math.ceil((dataURL.length - 'data:image/jpeg;base64,'.length) * 3/4);
         sizeInfo.textContent = `Compressed image ~${Math.round(bytes/1024)} KB`;
-        msg.textContent = "";
-      } catch (err) { showErr(err); msg.textContent = "Failed to process image."; }
+        msgAdd.textContent = "";
+      } catch (err) { msgAdd.textContent = "Failed to process image."; }
     };
 
-    // Save to RTDB
-    el('btnSave').onclick = async () => {
+    el('btnAddStop').onclick = () => {
       try {
-        msg.textContent = "Saving…";
-        const title = titleEl.value || "Untitled";
-        const lat = parseFloat(latEl.value);
-        const lng = parseFloat(lngEl.value);
-        const radiusMeters = Math.max(5, parseInt(radiusEl.value || "50", 10));
-        const imageUrl = (urlEl.value || "").trim();
+        const lat = parseFloat(latEl.value), lng = parseFloat(lngEl.value);
+        const radius = Math.max(5, parseInt(radiusEl.value || "50", 10));
+        const sTitle = stopTitle.value.trim();
+        const caption = captionEl.value.trim();
+        const imageURL = urlEl.value.trim();
 
-        if (isNaN(lat) || isNaN(lng)) throw new Error("Set a location (Use my current location).");
-        if (!dataURL && !imageUrl) throw new Error("Choose a photo or paste an image URL.");
+        if (Number.isNaN(lat) || Number.isNaN(lng)) throw new Error("Set a location first.");
+        if (!dataURL && !imageURL) throw new Error("Choose a photo or paste an image URL.");
 
-        // If both provided, prefer uploaded/compressed dataURL
-        const spot = {
-          title, lat, lng, radiusMeters, active: true, createdAt: Date.now()
-        };
-        if (dataURL) spot.imageData = dataURL;    // inline base64 (no Storage)
-        else spot.imageURL = imageUrl;            // external URL
-
-        const spotsRef = ref(db, "spots");
-        const newRef = push(spotsRef);
-        await set(newRef, spot);
-
-        msg.textContent = "Saved! 🎉";
-        // reset some fields
-        fileEl.value = ""; preview.style.display = "none"; dataURL = null; urlEl.value = "";
-        sizeInfo.textContent = "";
-      } catch (e) { msg.textContent = "Error saving."; showErr(e); }
+        stops.push({
+          title: sTitle, caption,
+          lat, lng, radiusMeters: radius, active: true,
+          createdAt: Date.now(),
+          imageData: dataURL || null,
+          imageURL: imageURL || null
+        });
+        // reset stop form
+        stopTitle.value = ""; captionEl.value = ""; urlEl.value = ""; fileEl.value = "";
+        dataURL = null; preview.style.display = 'none'; sizeInfo.textContent = "";
+        msgAdd.textContent = "Stop added.";
+        renderStops();
+      } catch (e) { msgAdd.textContent = e.message; }
     };
+
+    el('btnSaveScenario').onclick = async () => {
+      try {
+        if (!scTitle.value.trim()) throw new Error("Scenario title is required.");
+        if (!stops.length) throw new Error("Add at least one stop.");
+        msgSave.textContent = "Saving scenario…";
+
+        const newRef = push(ref(db, "scenarios"));
+        await set(newRef, {
+          title: scTitle.value.trim(),
+          notes: scNotes.value.trim(),
+          active: (scActive.value === "true"),
+          createdAt: Date.now(),
+          stops // store as array
+        });
+
+        msgSave.textContent = "Scenario saved! 🎉";
+        // reset scenario builder
+        scTitle.value = ""; scNotes.value = ""; scActive.value = "true";
+        stops = []; renderStops();
+      } catch (e) { msgSave.textContent = e.message; }
+    };
+
+    // initial
+    renderStops();
+
   } catch (e) {
     showErr(e);
   }
