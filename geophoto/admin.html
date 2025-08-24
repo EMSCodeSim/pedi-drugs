@@ -4,73 +4,83 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
 <title>Geo Scenarios — Admin</title>
-<link rel="apple-touch-icon" href="data:,">
 <style>
-  /* ===== Mobile-first, high-contrast UI ===== */
   :root{
-    --bg: #0a0f14; --surface: #0f1820; --panel:#121f2a; --muted:#7fb8c7;
-    --accent:#2dd4bf; --accent-2:#22b2a0; --text:#e6f6fb; --danger:#ff6b6b; --ok:#6ee7b7;
-    --br: 16px; --pad:14px; --gap:12px; --shadow: 0 6px 24px rgba(0,0,0,.45);
+    --bg:#0a0f14; --surface:#0f1820; --panel:#142431;
+    --text:#eaf7fb; --muted:#9bc6d2; --border:#244656;
+    --accent:#2dd4bf; --accentText:#042e2a;
+    --primary:#44c3ff; --primaryText:#04131c;
+    --danger:#ff6b6b; --dangerText:#2a0a0a;
+    --ok:#6ee7b7;
+    --br:16px; --pad:14px; --gap:12px; --shadow:0 6px 24px rgba(0,0,0,.45);
   }
   @media (prefers-color-scheme: light){
-    :root{ --bg:#f5fbff; --surface:#ffffff; --panel:#ffffff; --text:#0b1e27; --muted:#4f6b78; --shadow: 0 6px 24px rgba(0,0,0,.08) }
+    :root{
+      --bg:#f4fbff; --surface:#ffffff; --panel:#ffffff;
+      --text:#0b1e27; --muted:#4f6b78; --border:#d3e5ec;
+      --accent:#00a38c; --accentText:#ffffff;
+      --primary:#0077cc; --primaryText:#ffffff;
+      --danger:#d93b3b; --dangerText:#ffffff;
+      --shadow:0 6px 24px rgba(0,0,0,.08);
+    }
     body{background:linear-gradient(180deg,#eef7fc, #ffffff 30%)}
   }
   *{box-sizing:border-box}
-  body{margin:0;font-family:system-ui, -apple-system, Segoe UI, Roboto, Arial; color:var(--text); background:var(--bg)}
-  .wrap{max-width:860px;margin:0 auto;padding:env(safe-area-inset-top) var(--pad) calc(72px + env(safe-area-inset-bottom)) var(--pad)}
-  header.sticky{position:sticky;top:0;z-index:10;backdrop-filter:saturate(1.1) blur(6px);background:color-mix(in hsl, var(--bg) 85%, transparent);padding:10px var(--pad)}
-  .brand{display:flex;align-items:center;gap:10px}
-  .dot{width:12px;height:12px;border-radius:50%;background:var(--accent);box-shadow:0 0 0 6px color-mix(in srgb, var(--accent) 25%, transparent)}
+  body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial;color:var(--text);background:var(--bg)}
+  header{position:sticky;top:0;z-index:10;padding:10px var(--pad);backdrop-filter:blur(6px) saturate(1.1);background:color-mix(in hsl, var(--bg) 85%, transparent)}
   h1{font-size:20px;margin:0}
-  .card{background:var(--surface); border:1px solid color-mix(in srgb, var(--surface) 60%, #86a0aa); border-radius:var(--br); padding:var(--pad); box-shadow:var(--shadow); margin:var(--gap) 0}
-  .sectionTitle{margin:0 0 8px 0;font-size:16px;opacity:.95}
+  .wrap{max-width:980px;margin:0 auto;padding:env(safe-area-inset-top) var(--pad) calc(72px + env(safe-area-inset-bottom)) var(--pad)}
+  .card{background:var(--surface); border:1px solid var(--border); border-radius:var(--br); padding:var(--pad); margin:var(--gap) 0; box-shadow:var(--shadow)}
   label{display:block;margin:10px 0 6px 2px;font-size:13px;color:var(--muted)}
-  input, textarea, select{
-    width:100%; border:1px solid color-mix(in srgb, var(--panel) 70%, #9fb5be); background:var(--panel); color:var(--text);
-    padding:14px 12px; border-radius:12px; font-size:16px; outline:none; transition:border .15s ease;
+  input,textarea,select{
+    width:100%; padding:14px 12px; border-radius:12px; border:1px solid var(--border);
+    background:var(--panel); color:var(--text); font-size:16px; outline:none;
   }
-  input:focus, textarea:focus, select:focus{border-color:var(--accent)}
-  textarea{min-height:84px; resize:vertical}
+  input:focus,textarea:focus,select:focus{border-color:var(--primary); box-shadow:0 0 0 2px color-mix(in srgb, var(--primary) 30%, transparent)}
+  textarea{min-height:84px;resize:vertical}
   .grid{display:grid; gap:10px}
   .g2{grid-template-columns:1fr 1fr}
   .g3{grid-template-columns:1fr 1fr 1fr}
   @media (max-width:680px){ .g2,.g3{grid-template-columns:1fr} }
-  .btn{appearance:none; border:0; background:var(--accent); color:#042525; padding:14px 16px; border-radius:12px; font-size:16px; font-weight:600; box-shadow:var(--shadow); cursor:pointer}
-  .btn.secondary{background:#1b2a35; color:var(--text); border:1px solid color-mix(in srgb, #9fb5be 40%, var(--panel))}
-  .btn.ghost{background:transparent; border:1px dashed color-mix(in srgb, #9fb5be 50%, var(--panel)); color:var(--muted)}
-  .btn.danger{background:var(--danger); color:#1a0606}
-  .btnbar{display:flex; gap:10px; flex-wrap:wrap}
-  .hint{color:var(--muted); font-size:13px; margin:8px 2px}
-  .pill{display:inline-flex; align-items:center; gap:8px; padding:6px 10px; border-radius:999px; background:#0f2a2f; border:1px solid #1d3a41; color:var(--muted); font-size:12px}
-  .row{display:flex; align-items:center; gap:10px; flex-wrap:wrap}
-  .thumb{width:84px;height:84px;border-radius:12px;object-fit:cover;background:#0b2130;border:1px solid #204050}
-  .stopRow{display:grid; grid-template-columns:84px 1fr auto; gap:12px; align-items:start; padding:12px; border-radius:14px; background:#0e1d26; border:1px solid #2a4450; margin-top:10px}
-  .stopRow .title{font-weight:700; margin:0 0 4px 0}
-  .stopRow .meta{font-size:12px; color:var(--muted)}
-  .toast{position:fixed; left:16px; right:16px; bottom:calc(16px + env(safe-area-inset-bottom)); background:#0d312b; border:1px solid #1c5a51; color:#baf2e6; padding:12px 14px; border-radius:14px; box-shadow:var(--shadow); display:none; z-index:50}
-  .stickyBar{position:fixed; bottom:0; left:0; right:0; padding:10px var(--pad) calc(10px + env(safe-area-inset-bottom)); background:linear-gradient(180deg, transparent, rgba(0,0,0,.25) 35%, rgba(0,0,0,.55)); backdrop-filter:blur(6px)}
-  .stickyBar .inner{display:flex; gap:10px}
-  .divider{height:1px; background:color-mix(in srgb, #89a9b5 35%, transparent); margin:12px 0}
+  .btn{
+    appearance:none; border:0; border-radius:12px; padding:14px 16px; font-size:16px; font-weight:700;
+    cursor:pointer; box-shadow:var(--shadow);
+  }
+  .btn.accent{background:var(--accent); color:var(--accentText)}
+  .btn.primary{background:var(--primary); color:var(--primaryText)}
+  .btn.ghost{background:transparent; color:var(--text); border:2px dashed var(--border)}
+  .btn.danger{background:var(--danger); color:var(--dangerText)}
+  .btnbar{display:flex;gap:10px;flex-wrap:wrap}
+  .pill{display:inline-flex; align-items:center; gap:8px; padding:6px 10px; border-radius:999px;
+        background:color-mix(in srgb, var(--panel) 70%, #000); border:1px solid var(--border); color:var(--muted); font-size:12px}
+  .thumb{width:84px;height:84px;border-radius:12px;object-fit:cover;background:#0b2130;border:1px solid var(--border)}
+  .stopRow{display:grid;grid-template-columns:84px 1fr auto;gap:12px;align-items:start;background:color-mix(in srgb, var(--surface) 80%, #000);border:1px solid var(--border);border-radius:14px;padding:12px;margin-top:10px}
+  .title{font-weight:800;margin:0 0 4px 0}
+  .meta{font-size:12px;color:var(--muted)}
+  .hint{color:var(--muted);font-size:13px;margin:8px 2px}
+  .divider{height:1px;background:var(--border);opacity:.6;margin:12px 0}
+  .list{display:grid;gap:10px}
+  .scenarioRow{display:grid;grid-template-columns:84px 1fr auto;gap:12px;align-items:center;border:1px solid var(--border);border-radius:14px;padding:10px;background:color-mix(in srgb, var(--surface) 80%, #000);cursor:pointer}
+  .ok{color:var(--ok)}
+  /* inline error viewer */
+  #error{white-space:pre-wrap;background:#241113;border:1px solid #7b2b2b;color:#ffd6d6;padding:.75rem;border-radius:12px;display:none}
 </style>
 </head>
 <body>
-<header class="sticky">
-  <div class="brand"><span class="dot"></span><h1>Geo Scenarios — Admin</h1></div>
-</header>
+<header><h1>Geo Scenarios — Admin</h1></header>
 <div class="wrap">
 
   <!-- Mode -->
   <div class="card">
-    <div class="row">
-      <label class="pill"><input type="radio" name="mode" id="modeCreate" checked> Create new</label>
-      <label class="pill"><input type="radio" name="mode" id="modeEdit"> Edit existing</label>
+    <div class="btnbar">
+      <label class="pill"><input type="radio" name="mode" id="modeCreate" checked> &nbsp;Create new</label>
+      <label class="pill"><input type="radio" name="mode" id="modeEdit"> &nbsp;Edit existing</label>
     </div>
   </div>
 
   <!-- CREATE -->
   <div id="createPane" class="card">
-    <h3 class="sectionTitle">Create Scenario</h3>
+    <h3 style="margin:0 0 8px">Create Scenario</h3>
     <label>Scenario title</label>
     <input id="c_scTitle" placeholder="e.g., Station Tour A">
     <label>Notes (optional)</label>
@@ -79,36 +89,20 @@
     <select id="c_scActive"><option value="true" selected>Yes</option><option value="false">No</option></select>
 
     <div class="divider"></div>
-
-    <h4 class="sectionTitle">Add first location</h4>
+    <h4 style="margin:0 0 8px">Add first location</h4>
     <div class="grid g2">
-      <div>
-        <label>Latitude</label>
-        <input id="c_lat" readonly placeholder="Tap ‘Use my location’">
-      </div>
-      <div>
-        <label>Longitude</label>
-        <input id="c_lng" readonly>
-      </div>
+      <div><label>Latitude</label><input id="c_lat" readonly placeholder="Tap ‘Use my location’"></div>
+      <div><label>Longitude</label><input id="c_lng" readonly></div>
     </div>
-    <div class="btnbar" style="margin-top:6px"><button id="c_btnLoc" class="btn secondary">Use my location</button></div>
+    <div class="btnbar" style="margin-top:6px"><button id="c_btnLoc" class="btn primary">Use my location</button></div>
     <p class="hint">Stand where the photo should appear, then capture your GPS.</p>
 
     <div class="grid g3">
-      <div>
-        <label>Radius (meters)</label>
-        <input id="c_radius" type="number" value="50" min="5" step="5">
-      </div>
-      <div>
-        <label>Stop title (optional)</label>
-        <input id="c_stopTitle" placeholder="Short label">
-      </div>
-      <div>
-        <label>Photo file</label>
-        <input id="c_file" type="file" accept="image/*" capture="environment">
-      </div>
+      <div><label>Radius (m)</label><input id="c_radius" type="number" value="50" min="5" step="5"></div>
+      <div><label>Stop title</label><input id="c_stopTitle" placeholder="Short label (optional)"></div>
+      <div><label>Photo file</label><input id="c_file" type="file" accept="image/*" capture="environment"></div>
     </div>
-    <img id="c_preview" class="thumb" style="display:none; width:100%; height:auto;" alt="Preview"/>
+    <img id="c_preview" class="thumb" style="display:none;width:100%;height:auto" alt="Preview"/>
     <label class="hint">…or paste a public image URL (optional)</label>
     <input id="c_imageUrl" placeholder="https://…">
     <label>Caption / Text (optional)</label>
@@ -116,126 +110,110 @@
     <p id="c_sizeInfo" class="hint"></p>
 
     <div class="btnbar">
-      <button id="c_btnSaveStop" class="btn" style="display:none">Save location</button>
+      <button id="c_btnSaveStop" class="btn accent" style="display:none">Save location</button>
       <button id="c_btnAddAnother" class="btn ghost" style="display:none">Add a location</button>
-      <button id="c_btnEndScenario" class="btn" style="display:none">End scenario</button>
+      <button id="c_btnEndScenario" class="btn primary" style="display:none">End scenario</button>
     </div>
     <p id="c_msg" class="hint"></p>
 
     <div class="divider"></div>
-    <h4 class="sectionTitle">Locations in this scenario</h4>
+    <h4 style="margin:0 0 8px">Locations in this scenario</h4>
     <div id="c_stopsList"></div>
     <p id="c_countNote" class="hint">0 stops</p>
   </div>
 
   <!-- EDIT -->
   <div id="editPane" class="card" style="display:none">
-    <h3 class="sectionTitle">Edit Scenario</h3>
+    <h3 style="margin:0 0 8px">Edit Scenario</h3>
     <div id="e_listPane">
-      <p class="hint">Tap a scenario to edit</p>
-      <div id="e_scenarios"></div>
+      <div id="e_scenarios" class="list"></div>
       <p id="e_status" class="hint"></p>
     </div>
 
     <div id="e_editor" style="display:none">
-      <div class="row" style="justify-content:space-between">
+      <div class="btnbar" style="justify-content:space-between">
         <div class="pill" id="e_titleHeading">Editing…</div>
-        <button id="e_back" class="btn secondary">Back to list</button>
+        <button id="e_back" class="btn ghost">Back to list</button>
       </div>
 
-      <label>Scenario title</label>
-      <input id="e_scTitle">
-      <label>Notes</label>
-      <textarea id="e_scNotes"></textarea>
-      <label>Active?</label>
-      <select id="e_scActive"><option value="true">Yes</option><option value="false">No</option></select>
+      <label>Scenario title</label><input id="e_scTitle">
+      <label>Notes</label><textarea id="e_scNotes"></textarea>
+      <label>Active?</label><select id="e_scActive"><option value="true">Yes</option><option value="false">No</option></select>
 
       <div class="divider"></div>
-      <h4 class="sectionTitle">Locations</h4>
+      <h4 style="margin:0 0 8px">Locations</h4>
       <div id="e_stops"></div>
 
       <div class="divider"></div>
-      <div class="card" style="background:#0a1620;border-color:#1e3541">
-        <h4 class="sectionTitle" style="margin:0 0 8px 0">Add new location</h4>
+      <div class="card" style="background:color-mix(in srgb, var(--surface) 80%, #000);border-color:var(--border)">
+        <h4 style="margin:0 0 8px">Add new location</h4>
         <div class="grid g2">
           <div><label>Latitude</label><input id="e_new_lat" readonly></div>
           <div><label>Longitude</label><input id="e_new_lng" readonly></div>
         </div>
-        <div class="btnbar" style="margin-top:6px"><button id="e_new_btnLoc" class="btn secondary">Use my location</button></div>
-        <div class="grid g3" style="margin-top:6px">
+        <div class="btnbar" style="margin-top:6px"><button id="e_new_btnLoc" class="btn primary">Use my location</button></div>
+        <div class="grid g3">
           <div><label>Radius (m)</label><input id="e_new_radius" type="number" value="50" min="5" step="5"></div>
           <div><label>Stop title</label><input id="e_new_title"></div>
           <div><label>Photo file</label><input id="e_new_file" type="file" accept="image/*" capture="environment"></div>
         </div>
-        <img id="e_new_preview" class="thumb" style="display:none; width:100%; height:auto;" alt="Preview"/>
-        <label class="hint">…or image URL</label>
-        <input id="e_new_url" placeholder="https://…">
-        <label>Caption</label>
-        <textarea id="e_new_caption"></textarea>
+        <img id="e_new_preview" class="thumb" style="display:none;width:100%;height:auto" alt="Preview"/>
+        <label class="hint">…or image URL</label><input id="e_new_url" placeholder="https://…">
+        <label>Caption</label><textarea id="e_new_caption"></textarea>
         <p id="e_new_size" class="hint"></p>
-        <button id="e_add_stop" class="btn">Add location</button>
+        <button id="e_add_stop" class="btn accent">Add location</button>
       </div>
 
       <div class="btnbar" style="margin-top:10px">
-        <button id="e_save" class="btn">Save Scenario Changes</button>
+        <button id="e_save" class="btn primary">Save Scenario Changes</button>
       </div>
       <p id="e_msg" class="hint"></p>
     </div>
   </div>
 
-  <div id="toast" class="toast"></div>
-</div>
-
-<!-- Bottom sticky quick actions (mobile reach) -->
-<div class="stickyBar">
-  <div class="inner">
-    <button id="quickAdd" class="btn" style="flex:1">+ Quick Add Location</button>
-    <button id="quickSave" class="btn secondary" style="flex:1">Save Scenario</button>
-  </div>
+  <div id="error"></div>
 </div>
 
 <script type="module">
 (async () => {
-  // ---------- Helpers ----------
   const $ = id => document.getElementById(id);
-  const toast = (t)=>{ const el=$('toast'); el.textContent=t; el.style.display='block'; clearTimeout(el._t); el._t=setTimeout(()=>el.style.display='none',2000); };
+  const showErr = (e) => { const box=$('error'); box.style.display='block'; box.textContent=String(e && e.stack?e.stack:e); console.error(e); };
+  const toast = (t) => { /* minimal toast via alert for now */ console.log(t); };
+
+  // Firebase (RTDB only)
+  const [{ initializeApp }] = await Promise.all([ import("https://www.gstatic.com/firebasejs/10.12.4/firebase-app.js") ]);
+  const [{ getDatabase, ref, onValue, push, set }] = await Promise.all([ import("https://www.gstatic.com/firebasejs/10.12.4/firebase-database.js") ]);
+  const firebaseConfig = {
+    apiKey:"AIzaSyDM6DpRSeZueVKRpbyJyDmhf8WY66KyCDk",
+    authDomain:"dailyquiz-d5279.firebaseapp.com",
+    databaseURL:"https://dailyquiz-d5279-default-rtdb.firebaseio.com",
+    projectId:"dailyquiz-d5279",
+    appId:"1:94577748034:web:c032d3a1d72db1313de5db",
+    measurementId:"G-19DVN7NNH7"
+  };
+  const app = initializeApp(firebaseConfig);
+  const db = getDatabase(app);
+
+  // Common helpers
   async function fileToDataURL(file, maxDim=1280, q=0.72){
     const img=new Image(), rdr=new FileReader();
     const data=await new Promise((res,rej)=>{ rdr.onload=()=>res(rdr.result); rdr.onerror=rej; rdr.readAsDataURL(file); });
     await new Promise((res,rej)=>{ img.onload=res; img.onerror=rej; img.src=data; });
-    let {width:w, height:h}=img;
-    if (w>h && w>maxDim){ h=Math.round(h*(maxDim/w)); w=maxDim; }
-    else if (h>w && h>maxDim){ w=Math.round(w*(maxDim/h)); h=maxDim; }
+    let {width:w,height:h}=img;
+    if(w>h && w>maxDim){ h=Math.round(h*(maxDim/w)); w=maxDim; }
+    else if(h>w && h>maxDim){ w=Math.round(w*(maxDim/h)); h=maxDim; }
     const c=document.createElement('canvas'); c.width=w; c.height=h;
     c.getContext('2d').drawImage(img,0,0,w,h);
     return c.toDataURL('image/jpeg', q);
   }
 
-  // ---------- Firebase (RTDB only) ----------
-  const [{ initializeApp }] = await Promise.all([
-    import("https://www.gstatic.com/firebasejs/10.12.4/firebase-app.js"),
-  ]);
-  const [{ getDatabase, ref, onValue, push, set }] = await Promise.all([
-    import("https://www.gstatic.com/firebasejs/10.12.4/firebase-database.js"),
-  ]);
-
-  const firebaseConfig = {
-    apiKey: "AIzaSyDM6DpRSeZueVKRpbyJyDmhf8WY66KyCDk",
-    authDomain: "dailyquiz-d5279.firebaseapp.com",
-    databaseURL: "https://dailyquiz-d5279-default-rtdb.firebaseio.com",
-    projectId: "dailyquiz-d5279",
-    appId: "1:94577748034:web:c032d3a1d72db1313de5db",
-    measurementId: "G-19DVN7NNH7"
-  };
-  const app = initializeApp(firebaseConfig);
-  const db = getDatabase(app);
-
-  // ---------- Mode toggle ----------
-  const modeCreate = $('modeCreate'), modeEdit=$('modeEdit'), createPane=$('createPane'), editPane=$('editPane');
+  // Mode toggle
+  const modeCreate=$('modeCreate'), modeEdit=$('modeEdit');
+  const createPane=$('createPane'), editPane=$('editPane');
   modeCreate.onchange=()=>{ if(modeCreate.checked){ createPane.style.display='block'; editPane.style.display='none'; } };
-  modeEdit.onchange  =()=>{ if(modeEdit.checked){   createPane.style.display='none'; editPane.style.display='block'; } };
+  modeEdit.onchange  =()=>{ if(modeEdit.checked){   createPane.style.display='none'; editPane.style.display='block'; renderScenarioList(); } };
 
-  // ---------- CREATE MODE ----------
+  // ---- CREATE MODE
   let c_stops=[]; let c_dataURL=null;
   const c_scTitle=$('c_scTitle'), c_scNotes=$('c_scNotes'), c_scActive=$('c_scActive');
   const c_lat=$('c_lat'), c_lng=$('c_lng'), c_radius=$('c_radius'), c_stopTitle=$('c_stopTitle');
@@ -245,8 +223,8 @@
   const c_msg=$('c_msg'), c_stopsList=$('c_stopsList'), c_countNote=$('c_countNote');
 
   c_btnLoc.onclick=()=>navigator.geolocation.getCurrentPosition(
-    p=>{ c_lat.value=p.coords.latitude.toFixed(6); c_lng.value=p.coords.longitude.toFixed(6); toast('GPS captured'); },
-    e=>toast('Location error: '+e.message),
+    p=>{ c_lat.value=p.coords.latitude.toFixed(6); c_lng.value=p.coords.longitude.toFixed(6); },
+    e=>{ c_msg.textContent='Location error: '+e.message; },
     {enableHighAccuracy:true, timeout:10000, maximumAge:0}
   );
 
@@ -257,8 +235,7 @@
     c_preview.src=c_dataURL; c_preview.style.display='block';
     const bytes=Math.ceil((c_dataURL.length-'data:image/jpeg;base64,'.length)*3/4);
     c_sizeInfo.textContent=`~${Math.round(bytes/1024)} KB`;
-    c_msg.textContent='';
-    showCreateFlowBtns();
+    c_msg.textContent=''; showCreateFlowBtns();
   };
   c_imageUrl.addEventListener('input', showCreateFlowBtns);
 
@@ -286,7 +263,7 @@
     c_stopsList.querySelectorAll('button[data-i]').forEach(b=>{
       b.onclick=()=>{ c_stops.splice(parseInt(b.dataset.i),1); renderCreateStops(); showCreateFlowBtns(); };
     });
-    c_countNote.textContent = `${c_stops.length} stop(s)`;
+    c_countNote.textContent=`${c_stops.length} stop(s)`;
   }
   function captureStop(){
     const lat=parseFloat(c_lat.value), lng=parseFloat(c_lng.value);
@@ -300,43 +277,46 @@
     c_stopTitle.value=''; c_caption.value=''; c_imageUrl.value=''; c_file.value='';
     c_dataURL=null; c_preview.style.display='none'; c_sizeInfo.textContent='';
   }
-
   c_btnSaveStop.onclick=()=>{
-    try{ const s=captureStop(); c_stops.push(s); renderCreateStops(); clearCreateStop(); showCreateFlowBtns(); toast('Location saved'); c_msg.textContent='Location saved. You can add another or end scenario.';}
-    catch(err){ c_msg.textContent=err.message; toast(err.message); }
+    try{ const s=captureStop(); c_stops.push(s); renderCreateStops(); clearCreateStop(); showCreateFlowBtns(); c_msg.textContent='Location saved. You can add another or end scenario.'; }
+    catch(err){ c_msg.textContent=err.message; }
   };
-  c_btnAddAnother.onclick=()=>{ clearCreateStop(); toast('Add the next location'); };
+  c_btnAddAnother.onclick=()=>{ clearCreateStop(); };
   c_btnEndScenario.onclick=async()=>{
     try{
       if(!c_scTitle.value.trim()) throw new Error('Scenario title is required');
       if(!c_stops.length) throw new Error('Add at least one location');
-      await set(push(ref(db,'scenarios')),{ title:c_scTitle.value.trim(), notes:c_scNotes.value.trim(), active:(c_scActive.value==='true'), createdAt:Date.now(), stops:c_stops });
-      toast('Scenario saved'); c_scTitle.value=''; c_scNotes.value=''; c_scActive.value='true'; c_stops=[]; renderCreateStops(); clearCreateStop(); showCreateFlowBtns();
-    }catch(err){ toast(err.message); }
+      const newRef = push(ref(db,'scenarios'));
+      const id = newRef.key;
+      await set(newRef,{ title:c_scTitle.value.trim(), notes:c_scNotes.value.trim(), active:(c_scActive.value==='true'), createdAt:Date.now(), stops:c_stops });
+      // Reset + auto-switch to edit and open the saved scenario
+      c_scTitle.value=''; c_scNotes.value=''; c_scActive.value='true'; c_stops=[]; renderCreateStops(); clearCreateStop(); showCreateFlowBtns();
+      modeEdit.checked = true; modeEdit.onchange(); // switch UI
+      // store target id so when list renders we auto-open it
+      lastSavedId = id;
+    }catch(err){ c_msg.textContent=err.message; }
   };
 
   renderCreateStops(); showCreateFlowBtns();
 
-  // Quick bar
-  $('quickAdd').onclick=()=>c_btnSaveStop.click();
-  $('quickSave').onclick=()=>c_btnEndScenario.click();
-
-  // ---------- EDIT MODE ----------
+  // ---- EDIT MODE
   const e_listPane=$('e_listPane'), e_scenarios=$('e_scenarios'), e_status=$('e_status');
   const e_editor=$('e_editor'), e_back=$('e_back'), e_titleHeading=$('e_titleHeading');
   const e_scTitle=$('e_scTitle'), e_scNotes=$('e_scNotes'), e_scActive=$('e_scActive');
-  const e_stops=$('e_stops'), e_new_btnLoc=$('e_new_btnLoc');
+  const e_stops=$('e_stops'), e_save=$('e_save'), e_msg=$('e_msg');
+
   const e_new_lat=$('e_new_lat'), e_new_lng=$('e_new_lng'), e_new_radius=$('e_new_radius');
   const e_new_title=$('e_new_title'), e_new_file=$('e_new_file'), e_new_url=$('e_new_url'), e_new_caption=$('e_new_caption');
-  const e_new_preview=$('e_new_preview'), e_new_size=$('e_new_size'), e_add_stop=$('e_add_stop');
-  const e_save=$('e_save'), e_msg=$('e_msg');
-  let scenarios=[]; let editing=null; let e_new_dataURL=null;
+  const e_new_preview=$('e_new_preview'), e_new_size=$('e_new_size'), e_new_btnLoc=$('e_new_btnLoc'), e_add_stop=$('e_add_stop');
 
+  let scenarios=[]; let editing=null; let e_new_dataURL=null; let lastSavedId=null;
+
+  // Always render the list when data changes (regardless of mode)
   onValue(ref(db,'scenarios'), snap=>{
     const v=snap.val()||{};
     scenarios=Object.entries(v).map(([id,s])=>({id,...s})).sort((a,b)=>(b.createdAt||0)-(a.createdAt||0));
-    if(modeEdit.checked) renderScenarioList();
-  });
+    renderScenarioList();
+  }, err=>showErr(err));
 
   function renderScenarioList(){
     e_scenarios.innerHTML='';
@@ -344,24 +324,32 @@
     e_status.textContent=`${scenarios.length} scenario(s)`;
     scenarios.forEach(sc=>{
       const first=(sc.stops && sc.stops[0])||{};
-      const row=document.createElement('div'); row.className='stopRow'; row.style.cursor='pointer';
+      const row=document.createElement('div'); row.className='scenarioRow';
       row.innerHTML=`
         <img class="thumb" src="${first.imageData||first.imageURL||''}" alt="thumb">
         <div>
-          <p class="title">${sc.title||'(untitled)'}</p>
-          <p class="meta">${(sc.notes||'').slice(0,140)}</p>
+          <div class="title">${sc.title||'(untitled)'}</div>
+          <div class="meta">${(sc.notes||'').slice(0,140)}</div>
         </div>
         <div class="pill">${sc.active?'Active':'Inactive'}</div>`;
-      row.onclick=()=>openEditor(sc);
+      row.onclick=()=>openEditor(sc.id);
       e_scenarios.appendChild(row);
     });
+
+    // Auto-open the last saved scenario (after create)
+    if (lastSavedId) {
+      const target = scenarios.find(s=>s.id===lastSavedId);
+      if (target) { openEditor(lastSavedId); lastSavedId=null; }
+    }
   }
 
-  function openEditor(sc){
-    editing=JSON.parse(JSON.stringify(sc));
+  function openEditor(id){
+    const sc = scenarios.find(s=>s.id===id);
+    if(!sc){ e_status.textContent='Scenario not found.'; return; }
+    editing = JSON.parse(JSON.stringify(sc));
     e_listPane.style.display='none'; e_editor.style.display='block';
-    e_titleHeading.textContent=`Editing: ${editing.title||'(untitled)'}`;
-    e_scTitle.value=editing.title||''; e_scNotes.value=editing.notes||''; e_scActive.value=editing.active?'true':'false';
+    e_titleHeading.textContent = `Editing: ${editing.title||'(untitled)'}`;
+    e_scTitle.value = editing.title||''; e_scNotes.value = editing.notes||''; e_scActive.value = editing.active?'true':'false';
     renderEditStops();
   }
   e_back.onclick=()=>{ editing=null; e_editor.style.display='none'; e_listPane.style.display='block'; e_msg.textContent=''; };
@@ -386,7 +374,7 @@
             <div><label>Photo file (replace)</label><input id="e_file_${i}" type="file" accept="image/*" capture="environment"></div>
             <div><label>…or Image URL</label><input id="e_url_${i}" value="${s.imageURL||''}"></div>
           </div>
-          <div class="btnbar"><button id="e_loc_${i}" class="btn secondary">Use my location</button></div>
+          <div class="btnbar"><button id="e_loc_${i}" class="btn primary">Use my location</button></div>
           <p class="hint" id="e_info_${i}"></p>
         </div>
         <div><button class="btn danger" id="e_del_${i}">Remove</button></div>`;
@@ -394,8 +382,8 @@
 
       $('e_del_'+i).onclick=()=>{ editing.stops.splice(i,1); renderEditStops(); };
       $('e_loc_'+i).onclick=()=>navigator.geolocation.getCurrentPosition(
-        p=>{ $('e_lat_'+i).value=p.coords.latitude.toFixed(6); $('e_lng_'+i).value=p.coords.longitude.toFixed(6); toast('GPS captured'); },
-        e=>toast('Location error: '+e.message),
+        p=>{ $('e_lat_'+i).value=p.coords.latitude.toFixed(6); $('e_lng_'+i).value=p.coords.longitude.toFixed(6); },
+        e=>{ $('e_info_'+i).textContent='Location error: '+e.message; },
         {enableHighAccuracy:true, timeout:10000, maximumAge:0}
       );
       $('e_file_'+i).onchange=async ev=>{
@@ -407,31 +395,35 @@
     });
   }
 
+  // Add new stop (within edit)
+  const e_new_btnLoc=$('e_new_btnLoc');
   e_new_btnLoc.onclick=()=>navigator.geolocation.getCurrentPosition(
-    p=>{ e_new_lat.value=p.coords.latitude.toFixed(6); e_new_lng.value=p.coords.longitude.toFixed(6); toast('GPS captured'); },
-    e=>toast('Location error: '+e.message),
+    p=>{ e_new_lat.value=p.coords.latitude.toFixed(6); e_new_lng.value=p.coords.longitude.toFixed(6); },
+    e=>{ e_new_size.textContent='Location error: '+e.message; },
     {enableHighAccuracy:true, timeout:10000, maximumAge:0}
   );
-  e_new_file.onchange=async ev=>{
+  $('e_new_file').onchange=async ev=>{
     const f=ev.target.files?.[0]; if(!f) return;
     e_new_size.textContent='Compressing…'; e_new_dataURL=await fileToDataURL(f);
     e_new_preview.src=e_new_dataURL; e_new_preview.style.display='block';
     const bytes=Math.ceil((e_new_dataURL.length-'data:image/jpeg;base64,'.length)*3/4); e_new_size.textContent=`~${Math.round(bytes/1024)} KB`;
   };
-  e_add_stop.onclick=()=>{
+  $('e_add_stop').onclick=()=>{
     try{
+      if(!editing) return;
       const la=parseFloat(e_new_lat.value), ln=parseFloat(e_new_lng.value);
       const r=Math.max(5, parseInt(e_new_radius.value||'50',10));
       const t=e_new_title.value.trim(), cap=e_new_caption.value.trim(), url=e_new_url.value.trim();
       if(Number.isNaN(la)||Number.isNaN(ln)) throw new Error('Set a location first');
       if(!e_new_dataURL && !url) throw new Error('Choose a photo or paste an image URL');
       (editing.stops ||= []).push({ title:t, caption:cap, lat:la, lng:ln, radiusMeters:r, active:true, createdAt:Date.now(), imageData:e_new_dataURL||null, imageURL:url||null });
-      e_new_title.value=''; e_new_caption.value=''; e_new_url.value=''; e_new_file.value=''; e_new_dataURL=null; e_new_preview.style.display='none'; e_new_size.textContent='';
-      renderEditStops(); toast('Location added (not saved yet)');
-    }catch(err){ toast(err.message); }
+      e_new_title.value=''; e_new_caption.value=''; e_new_url.value=''; $('e_new_file').value=''; e_new_dataURL=null; e_new_preview.style.display='none'; e_new_size.textContent='';
+      renderEditStops();
+    }catch(err){ e_msg.textContent=err.message; }
   };
 
-  e_save.onclick=async()=>{
+  // Save edits
+  $('e_save').onclick=async()=>{
     try{
       if(!editing) return;
       (editing.stops||[]).forEach((s,i)=>{
@@ -443,13 +435,13 @@
         const url = $('e_url_'+i).value.trim();
         if(url){ s.imageURL=url; if(!s.imageData) s.imageData=null; }
       });
-      editing.title = e_scTitle.value.trim();
-      editing.notes = e_scNotes.value.trim();
-      editing.active = (e_scActive.value==='true');
+      editing.title = $('e_scTitle').value.trim();
+      editing.notes = $('e_scNotes').value.trim();
+      editing.active = ($('e_scActive').value==='true');
       const {id, ...payload}=editing;
       await set(ref(db,'scenarios/'+editing.id), payload);
-      toast('Saved changes');
-    }catch(err){ toast(err.message); }
+      e_msg.textContent='Saved changes!';
+    }catch(err){ e_msg.textContent=err.message; }
   };
 })();
 </script>
