@@ -2,15 +2,16 @@
 <html lang="en">
 <head>
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Geo-Photo Viewer (Diagnostic)</title>
+<title>Geo-Photo Viewer</title>
 <style>
-  body{margin:0;font-family:system-ui;background:#0b1e27;color:#fff;display:flex;min-height:100vh}
-  .wrap{margin:auto;max-width:560px;padding:1rem}
-  .card{background:#102b36;border:1px solid #1c3a47;border-radius:.75rem;padding:1rem}
-  .status{opacity:.85;font-size:.95rem;margin:.5rem 0 1rem}
-  img{max-width:100%;border-radius:.5rem;display:block;margin:.5rem 0}
+  :root{--bg:#0b1e27;--card:#102b36;--border:#1c3a47;--accent:#2aa3b5;--text:#ffffff}
+  body{margin:0;font-family:system-ui,Arial;background:var(--bg);color:var(--text);display:flex;min-height:100vh}
+  .wrap{margin:auto;max-width:560px;padding:16px;width:100%}
+  .card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:16px}
+  .status{opacity:.85}
+  img{max-width:100%;border-radius:12px;display:block;margin:.5rem 0}
   .hidden{display:none}
-  .btn{width:100%;padding:.8rem;font-size:1rem;border:0;border-radius:.5rem;background:#2aa3b5;color:#00151b}
+  .btn{width:100%;padding:.8rem;font-size:1rem;border:0;border-radius:10px;background:var(--accent);color:#00151b}
   #error{white-space:pre-wrap;background:#2b1b1b;border:1px solid #4b2a2a;padding:.75rem;border-radius:.5rem;color:#ffd6d6;margin-top:.75rem;display:none}
 </style>
 <noscript><strong>This page requires JavaScript.</strong></noscript>
@@ -41,7 +42,7 @@
   const setStatus = (t) => document.getElementById('status').textContent = t;
 
   try {
-    // 1) IMPORTS
+    // Firebase imports
     const [{ initializeApp }] = await Promise.all([
       import("https://www.gstatic.com/firebasejs/10.12.4/firebase-app.js"),
     ]);
@@ -49,23 +50,22 @@
       import("https://www.gstatic.com/firebasejs/10.12.4/firebase-firestore.js"),
     ]);
 
-    // 2) CONFIG (yours)
+    // Your Firebase config (fixed storageBucket even though viewer doesn't use Storage)
     const firebaseConfig = {
       apiKey: "AIzaSyDM6DpRSeZueVKRpbyJyDmhf8WY66KyCDk",
       authDomain: "dailyquiz-d5279.firebaseapp.com",
       databaseURL: "https://dailyquiz-d5279-default-rtdb.firebaseio.com",
       projectId: "dailyquiz-d5279",
-      storageBucket: "dailyquiz-d5279.firebasestorage.app",
+      storageBucket: "dailyquiz-d5279.appspot.com",
       messagingSenderId: "94577748034",
       appId: "1:94577748034:web:c032d3a1d72db1313de5db",
       measurementId: "G-19DVN7NNH7"
     };
 
-    // 3) INIT
     const app = initializeApp(firebaseConfig);
     const db = getFirestore(app);
 
-    // 4) FETCH SPOTS
+    // Load active spots
     let spots = [];
     async function loadSpots(){
       const q = query(collection(db, "spots"), where("active", "==", true));
@@ -75,7 +75,7 @@
     }
     await loadSpots();
 
-    // 5) GEO HELPERS
+    // Distance helpers
     function haversineMeters(lat1, lon1, lat2, lon2) {
       const toRad = d => d * Math.PI / 180;
       const R = 6371000;
@@ -89,14 +89,14 @@
       let best = null;
       for (const s of spots){
         const dist = haversineMeters(userLat, userLng, s.lat, s.lng);
-        if (s.radiusMeters != null && s.active && dist <= s.radiusMeters){
+        if (s.active && typeof s.radiusMeters === 'number' && dist <= s.radiusMeters){
           if (!best || dist < best.dist) best = { spot: s, dist };
         }
       }
       return best;
     }
 
-    // 6) UI
+    // UI refs
     const result = document.getElementById('result');
     const title = document.getElementById('title');
     const photo = document.getElementById('photo');
@@ -110,7 +110,7 @@
       detail.textContent = `You are ${Math.round(dist)} m from "${spot.title}" (radius ${spot.radiusMeters} m).`;
     }
 
-    // 7) LOCATION
+    // Location
     let lastUpdate = 0;
     const MIN_MS = 4000;
     function onPosition(pos){
