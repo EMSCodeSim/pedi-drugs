@@ -2,17 +2,22 @@
 <html lang="en">
 <head>
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Geo-Photo Viewer (RTDB)</title>
+<title>Geo-Photo Viewer (RTDB Debug)</title>
 <style>
   :root{--bg:#0b1e27;--card:#102b36;--border:#1c3a47;--accent:#2aa3b5;--text:#ffffff}
   body{margin:0;font-family:system-ui,Arial;background:var(--bg);color:var(--text);display:flex;min-height:100vh}
-  .wrap{margin:auto;max-width:560px;padding:16px;width:100%}
-  .card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:16px}
+  .wrap{margin:auto;max-width:700px;padding:16px;width:100%}
+  .card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:16px;margin-bottom:12px}
   .status{opacity:.85}
   img{max-width:100%;border-radius:12px;display:block;margin:.5rem 0}
   .hidden{display:none}
-  .btn{width:100%;padding:.8rem;font-size:1rem;border:0;border-radius:10px;background:var(--accent);color:#00151b}
+  .btn{padding:.6rem .9rem;font-size:1rem;border:0;border-radius:10px;background:var(--accent);color:#00151b;cursor:pointer}
   #error{white-space:pre-wrap;background:#2b1b1b;border:1px solid #4b2a2a;padding:.75rem;border-radius:.5rem;color:#ffd6d6;margin-top:.75rem;display:none}
+  .list{display:grid;grid-template-columns:1fr;gap:10px}
+  .spot{display:flex;gap:10px;align-items:center;background:#0f3542;border:1px solid var(--border);border-radius:10px;padding:10px}
+  .thumb{width:72px;height:72px;object-fit:cover;border-radius:8px;background:#0a2230}
+  .grow{flex:1}
+  .muted{opacity:.75;font-size:.9rem}
 </style>
 <noscript><strong>This page requires JavaScript.</strong></noscript>
 </head>
@@ -26,8 +31,17 @@
       <img id="photo" alt="Location photo">
       <p class="status" id="detail"></p>
     </div>
-    <button id="enable" class="btn hidden">Enable Location</button>
+    <div style="display:flex;gap:8px;margin-top:8px">
+      <button id="enable" class="btn hidden">Enable Location</button>
+      <button id="forceShow" class="btn">Test: show newest spot</button>
+    </div>
     <div id="error"></div>
+  </div>
+
+  <div class="card">
+    <h3>Spots (live)</h3>
+    <p class="muted" id="countNote"></p>
+    <div id="spotList" class="list"></div>
   </div>
 </div>
 
@@ -50,7 +64,7 @@
       import("https://www.gstatic.com/firebasejs/10.12.4/firebase-database.js"),
     ]);
 
-    // Your config
+    // CONFIG (RTDB-only)
     const firebaseConfig = {
       apiKey: "AIzaSyDM6DpRSeZueVKRpbyJyDmhf8WY66KyCDk",
       authDomain: "dailyquiz-d5279.firebaseapp.com",
@@ -68,6 +82,9 @@
     onValue(ref(db, "spots"), snap => {
       const val = snap.val() || {};
       spots = Object.values(val).filter(s => s && s.active);
+      spots.sort((a,b)=> (b.createdAt||0)-(a.createdAt||0));
+      renderList();
+      document.getElementById('countNote').textContent = `${spots.length} active spot(s)`;
       if (!spots.length) setStatus("No active spots yet.");
     }, err => showErr(err));
 
@@ -84,7 +101,10 @@
     function findMatch(userLat, userLng){
       let best = null;
       for (const s of spots){
-        if (typeof s.lat !== 'number' || typeof s.lng !== 'number' || typeof s.radiusMeters !== 'number') continue;
+        if (typeof s.lat !== 'number') s.lat = parseFloat(s.lat);
+        if (typeof s.lng !== 'number') s.lng = parseFloat(s.lng);
+        if (typeof s.radiusMeters !== 'number') s.radiusMeters = parseFloat(s.radiusMeters);
+        if (Number.isNaN(s.lat) || Number.isNaN(s.lng) || Number.isNaN(s.radiusMeters)) continue;
         const dist = haversineMeters(userLat, userLng, s.lat, s.lng);
         if (dist <= s.radiusMeters){
           if (!best || dist < best.dist) best = { spot: s, dist };
@@ -99,13 +119,54 @@
     const photo = document.getElementById('photo');
     const detail = document.getElementById('detail');
     const enableBtn = document.getElementById('enable');
+    const forceBtn = document.getElementById('forceShow');
+    const listEl = document.getElementById('spotList');
+
+    function setImage(imgEl, spot) {
+      const src = spot.imageData || spot.imageURL || "";
+      imgEl.src = src;
+      imgEl.onerror = () => {
+        setStatus("Image failed to load (blocked URL or bad data). Showing placeholder.");
+        imgEl.src = "data:image/svg+xml;utf8," + encodeURIComponent(
+          `<svg xmlns='http://www.w3.org/2000/svg' width='600' height='400'>
+             <rect width='100%' height='100%' fill='#0a2230'/>
+             <text x='50%' y='50%' fill='#9ecbd6' font-size='18' text-anchor='middle'>Image failed to load</text>
+           </svg>`
+        );
+      };
+    }
 
     function show(spot, dist){
       result.classList.remove('hidden');
       title.textContent = spot.title || "Nearby spot";
-      // Prefer embedded data; fallback to URL
-      photo.src = spot.imageData || spot.imageURL || "";
-      detail.textContent = `You are ${Math.round(dist)} m from "${spot.title}" (radius ${spot.radiusMeters} m).`;
+      setImage(photo, spot);
+      detail.textContent = `Distance: ${Math.round(dist)} m (radius ${spot.radiusMeters} m).`;
+    }
+
+    function renderList(){
+      listEl.innerHTML = "";
+      for (const s of spots){
+        const row = document.createElement('div');
+        row.className = 'spot';
+        const img = document.createElement('img');
+        img.className = 'thumb';
+        img.alt = 'thumb';
+        setImage(img, s);
+        const meta = document.createElement('div');
+        meta.className = 'grow';
+        const h = document.createElement('div');
+        h.textContent = s.title || "(untitled)";
+        const sub = document.createElement('div');
+        sub.className = 'muted';
+        sub.textContent = `Lat ${s.lat}, Lng ${s.lng}, R ${s.radiusMeters}m`;
+        row.appendChild(img);
+        meta.appendChild(h); meta.appendChild(sub);
+        row.appendChild(meta);
+
+        // click to force show this spot
+        row.onclick = () => show(s, 0);
+        listEl.appendChild(row);
+      }
     }
 
     // Location
@@ -120,6 +181,15 @@
       setStatus(`Lat ${latitude.toFixed(5)}, Lng ${longitude.toFixed(5)} (±${Math.round(accuracy)}m)`);
       const match = findMatch(latitude, longitude);
       if (match) show(match.spot, match.dist);
+      else if (spots.length) {
+        // show nearest distance for debugging
+        let nearest = null;
+        for (const s of spots){
+          const d = haversineMeters(latitude, longitude, parseFloat(s.lat), parseFloat(s.lng));
+          if (!nearest || d < nearest.d) nearest = { s, d };
+        }
+        if (nearest) setStatus(`Nearest: "${nearest.s.title}" is ${Math.round(nearest.d)} m away (radius ${nearest.s.radiusMeters} m).`);
+      }
     }
 
     function onError(err){
@@ -141,6 +211,12 @@
       try {
         navigator.geolocation.watchPosition(onPosition, onError, { enableHighAccuracy:true, maximumAge:2000, timeout:10000 });
       } catch (e){ showErr(e); }
+    };
+
+    // Force show newest spot for quick verification
+    forceBtn.onclick = () => {
+      if (!spots.length) { setStatus("No spots yet."); return; }
+      show(spots[0], 0);
     };
 
   } catch (e) {
