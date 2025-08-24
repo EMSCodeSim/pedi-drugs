@@ -49,11 +49,9 @@
   ::placeholder { color: color-mix(in srgb, var(--muted) 90%, transparent); opacity: 1; }
 
   /* Overlay shelf */
-  .olThumb {
-    width: 100%; aspect-ratio: 1/1; border-radius: 10px; border:1px solid var(--border);
-    background:#0b2130; display:flex; align-items:center; justify-content:center; cursor:pointer;
-  }
-  .olThumb img { max-width: 88%; max-height: 88%; display:block; }
+  .olThumb { width:100%; aspect-ratio:1/1; border-radius:10px; border:1px solid var(--border);
+             background:#0b2130; display:flex; align-items:center; justify-content:center; cursor:pointer; }
+  .olThumb img { max-width:88%; max-height:88%; display:block; }
   .ol-tab.active { outline:3px solid var(--accent); }
 </style>
 </head>
@@ -124,15 +122,14 @@
       <button id="zoomOut" class="btn secondary">Zoom −</button>
       <button id="rotateL" class="btn secondary">Rotate ⟲</button>
       <button id="rotateR" class="btn secondary">Rotate ⟳</button>
-      <button id="flipH" class="btn secondary">Flip H</button>
-      <button id="flipV" class="btn secondary">Flip V</button>
+      <!-- Flip removed from background toolbar -->
       <span class="pill" id="canvasInfo">Canvas</span>
       <button id="saveImage" class="btn">Save Image to RTDB</button>
     </div>
     <div class="canvasWrap"><canvas id="c"></canvas></div>
   </div>
 
-  <!-- Right: crop + overlays + eraser + overlay rotate -->
+  <!-- Right: crop + overlays + eraser + overlay transforms -->
   <div class="col">
     <div class="sectionTitle">Crop</div>
     <div class="row">
@@ -176,10 +173,12 @@
     <div class="pill" id="eraserStatus" style="margin-top:6px">Eraser: off</div>
 
     <div class="divider"></div>
-    <div class="sectionTitle">Rotate Overlay</div>
+    <div class="sectionTitle">Transform Overlay</div>
     <div class="row">
       <button id="rotSelLeft" class="btn secondary">Rotate −15°</button>
       <button id="rotSelRight" class="btn secondary">Rotate +15°</button>
+      <button id="flipSelH" class="btn secondary">Flip H</button>
+      <button id="flipSelV" class="btn secondary">Flip V</button>
     </div>
     <label style="margin-top:8px">Angle</label>
     <input id="rotSelSlider" type="range" min="-180" max="180" step="1" value="0">
@@ -245,8 +244,6 @@
   const zoomOut=document.getElementById('zoomOut');
   const rotateL=document.getElementById('rotateL');
   const rotateR=document.getElementById('rotateR');
-  const flipH=document.getElementById('flipH');
-  const flipV=document.getElementById('flipV');
   const saveImage=document.getElementById('saveImage');
 
   const cropStart=document.getElementById('cropStart');
@@ -270,6 +267,8 @@
   const rotSelLeft=document.getElementById('rotSelLeft');
   const rotSelRight=document.getElementById('rotSelRight');
   const rotSelSlider=document.getElementById('rotSelSlider');
+  const flipSelH=document.getElementById('flipSelH');
+  const flipSelV=document.getElementById('flipSelV');
 
   /* ===== State + canvas ===== */
   let scenarios=[], current=null, stopIndex=-1;
@@ -291,7 +290,7 @@
         if (baseImage) fabricCanvas.remove(baseImage);
         baseImage = img;
         baseImage.selectable=false; baseImage.evented=false;
-        baseImage.set('erasable', false); // NEVER erasable
+        baseImage.set('erasable', false); // never erasable
         const cw=fabricCanvas.getWidth(), ch=fabricCanvas.getHeight();
         const scale=Math.min(cw/img.width, ch/img.height);
         baseImage.scale(scale);
@@ -311,8 +310,8 @@
   function populateList(){
     scenarioSel.innerHTML = '<option value="">Select scenario…</option>';
     scenarios.forEach(sc => {
-      const o=document.createElement('option');
-      o.value=sc.id; o.textContent=(sc.title||'(untitled)') + (sc.active? '':' (inactive)');
+      const o=document.createElement('option'); o.value=sc.id;
+      o.textContent=(sc.title||'(untitled)') + (sc.active? '':' (inactive)');
       scenarioSel.appendChild(o);
     });
   }
@@ -430,18 +429,15 @@
     }catch(err){ metaMsg.textContent=String(err.message||err); }
   };
 
-  /* ===== Canvas commands ===== */
+  /* ===== Canvas commands (background only) ===== */
   const rebase = ()=>{ if(!baseImage) return; setBaseImageFromDataURL(baseImage.toDataURL({})); };
   fitBtn.onclick=rebase;
   zoomIn.onclick=()=>fabricCanvas.setZoom(fabricCanvas.getZoom()*1.1);
   zoomOut.onclick=()=>fabricCanvas.setZoom(fabricCanvas.getZoom()/1.1);
   rotateL.onclick=()=>{ if(baseImage){ baseImage.rotate((baseImage.angle||0)-90); fabricCanvas.requestRenderAll(); } };
   rotateR.onclick=()=>{ if(baseImage){ baseImage.rotate((baseImage.angle||0)+90); fabricCanvas.requestRenderAll(); } };
-  flipH.onclick=()=>{ if(baseImage){ baseImage.toggle('flipX'); fabricCanvas.requestRenderAll(); } };
-  flipV.onclick=()=>{ if(baseImage){ baseImage.toggle('flipY'); fabricCanvas.requestRenderAll(); } };
 
   /* ===== Crop workflow ===== */
-  let cropRect=null;
   cropStart.onclick=()=>{
     if(!baseImage) return;
     cropRect = new fabric.Rect({
@@ -478,7 +474,7 @@
     }
   };
 
-  /* ===== PNG overlays (absolute URLs, no SVG) ===== */
+  /* ===== PNG overlays (absolute URLs) ===== */
   const OVERLAY_BASE = 'https://fireopssim.com/geophoto/overlays/';
   const SPRITES = {
     fire   : ['fire1.png','fire2.png','fire_side.png'],
@@ -557,9 +553,9 @@
   eraserStart.onclick = ()=>{
     const sel = fabricCanvas.getActiveObject();
     if (!sel || sel.type !== 'image' || sel===baseImage) { alert('Select an overlay image first.'); return; }
-    // Lock background: never erasable
+    // Lock background
     if (baseImage) baseImage.set('erasable', false);
-    // Only selected overlay erasable now
+    // Only selected overlay erasable
     fabricCanvas.getObjects().forEach(o => o.set('erasable', false));
     sel.set('erasable', true);
     fabricCanvas.isDrawingMode = true;
@@ -571,7 +567,7 @@
   eraserDone.onclick = stopErasing;
   eraserCancel.onclick = ()=>{ stopErasing(); fabricCanvas.renderAll(); };
 
-  /* ===== Overlay rotate controls ===== */
+  /* ===== Overlay transform (rotate + flip) ===== */
   function rotateSelected(delta){
     const o=fabricCanvas.getActiveObject();
     if (!o || o===baseImage) return;
@@ -587,7 +583,27 @@
     o.rotate(parseInt(e.target.value,10)||0);
     fabricCanvas.requestRenderAll();
   };
+  function flipSelected(axis){
+    const o=fabricCanvas.getActiveObject();
+    if (!o || o===baseImage) return;
+    if (axis === 'x') o.set('flipX', !o.flipX);
+    if (axis === 'y') o.set('flipY', !o.flipY);
+    fabricCanvas.requestRenderAll();
+  }
+  flipSelH.onclick = ()=> flipSelected('x');
+  flipSelV.onclick = ()=> flipSelected('y');
 
+  /* ===== Delete stop ===== */
+  deleteStop.onclick=async()=>{
+    try{
+      if(!current || stopIndex<0) return;
+      if(!confirm('Delete this photo from the scenario?')) return;
+      current.stops.splice(stopIndex,1);
+      const { id, ...payload } = current;
+      await set(ref(db,'scenarios/'+current.id), payload);
+      stopIndex=-1; fabricCanvas.clear(); baseImage=null; renderStopsThumbs(); metaMsg.textContent='Photo deleted.';
+    }catch(e){ metaMsg.textContent=String(e.message||e); }
+  };
 })();
 </script>
 </body>
