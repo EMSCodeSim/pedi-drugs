@@ -96,14 +96,8 @@
       <img id="preview" class="media" style="display:none" alt="Preview" />
 
       <div class="grid g2">
-        <div>
-          <label>Latitude</label>
-          <input id="lat" readonly placeholder="Auto-captured…" />
-        </div>
-        <div>
-          <label>Longitude</label>
-          <input id="lng" readonly placeholder="Auto-captured…" />
-        </div>
+        <div><label>Latitude</label><input id="lat" readonly placeholder="Auto-captured…" /></div>
+        <div><label>Longitude</label><input id="lng" readonly placeholder="Auto-captured…" /></div>
       </div>
       <div class="row">
         <button id="retryGPS" class="btn ghost" style="width:auto">Retry GPS</button>
@@ -111,18 +105,9 @@
       </div>
 
       <div class="grid g3">
-        <div>
-          <label>Radius (meters)</label>
-          <input id="radius" type="number" value="50" min="5" step="5" />
-        </div>
-        <div>
-          <label>Stop title (optional)</label>
-          <input id="stopTitle" placeholder="Short label" />
-        </div>
-        <div>
-          <label>…or Image URL</label>
-          <input id="imageUrl" placeholder="https://…" />
-        </div>
+        <div><label>Radius (meters)</label><input id="radius" type="number" value="50" min="5" step="5" /></div>
+        <div><label>Stop title (optional)</label><input id="stopTitle" placeholder="Short label" /></div>
+        <div><label>…or Image URL</label><input id="imageUrl" placeholder="https://…" /></div>
       </div>
 
       <label>Text / Caption (optional)</label>
@@ -141,30 +126,71 @@
     <p id="countNote" class="hint">0 photo(s)</p>
   </div>
 
-  <!-- Edit Scenario pane (simple) -->
+  <!-- Edit Scenario pane -->
   <div id="editPane" class="card" style="display:none">
     <h3 style="margin:0 0 8px">Edit Scenario</h3>
-    <div id="scList"></div>
-    <div id="editBlock" style="display:none;margin-top:12px">
-      <div class="divider"></div>
-      <label>Scenario name</label>
-      <input id="editTitle" />
-      <label>Dispatch information</label>
-      <textarea id="editDispatch"></textarea>
-      <label>Active?</label>
-      <select id="editActive">
-        <option value="true">Yes</option>
-        <option value="false">No</option>
-      </select>
-      <div class="divider"></div>
-      <h4 style="margin:0 0 8px">Existing photos</h4>
-      <div id="editGallery" class="gallery"></div>
-      <div class="row" style="margin-top:8px">
-        <button id="saveScenarioChanges" class="btn primary" style="flex:1">Save Changes</button>
-        <button id="backToList" class="btn ghost" style="flex:1">Back</button>
+
+    <!-- List view -->
+    <div id="editListView">
+      <div id="scList"></div>
+      <div id="editBlock" style="display:none;margin-top:12px">
+        <div class="divider"></div>
+        <label>Scenario name</label>
+        <input id="editTitle" />
+        <label>Dispatch information</label>
+        <textarea id="editDispatch"></textarea>
+        <label>Active?</label>
+        <select id="editActive"><option value="true">Yes</option><option value="false">No</option></select>
+
+        <div class="divider"></div>
+        <div class="row" style="justify-content:space-between">
+          <h4 style="margin:0">Photos</h4>
+          <button id="editAddPhoto" class="btn accent" style="width:auto">Add Photo</button>
+        </div>
+        <div id="editGallery" class="gallery" style="margin-top:8px"></div>
+
+        <div class="row" style="margin-top:10px">
+          <button id="saveScenarioChanges" class="btn primary" style="flex:1">Save Scenario Changes</button>
+          <button id="backToList" class="btn ghost" style="flex:1">Back</button>
+        </div>
+        <p id="editStatus" class="hint"></p>
       </div>
     </div>
-    <p id="editStatus" class="hint"></p>
+
+    <!-- Stop editor view (shows when a thumbnail is tapped) -->
+    <div id="stopEditorView" style="display:none">
+      <div class="row" style="justify-content:space-between">
+        <h4 style="margin:0">Edit Photo</h4>
+        <button id="backToScenario" class="btn ghost" style="width:auto">Back to Scenario</button>
+      </div>
+
+      <img id="se_preview" class="media" alt="Preview" />
+      <div class="grid g2" style="margin-top:8px">
+        <div><label>Latitude</label><input id="se_lat" /></div>
+        <div><label>Longitude</label><input id="se_lng" /></div>
+      </div>
+      <div class="row" style="margin-top:6px">
+        <button id="se_useGPS" class="btn primary" style="width:auto">Use my location</button>
+        <span id="se_gpsStatus" class="hint"></span>
+      </div>
+
+      <div class="grid g3" style="margin-top:8px">
+        <div><label>Radius (m)</label><input id="se_radius" type="number" min="5" step="5" /></div>
+        <div><label>Stop title</label><input id="se_title" /></div>
+        <div><label>Replace photo</label><input id="se_file" type="file" accept="image/*" capture="environment" /></div>
+      </div>
+      <label class="hint">…or Image URL</label>
+      <input id="se_url" placeholder="https://…">
+
+      <label style="margin-top:8px">Caption / Text</label>
+      <textarea id="se_caption"></textarea>
+
+      <div class="row" style="margin-top:10px">
+        <button id="se_saveStop" class="btn primary" style="flex:1">Save Stop Changes</button>
+        <button id="se_deleteStop" class="btn danger" style="flex:1">Delete Stop</button>
+      </div>
+      <p id="se_info" class="hint"></p>
+    </div>
   </div>
 
   <div id="error"></div>
@@ -186,10 +212,16 @@
     c.getContext('2d').drawImage(img,0,0,w,h);
     return c.toDataURL('image/jpeg', quality);
   };
-  const thumb = (src) => {
+  const makeThumb = (src) => {
     const img = document.createElement('img'); img.className='thumb'; img.alt='thumb'; img.src=src || '';
     img.onerror = () => { img.src="data:image/svg+xml;utf8,"+encodeURIComponent("<svg xmlns='http://www.w3.org/2000/svg' width='120' height='120'><rect width='100%' height='100%' fill='#0a2230'/><text x='50%' y='50%' fill='#9ecbd6' font-size='12' text-anchor='middle'>No image</text></svg>"); };
     return img;
+  };
+  const setPreviewSafe = (imgEl, stop) => {
+    imgEl.src = stop.imageData || stop.imageURL || '';
+    imgEl.onerror = () => {
+      imgEl.src = "data:image/svg+xml;utf8,"+encodeURIComponent("<svg xmlns='http://www.w3.org/2000/svg' width='600' height='400'><rect width='100%' height='100%' fill='#0a2230'/><text x='50%' y='50%' fill='#9ecbd6' font-size='18' text-anchor='middle'>Image failed to load</text></svg>");
+    };
   };
 
   // ---------- Firebase (RTDB only) ----------
@@ -237,25 +269,44 @@
   const countNote = $('countNote');
 
   const editPane = $('editPane');
+  const editListView = $('editListView');
   const scList = $('scList');
   const editBlock = $('editBlock');
   const editTitle = $('editTitle');
   const editDispatch = $('editDispatch');
   const editActive = $('editActive');
   const editGallery = $('editGallery');
+  const editAddPhoto = $('editAddPhoto');
   const saveScenarioChanges = $('saveScenarioChanges');
   const backToList = $('backToList');
   const editStatus = $('editStatus');
 
-  // ---------- State (avoid duplicate names) ----------
+  const stopEditorView = $('stopEditorView');
+  const se_preview = $('se_preview');
+  const se_lat = $('se_lat');
+  const se_lng = $('se_lng');
+  const se_useGPS = $('se_useGPS');
+  const se_gpsStatus = $('se_gpsStatus');
+  const se_radius = $('se_radius');
+  const se_title = $('se_title');
+  const se_file = $('se_file');
+  const se_url = $('se_url');
+  const se_caption = $('se_caption');
+  const se_saveStop = $('se_saveStop');
+  const se_deleteStop = $('se_deleteStop');
+  const backToScenario = $('backToScenario');
+  const se_info = $('se_info');
+
+  // ---------- State ----------
   let createState = {
     scenarioNamed: false,
     scenarioTitle: '',
     dispatchInfo: '',
     photos: []
   };
-  let scenarioList = [];          // was "scenarios" (renamed)
-  let editingScenario = null;     // was "editing"  (renamed)
+  let scenarioList = [];
+  let editingScenario = null;
+  let editingStopIndex = -1; // index being edited (in stop editor)
 
   // ---------- Mode switching ----------
   function showCreate() {
@@ -270,6 +321,8 @@
     createPane.style.display = 'none';
     stickyActions.style.display = 'none';
     editPane.style.display = 'block';
+    stopEditorView.style.display = 'none';
+    editListView.style.display = 'block';
     renderScenarioList();
   }
   btnCreateMode.onclick = showCreate;
@@ -295,23 +348,22 @@
     sizeInfo.textContent = '';
     gpsStatus.textContent = 'Waiting for photo to request location…';
   }
-  function renderGallery() {
+  function renderCreateGallery() {
     gallery.innerHTML = '';
-    createState.photos.forEach(p => gallery.appendChild(thumb(p.imageData || p.imageURL)));
+    createState.photos.forEach(p => gallery.appendChild(makeThumb(p.imageData || p.imageURL)));
     countNote.textContent = `${createState.photos.length} photo(s)`;
   }
-  async function captureGPS() {
-    gpsStatus.textContent = 'Requesting GPS…';
+  async function captureGPS(targetLatEl, targetLngEl, statusEl) {
+    if (statusEl) statusEl.textContent = 'Requesting GPS…';
     return new Promise((resolve) => {
-      const onOk = (pos)=>{ lat.value = pos.coords.latitude.toFixed(6); lng.value = pos.coords.longitude.toFixed(6); gpsStatus.textContent = `GPS ok (±${Math.round(pos.coords.accuracy)}m)`; resolve(true); };
-      const onErr = (err)=>{ gpsStatus.textContent = 'Location error: ' + err.message; resolve(false); };
-      try {
-        navigator.geolocation.getCurrentPosition(onOk, onErr, { enableHighAccuracy:true, timeout:10000, maximumAge:0 });
-      } catch (e) { gpsStatus.textContent = 'Geolocation not supported'; resolve(false); }
+      const onOk = (pos)=>{ targetLatEl.value = pos.coords.latitude.toFixed(6); targetLngEl.value = pos.coords.longitude.toFixed(6); if(statusEl) statusEl.textContent = `GPS ok (±${Math.round(pos.coords.accuracy)}m)`; resolve(true); };
+      const onErr = (err)=>{ if(statusEl) statusEl.textContent = 'Location error: ' + err.message; resolve(false); };
+      try { navigator.geolocation.getCurrentPosition(onOk, onErr, { enableHighAccuracy:true, timeout:10000, maximumAge:0 }); }
+      catch (e) { if(statusEl) statusEl.textContent = 'Geolocation not supported'; resolve(false); }
     });
   }
 
-  // Auto-GPS when a photo file is picked
+  // Auto-GPS when a photo file is picked (create)
   file.onchange = async (e) => {
     const f = e.target.files?.[0]; if (!f) return;
     sizeInfo.textContent = 'Compressing image…';
@@ -320,12 +372,12 @@
       preview.src = dataURL; preview.style.display = 'block';
       const bytes = Math.ceil((dataURL.length - 'data:image/jpeg;base64,'.length) * 3/4);
       sizeInfo.textContent = `Image ~${Math.round(bytes/1024)} KB`;
-      await captureGPS();
+      await captureGPS(lat, lng, gpsStatus);
       savePhoto.dataset.pendingImageData = dataURL;
       savePhoto.dataset.pendingImageURL = '';
     } catch (err) { sizeInfo.textContent = 'Failed to process image.'; }
   };
-  retryGPS.onclick = async () => { await captureGPS(); };
+  retryGPS.onclick = async () => { await captureGPS(lat, lng, gpsStatus); };
 
   // Sticky actions
   topAddPhoto.onclick = () => { resetPhotoForm(true); window.scrollTo({ top: 0, behavior: 'smooth' }); file.focus(); };
@@ -347,7 +399,7 @@
     } catch (e) { alert(e.message || e); }
   };
 
-  // Save Photo
+  // Save Photo (create)
   savePhoto.onclick = async () => {
     try {
       if (!createState.scenarioNamed) {
@@ -371,7 +423,7 @@
         imageData: inlineData || null, imageURL: inlineData ? null : url
       };
       createState.photos.push(stop);
-      renderGallery();
+      renderCreateGallery();
       delete savePhoto.dataset.pendingImageData; delete savePhoto.dataset.pendingImageURL;
       resetPhotoForm(true);
       alert('Photo saved to scenario.');
@@ -389,16 +441,18 @@
   function renderScenarioList() {
     const list = $('scList'); list.innerHTML = '';
     editBlock.style.display = 'none';
+    stopEditorView.style.display = 'none';
+    editListView.style.display = 'block';
     if (!scenarioList.length) { editStatus.textContent = 'No scenarios yet.'; return; }
     editStatus.textContent = `${scenarioList.length} scenario(s)`;
     scenarioList.forEach(sc => {
       const row = document.createElement('div'); row.className = 'row'; row.style.padding='8px 0';
       const first = (sc.stops && sc.stops[0]) || {};
-      row.appendChild(thumb(first.imageData || first.imageURL));
+      row.appendChild(makeThumb(first.imageData || first.imageURL));
       const meta = document.createElement('div'); meta.style.flex='1';
       meta.innerHTML = `<div style="font-weight:800">${sc.title || '(untitled)'}</div>
                         <div class="hint">${(sc.stops?.length || 0)} photo(s) • ${sc.active ? 'Active' : 'Inactive'}</div>
-                        ${sc.dispatch ? `<div class="hint">Dispatch: ${String(sc.dispatch).slice(0,120)}</div>` : ''}`;
+                        ${sc.dispatch ? `<div class="hint">Dispatch: ${String(sc.dispatch).slice(0,160)}</div>` : ''}`;
       row.appendChild(meta);
       const openBtn = document.createElement('button'); openBtn.className='btn ghost'; openBtn.textContent='Open';
       openBtn.onclick = () => openEditor(sc.id);
@@ -415,26 +469,120 @@
     editTitle.value = editingScenario.title || '';
     editDispatch.value = editingScenario.dispatch || '';
     editActive.value = editingScenario.active ? 'true' : 'false';
+
+    // thumbnails
     editGallery.innerHTML = '';
-    (editingScenario.stops || []).forEach(st => editGallery.appendChild(thumb(st.imageData || st.imageURL)));
+    (editingScenario.stops || []).forEach((st, idx) => {
+      const t = makeThumb(st.imageData || st.imageURL);
+      t.style.cursor = 'pointer';
+      t.title = 'Tap to edit';
+      t.onclick = () => openStopEditor(idx);
+      editGallery.appendChild(t);
+    });
   }
 
+  // Add Photo (Edit mode) → adds a new stop and immediately opens Stop Editor
+  editAddPhoto.onclick = () => {
+    if (!editingScenario) return;
+    (editingScenario.stops ||= []).push({
+      title:'', caption:'', lat:'', lng:'', radiusMeters:50, active:true, createdAt:Date.now(), imageData:null, imageURL:''
+    });
+    openStopEditor(editingScenario.stops.length - 1);
+  };
+
+  // Stop editor
+  function openStopEditor(index) {
+    editingStopIndex = index;
+    const st = editingScenario.stops[index];
+    if (!st) return;
+    editListView.style.display = 'none';
+    stopEditorView.style.display = 'block';
+    setPreviewSafe(se_preview, st);
+    se_lat.value = st.lat ?? '';
+    se_lng.value = st.lng ?? '';
+    se_radius.value = st.radiusMeters ?? 50;
+    se_title.value = st.title ?? '';
+    se_url.value = st.imageURL ?? '';
+    se_caption.value = st.caption ?? '';
+    se_info.textContent = '';
+    se_file.value = '';
+  }
+
+  backToScenario.onclick = () => {
+    stopEditorView.style.display = 'none';
+    editListView.style.display = 'block';
+    // re-render thumbs in case image changed
+    openEditor(editingScenario.id);
+  };
+
+  se_useGPS.onclick = async () => {
+    await captureGPS(se_lat, se_lng, se_gpsStatus);
+  };
+
+  se_file.onchange = async (e) => {
+    const f = e.target.files?.[0]; if (!f) return;
+    se_info.textContent = 'Compressing image…';
+    const data = await compressToDataURL(f);
+    se_preview.src = data;
+    se_info.textContent = `New image selected (~${Math.round((data.length - 'data:image/jpeg;base64,'.length) * 3/4 / 1024)} KB). Not saved yet.`;
+    se_preview.dataset.newImageData = data; // temp stash
+  };
+
+  se_saveStop.onclick = async () => {
+    try{
+      if (!editingScenario || editingStopIndex < 0) return;
+      const st = editingScenario.stops[editingStopIndex];
+      st.lat = parseFloat(se_lat.value);
+      st.lng = parseFloat(se_lng.value);
+      if (Number.isNaN(st.lat) || Number.isNaN(st.lng)) throw new Error('Please provide valid GPS coordinates or use “Use my location”.');
+      st.radiusMeters = Math.max(5, parseInt(se_radius.value || '50', 10));
+      st.title = (se_title.value || '').trim();
+      st.caption = (se_caption.value || '').trim();
+      const url = (se_url.value || '').trim();
+      // prefer newly uploaded image, otherwise keep URL if provided
+      if (se_preview.dataset.newImageData) {
+        st.imageData = se_preview.dataset.newImageData;
+        st.imageURL = null;
+      } else if (url) {
+        st.imageURL = url;
+        if (!st.imageData) st.imageData = null;
+      }
+      // Persist *only this scenario* (full payload write for simplicity)
+      const { id, ...payload } = editingScenario;
+      await set(ref(db, 'scenarios/' + editingScenario.id), payload);
+      se_preview.dataset.newImageData = '';
+      se_info.textContent = 'Saved!';
+    }catch(err){ se_info.textContent = String(err.message || err); }
+  };
+
+  se_deleteStop.onclick = async () => {
+    try{
+      if (!editingScenario || editingStopIndex < 0) return;
+      editingScenario.stops.splice(editingStopIndex, 1);
+      const { id, ...payload } = editingScenario;
+      await set(ref(db, 'scenarios/' + editingScenario.id), payload);
+      // Back to scenario list view for that scenario
+      stopEditorView.style.display = 'none';
+      editListView.style.display = 'block';
+      openEditor(editingScenario.id);
+    }catch(err){ se_info.textContent = String(err.message || err); }
+  };
+
+  // Scenario meta save
   saveScenarioChanges.onclick = async () => {
-    try {
+    try{
       if (!editingScenario) return;
       editingScenario.title = editTitle.value.trim() || '(untitled)';
       editingScenario.dispatch = (editDispatch.value || '').trim();
       editingScenario.active = (editActive.value === 'true');
       const { id, ...payload } = editingScenario;
       await set(ref(db, 'scenarios/' + editingScenario.id), payload);
-      alert('Changes saved.');
-      renderScenarioList();
-      editBlock.style.display = 'none';
-    } catch (e) { alert(e.message || e); }
+      alert('Scenario changes saved.');
+    }catch(err){ alert(err.message || err); }
   };
   backToList.onclick = () => { editBlock.style.display = 'none'; };
 
-  // Start on the chooser (no auto-switch)
+  // ---------- Start on chooser ----------
 })();
 </script>
 </body>
