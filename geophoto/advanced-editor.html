@@ -48,14 +48,18 @@
 
 <div id="gate" class="desktopGate hidden">
   <h2 style="margin:0 0 8px">Use a computer to edit</h2>
-  <p>This advanced editor is only available on desktop/laptop. Please open this page on a computer for large-canvas photo editing, crop, and overlays.</p>
+  <p>This advanced editor is intended for desktop/laptop. If you’re on a touchscreen laptop or a narrow window, you can still proceed.</p>
+  <div class="row" style="margin-top:10px">
+    <button id="forceGo" class="btn">Continue anyway</button>
+  </div>
+  <p class="pill" id="gateInfo">Gate check…</p>
 </div>
 
 <div id="app" class="app hidden">
   <!-- Left: load/select -->
-  <div class="col">
+  <div class="col" id="leftCol">
     <div class="row" style="justify-content:space-between">
-      <div class="pill">Firebase RTDB</div>
+      <div class="pill" id="statusPill">Loading…</div>
       <button id="refresh" class="btn secondary">Refresh</button>
     </div>
     <label>Scenario</label>
@@ -107,7 +111,6 @@
       <button id="rotateR" class="btn secondary">Rotate ⟳</button>
       <button id="flipH" class="btn secondary">Flip H</button>
       <button id="flipV" class="btn secondary">Flip V</button>
-
       <span class="pill" id="canvasInfo">Canvas</span>
       <button id="saveImage" class="btn">Save Image to RTDB</button>
     </div>
@@ -151,28 +154,33 @@
   </div>
 </div>
 
-<!-- Fabric.js for canvas editing -->
-<script src="https://cdnjs.cloudflare.com/ajax/libs/fabric.js/5.3.0/fabric.min.js" integrity="sha512-l8sQf0S0mV3mJu2cQy8X9Qn9qWQmW6T49z9q6b3v0S8ix6h2w5OKXr7bVj5I8x1Xc1xV7mWwFhK8K5Gq8O2ZcA==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/fabric.js/5.3.0/fabric.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
 
 <script type="module">
 (async () => {
-  // --- Desktop gate ---
+  // ----- Desktop gate (relaxed) -----
   const gate=document.getElementById('gate');
   const app=document.getElementById('app');
-  const isCoarse = matchMedia('(pointer: coarse)').matches;
-  const narrow = window.innerWidth < 960;
-  if (isCoarse || narrow) {
-    gate.classList.remove('hidden');
-    app.classList.add('hidden');
-    return;
-  } else {
-    gate.classList.add('hidden');
-    app.classList.remove('hidden');
-  }
+  const gateInfo=document.getElementById('gateInfo');
+  const forceGo=document.getElementById('forceGo');
 
-  // --- Firebase RTDB ---
+  const urlForce = new URLSearchParams(location.search).get('force') === '1';
+  function decideGate(){
+    const coarse = matchMedia('(pointer: coarse)').matches; // true on many touch laptops
+    const narrow = window.innerWidth < 1024;                // require roomy width
+    gateInfo.textContent = `pointer: ${coarse?'coarse':'fine'} • width: ${window.innerWidth}px`;
+    if (urlForce || (!narrow)) { // allow if width is OK, even if coarse
+      gate.classList.add('hidden'); app.classList.remove('hidden'); return;
+    }
+    gate.classList.remove('hidden'); app.classList.add('hidden');
+  }
+  forceGo.onclick=()=>{ history.replaceState(null,'',location.pathname); app.classList.remove('hidden'); gate.classList.add('hidden'); };
+  decideGate();
+  window.addEventListener('resize', decideGate);
+
+  // ----- Firebase -----
   const [{ initializeApp }] = await Promise.all([ import("https://www.gstatic.com/firebasejs/10.12.4/firebase-app.js") ]);
-  const [{ getDatabase, ref, onValue, set }] = await Promise.all([ import("https://www.gstatic.com/firebasejs/10.12.4/firebase-database.js") ]);
+  const [{ getDatabase, ref, onValue, get, set }] = await Promise.all([ import("https://www.gstatic.com/firebasejs/10.12.4/firebase-database.js") ]);
   const firebaseConfig = {
     apiKey:"AIzaSyDM6DpRSeZueVKRpbyJyDmhf8WY66KyCDk",
     authDomain:"dailyquiz-d5279.firebaseapp.com",
@@ -184,55 +192,54 @@
   const appFB = initializeApp(firebaseConfig);
   const db = getDatabase(appFB);
 
-  // --- DOM refs ---
-  const scenarioSel = document.getElementById('scenarioSel');
-  const stopList = document.getElementById('stopList');
-  const metaTitle = document.getElementById('metaTitle');
-  const metaDispatch = document.getElementById('metaDispatch');
-  const refreshBtn = document.getElementById('refresh');
+  // ----- DOM refs -----
+  const statusPill=document.getElementById('statusPill');
+  const scenarioSel=document.getElementById('scenarioSel');
+  const stopList=document.getElementById('stopList');
+  const refreshBtn=document.getElementById('refresh');
 
-  const stopTitle = document.getElementById('stopTitle');
-  const stopCaption = document.getElementById('stopCaption');
-  const stopLat = document.getElementById('stopLat');
-  const stopLng = document.getElementById('stopLng');
-  const stopRadius = document.getElementById('stopRadius');
-  const useGPS = document.getElementById('useGPS');
-  const saveMeta = document.getElementById('saveMeta');
-  const metaMsg = document.getElementById('metaMsg');
+  const metaTitle=document.getElementById('metaTitle');
+  const metaDispatch=document.getElementById('metaDispatch');
 
-  const replaceFile = document.getElementById('replaceFile');
-  const replaceApply = document.getElementById('replaceApply');
-  const deleteStop = document.getElementById('deleteStop');
-  const exportPNG = document.getElementById('exportPNG');
+  const stopTitle=document.getElementById('stopTitle');
+  const stopCaption=document.getElementById('stopCaption');
+  const stopLat=document.getElementById('stopLat');
+  const stopLng=document.getElementById('stopLng');
+  const stopRadius=document.getElementById('stopRadius');
+  const useGPS=document.getElementById('useGPS');
+  const saveMeta=document.getElementById('saveMeta');
+  const metaMsg=document.getElementById('metaMsg');
 
-  const cInfo = document.getElementById('canvasInfo');
-  const fitBtn = document.getElementById('fit');
-  const zoomIn = document.getElementById('zoomIn');
-  const zoomOut = document.getElementById('zoomOut');
-  const rotateL = document.getElementById('rotateL');
-  const rotateR = document.getElementById('rotateR');
-  const flipH = document.getElementById('flipH');
-  const flipV = document.getElementById('flipV');
-  const saveImage = document.getElementById('saveImage');
+  const replaceFile=document.getElementById('replaceFile');
+  const replaceApply=document.getElementById('replaceApply');
+  const deleteStop=document.getElementById('deleteStop');
+  const exportPNG=document.getElementById('exportPNG');
 
-  const cropStart = document.getElementById('cropStart');
-  const cropApply = document.getElementById('cropApply');
-  const cropCancel = document.getElementById('cropCancel');
+  const cInfo=document.getElementById('canvasInfo');
+  const fitBtn=document.getElementById('fit');
+  const zoomIn=document.getElementById('zoomIn');
+  const zoomOut=document.getElementById('zoomOut');
+  const rotateL=document.getElementById('rotateL');
+  const rotateR=document.getElementById('rotateR');
+  const flipH=document.getElementById('flipH');
+  const flipV=document.getElementById('flipV');
+  const saveImage=document.getElementById('saveImage');
 
-  const overlayOpacity = document.getElementById('overlayOpacity');
-  const bringFront = document.getElementById('bringFront');
-  const sendBack = document.getElementById('sendBack');
-  const deleteObj = document.getElementById('deleteObj');
-  const overlayBtns = Array.from(document.querySelectorAll('.ol'));
+  const cropStart=document.getElementById('cropStart');
+  const cropApply=document.getElementById('cropApply');
+  const cropCancel=document.getElementById('cropCancel');
 
-  // --- State ---
-  let scenarios=[];
-  let current=null; // {id, ...}
-  let stopIndex=-1; // which stop is loaded
+  const overlayOpacity=document.getElementById('overlayOpacity');
+  const bringFront=document.getElementById('bringFront');
+  const sendBack=document.getElementById('sendBack');
+  const deleteObj=document.getElementById('deleteObj');
+  const overlayBtns=Array.from(document.querySelectorAll('.ol'));
+
+  // ----- State -----
+  let scenarios=[], current=null, stopIndex=-1;
   let fabricCanvas, baseImage=null, cropRect=null, cropMode=false;
 
-  // --- Fabric canvas ---
-  const canvasEl=document.getElementById('c');
+  // ----- Fabric canvas -----
   fabricCanvas = new fabric.Canvas('c', { backgroundColor:'#061621', preserveObjectStacking:true, selection:true });
   function fitCanvas(){
     fabricCanvas.setHeight(window.innerHeight - 160);
@@ -247,11 +254,9 @@
     return new Promise((resolve,reject)=>{
       fabric.Image.fromURL(dataURL, (img)=>{
         if (!img) { reject(new Error('Image load failed')); return; }
-        // Remove old base image if any (objects without selectable)
         if (baseImage) fabricCanvas.remove(baseImage);
         baseImage = img;
         baseImage.selectable=false; baseImage.evented=false;
-        // scale to fit canvas
         const cw=fabricCanvas.getWidth(), ch=fabricCanvas.getHeight();
         const scale=Math.min(cw/img.width, ch/img.height);
         baseImage.scale(scale);
@@ -264,128 +269,129 @@
       }, { crossOrigin:'anonymous' });
     });
   }
+  const dataURLFromCanvas = () => fabricCanvas.toDataURL({ format:'png', quality:0.92 });
 
-  function dataURLFromCanvas(){
-    // Export with current canvas size—overlays baked in
-    return fabricCanvas.toDataURL({ format:'png', quality:0.92 });
-  }
-
-  // --- Load scenarios ---
-  function populateList() {
+  // ----- Scenario loading (robust with diagnostics) -----
+  function showStatus(msg){ statusPill.textContent = msg; }
+  function populateList(){
     scenarioSel.innerHTML = '<option value="">Select scenario…</option>';
-    scenarios.filter(s=>s).forEach(sc=>{
-      const o=document.createElement('option'); o.value=sc.id; o.textContent=sc.title||'(untitled)'; scenarioSel.appendChild(o);
+    scenarios.forEach(sc => {
+      const o=document.createElement('option');
+      o.value=sc.id;
+      o.textContent=(sc.title||'(untitled)') + (sc.active? '':' (inactive)');
+      scenarioSel.appendChild(o);
     });
   }
-
-  function renderStopsThumbs() {
+  function renderStopsThumbs(){
     stopList.innerHTML='';
-    if(!current || !current.stops || !current.stops.length){
-      stopList.innerHTML = '<div class="pill">No photos</div>'; return;
-    }
+    if(!current?.stops?.length){ stopList.innerHTML='<div class="pill">No photos</div>'; return; }
     current.stops.forEach((s,idx)=>{
       const img=document.createElement('img');
       img.className='thumb'+(idx===stopIndex?' active':'');
       img.src=s.imageData||s.imageURL||'';
-      img.title = s.title||`Stop ${idx+1}`;
-      img.onerror = ()=>{ img.src="data:image/svg+xml;utf8,"+encodeURIComponent("<svg xmlns='http://www.w3.org/2000/svg' width='80' height='80'><rect width='100%' height='100%' fill='#0a2230'/><text x='50%' y='50%' fill='#9ecbd6' font-size='10' text-anchor='middle'>no image</text></svg>"); };
+      img.title=s.title||`Stop ${idx+1}`;
+      img.onerror=()=>{ img.src="data:image/svg+xml;utf8,"+encodeURIComponent("<svg xmlns='http://www.w3.org/2000/svg' width='80' height='80'><rect width='100%' height='100%' fill='#0a2230'/><text x='50%' y='50%' fill='#9ecbd6' font-size='10' text-anchor='middle'>no image</text></svg>"); };
       img.onclick=()=>loadStop(idx);
       stopList.appendChild(img);
     });
   }
-
-  function updateMetaHeader() {
-    metaTitle.textContent = current ? (current.title||'(untitled)') : '(title)';
-    metaDispatch.textContent = 'Dispatch: ' + (current && current.dispatch ? String(current.dispatch).slice(0,120) : '(none)');
+  function updateMetaHeader(){
+    metaTitle.textContent=current ? (current.title||'(untitled)') : '(title)';
+    metaDispatch.textContent='Dispatch: ' + (current?.dispatch ? String(current.dispatch).slice(0,120) : '(none)');
   }
 
-  // Fetch once and subscribe
-  onValue(ref(db,'scenarios'), snap=>{
-    const val=snap.val()||{};
-    scenarios = Object.entries(val).map(([id,s])=>({id,...s})).sort((a,b)=>(b.createdAt||0)-(a.createdAt||0));
-    populateList();
-    if(current){
-      const fresh = scenarios.find(sc=>sc.id===current.id);
-      if (fresh) { current=fresh; renderStopsThumbs(); updateMetaHeader(); }
-    }
-  });
-  refreshBtn.onclick=populateList;
+  try {
+    const scenariosRef = ref(db,'scenarios');
+    onValue(scenariosRef, snap=>{
+      const v = snap.val() || {};
+      scenarios = Object.entries(v).map(([id,s])=>({id,...s})).sort((a,b)=>(b.createdAt||0)-(a.createdAt||0));
+      populateList();
+      showStatus(`${scenarios.length} scenario(s) loaded`);
+      if (current) {
+        const fresh=scenarios.find(sc=>sc.id===current.id);
+        if (fresh){ current=fresh; renderStopsThumbs(); updateMetaHeader(); }
+      }
+    }, err => { showStatus('RTDB onValue error: '+(err?.message||err)); });
 
+    // one-time get with timeout (diagnostics)
+    const timeout = new Promise((_,rej)=>setTimeout(()=>rej(new Error('RTDB timeout (8s)')),8000));
+    await Promise.race([ get(scenariosRef), timeout ]).then(snap=>{
+      if (!snap.exists()) showStatus('Connected but /scenarios is empty.');
+    }).catch(e=> showStatus('RTDB connection issue: '+e.message));
+  } catch (e) {
+    showStatus('Firebase init/permission error: ' + (e?.message||e));
+  }
+
+  refreshBtn.onclick = populateList;
+
+  // ----- Select scenario & load stop -----
   scenarioSel.onchange = ()=>{
-    const id = scenarioSel.value;
+    const id=scenarioSel.value;
     current = scenarios.find(s=>s.id===id) || null;
-    stopIndex = -1;
+    stopIndex=-1;
     updateMetaHeader();
     renderStopsThumbs();
-    // clear canvas
-    fabricCanvas.clear();
-    baseImage=null;
+    fabricCanvas.clear(); baseImage=null; cropRect=null; cropMode=false;
     fitCanvas();
   };
 
-  // --- Load a stop into canvas ---
   async function loadStop(idx){
     if(!current) return;
     const s=current.stops[idx]; if(!s) return;
-    stopIndex = idx;
-    // UI populate
-    stopTitle.value = s.title||'';
-    stopCaption.value = s.caption||'';
-    stopLat.value = (s.lat ?? '').toString();
-    stopLng.value = (s.lng ?? '').toString();
-    stopRadius.value = (s.radiusMeters ?? 50).toString();
+    stopIndex=idx;
+    stopTitle.value=s.title||'';
+    stopCaption.value=s.caption||'';
+    stopLat.value=(s.lat ?? '').toString();
+    stopLng.value=(s.lng ?? '').toString();
+    stopRadius.value=(s.radiusMeters ?? 50).toString();
     Array.from(stopList.children).forEach((n,i)=>n.classList.toggle('active', i===idx));
-    // Canvas
     fabricCanvas.clear(); baseImage=null; cropRect=null; cropMode=false;
-    const src = s.imageData || s.imageURL;
-    if (!src) { metaMsg.textContent='No image in this stop.'; return; }
+    const src=s.imageData||s.imageURL;
+    if(!src){ metaMsg.textContent='No image in this stop.'; return; }
     await setBaseImageFromDataURL(src);
   }
 
-  // --- Meta save / GPS ---
+  // ----- Meta save / GPS -----
   useGPS.onclick=()=>{
     navigator.geolocation.getCurrentPosition(p=>{
-      stopLat.value = p.coords.latitude.toFixed(6);
-      stopLng.value = p.coords.longitude.toFixed(6);
-      metaMsg.textContent = 'GPS captured.';
+      stopLat.value=p.coords.latitude.toFixed(6);
+      stopLng.value=p.coords.longitude.toFixed(6);
+      metaMsg.textContent='GPS captured.';
     }, e=>{ metaMsg.textContent='GPS error: '+e.message; }, { enableHighAccuracy:true, timeout:10000 });
   };
-
   saveMeta.onclick=async()=>{
     try{
-      if (!current || stopIndex<0) throw new Error('Select a stop first.');
-      const s = current.stops[stopIndex];
-      s.title = stopTitle.value.trim();
-      s.caption = stopCaption.value.trim();
-      s.lat = parseFloat(stopLat.value);
-      s.lng = parseFloat(stopLng.value);
-      s.radiusMeters = Math.max(5, parseInt(stopRadius.value||'50',10));
-      if (Number.isNaN(s.lat)||Number.isNaN(s.lng)) throw new Error('Invalid GPS coordinates.');
+      if(!current || stopIndex<0) throw new Error('Select a stop first.');
+      const s=current.stops[stopIndex];
+      s.title=stopTitle.value.trim();
+      s.caption=stopCaption.value.trim();
+      s.lat=parseFloat(stopLat.value);
+      s.lng=parseFloat(stopLng.value);
+      s.radiusMeters=Math.max(5, parseInt(stopRadius.value||'50',10));
+      if(Number.isNaN(s.lat)||Number.isNaN(s.lng)) throw new Error('Invalid GPS coordinates.');
       const { id, ...payload } = current;
       await set(ref(db,'scenarios/'+current.id), payload);
       metaMsg.textContent='Meta saved.';
     }catch(err){ metaMsg.textContent=String(err.message||err); }
   };
 
-  // --- Replace image ---
+  // ----- Replace / Export / Save image -----
   function readFileAsDataURL(f){ return new Promise((res,rej)=>{ const r=new FileReader(); r.onload=()=>res(r.result); r.onerror=rej; r.readAsDataURL(f); }); }
   replaceApply.onclick=async()=>{
     const f=replaceFile.files?.[0]; if(!f){ metaMsg.textContent='Choose a file first.'; return; }
     const data=await readFileAsDataURL(f);
     await setBaseImageFromDataURL(data);
   };
-
-  // --- Export / Save image to RTDB ---
   exportPNG.onclick=()=>{
     const url=dataURLFromCanvas();
     const a=document.createElement('a'); a.href=url; a.download=(current?.title||'image')+'-edited.png'; a.click();
   };
   saveImage.onclick=async()=>{
     try{
-      if (!current || stopIndex<0) throw new Error('Select a stop first.');
+      if(!current || stopIndex<0) throw new Error('Select a stop first.');
       const url=dataURLFromCanvas();
-      current.stops[stopIndex].imageData = url;
-      current.stops[stopIndex].imageURL = null;
+      current.stops[stopIndex].imageData=url;
+      current.stops[stopIndex].imageURL=null;
       const { id, ...payload } = current;
       await set(ref(db,'scenarios/'+current.id), payload);
       metaMsg.textContent='Image saved to RTDB.';
@@ -393,117 +399,79 @@
     }catch(err){ metaMsg.textContent=String(err.message||err); }
   };
 
-  // --- Canvas commands ---
-  fitBtn.onclick=()=>{ if(!baseImage) return; setBaseImageFromDataURL(baseImage.toDataURL({})); }; // quick reset positioning
-  zoomIn.onclick=()=>fabricCanvas.setZoom(fabricCanvas.getZoom()*1.1);
-  zoomOut.onclick=()=>fabricCanvas.setZoom(fabricCanvas.getZoom()/1.1);
-  rotateL.onclick=()=>{ if(baseImage){ baseImage.rotate((baseImage.angle||0)-90); fabricCanvas.requestRenderAll(); } };
-  rotateR.onclick=()=>{ if(baseImage){ baseImage.rotate((baseImage.angle||0)+90); fabricCanvas.requestRenderAll(); } };
-  flipH.onclick=()=>{ if(baseImage){ baseImage.toggle('flipX'); fabricCanvas.requestRenderAll(); } };
-  flipV.onclick=()=>{ if(baseImage){ baseImage.toggle('flipY'); fabricCanvas.requestRenderAll(); } };
+  // ----- Canvas commands -----
+  const canvasEl=document.getElementById('c');
+  const rebase = ()=>{ if(!baseImage) return; setBaseImageFromDataURL(baseImage.toDataURL({})); };
+  document.getElementById('fit').onclick=rebase;
+  document.getElementById('zoomIn').onclick=()=>fabricCanvas.setZoom(fabricCanvas.getZoom()*1.1);
+  document.getElementById('zoomOut').onclick=()=>fabricCanvas.setZoom(fabricCanvas.getZoom()/1.1);
+  document.getElementById('rotateL').onclick=()=>{ if(baseImage){ baseImage.rotate((baseImage.angle||0)-90); fabricCanvas.requestRenderAll(); } };
+  document.getElementById('rotateR').onclick=()=>{ if(baseImage){ baseImage.rotate((baseImage.angle||0)+90); fabricCanvas.requestRenderAll(); } };
+  document.getElementById('flipH').onclick=()=>{ if(baseImage){ baseImage.toggle('flipX'); fabricCanvas.requestRenderAll(); } };
+  document.getElementById('flipV').onclick=()=>{ if(baseImage){ baseImage.toggle('flipY'); fabricCanvas.requestRenderAll(); } };
 
-  // --- Crop workflow ---
-  cropStart.onclick=()=>{
+  // ----- Crop workflow -----
+  document.getElementById('cropStart').onclick=()=>{
     if(!baseImage) return;
     cropMode=true;
-    // add a semi-transparent rect for selection
     cropRect = new fabric.Rect({
       left: baseImage.left + 20, top: baseImage.top + 20,
       width: Math.min(200, baseImage.getScaledWidth()-40),
       height: Math.min(200, baseImage.getScaledHeight()-40),
       fill: 'rgba(0,0,0,0.15)', stroke:'#2dd4bf', strokeWidth:2, hasRotatingPoint:false
     });
-    fabricCanvas.add(cropRect);
-    cropRect.bringToFront();
-    fabricCanvas.setActiveObject(cropRect);
+    fabricCanvas.add(cropRect); cropRect.bringToFront(); fabricCanvas.setActiveObject(cropRect);
   };
-  cropCancel.onclick=()=>{
-    cropMode=false;
-    if(cropRect){ fabricCanvas.remove(cropRect); cropRect=null; }
-    fabricCanvas.discardActiveObject(); fabricCanvas.requestRenderAll();
+  document.getElementById('cropCancel').onclick=()=>{
+    cropMode=false; if(cropRect){ fabricCanvas.remove(cropRect); cropRect=null; } fabricCanvas.discardActiveObject(); fabricCanvas.requestRenderAll();
   };
-  cropApply.onclick=()=>{
+  document.getElementById('cropApply').onclick=()=>{
     if(!baseImage || !cropRect) return;
-    // compute crop area relative to base image bitmap
     const scale = baseImage.scaleX;
-    const bx = baseImage.left;
-    const by = baseImage.top;
-    const rx = cropRect.left - bx;
-    const ry = cropRect.top - by;
-    const rw = cropRect.width * cropRect.scaleX;
-    const rh = cropRect.height * cropRect.scaleY;
-    const sx = rx / scale;
-    const sy = ry / scale;
-    const sw = rw / scale;
-    const sh = rh / scale;
-
-    // export cropped data via offscreen canvas
-    const el = document.createElement('canvas');
-    el.width = Math.max(1, Math.round(sw));
-    el.height = Math.max(1, Math.round(sh));
+    const bx = baseImage.left, by = baseImage.top;
+    const rw = cropRect.width * cropRect.scaleX, rh = cropRect.height * cropRect.scaleY;
+    const rx = cropRect.left - bx, ry = cropRect.top - by;
+    const sx = rx / scale, sy = ry / scale, sw = rw / scale, sh = rh / scale;
+    const el = document.createElement('canvas'); el.width=Math.max(1,Math.round(sw)); el.height=Math.max(1,Math.round(sh));
     const ctx = el.getContext('2d');
-
-    // draw original base image into offscreen then clip region
-    const base = baseImage.getElement(); // HTMLImageElement
-    // compute source rect in original image space
-    // also account for rotation if present (simplified: if rotated not 0°, we render current canvas instead)
     const angle = (baseImage.angle||0) % 360;
     if (angle !== 0) {
-      // Fallback: render current canvas area to image, then crop from that bitmap
       const fullURL = fabricCanvas.toDataURL({ format:'png', quality:1 });
-      const tmp = new Image(); tmp.onload = ()=>{
-        // Map cropRect bbox to canvas pixels
+      const tmp = new Image(); tmp.onload=()=>{
         const scaleX = tmp.width / fabricCanvas.getWidth();
         const scaleY = tmp.height / fabricCanvas.getHeight();
         ctx.drawImage(tmp, cropRect.left*scaleX, cropRect.top*scaleY, rw*scaleX, rh*scaleY, 0,0, el.width, el.height);
-        const dataURL = el.toDataURL('image/png', 0.95);
-        // replace base image
-        setBaseImageFromDataURL(dataURL).then(()=>{
-          fabricCanvas.remove(cropRect); cropRect=null; cropMode=false; fabricCanvas.requestRenderAll();
-        });
-      };
-      tmp.src = fullURL;
-      return;
+        setBaseImageFromDataURL(el.toDataURL('image/png', 0.95)).then(()=>{ fabricCanvas.remove(cropRect); cropRect=null; cropMode=false; });
+      }; tmp.src=fullURL; return;
     } else {
-      ctx.drawImage(base, sx, sy, sw, sh, 0, 0, el.width, el.height);
-      const dataURL = el.toDataURL('image/png', 0.95);
-      setBaseImageFromDataURL(dataURL).then(()=>{
-        fabricCanvas.remove(cropRect); cropRect=null; cropMode=false; fabricCanvas.requestRenderAll();
-      });
+      const base = baseImage.getElement();
+      ctx.drawImage(base, sx, sy, sw, sh, 0,0, el.width, el.height);
+      setBaseImageFromDataURL(el.toDataURL('image/png', 0.95)).then(()=>{ fabricCanvas.remove(cropRect); cropRect=null; cropMode=false; });
     }
   };
 
-  // --- Overlays ---
+  // ----- Overlays -----
   function addOverlay(type){
-    let obj;
-    // Simple emoji-based overlays for portability; you can swap to SVG paths later.
-    const emojiMap = { fire:'🔥', smoke:'🌫️', person:'🧍', car:'🚗', hazard:'⚠️' };
-    const emoji = emojiMap[type] || '⬤';
-    obj = new fabric.Text(emoji, { fontSize: 80, fill:'#ffffff', left: (fabricCanvas.getWidth()/2)-20, top: (fabricCanvas.getHeight()/2)-20, selectable:true, stroke:'#000', strokeWidth:0.3, shadow:'rgba(0,0,0,0.35) 0 2px 6px' });
-    fabricCanvas.add(obj);
-    fabricCanvas.setActiveObject(obj);
+    const emojiMap={ fire:'🔥', smoke:'🌫️', person:'🧍', car:'🚗', hazard:'⚠️' };
+    const emoji=emojiMap[type] || '⬤';
+    const obj=new fabric.Text(emoji,{ fontSize:80, fill:'#fff', left:(fabricCanvas.getWidth()/2)-20, top:(fabricCanvas.getHeight()/2)-20, selectable:true, stroke:'#000', strokeWidth:0.3, shadow:'rgba(0,0,0,0.35) 0 2px 6px' });
+    fabricCanvas.add(obj); fabricCanvas.setActiveObject(obj);
   }
   overlayBtns.forEach(b=> b.onclick=()=>addOverlay(b.dataset.type));
-  overlayOpacity.oninput = (e)=>{
-    const o = fabricCanvas.getActiveObject();
-    if (o) { o.set('opacity', parseFloat(e.target.value)); fabricCanvas.requestRenderAll(); }
-  };
+  overlayOpacity.oninput = (e)=>{ const o=fabricCanvas.getActiveObject(); if(o){ o.set('opacity', parseFloat(e.target.value)); fabricCanvas.requestRenderAll(); } };
   bringFront.onclick = ()=>{ const o=fabricCanvas.getActiveObject(); if(o){ o.bringToFront(); fabricCanvas.requestRenderAll(); } };
   sendBack.onclick = ()=>{ const o=fabricCanvas.getActiveObject(); if(o){ o.sendToBack(); if(baseImage) baseImage.sendToBack(); fabricCanvas.requestRenderAll(); } };
   deleteObj.onclick = ()=>{ const o=fabricCanvas.getActiveObject(); if(o && o!==baseImage){ fabricCanvas.remove(o); fabricCanvas.discardActiveObject(); fabricCanvas.requestRenderAll(); } };
 
-  // --- Delete stop ---
+  // ----- Delete stop -----
   deleteStop.onclick=async()=>{
     try{
-      if (!current || stopIndex<0) return;
-      if (!confirm('Delete this photo from the scenario?')) return;
+      if(!current || stopIndex<0) return;
+      if(!confirm('Delete this photo from the scenario?')) return;
       current.stops.splice(stopIndex,1);
       const { id, ...payload } = current;
       await set(ref(db,'scenarios/'+current.id), payload);
-      stopIndex = -1;
-      fabricCanvas.clear(); baseImage=null;
-      renderStopsThumbs();
-      metaMsg.textContent='Photo deleted.';
+      stopIndex=-1; fabricCanvas.clear(); baseImage=null; renderStopsThumbs(); metaMsg.textContent='Photo deleted.';
     }catch(e){ metaMsg.textContent=String(e.message||e); }
   };
 
