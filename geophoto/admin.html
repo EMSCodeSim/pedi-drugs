@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Geo-Photo Admin</title>
+<title>Geo-Photo Admin (RTDB, no Storage)</title>
 <style>
   :root{--bg:#0b1e27;--card:#102b36;--border:#1c3a47;--accent:#2aa3b5;--text:#ffffff}
   body{margin:0;font-family:system-ui,Arial;background:var(--bg);color:var(--text)}
@@ -11,13 +11,14 @@
   h2{margin:0}
   .card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:16px;margin:12px 0}
   label{display:block;margin:.5rem 0 .25rem}
-  input,button{width:100%;padding:.8rem;font-size:1rem;border-radius:10px;border:1px solid var(--border);background:#0f3542;color:#e7fbff}
-  input[readonly]{opacity:.8}
+  input,button,textarea{width:100%;padding:.8rem;font-size:1rem;border-radius:10px;border:1px solid var(--border);background:#0f3542;color:#e7fbff}
+  input[readonly]{opacity:.85}
   .row{display:grid;grid-template-columns:1fr 1fr;gap:.75rem}
-  .btn{background:var(--accent);color:#00151b;border:0}
+  .btn{background:var(--accent);color:#00151b;border:0;cursor:pointer}
   .hint{opacity:.85;font-size:.95rem}
   img{max-width:100%;display:block;border-radius:12px;margin:.5rem 0}
   #error{white-space:pre-wrap;background:#2b1b1b;border:1px solid #4b2a2a;padding:.75rem;border-radius:.5rem;color:#ffd6d6;margin-top:.75rem;display:none}
+  .small{font-size:.9rem;opacity:.8}
 </style>
 <noscript><strong>This page requires JavaScript.</strong></noscript>
 </head>
@@ -33,7 +34,7 @@
       </div>
       <div>
         <label>Radius (meters)</label>
-        <input id="radius" type="number" value="40" min="5" step="5">
+        <input id="radius" type="number" value="50" min="5" step="5">
       </div>
     </div>
 
@@ -49,11 +50,16 @@
     </div>
 
     <button id="btnLoc" class="btn">Use my current location</button>
-    <p class="hint">Stand at the spot where the photo should appear, then tap the button above.</p>
+    <p class="hint">Stand where the photo should appear, then tap the button above.</p>
 
-    <label>Photo</label>
+    <label>Photo file (we’ll compress to keep it small)</label>
     <input id="file" type="file" accept="image/*" capture="environment">
     <img id="preview" style="display:none" alt="Preview"/>
+
+    <label class="small">Or paste a public image URL (optional)</label>
+    <input id="imageUrl" placeholder="https://… (optional)">
+
+    <p class="small" id="sizeInfo"></p>
 
     <button id="btnSave" class="btn">Save Spot</button>
     <p id="msg" class="hint"></p>
@@ -71,87 +77,113 @@
   };
 
   try {
-    // Firebase imports
+    // Firebase (RTDB only)
     const [{ initializeApp }] = await Promise.all([
       import("https://www.gstatic.com/firebasejs/10.12.4/firebase-app.js"),
     ]);
-    const [
-      { getFirestore, collection, addDoc, serverTimestamp },
-      { getStorage, ref: sRef, uploadBytes, getDownloadURL },
-    ] = await Promise.all([
-      import("https://www.gstatic.com/firebasejs/10.12.4/firebase-firestore.js"),
-      import("https://www.gstatic.com/firebasejs/10.12.4/firebase-storage.js"),
+    const [{ getDatabase, ref, push, set }] = await Promise.all([
+      import("https://www.gstatic.com/firebasejs/10.12.4/firebase-database.js"),
     ]);
 
-    // Your Firebase config (fixed storageBucket)
+    // Your Firebase config
     const firebaseConfig = {
       apiKey: "AIzaSyDM6DpRSeZueVKRpbyJyDmhf8WY66KyCDk",
       authDomain: "dailyquiz-d5279.firebaseapp.com",
       databaseURL: "https://dailyquiz-d5279-default-rtdb.firebaseio.com",
       projectId: "dailyquiz-d5279",
-      storageBucket: "dailyquiz-d5279.appspot.com",
-      messagingSenderId: "94577748034",
       appId: "1:94577748034:web:c032d3a1d72db1313de5db",
       measurementId: "G-19DVN7NNH7"
     };
 
-    // Init
     const app = initializeApp(firebaseConfig);
-    const db = getFirestore(app);
-    const storage = getStorage(app);
+    const db = getDatabase(app);
 
-    // UI
+    // UI refs
     const el = id => document.getElementById(id);
-    const title = el('title'), radius = el('radius'), lat = el('lat'), lng = el('lng');
-    const file = el('file'), preview = el('preview'), msg = el('msg');
+    const titleEl = el('title'), radiusEl = el('radius'), latEl = el('lat'), lngEl = el('lng');
+    const fileEl = el('file'), preview = el('preview'), msg = el('msg');
+    const urlEl = el('imageUrl'), sizeInfo = el('sizeInfo');
 
+    // Get current location
     el('btnLoc').onclick = () => {
       try {
         navigator.geolocation.getCurrentPosition(
-          p => { lat.value = p.coords.latitude.toFixed(6); lng.value = p.coords.longitude.toFixed(6); },
+          p => { latEl.value = p.coords.latitude.toFixed(6); lngEl.value = p.coords.longitude.toFixed(6); },
           e => { msg.textContent = "Location error: " + e.message; },
           { enableHighAccuracy:true, timeout:10000, maximumAge:0 }
         );
       } catch (e) { showErr(e); }
     };
 
-    file.onchange = e => {
+    // Compress the chosen image to a data URL (JPEG, max 1280px, ~0.7 quality)
+    async function fileToCompressedDataURL(file, maxDim = 1280, quality = 0.7) {
+      const img = new Image();
+      const reader = new FileReader();
+      const data = await new Promise((res, rej) => {
+        reader.onload = () => res(reader.result);
+        reader.onerror = rej;
+        reader.readAsDataURL(file);
+      });
+      await new Promise((res, rej) => { img.onload = res; img.onerror = rej; img.src = data; });
+
+      const canvas = document.createElement('canvas');
+      let { width, height } = img;
+      if (width > height && width > maxDim) {
+        height = Math.round(height * (maxDim / width));
+        width = maxDim;
+      } else if (height > width && height > maxDim) {
+        width = Math.round(width * (maxDim / height));
+        height = maxDim;
+      }
+      canvas.width = width; canvas.height = height;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(img, 0, 0, width, height);
+      return canvas.toDataURL('image/jpeg', quality); // "data:image/jpeg;base64,..."
+    }
+
+    let dataURL = null;
+    fileEl.onchange = async (e) => {
       try {
         const f = e.target.files?.[0];
         if (!f) return;
-        const r = new FileReader();
-        r.onload = () => { preview.src = r.result; preview.style.display = 'block'; };
-        r.readAsDataURL(f);
-      } catch (e) { showErr(e); }
+        msg.textContent = "Compressing image…";
+        dataURL = await fileToCompressedDataURL(f, 1280, 0.7);
+        preview.src = dataURL; preview.style.display = 'block';
+        // Approximate bytes
+        const bytes = Math.ceil((dataURL.length - 'data:image/jpeg;base64,'.length) * 3/4);
+        sizeInfo.textContent = `Compressed image ~${Math.round(bytes/1024)} KB`;
+        msg.textContent = "";
+      } catch (err) { showErr(err); msg.textContent = "Failed to process image."; }
     };
 
+    // Save to RTDB
     el('btnSave').onclick = async () => {
       try {
-        msg.textContent = "Uploading...";
-        const f = file.files?.[0];
-        if (!f) throw new Error("Choose a photo");
-        if (!lat.value || !lng.value) throw new Error("Set a location");
+        msg.textContent = "Saving…";
+        const title = titleEl.value || "Untitled";
+        const lat = parseFloat(latEl.value);
+        const lng = parseFloat(lngEl.value);
+        const radiusMeters = Math.max(5, parseInt(radiusEl.value || "50", 10));
+        const imageUrl = (urlEl.value || "").trim();
 
-        // Upload image
-        const path = `photos/${Date.now()}_${f.name.replace(/\s+/g,'_')}`;
-        const imgRef = sRef(storage, path);
-        await uploadBytes(imgRef, f);
-        const url = await getDownloadURL(imgRef);
+        if (isNaN(lat) || isNaN(lng)) throw new Error("Set a location (Use my current location).");
+        if (!dataURL && !imageUrl) throw new Error("Choose a photo or paste an image URL.");
 
-        // Save spot
-        await addDoc(collection(db, "spots"), {
-          title: title.value || "Untitled",
-          lat: parseFloat(lat.value),
-          lng: parseFloat(lng.value),
-          radiusMeters: Math.max(5, parseInt(radius.value || "25", 10)),
-          imageURL: url,
-          active: true,
-          createdAt: Date.now(),
-          createdAtSrv: serverTimestamp()
-        });
+        // If both provided, prefer uploaded/compressed dataURL
+        const spot = {
+          title, lat, lng, radiusMeters, active: true, createdAt: Date.now()
+        };
+        if (dataURL) spot.imageData = dataURL;    // inline base64 (no Storage)
+        else spot.imageURL = imageUrl;            // external URL
+
+        const spotsRef = ref(db, "spots");
+        const newRef = push(spotsRef);
+        await set(newRef, spot);
 
         msg.textContent = "Saved! 🎉";
-        file.value = ""; preview.style.display = "none"; title.value = "";
+        // reset some fields
+        fileEl.value = ""; preview.style.display = "none"; dataURL = null; urlEl.value = "";
+        sizeInfo.textContent = "";
       } catch (e) { msg.textContent = "Error saving."; showErr(e); }
     };
   } catch (e) {
