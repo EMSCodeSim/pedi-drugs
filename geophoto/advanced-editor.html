@@ -41,6 +41,20 @@
   .divider{height:1px;background:var(--border);opacity:.6;margin:10px 0}
   .hidden{display:none}
   .desktopGate{max-width:740px;margin:48px auto;background:var(--surface);border:1px solid var(--border);border-radius:16px;box-shadow:var(--shadow);padding:18px}
+
+  /* Readability overrides for inputs/dropdowns/placeholders */
+  select, input, textarea { color: var(--text) !important; background: var(--panel) !important; border-color: var(--border) !important; }
+  select option { color: #0b1e27; }
+  @media (prefers-color-scheme: dark){ select option { color:#eaf7fb; background:#0d2430; } }
+  ::placeholder { color: color-mix(in srgb, var(--muted) 90%, transparent); opacity: 1; }
+
+  /* Overlay shelf */
+  .olThumb {
+    width: 100%; aspect-ratio: 1/1; border-radius: 10px; border:1px solid var(--border);
+    background:#0b2130; display:flex; align-items:center; justify-content:center; cursor:pointer;
+  }
+  .olThumb img { max-width: 88%; max-height: 88%; display:block; }
+  .ol-tab.active { outline:3px solid var(--accent); }
 </style>
 </head>
 <body>
@@ -130,13 +144,15 @@
     <div class="divider"></div>
 
     <div class="sectionTitle">Overlays</div>
-    <div class="row">
-      <button class="btn secondary ol" data-type="fire">🔥 Fire</button>
-      <button class="btn secondary ol" data-type="smoke">🌫️ Smoke</button>
-      <button class="btn secondary ol" data-type="person">🧍 Person</button>
-      <button class="btn secondary ol" data-type="car">🚗 Car</button>
-      <button class="btn secondary ol" data-type="hazard">⚠️ Hazard</button>
+    <div class="row" style="gap:6px; flex-wrap:nowrap; overflow:auto">
+      <button class="btn secondary ol-tab" data-cat="fire">🔥 Fire</button>
+      <button class="btn secondary ol-tab" data-cat="smoke">🌫️ Smoke</button>
+      <button class="btn secondary ol-tab" data-cat="people">🧍 People</button>
+      <button class="btn secondary ol-tab" data-cat="cars">🚗 Cars</button>
+      <button class="btn secondary ol-tab" data-cat="hazard">⚠️ Hazard</button>
     </div>
+    <div id="overlayShelf" style="margin-top:8px; display:grid; grid-template-columns:repeat(3, 1fr); gap:8px"></div>
+
     <label style="margin-top:10px">Selected overlay opacity</label>
     <input id="overlayOpacity" type="range" min="0.05" max="1" step="0.05" value="1">
     <div class="row" style="margin-top:8px">
@@ -144,6 +160,7 @@
       <button id="sendBack" class="btn secondary">Send to Back</button>
       <button id="deleteObj" class="btn danger">Delete Selected</button>
     </div>
+
     <div class="divider"></div>
     <div class="sectionTitle">Hints</div>
     <ul style="margin:6px 0 0 18px; color:var(--muted)">
@@ -166,12 +183,10 @@
 
   const urlForce = new URLSearchParams(location.search).get('force') === '1';
   function decideGate(){
-    const coarse = matchMedia('(pointer: coarse)').matches; // true on many touch laptops
-    const narrow = window.innerWidth < 1024;                // require roomy width
+    const coarse = matchMedia('(pointer: coarse)').matches;
+    const narrow = window.innerWidth < 1024;
     gateInfo.textContent = `pointer: ${coarse?'coarse':'fine'} • width: ${window.innerWidth}px`;
-    if (urlForce || (!narrow)) { // allow if width is OK, even if coarse
-      gate.classList.add('hidden'); app.classList.remove('hidden'); return;
-    }
+    if (urlForce || (!narrow)) { gate.classList.add('hidden'); app.classList.remove('hidden'); return; }
     gate.classList.remove('hidden'); app.classList.add('hidden');
   }
   forceGo.onclick=()=>{ history.replaceState(null,'',location.pathname); app.classList.remove('hidden'); gate.classList.add('hidden'); };
@@ -229,11 +244,12 @@
   const cropApply=document.getElementById('cropApply');
   const cropCancel=document.getElementById('cropCancel');
 
+  const overlayShelf = document.getElementById('overlayShelf');
+  const tabBtns = Array.from(document.querySelectorAll('.ol-tab'));
   const overlayOpacity=document.getElementById('overlayOpacity');
   const bringFront=document.getElementById('bringFront');
   const sendBack=document.getElementById('sendBack');
   const deleteObj=document.getElementById('deleteObj');
-  const overlayBtns=Array.from(document.querySelectorAll('.ol'));
 
   // ----- State -----
   let scenarios=[], current=null, stopIndex=-1;
@@ -400,18 +416,17 @@
   };
 
   // ----- Canvas commands -----
-  const canvasEl=document.getElementById('c');
   const rebase = ()=>{ if(!baseImage) return; setBaseImageFromDataURL(baseImage.toDataURL({})); };
-  document.getElementById('fit').onclick=rebase;
-  document.getElementById('zoomIn').onclick=()=>fabricCanvas.setZoom(fabricCanvas.getZoom()*1.1);
-  document.getElementById('zoomOut').onclick=()=>fabricCanvas.setZoom(fabricCanvas.getZoom()/1.1);
-  document.getElementById('rotateL').onclick=()=>{ if(baseImage){ baseImage.rotate((baseImage.angle||0)-90); fabricCanvas.requestRenderAll(); } };
-  document.getElementById('rotateR').onclick=()=>{ if(baseImage){ baseImage.rotate((baseImage.angle||0)+90); fabricCanvas.requestRenderAll(); } };
-  document.getElementById('flipH').onclick=()=>{ if(baseImage){ baseImage.toggle('flipX'); fabricCanvas.requestRenderAll(); } };
-  document.getElementById('flipV').onclick=()=>{ if(baseImage){ baseImage.toggle('flipY'); fabricCanvas.requestRenderAll(); } };
+  fitBtn.onclick=rebase;
+  zoomIn.onclick=()=>fabricCanvas.setZoom(fabricCanvas.getZoom()*1.1);
+  zoomOut.onclick=()=>fabricCanvas.setZoom(fabricCanvas.getZoom()/1.1);
+  rotateL.onclick=()=>{ if(baseImage){ baseImage.rotate((baseImage.angle||0)-90); fabricCanvas.requestRenderAll(); } };
+  rotateR.onclick=()=>{ if(baseImage){ baseImage.rotate((baseImage.angle||0)+90); fabricCanvas.requestRenderAll(); } };
+  flipH.onclick=()=>{ if(baseImage){ baseImage.toggle('flipX'); fabricCanvas.requestRenderAll(); } };
+  flipV.onclick=()=>{ if(baseImage){ baseImage.toggle('flipY'); fabricCanvas.requestRenderAll(); } };
 
   // ----- Crop workflow -----
-  document.getElementById('cropStart').onclick=()=>{
+  cropStart.onclick=()=>{
     if(!baseImage) return;
     cropMode=true;
     cropRect = new fabric.Rect({
@@ -422,10 +437,10 @@
     });
     fabricCanvas.add(cropRect); cropRect.bringToFront(); fabricCanvas.setActiveObject(cropRect);
   };
-  document.getElementById('cropCancel').onclick=()=>{
+  cropCancel.onclick=()=>{
     cropMode=false; if(cropRect){ fabricCanvas.remove(cropRect); cropRect=null; } fabricCanvas.discardActiveObject(); fabricCanvas.requestRenderAll();
   };
-  document.getElementById('cropApply').onclick=()=>{
+  cropApply.onclick=()=>{
     if(!baseImage || !cropRect) return;
     const scale = baseImage.scaleX;
     const bx = baseImage.left, by = baseImage.top;
@@ -450,14 +465,219 @@
     }
   };
 
-  // ----- Overlays -----
-  function addOverlay(type){
-    const emojiMap={ fire:'🔥', smoke:'🌫️', person:'🧍', car:'🚗', hazard:'⚠️' };
-    const emoji=emojiMap[type] || '⬤';
-    const obj=new fabric.Text(emoji,{ fontSize:80, fill:'#fff', left:(fabricCanvas.getWidth()/2)-20, top:(fabricCanvas.getHeight()/2)-20, selectable:true, stroke:'#000', strokeWidth:0.3, shadow:'rgba(0,0,0,0.35) 0 2px 6px' });
-    fabricCanvas.add(obj); fabricCanvas.setActiveObject(obj);
+  /* ===== Realistic Overlays (SVG data URIs with multiple choices) ===== */
+  const SPRITES = {
+    fire: [
+      `data:image/svg+xml;utf8,` + encodeURIComponent(`
+        <svg xmlns="http://www.w3.org/2000/svg" width="512" height="512">
+          <defs>
+            <radialGradient id="g" cx="50%" cy="60%" r="60%">
+              <stop offset="0%" stop-color="#ffe082"/>
+              <stop offset="40%" stop-color="#ff8f00"/>
+              <stop offset="80%" stop-color="#e65100"/>
+              <stop offset="100%" stop-color="#bf360c"/>
+            </radialGradient>
+            <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
+              <feGaussianBlur stdDeviation="6" result="b"/>
+              <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+            </filter>
+          </defs>
+          <path d="M256,480 C200,440 140,380 140,300 c0-64 40-104 70-140 16-20 24-48 18-80 50,40 82,90 82,138 0-36 22-62 50-92-4,44 4,74 20,92 24,26 44,60 44,92 0,80-64,132-168,170z" fill="url(#g)" filter="url(#glow)"/>
+        </svg>
+      `),
+      `data:image/svg+xml;utf8,` + encodeURIComponent(`
+        <svg xmlns="http://www.w3.org/2000/svg" width="512" height="512">
+          <defs>
+            <radialGradient id="g2" cx="50%" cy="70%" r="70%">
+              <stop offset="0%" stop-color="#fff59d"/>
+              <stop offset="45%" stop-color="#ff9800"/>
+              <stop offset="85%" stop-color="#e65100"/>
+            </radialGradient>
+            <filter id="glow2"><feGaussianBlur stdDeviation="5"/></filter>
+          </defs>
+          <path d="M256,480 C176,430 128,360 128,280 c0-70 50-120 92-160 10-10 16-36 14-68 54,44 96,100 96,156 0-22 20-56 54-90-8,46-2,80 18,100 26,26 38,60 38,88 0,86-66,138-184,174z" fill="url(#g2)" filter="url(#glow2)"/>
+        </svg>
+      `),
+      `data:image/svg+xml;utf8,` + encodeURIComponent(`
+        <svg xmlns="http://www.w3.org/2000/svg" width="512" height="512">
+          <defs>
+            <radialGradient id="g3" cx="50%" cy="60%" r="65%">
+              <stop offset="0%" stop-color="#fff3e0"/>
+              <stop offset="40%" stop-color="#ffb300"/>
+              <stop offset="75%" stop-color="#f57c00"/>
+              <stop offset="100%" stop-color="#d84315"/>
+            </radialGradient>
+          </defs>
+          <path d="M256,470 C160,420 120,360 120,290 c0-64 44-106 84-142 16-14 22-44 20-70 42,30 92,92 92,144 0-30 26-66 64-96-8,48 2,78 20,96 24,24 42,58 42,90 0,80-60,126-186,158z" fill="url(#g3)"/>
+        </svg>
+      `),
+    ],
+    smoke: [
+      `data:image/svg+xml;utf8,` + encodeURIComponent(`
+        <svg xmlns="http://www.w3.org/2000/svg" width="512" height="512">
+          <defs>
+            <filter id="blur" x="-20%" y="-20%" width="140%" height="140%">
+              <feGaussianBlur stdDeviation="10"/>
+            </filter>
+            <radialGradient id="sm" cx="50%" cy="50%" r="50%">
+              <stop offset="0%" stop-color="#ffffff" stop-opacity="0.5"/>
+              <stop offset="100%" stop-color="#9ea7ac" stop-opacity="0.2"/>
+            </radialGradient>
+          </defs>
+          <g filter="url(#blur)" fill="url(#sm)">
+            <ellipse cx="200" cy="340" rx="120" ry="90"/>
+            <ellipse cx="280" cy="300" rx="140" ry="100" opacity="0.8"/>
+            <ellipse cx="340" cy="240" rx="110" ry="80" opacity="0.7"/>
+          </g>
+        </svg>
+      `),
+      `data:image/svg+xml;utf8,` + encodeURIComponent(`
+        <svg xmlns="http://www.w3.org/2000/svg" width="512" height="512">
+          <defs>
+            <filter id="blur2"><feGaussianBlur stdDeviation="12"/></filter>
+            <linearGradient id="sm2" x1="0" x2="0" y1="1" y2="0">
+              <stop offset="0%" stop-color="#b0b6bb" stop-opacity="0.2"/>
+              <stop offset="100%" stop-color="#ffffff" stop-opacity="0.5"/>
+            </linearGradient>
+          </defs>
+          <path d="M180,440c-40-60 20-90 20-130s-40-50-20-100 80-40 120,0 10,80 30,120 60,40 40,100c-20,60-150,60-190,10z" fill="url(#sm2)" filter="url(#blur2)"/>
+        </svg>
+      `),
+      `data:image/svg+xml;utf8,` + encodeURIComponent(`
+        <svg xmlns="http://www.w3.org/2000/svg" width="512" height="512">
+          <defs><filter id="blur3"><feGaussianBlur stdDeviation="8"/></filter></defs>
+          <g filter="url(#blur3)" fill="#c7ccd1" fill-opacity="0.25">
+            <ellipse cx="180" cy="360" rx="150" ry="60"/>
+            <ellipse cx="320" cy="360" rx="160" ry="58"/>
+            <ellipse cx="260" cy="330" rx="120" ry="46" fill-opacity="0.3"/>
+          </g>
+        </svg>
+      `),
+    ],
+    people: [
+      `data:image/svg+xml;utf8,` + encodeURIComponent(`
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 400">
+          <g fill="#1de9b6">
+            <circle cx="100" cy="60" r="34"/>
+            <path d="M60,140 h80 v60 h-20 v120 h-20 v-120 h-20z"/>
+            <path d="M60,210 h-30 v-20 h30z"/>
+            <path d="M140,210 h30 v-20 h-30z"/>
+          </g>
+        </svg>
+      `),
+      `data:image/svg+xml;utf8,` + encodeURIComponent(`
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 400">
+          <g fill="#e0e0e0">
+            <circle cx="100" cy="55" r="32"/>
+            <path d="M70,130 h60 v70 h-16 v120 h-28 v-120 h-16z" />
+            <path d="M70,210 h-28 v-18 h28z"/>
+            <path d="M130,210 h28 v-18 h-28z"/>
+          </g>
+        </svg>
+      `),
+      `data:image/svg+xml;utf8,` + encodeURIComponent(`
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 400">
+          <defs><linearGradient id="vest" x1="0" x2="0" y1="0" y2="1"><stop offset="0%" stop-color="#ffea00"/><stop offset="100%" stop-color="#ff6f00"/></linearGradient></defs>
+          <g>
+            <circle cx="100" cy="58" r="32" fill="#fafafa"/>
+            <path d="M60,120 h80 v70 h-24 v120 h-32 v-120 h-24z" fill="url(#vest)"/>
+            <rect x="86" y="150" width="28" height="26" fill="#212121"/>
+          </g>
+        </svg>
+      `),
+    ],
+    cars: [
+      `data:image/svg+xml;utf8,` + encodeURIComponent(`
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 500 220">
+          <rect x="40" y="120" width="420" height="60" rx="20" fill="#90caf9"/>
+          <path d="M80,120 c40-50,120-70,220-70 h50 c30,0,50,20,60,70z" fill="#64b5f6"/>
+          <circle cx="140" cy="190" r="24" fill="#212121"/><circle cx="360" cy="190" r="24" fill="#212121"/>
+          <rect x="220" y="70" width="100" height="40" fill="#e3f2fd"/>
+        </svg>
+      `),
+      `data:image/svg+xml;utf8,` + encodeURIComponent(`
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 520 240">
+          <rect x="50" y="120" width="420" height="70" rx="16" fill="#a5d6a7"/>
+          <path d="M90,120 c30-60,140-80,240-80 h40 c30,0,60,20,70,80z" fill="#81c784"/>
+          <circle cx="150" cy="200" r="26" fill="#263238"/><circle cx="380" cy="200" r="26" fill="#263238"/>
+          <rect x="240" y="60" width="110" height="44" fill="#e8f5e9"/>
+        </svg>
+      `),
+      `data:image/svg+xml;utf8,` + encodeURIComponent(`
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 520 240">
+          <rect x="50" y="120" width="420" height="66" rx="14" fill="#ef5350"/>
+          <path d="M90,120 c30-60,140-80,240-80 h40 c30,0,60,20,70,80z" fill="#e53935"/>
+          <circle cx="150" cy="196" r="26" fill="#212121"/><circle cx="380" cy="196" r="26" fill="#212121"/>
+          <rect x="240" y="60" width="110" height="44" fill="#ffcdd2"/>
+        </svg>
+      `),
+    ],
+    hazard: [
+      `data:image/svg+xml;utf8,` + encodeURIComponent(`
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 128">
+          <defs><pattern id="diag" width="40" height="40" patternUnits="userSpaceOnUse" patternTransform="skewX(-20)">
+            <rect width="40" height="40" fill="#ffc107"/>
+            <path d="M-10,40 0,0 10,0 0,40z M30,40 40,0 50,0 40,40z" fill="#212121" opacity="0.75"/>
+          </pattern></defs>
+          <rect x="8" y="44" width="496" height="40" fill="url(#diag)" rx="6"/>
+        </svg>
+      `),
+      `data:image/svg+xml;utf8,` + encodeURIComponent(`
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 220">
+          <rect x="20" y="180" width="160" height="24" rx="8" fill="#6d4c41"/>
+          <path d="M100,20 l60,160 h-120z" fill="#ff6f00"/>
+          <rect x="80" y="120" width="40" height="20" fill="#ffcc80"/>
+          <rect x="90" y="80" width="20" height="16" fill="#ffe0b2"/>
+        </svg>
+      `),
+      `data:image/svg+xml;utf8,` + encodeURIComponent(`
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 220 220">
+          <rect x="10" y="10" width="200" height="200" rx="16" fill="#ffeb3b" stroke="#212121" stroke-width="10"/>
+          <path d="M110,90 a20,20 0 1,0 0.1,0 z" fill="#212121"/>
+          <path d="M110,50 c40,0 40,40 70,40 -30,0 -30,40 -70,40 -40,0 -40-40 -70-40 30,0 30-40 70-40z" fill="none" stroke="#212121" stroke-width="12"/>
+        </svg>
+      `),
+    ],
+  };
+
+  function renderShelf(cat) {
+    overlayShelf.innerHTML = '';
+    const items = SPRITES[cat] || [];
+    items.forEach((uri, i) => {
+      const div = document.createElement('div');
+      div.className = 'olThumb';
+      const img = document.createElement('img');
+      img.src = uri; img.alt = `${cat}-${i+1}`;
+      div.appendChild(img);
+      div.onclick = () => addOverlayImage(uri);
+      overlayShelf.appendChild(div);
+    });
   }
-  overlayBtns.forEach(b=> b.onclick=()=>addOverlay(b.dataset.type));
+  tabBtns.forEach(btn => btn.onclick = () => {
+    tabBtns.forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    renderShelf(btn.dataset.cat);
+  });
+  if (tabBtns[0]) { tabBtns[0].classList.add('active'); renderShelf(tabBtns[0].dataset.cat); }
+
+  function addOverlayImage(dataURI) {
+    fabric.Image.fromURL(dataURI, img => {
+      const cw = fabricCanvas.getWidth(), ch = fabricCanvas.getHeight();
+      const targetW = cw * 0.25;
+      const scale = targetW / img.width;
+      img.scale(scale);
+      img.set({
+        left: cw/2 - (img.width*scale)/2,
+        top:  ch/2 - (img.height*scale)/2,
+        cornerStyle:'circle', transparentCorners:false,
+        shadow:'rgba(0,0,0,0.35) 0 6px 16px'
+      });
+      fabricCanvas.add(img);
+      fabricCanvas.setActiveObject(img);
+      fabricCanvas.requestRenderAll();
+    }, { crossOrigin:'anonymous' });
+  }
+
   overlayOpacity.oninput = (e)=>{ const o=fabricCanvas.getActiveObject(); if(o){ o.set('opacity', parseFloat(e.target.value)); fabricCanvas.requestRenderAll(); } };
   bringFront.onclick = ()=>{ const o=fabricCanvas.getActiveObject(); if(o){ o.bringToFront(); fabricCanvas.requestRenderAll(); } };
   sendBack.onclick = ()=>{ const o=fabricCanvas.getActiveObject(); if(o){ o.sendToBack(); if(baseImage) baseImage.sendToBack(); fabricCanvas.requestRenderAll(); } };
