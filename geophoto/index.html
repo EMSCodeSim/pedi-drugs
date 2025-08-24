@@ -20,7 +20,7 @@
   .brand{display:flex;align-items:center;gap:10px}
   .dot{width:12px;height:12px;border-radius:50%;background:var(--accent);box-shadow:0 0 0 6px color-mix(in srgb, var(--accent) 25%, transparent)}
   h1{font-size:20px;margin:0}
-  .wrap{max-width:820px;margin:0 auto;padding:12px 16px calc(80px + env(safe-area-inset-bottom))}
+  .wrap{max-width:820px;margin:0 auto;padding:12px 16px calc(96px + env(safe-area-inset-bottom))}
   .card{background:var(--surface); border:1px solid var(--border); border-radius:var(--br); padding:14px; margin:12px 0; box-shadow:var(--shadow)}
   label{display:block;margin:8px 0 6px 2px;font-size:13px;color:var(--muted)}
   select,.btn{width:100%; padding:14px 12px; font-size:16px; border-radius:12px}
@@ -32,7 +32,10 @@
   .hidden{display:none}
   .pill{display:inline-flex;align-items:center;gap:8px;padding:6px 10px;border-radius:999px;background:#0f2a2f;border:1px solid #1d3a41;color:var(--muted);font-size:12px}
   .stickyBar{position:fixed; left:0; right:0; bottom:0; padding:10px 16px calc(10px + env(safe-area-inset-bottom)); background:linear-gradient(180deg, transparent, rgba(0,0,0,.35) 35%, rgba(0,0,0,.65)); backdrop-filter:blur(6px)}
-  .stickyBar .inner{max-width:820px;margin:0 auto; display:flex; gap:10px}
+  .stickyBar .inner{max-width:820px;margin:0 auto; display:flex; gap:10px; align-items:center}
+  .audioCtrls{display:flex; gap:10px; align-items:center; flex-wrap:wrap}
+  .audioCtrls .btn{width:auto}
+  input[type="range"]{accent-color:#2dd4bf}
 </style>
 </head>
 <body>
@@ -47,18 +50,32 @@
     <div class="status" id="status"></div>
   </div>
 
+  <!-- Audio / TTS Controls -->
+  <div class="card" id="audioCard">
+    <div class="audioCtrls">
+      <button id="enableAudio" class="btn">Enable Audio</button>
+      <button id="muteToggle" class="btn secondary">Mute</button>
+      <label style="margin-left:auto">Volume
+        <input id="vol" type="range" min="0" max="1" step="0.05" value="1" />
+      </label>
+    </div>
+    <div class="status">Audio is used for: dispatch intro (TTS), geofence beep, and reading each stop’s caption.</div>
+  </div>
+
+  <!-- Scenario viewer -->
   <div class="card hidden" id="viewer">
     <div style="display:flex;justify-content:space-between;align-items:center;gap:8px">
       <div class="pill" id="scTitle">(scenario)</div>
       <button id="backBtn" class="btn secondary" style="width:auto">Back</button>
     </div>
-    <div class="status" id="scNotes"></div>
+
+    <div class="status" id="dispatchBlock" style="white-space:pre-wrap"></div>
     <div class="status" id="geoStatus">Waiting for location…</div>
 
     <div id="result" class="hidden">
       <h3 id="stopTitle" style="margin:8px 2px 4px 2px"></h3>
       <img id="photo" class="media" alt="Photo">
-      <div class="status" id="caption"></div>
+      <div class="status" id="caption" style="white-space:pre-wrap"></div>
       <div class="status" id="detail"></div>
     </div>
   </div>
@@ -76,7 +93,7 @@
   const $=id=>document.getElementById(id);
   const setImage=(img,stop)=>{ img.src=stop.imageData||stop.imageURL||''; img.onerror=()=>{ img.src="data:image/svg+xml;utf8,"+encodeURIComponent("<svg xmlns='http://www.w3.org/2000/svg' width='600' height='400'><rect width='100%' height='100%' fill='#0a2230'/><text x='50%' y='50%' fill='#9ecbd6' font-size='18' text-anchor='middle'>Image failed to load</text></svg>"); }; };
   const hav=(a,b,c,d)=>{ const t=x=>x*Math.PI/180,R=6371000, dA=t(c-a), dB=t(d-b); return 2*R*Math.asin(Math.sqrt(Math.sin(dA/2)**2 + Math.cos(t(a))*Math.cos(t(c))*Math.sin(dB/2)**2)); };
-  const nearest=(st,la,ln)=>{ let best=null; (st||[]).forEach(s=>{ const d=hav(la,ln,parseFloat(s.lat),parseFloat(s.lng)); if(d<=parseFloat(s.radiusMeters)){ if(!best||d<best.dist) best={s,dist:d}; } }); return best; };
+  const nearestWithin=(st,la,ln)=>{ let best=null; (st||[]).forEach((s,i)=>{ const d=hav(la,ln,parseFloat(s.lat),parseFloat(s.lng)); if(d<=parseFloat(s.radiusMeters||0)){ if(!best||d<best.dist) best={s,index:i,dist:d}; } }); return best; };
 
   // Firebase RTDB only
   const [{ initializeApp }] = await Promise.all([ import("https://www.gstatic.com/firebasejs/10.12.4/firebase-app.js") ]);
@@ -86,11 +103,58 @@
 
   // DOM
   const status=$('status'), select=$('scenarioSelect'), openBtn=$('openBtn'), viewer=$('viewer'), backBtn=$('backBtn');
-  const scTitle=$('scTitle'), scNotes=$('scNotes'), geoStatus=$('geoStatus'), result=$('result');
+  const scTitle=$('scTitle'), geoStatus=$('geoStatus'), result=$('result');
+  const dispatchBlock=$('dispatchBlock');
   const stopTitle=$('stopTitle'), photo=$('photo'), caption=$('caption'), detail=$('detail'), forceBtn=$('forceShow');
 
+  // Audio controls
+  const enableAudio=$('enableAudio'), muteToggle=$('muteToggle'), vol=$('vol');
+
+  // TTS + beep state
+  let audioEnabled=false, muted=false, volume=1.0;
+  function speak(text){
+    if(!audioEnabled || muted || !text) return;
+    try{
+      window.speechSynthesis.cancel();
+      const u=new SpeechSynthesisUtterance(text);
+      u.volume=volume; // 0..1
+      window.speechSynthesis.speak(u);
+    }catch(e){ /* ignore */ }
+  }
+  // Simple beep via Web Audio
+  let audioCtx=null;
+  function beep(){
+    if(!audioEnabled || muted) return;
+    try{
+      if(!audioCtx) audioCtx=new (window.AudioContext||window.webkitAudioContext)();
+      const o=audioCtx.createOscillator();
+      const g=audioCtx.createGain();
+      o.type='sine'; o.frequency.value=880;
+      g.gain.value=0.001; // start silent
+      o.connect(g).connect(audioCtx.destination);
+      const now=audioCtx.currentTime;
+      // quick envelope
+      g.gain.setValueAtTime(0.0001, now);
+      g.gain.linearRampToValueAtTime(0.2*volume, now+0.02);
+      g.gain.exponentialRampToValueAtTime(0.0001, now+0.25);
+      o.start(now); o.stop(now+0.3);
+    }catch(e){ /* ignore */ }
+  }
+  enableAudio.onclick=async()=>{
+    try{
+      audioEnabled=true;
+      if(!audioCtx) audioCtx=new (window.AudioContext||window.webkitAudioContext)();
+      await audioCtx.resume();
+      beep();
+      enableAudio.textContent='Audio Enabled';
+      enableAudio.disabled=true;
+    }catch(e){ alert('Could not enable audio: '+e.message); }
+  };
+  muteToggle.onclick=()=>{ muted=!muted; muteToggle.textContent=muted?'Unmute':'Mute'; };
+  vol.oninput=e=>{ volume=parseFloat(e.target.value||'1')||1; };
+
   // State
-  let scenarios=[], current=null, watchId=null;
+  let scenarios=[], current=null, watchId=null, lastStopIndex=-1;
 
   // Load scenarios -> dropdown
   onValue(ref(db,'scenarios'), snap=>{
@@ -101,24 +165,56 @@
     status.textContent=scenarios.length ? `${scenarios.length} active scenario(s)` : 'No scenarios yet.';
   });
 
+  function showDispatchIntro(sc){
+    // Show dispatch text block and speak it
+    const txt = (sc.dispatch || '').trim();
+    dispatchBlock.textContent = txt ? `Dispatch: ${txt}` : 'Dispatch: (none)';
+    dispatchBlock.classList.remove('hidden');
+    // read it out
+    speak(txt || `${sc.title || 'scenario'} started.`);
+  }
+
   function openScenarioById(id){
     const sc=scenarios.find(s=>s.id===id); if(!sc){ status.textContent='Scenario not found.'; return; }
-    current=sc; viewer.classList.remove('hidden'); scTitle.textContent=sc.title||'(scenario)'; scNotes.textContent=sc.notes||'';
+    current=sc; viewer.classList.remove('hidden'); scTitle.textContent=sc.title||'(scenario)';
+    // Reset UI/result
+    result.classList.add('hidden'); stopTitle.textContent=''; caption.textContent=''; detail.textContent='';
+    lastStopIndex = -1;
+
+    showDispatchIntro(sc);
+
     if(watchId) navigator.geolocation.clearWatch(watchId);
     geoStatus.textContent='Watching your location…';
     try{
       watchId=navigator.geolocation.watchPosition(p=>{
         const { latitude:la, longitude:ln, accuracy:acc }=p.coords;
         geoStatus.textContent=`Lat ${la.toFixed(5)}, Lng ${ln.toFixed(5)} (±${Math.round(acc)}m)`;
-        const hit=nearest(current.stops, la, ln);
-        if(hit){ result.classList.remove('hidden'); stopTitle.textContent=hit.s.title||'Stop'; setImage(photo,hit.s); caption.textContent=hit.s.caption||''; detail.textContent=`Distance: ${Math.round(hit.dist)} m (radius ${hit.s.radiusMeters} m)`; }
+        const hit=nearestWithin(current.stops, la, ln);
+        if(hit && hit.index!==lastStopIndex){
+          // Entered a new stop’s radius
+          lastStopIndex = hit.index;
+          result.classList.remove('hidden');
+          stopTitle.textContent=hit.s.title||'Stop';
+          setImage(photo,hit.s);
+          caption.textContent=hit.s.caption||'';
+          detail.textContent=`Distance: ${Math.round(hit.dist)} m (radius ${hit.s.radiusMeters} m)`;
+          beep();
+          // Speak title + caption
+          const speech = `${hit.s.title ? hit.s.title + '. ' : ''}${hit.s.caption || ''}`;
+          speak(speech);
+        }
       }, err=>{ geoStatus.textContent='Location error: '+err.message; }, {enableHighAccuracy:true, maximumAge:2000, timeout:10000});
     }catch(e){ geoStatus.textContent='Location error: '+e.message; }
   }
 
   openBtn.onclick=()=>{ const id=select.value; status.textContent = id ? '' : 'Choose a scenario first.'; if(id) openScenarioById(id); };
-  forceBtn.onclick=()=>{ if(!current || !current.stops || !current.stops[0]){ status.textContent='Open a scenario first.'; return; } result.classList.remove('hidden'); const s=current.stops[0]; stopTitle.textContent=s.title||'Stop'; setImage(photo,s); caption.textContent=s.caption||''; detail.textContent=`(Test view)`; };
-  backBtn.onclick=()=>{ viewer.classList.add('hidden'); if(watchId) navigator.geolocation.clearWatch(watchId); status.textContent='Choose a scenario.'; };
+  forceBtn.onclick=()=>{ 
+    if(!current || !current.stops || !current.stops[0]){ status.textContent='Open a scenario first.'; return; } 
+    result.classList.remove('hidden'); const s=current.stops[0]; stopTitle.textContent=s.title||'Stop'; setImage(photo,s); caption.textContent=s.caption||''; detail.textContent=`(Test view)`; 
+    // also speak for test
+    beep(); speak(`${s.title ? s.title + '. ' : ''}${s.caption || ''}`);
+  };
+  backBtn.onclick=()=>{ viewer.classList.add('hidden'); if(watchId) navigator.geolocation.clearWatch(watchId); status.textContent='Choose a scenario.'; window.speechSynthesis.cancel(); };
 
   // Deep link ?id=
   const pre=new URLSearchParams(location.search).get('id');
