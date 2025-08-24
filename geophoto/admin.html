@@ -39,9 +39,7 @@
   .btn.ghost{background:transparent;color:var(--text);border:2px dashed var(--border)}
   .btn.danger{background:var(--danger);color:var(--dangerText)}
   label{display:block;margin:10px 0 6px 2px;font-size:13px;color:var(--muted)}
-  input,textarea,select{
-    width:100%;padding:14px 12px;border-radius:12px;border:1px solid var(--border);background:var(--panel);color:var(--text);font-size:16px;outline:none
-  }
+  input,textarea,select{width:100%;padding:14px 12px;border-radius:12px;border:1px solid var(--border);background:var(--panel);color:var(--text);font-size:16px;outline:none}
   input:focus,textarea:focus,select:focus{border-color:var(--primary);box-shadow:0 0 0 2px color-mix(in srgb, var(--primary) 30%, transparent)}
   textarea{min-height:84px;resize:vertical}
   .grid{display:grid;gap:10px}
@@ -81,7 +79,7 @@
   <div id="createPane" class="card" style="display:none">
     <h3 style="margin:0 0 8px">Create Scenario</h3>
 
-    <!-- Scenario name + Dispatch (first time only, both hide after first photo saved) -->
+    <!-- Scenario name + Dispatch (first time only) -->
     <div id="scenarioNameBlock">
       <label>Scenario name</label>
       <input id="scTitle" placeholder="e.g., Station Tour A" />
@@ -178,8 +176,7 @@
   const $ = (id) => document.getElementById(id);
   const showErr = (e) => { const box=$('error'); box.style.display='block'; box.textContent=String(e && e.stack?e.stack:e); console.error(e); };
   const compressToDataURL = async (file, maxDim=1280, quality=0.72) => {
-    const img = new Image();
-    const rdr = new FileReader();
+    const img = new Image(); const rdr = new FileReader();
     const data = await new Promise((res, rej)=>{ rdr.onload=()=>res(rdr.result); rdr.onerror=rej; rdr.readAsDataURL(file); });
     await new Promise((res, rej)=>{ img.onload=res; img.onerror=rej; img.src=data; });
     let { width:w, height:h } = img;
@@ -209,7 +206,7 @@
   const app = initializeApp(firebaseConfig);
   const db = getDatabase(app);
 
-  // ---------- UI elements ----------
+  // ---------- UI refs ----------
   const modeCard = $('modeCard');
   const btnCreateMode = $('btnCreateMode');
   const btnEditMode = $('btnEditMode');
@@ -250,15 +247,15 @@
   const backToList = $('backToList');
   const editStatus = $('editStatus');
 
-  // ---------- State ----------
+  // ---------- State (avoid duplicate names) ----------
   let createState = {
     scenarioNamed: false,
     scenarioTitle: '',
     dispatchInfo: '',
-    photos: [] // {imageData|imageURL, lat, lng, radiusMeters, title, caption, active:true, createdAt}
+    photos: []
   };
-  let scenarios = []; // [{id, ...}]
-  let editing = null;
+  let scenarioList = [];          // was "scenarios" (renamed)
+  let editingScenario = null;     // was "editing"  (renamed)
 
   // ---------- Mode switching ----------
   function showCreate() {
@@ -303,7 +300,6 @@
     createState.photos.forEach(p => gallery.appendChild(thumb(p.imageData || p.imageURL)));
     countNote.textContent = `${createState.photos.length} photo(s)`;
   }
-
   async function captureGPS() {
     gpsStatus.textContent = 'Requesting GPS…';
     return new Promise((resolve) => {
@@ -311,17 +307,13 @@
       const onErr = (err)=>{ gpsStatus.textContent = 'Location error: ' + err.message; resolve(false); };
       try {
         navigator.geolocation.getCurrentPosition(onOk, onErr, { enableHighAccuracy:true, timeout:10000, maximumAge:0 });
-      } catch (e) {
-        gpsStatus.textContent = 'Geolocation not supported';
-        resolve(false);
-      }
+      } catch (e) { gpsStatus.textContent = 'Geolocation not supported'; resolve(false); }
     });
   }
 
   // Auto-GPS when a photo file is picked
   file.onchange = async (e) => {
-    const f = e.target.files?.[0];
-    if (!f) return;
+    const f = e.target.files?.[0]; if (!f) return;
     sizeInfo.textContent = 'Compressing image…';
     try {
       const dataURL = await compressToDataURL(f);
@@ -331,19 +323,12 @@
       await captureGPS();
       savePhoto.dataset.pendingImageData = dataURL;
       savePhoto.dataset.pendingImageURL = '';
-    } catch (err) {
-      sizeInfo.textContent = 'Failed to process image.';
-    }
+    } catch (err) { sizeInfo.textContent = 'Failed to process image.'; }
   };
-
   retryGPS.onclick = async () => { await captureGPS(); };
 
-  // Top sticky actions
-  topAddPhoto.onclick = () => {
-    resetPhotoForm(true);
-    window.scrollTo({ top: 0, behavior: 'smooth' });
-    file.focus();
-  };
+  // Sticky actions
+  topAddPhoto.onclick = () => { resetPhotoForm(true); window.scrollTo({ top: 0, behavior: 'smooth' }); file.focus(); };
   topEndScenario.onclick = async () => {
     try {
       if (!createState.scenarioNamed) throw new Error('Name the scenario and enter dispatch info first.');
@@ -352,30 +337,25 @@
       await set(newRef, {
         title: createState.scenarioTitle,
         dispatch: createState.dispatchInfo,
-        notes: '',           // kept for compatibility
+        notes: '',
         active: true,
         createdAt: Date.now(),
         stops: createState.photos
       });
       resetPhotoForm(false);
       alert('Scenario saved!');
-    } catch (e) {
-      alert(e.message || e);
-    }
+    } catch (e) { alert(e.message || e); }
   };
 
-  // Save Photo (adds one stop locally; hides Scenario+Dispatch after first save)
+  // Save Photo
   savePhoto.onclick = async () => {
     try {
-      // Lock scenario name + dispatch the first time
       if (!createState.scenarioNamed) {
-        const title = scTitle.value.trim();
-        if (!title) throw new Error('Please name the scenario.');
-        const disp = (dispatchInfo.value || '').trim();
+        const title = scTitle.value.trim(); if (!title) throw new Error('Please name the scenario.');
         createState.scenarioTitle = title;
-        createState.dispatchInfo = disp;
+        createState.dispatchInfo = (dispatchInfo.value || '').trim();
         createState.scenarioNamed = true;
-        scenarioNameBlock.style.display = 'none'; // hides both name + dispatch after first photo save
+        scenarioNameBlock.style.display = 'none';
       }
       const inlineData = savePhoto.dataset.pendingImageData || '';
       const url = (imageUrl.value || '').trim();
@@ -383,43 +363,35 @@
       const la = parseFloat(lat.value), ln = parseFloat(lng.value);
       if (Number.isNaN(la) || Number.isNaN(ln)) throw new Error('GPS not available yet. Tap Retry GPS.');
       const r = Math.max(5, parseInt(radius.value || '50', 10));
-
       const stop = {
         title: (stopTitle.value || '').trim(),
         caption: (caption.value || '').trim(),
-        lat: la, lng: ln,
-        radiusMeters: r,
-        active: true,
-        createdAt: Date.now(),
-        imageData: inlineData || null,
-        imageURL: inlineData ? null : url
+        lat: la, lng: ln, radiusMeters: r,
+        active: true, createdAt: Date.now(),
+        imageData: inlineData || null, imageURL: inlineData ? null : url
       };
       createState.photos.push(stop);
       renderGallery();
-      delete savePhoto.dataset.pendingImageData;
-      delete savePhoto.dataset.pendingImageURL;
+      delete savePhoto.dataset.pendingImageData; delete savePhoto.dataset.pendingImageURL;
       resetPhotoForm(true);
       alert('Photo saved to scenario.');
-    } catch (e) {
-      alert(e.message || e);
-    }
+    } catch (e) { alert(e.message || e); }
   };
 
-  // ---------- Edit list (simple) ----------
-  let scenarios = [], editing = null;
+  // ---------- Edit list ----------
   onValue(ref(db, 'scenarios'), (snap) => {
     const val = snap.val() || {};
-    scenarios = Object.entries(val).map(([id, s]) => ({ id, ...s }))
+    scenarioList = Object.entries(val).map(([id, s]) => ({ id, ...s }))
       .sort((a,b)=> (b.createdAt||0)-(a.createdAt||0));
     if (editPane.style.display !== 'none') renderScenarioList();
   }, showErr);
 
   function renderScenarioList() {
-    scList.innerHTML = '';
+    const list = $('scList'); list.innerHTML = '';
     editBlock.style.display = 'none';
-    if (!scenarios.length) { editStatus.textContent = 'No scenarios yet.'; return; }
-    editStatus.textContent = `${scenarios.length} scenario(s)`;
-    scenarios.forEach(sc => {
+    if (!scenarioList.length) { editStatus.textContent = 'No scenarios yet.'; return; }
+    editStatus.textContent = `${scenarioList.length} scenario(s)`;
+    scenarioList.forEach(sc => {
       const row = document.createElement('div'); row.className = 'row'; row.style.padding='8px 0';
       const first = (sc.stops && sc.stops[0]) || {};
       row.appendChild(thumb(first.imageData || first.imageURL));
@@ -431,41 +403,38 @@
       const openBtn = document.createElement('button'); openBtn.className='btn ghost'; openBtn.textContent='Open';
       openBtn.onclick = () => openEditor(sc.id);
       row.appendChild(openBtn);
-      scList.appendChild(row);
+      list.appendChild(row);
     });
   }
 
   function openEditor(id) {
-    const sc = scenarios.find(s => s.id === id);
+    const sc = scenarioList.find(s => s.id === id);
     if (!sc) { editStatus.textContent = 'Scenario not found.'; return; }
-    editing = JSON.parse(JSON.stringify(sc));
+    editingScenario = JSON.parse(JSON.stringify(sc));
     editBlock.style.display = 'block';
-    editTitle.value = editing.title || '';
-    editDispatch.value = editing.dispatch || '';
-    editActive.value = editing.active ? 'true' : 'false';
+    editTitle.value = editingScenario.title || '';
+    editDispatch.value = editingScenario.dispatch || '';
+    editActive.value = editingScenario.active ? 'true' : 'false';
     editGallery.innerHTML = '';
-    (editing.stops || []).forEach(st => editGallery.appendChild(thumb(st.imageData || st.imageURL)));
+    (editingScenario.stops || []).forEach(st => editGallery.appendChild(thumb(st.imageData || st.imageURL)));
   }
 
   saveScenarioChanges.onclick = async () => {
     try {
-      if (!editing) return;
-      editing.title = editTitle.value.trim() || '(untitled)';
-      editing.dispatch = (editDispatch.value || '').trim();
-      editing.active = (editActive.value === 'true');
-      const { id, ...payload } = editing;
-      await set(ref(db, 'scenarios/' + editing.id), payload);
+      if (!editingScenario) return;
+      editingScenario.title = editTitle.value.trim() || '(untitled)';
+      editingScenario.dispatch = (editDispatch.value || '').trim();
+      editingScenario.active = (editActive.value === 'true');
+      const { id, ...payload } = editingScenario;
+      await set(ref(db, 'scenarios/' + editingScenario.id), payload);
       alert('Changes saved.');
       renderScenarioList();
       editBlock.style.display = 'none';
-    } catch (e) {
-      alert(e.message || e);
-    }
+    } catch (e) { alert(e.message || e); }
   };
   backToList.onclick = () => { editBlock.style.display = 'none'; };
 
-  // ---------- Start on chooser ----------
-  // (No auto-mode; user taps Create or Edit)
+  // Start on the chooser (no auto-switch)
 })();
 </script>
 </body>
