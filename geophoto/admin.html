@@ -31,7 +31,6 @@
   .wrap{max-width:900px;margin:0 auto;padding:12px 14px calc(80px + env(safe-area-inset-bottom))}
   .card{background:var(--surface);border:1px solid var(--border);border-radius:var(--br);box-shadow:var(--shadow);padding:var(--pad);margin:var(--gap) 0}
   .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
-  .pill{display:inline-flex;align-items:center;gap:8px;padding:6px 10px;border-radius:999px;background:color-mix(in srgb, var(--panel) 70%, #000);border:1px solid var(--border);color:var(--muted);font-size:12px}
   .stickyBar{position:sticky;top:56px;z-index:19;background:color-mix(in hsl, var(--bg) 85%, transparent);backdrop-filter:blur(6px) saturate(1.05);border-bottom:1px solid var(--border);padding:8px 0;margin:0 -14px 12px}
   .stickyBar .inner{max-width:900px;margin:0 auto;padding:0 14px;display:flex;gap:10px}
   .btn{appearance:none;border:0;border-radius:12px;padding:13px 14px;font-size:16px;font-weight:700;cursor:pointer;box-shadow:var(--shadow)}
@@ -70,7 +69,7 @@
     <p class="hint">Choose what you want to do.</p>
   </div>
 
-  <!-- Sticky actions (shown in Create mode) -->
+  <!-- Sticky actions (Create mode) -->
   <div id="stickyActions" class="stickyBar" style="display:none">
     <div class="inner">
       <button id="topAddPhoto" class="btn accent" style="flex:1">Add Photo</button>
@@ -82,11 +81,13 @@
   <div id="createPane" class="card" style="display:none">
     <h3 style="margin:0 0 8px">Create Scenario</h3>
 
-    <!-- Scenario name (first time only) -->
+    <!-- Scenario name + Dispatch (first time only, both hide after first photo saved) -->
     <div id="scenarioNameBlock">
       <label>Scenario name</label>
       <input id="scTitle" placeholder="e.g., Station Tour A" />
-      <label class="hint">You’ll name the scenario once. Additional photos use the same name.</label>
+      <label>Dispatch information</label>
+      <textarea id="dispatchInfo" placeholder="Call details, unit assignments, address, notes…"></textarea>
+      <label class="hint">These fields are required only once. They’ll be hidden after the first photo is saved.</label>
       <div class="divider"></div>
     </div>
 
@@ -99,11 +100,11 @@
       <div class="grid g2">
         <div>
           <label>Latitude</label>
-          <input id="lat" readonly placeholder="Will fill automatically…" />
+          <input id="lat" readonly placeholder="Auto-captured…" />
         </div>
         <div>
           <label>Longitude</label>
-          <input id="lng" readonly placeholder="Will fill automatically…" />
+          <input id="lng" readonly placeholder="Auto-captured…" />
         </div>
       </div>
       <div class="row">
@@ -142,7 +143,7 @@
     <p id="countNote" class="hint">0 photo(s)</p>
   </div>
 
-  <!-- Edit Scenario pane -->
+  <!-- Edit Scenario pane (simple) -->
   <div id="editPane" class="card" style="display:none">
     <h3 style="margin:0 0 8px">Edit Scenario</h3>
     <div id="scList"></div>
@@ -150,6 +151,8 @@
       <div class="divider"></div>
       <label>Scenario name</label>
       <input id="editTitle" />
+      <label>Dispatch information</label>
+      <textarea id="editDispatch"></textarea>
       <label>Active?</label>
       <select id="editActive">
         <option value="true">Yes</option>
@@ -158,7 +161,6 @@
       <div class="divider"></div>
       <h4 style="margin:0 0 8px">Existing photos</h4>
       <div id="editGallery" class="gallery"></div>
-      <p class="hint">This simple editor lets you rename the scenario and toggle active. (Full per-photo edits can be added later.)</p>
       <div class="row" style="margin-top:8px">
         <button id="saveScenarioChanges" class="btn primary" style="flex:1">Save Changes</button>
         <button id="backToList" class="btn ghost" style="flex:1">Back</button>
@@ -220,6 +222,8 @@
   const scenarioNameBlock = $('scenarioNameBlock');
 
   const scTitle = $('scTitle');
+  const dispatchInfo = $('dispatchInfo');
+
   const file = $('file');
   const preview = $('preview');
   const lat = $('lat');
@@ -239,6 +243,7 @@
   const scList = $('scList');
   const editBlock = $('editBlock');
   const editTitle = $('editTitle');
+  const editDispatch = $('editDispatch');
   const editActive = $('editActive');
   const editGallery = $('editGallery');
   const saveScenarioChanges = $('saveScenarioChanges');
@@ -249,10 +254,11 @@
   let createState = {
     scenarioNamed: false,
     scenarioTitle: '',
-    photos: [] // each: {imageData|imageURL, lat, lng, radiusMeters, title, caption, createdAt, active:true}
+    dispatchInfo: '',
+    photos: [] // {imageData|imageURL, lat, lng, radiusMeters, title, caption, active:true, createdAt}
   };
   let scenarios = []; // [{id, ...}]
-  let editing = null; // selected scenario for edit
+  let editing = null;
 
   // ---------- Mode switching ----------
   function showCreate() {
@@ -260,7 +266,6 @@
     editPane.style.display = 'none';
     createPane.style.display = 'block';
     stickyActions.style.display = 'block';
-    // First time in create: require scenario name
     scenarioNameBlock.style.display = createState.scenarioNamed ? 'none' : 'block';
   }
   function showEdit() {
@@ -273,11 +278,12 @@
   btnCreateMode.onclick = showCreate;
   btnEditMode.onclick = showEdit;
 
-  // ---------- Create flow logic ----------
+  // ---------- Create flow ----------
   function resetPhotoForm(keepScenario=true) {
     if (!keepScenario) {
-      createState = { scenarioNamed:false, scenarioTitle:'', photos:[] };
+      createState = { scenarioNamed:false, scenarioTitle:'', dispatchInfo:'', photos:[] };
       scTitle.value = '';
+      dispatchInfo.value = '';
       scenarioNameBlock.style.display = 'block';
       gallery.innerHTML = '';
       countNote.textContent = '0 photo(s)';
@@ -294,9 +300,7 @@
   }
   function renderGallery() {
     gallery.innerHTML = '';
-    createState.photos.forEach(p => {
-      gallery.appendChild(thumb(p.imageData || p.imageURL));
-    });
+    createState.photos.forEach(p => gallery.appendChild(thumb(p.imageData || p.imageURL)));
     countNote.textContent = `${createState.photos.length} photo(s)`;
   }
 
@@ -324,9 +328,7 @@
       preview.src = dataURL; preview.style.display = 'block';
       const bytes = Math.ceil((dataURL.length - 'data:image/jpeg;base64,'.length) * 3/4);
       sizeInfo.textContent = `Image ~${Math.round(bytes/1024)} KB`;
-      // Auto capture GPS
       await captureGPS();
-      // Store temporarily on the save button handler via dataset
       savePhoto.dataset.pendingImageData = dataURL;
       savePhoto.dataset.pendingImageURL = '';
     } catch (err) {
@@ -334,30 +336,27 @@
     }
   };
 
-  // Retry GPS manually
   retryGPS.onclick = async () => { await captureGPS(); };
 
   // Top sticky actions
   topAddPhoto.onclick = () => {
-    // Start a fresh photo form (keep scenario name)
     resetPhotoForm(true);
     window.scrollTo({ top: 0, behavior: 'smooth' });
     file.focus();
   };
   topEndScenario.onclick = async () => {
     try {
-      if (!createState.scenarioNamed) throw new Error('Name the scenario first.');
+      if (!createState.scenarioNamed) throw new Error('Name the scenario and enter dispatch info first.');
       if (!createState.photos.length) throw new Error('Add at least one photo.');
-      // Save to RTDB
       const newRef = push(ref(db, 'scenarios'));
       await set(newRef, {
         title: createState.scenarioTitle,
-        notes: '',
+        dispatch: createState.dispatchInfo,
+        notes: '',           // kept for compatibility
         active: true,
         createdAt: Date.now(),
         stops: createState.photos
       });
-      // Reset and go to Edit list (optional)
       resetPhotoForm(false);
       alert('Scenario saved!');
     } catch (e) {
@@ -365,18 +364,19 @@
     }
   };
 
-  // Save Photo (adds one stop to local list)
+  // Save Photo (adds one stop locally; hides Scenario+Dispatch after first save)
   savePhoto.onclick = async () => {
     try {
-      // First time, lock scenario name
+      // Lock scenario name + dispatch the first time
       if (!createState.scenarioNamed) {
         const title = scTitle.value.trim();
         if (!title) throw new Error('Please name the scenario.');
+        const disp = (dispatchInfo.value || '').trim();
         createState.scenarioTitle = title;
+        createState.dispatchInfo = disp;
         createState.scenarioNamed = true;
-        scenarioNameBlock.style.display = 'none';
+        scenarioNameBlock.style.display = 'none'; // hides both name + dispatch after first photo save
       }
-      // Validate photo & gps
       const inlineData = savePhoto.dataset.pendingImageData || '';
       const url = (imageUrl.value || '').trim();
       if (!inlineData && !url) throw new Error('Choose a photo or paste an image URL.');
@@ -384,7 +384,6 @@
       if (Number.isNaN(la) || Number.isNaN(ln)) throw new Error('GPS not available yet. Tap Retry GPS.');
       const r = Math.max(5, parseInt(radius.value || '50', 10));
 
-      // Build stop
       const stop = {
         title: (stopTitle.value || '').trim(),
         caption: (caption.value || '').trim(),
@@ -397,7 +396,6 @@
       };
       createState.photos.push(stop);
       renderGallery();
-      // Clear pending and form for next photo
       delete savePhoto.dataset.pendingImageData;
       delete savePhoto.dataset.pendingImageURL;
       resetPhotoForm(true);
@@ -408,36 +406,29 @@
   };
 
   // ---------- Edit list (simple) ----------
+  let scenarios = [], editing = null;
   onValue(ref(db, 'scenarios'), (snap) => {
     const val = snap.val() || {};
     scenarios = Object.entries(val).map(([id, s]) => ({ id, ...s }))
       .sort((a,b)=> (b.createdAt||0)-(a.createdAt||0));
-    // Refresh list if Edit pane visible
     if (editPane.style.display !== 'none') renderScenarioList();
   }, showErr);
 
   function renderScenarioList() {
     scList.innerHTML = '';
     editBlock.style.display = 'none';
-    if (!scenarios.length) {
-      editStatus.textContent = 'No scenarios yet.';
-      return;
-    }
+    if (!scenarios.length) { editStatus.textContent = 'No scenarios yet.'; return; }
     editStatus.textContent = `${scenarios.length} scenario(s)`;
     scenarios.forEach(sc => {
-      const row = document.createElement('div');
-      row.className = 'row';
-      row.style.padding = '8px 0';
+      const row = document.createElement('div'); row.className = 'row'; row.style.padding='8px 0';
       const first = (sc.stops && sc.stops[0]) || {};
       row.appendChild(thumb(first.imageData || first.imageURL));
-      const meta = document.createElement('div');
-      meta.style.flex = '1';
+      const meta = document.createElement('div'); meta.style.flex='1';
       meta.innerHTML = `<div style="font-weight:800">${sc.title || '(untitled)'}</div>
-                        <div class="hint">${(sc.stops?.length || 0)} photo(s) • ${sc.active ? 'Active' : 'Inactive'}</div>`;
+                        <div class="hint">${(sc.stops?.length || 0)} photo(s) • ${sc.active ? 'Active' : 'Inactive'}</div>
+                        ${sc.dispatch ? `<div class="hint">Dispatch: ${String(sc.dispatch).slice(0,120)}</div>` : ''}`;
       row.appendChild(meta);
-      const openBtn = document.createElement('button');
-      openBtn.className = 'btn ghost';
-      openBtn.textContent = 'Open';
+      const openBtn = document.createElement('button'); openBtn.className='btn ghost'; openBtn.textContent='Open';
       openBtn.onclick = () => openEditor(sc.id);
       row.appendChild(openBtn);
       scList.appendChild(row);
@@ -450,17 +441,17 @@
     editing = JSON.parse(JSON.stringify(sc));
     editBlock.style.display = 'block';
     editTitle.value = editing.title || '';
+    editDispatch.value = editing.dispatch || '';
     editActive.value = editing.active ? 'true' : 'false';
     editGallery.innerHTML = '';
-    (editing.stops || []).forEach(st => {
-      editGallery.appendChild(thumb(st.imageData || st.imageURL));
-    });
+    (editing.stops || []).forEach(st => editGallery.appendChild(thumb(st.imageData || st.imageURL)));
   }
 
   saveScenarioChanges.onclick = async () => {
     try {
       if (!editing) return;
       editing.title = editTitle.value.trim() || '(untitled)';
+      editing.dispatch = (editDispatch.value || '').trim();
       editing.active = (editActive.value === 'true');
       const { id, ...payload } = editing;
       await set(ref(db, 'scenarios/' + editing.id), payload);
@@ -473,8 +464,8 @@
   };
   backToList.onclick = () => { editBlock.style.display = 'none'; };
 
-  // ---------- Start on mode chooser ----------
-  resetPhotoForm(false);
+  // ---------- Start on chooser ----------
+  // (No auto-mode; user taps Create or Edit)
 })();
 </script>
 </body>
