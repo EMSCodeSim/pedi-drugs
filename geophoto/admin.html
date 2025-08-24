@@ -2,53 +2,63 @@
 <html lang="en">
 <head>
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Geo-Photo Admin (Diagnostic)</title>
+<title>Geo-Photo Admin</title>
 <style>
-  body{font-family:system-ui;margin:0;padding:1rem;max-width:700px;background:#0b1e27;color:#fff}
-  header{position:sticky;top:0;background:#0a6370;color:#fff;padding:.75rem 1rem;border-radius:.5rem}
-  .card{background:#102b36;border:1px solid #1c3a47;border-radius:.75rem;padding:1rem;margin:1rem 0}
+  :root{--bg:#0b1e27;--card:#102b36;--border:#1c3a47;--accent:#2aa3b5;--text:#ffffff}
+  body{margin:0;font-family:system-ui,Arial;background:var(--bg);color:var(--text)}
+  .wrap{max-width:720px;margin:0 auto;padding:16px}
+  header{background:#0a6370;padding:14px 16px;border-radius:12px;margin:12px 0}
+  h2{margin:0}
+  .card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:16px;margin:12px 0}
   label{display:block;margin:.5rem 0 .25rem}
-  input,button{width:100%;padding:.75rem;font-size:1rem}
+  input,button{width:100%;padding:.8rem;font-size:1rem;border-radius:10px;border:1px solid var(--border);background:#0f3542;color:#e7fbff}
+  input[readonly]{opacity:.8}
   .row{display:grid;grid-template-columns:1fr 1fr;gap:.75rem}
-  .hint{font-size:.9rem;color:#b7d9e4}
+  .btn{background:var(--accent);color:#00151b;border:0}
+  .hint{opacity:.85;font-size:.95rem}
+  img{max-width:100%;display:block;border-radius:12px;margin:.5rem 0}
   #error{white-space:pre-wrap;background:#2b1b1b;border:1px solid #4b2a2a;padding:.75rem;border-radius:.5rem;color:#ffd6d6;margin-top:.75rem;display:none}
 </style>
 <noscript><strong>This page requires JavaScript.</strong></noscript>
 </head>
 <body>
-<header><h2>Geo-Photo Admin</h2></header>
+<div class="wrap">
+  <header><h2>Geo-Photo Admin</h2></header>
 
-<div class="card">
-  <div class="row">
-    <div>
-      <label>Title</label>
-      <input id="title" placeholder="Short label">
+  <div class="card">
+    <div class="row">
+      <div>
+        <label>Title</label>
+        <input id="title" placeholder="Short label">
+      </div>
+      <div>
+        <label>Radius (meters)</label>
+        <input id="radius" type="number" value="40" min="5" step="5">
+      </div>
     </div>
-    <div>
-      <label>Radius (meters)</label>
-      <input id="radius" type="number" value="40" min="5" step="5">
+
+    <div class="row">
+      <div>
+        <label>Latitude</label>
+        <input id="lat" readonly>
+      </div>
+      <div>
+        <label>Longitude</label>
+        <input id="lng" readonly>
+      </div>
     </div>
+
+    <button id="btnLoc" class="btn">Use my current location</button>
+    <p class="hint">Stand at the spot where the photo should appear, then tap the button above.</p>
+
+    <label>Photo</label>
+    <input id="file" type="file" accept="image/*" capture="environment">
+    <img id="preview" style="display:none" alt="Preview"/>
+
+    <button id="btnSave" class="btn">Save Spot</button>
+    <p id="msg" class="hint"></p>
+    <div id="error"></div>
   </div>
-  <div class="row">
-    <div>
-      <label>Latitude</label>
-      <input id="lat" readonly>
-    </div>
-    <div>
-      <label>Longitude</label>
-      <input id="lng" readonly>
-    </div>
-  </div>
-  <button id="btnLoc">Use my current location</button>
-  <p class="hint">Stand at the spot → tap the button above.</p>
-
-  <label>Photo</label>
-  <input id="file" type="file" accept="image/*" capture="environment">
-  <img id="preview" style="display:none;max-width:100%;margin:.5rem 0;border-radius:.5rem"/>
-
-  <button id="btnSave">Save Spot</button>
-  <p id="msg" class="hint"></p>
-  <div id="error"></div>
 </div>
 
 <script type="module">
@@ -61,11 +71,10 @@
   };
 
   try {
-    // 1) IMPORTS
+    // Firebase imports
     const [{ initializeApp }] = await Promise.all([
       import("https://www.gstatic.com/firebasejs/10.12.4/firebase-app.js"),
     ]);
-
     const [
       { getFirestore, collection, addDoc, serverTimestamp },
       { getStorage, ref: sRef, uploadBytes, getDownloadURL },
@@ -74,24 +83,24 @@
       import("https://www.gstatic.com/firebasejs/10.12.4/firebase-storage.js"),
     ]);
 
-    // 2) CONFIG (yours)
+    // Your Firebase config (fixed storageBucket)
     const firebaseConfig = {
       apiKey: "AIzaSyDM6DpRSeZueVKRpbyJyDmhf8WY66KyCDk",
       authDomain: "dailyquiz-d5279.firebaseapp.com",
       databaseURL: "https://dailyquiz-d5279-default-rtdb.firebaseio.com",
       projectId: "dailyquiz-d5279",
-      storageBucket: "dailyquiz-d5279.firebasestorage.app",
+      storageBucket: "dailyquiz-d5279.appspot.com",
       messagingSenderId: "94577748034",
       appId: "1:94577748034:web:c032d3a1d72db1313de5db",
       measurementId: "G-19DVN7NNH7"
     };
 
-    // 3) INIT
+    // Init
     const app = initializeApp(firebaseConfig);
     const db = getFirestore(app);
     const storage = getStorage(app);
 
-    // 4) UI HANDLERS
+    // UI
     const el = id => document.getElementById(id);
     const title = el('title'), radius = el('radius'), lat = el('lat'), lng = el('lng');
     const file = el('file'), preview = el('preview'), msg = el('msg');
@@ -123,11 +132,13 @@
         if (!f) throw new Error("Choose a photo");
         if (!lat.value || !lng.value) throw new Error("Set a location");
 
+        // Upload image
         const path = `photos/${Date.now()}_${f.name.replace(/\s+/g,'_')}`;
-        const refImg = sRef(storage, path);
-        await uploadBytes(refImg, f);
-        const url = await getDownloadURL(refImg);
+        const imgRef = sRef(storage, path);
+        await uploadBytes(imgRef, f);
+        const url = await getDownloadURL(imgRef);
 
+        // Save spot
         await addDoc(collection(db, "spots"), {
           title: title.value || "Untitled",
           lat: parseFloat(lat.value),
@@ -141,7 +152,7 @@
 
         msg.textContent = "Saved! 🎉";
         file.value = ""; preview.style.display = "none"; title.value = "";
-      } catch (e) { msg.textContent = "Error"; showErr(e); }
+      } catch (e) { msg.textContent = "Error saving."; showErr(e); }
     };
   } catch (e) {
     showErr(e);
