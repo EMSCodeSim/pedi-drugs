@@ -1,50 +1,154 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Geo-Photo Viewer (Diagnostic)</title>
+<style>
+  body{margin:0;font-family:system-ui;background:#0b1e27;color:#fff;display:flex;min-height:100vh}
+  .wrap{margin:auto;max-width:560px;padding:1rem}
+  .card{background:#102b36;border:1px solid #1c3a47;border-radius:.75rem;padding:1rem}
+  .status{opacity:.85;font-size:.95rem;margin:.5rem 0 1rem}
+  img{max-width:100%;border-radius:.5rem;display:block;margin:.5rem 0}
+  .hidden{display:none}
+  .btn{width:100%;padding:.8rem;font-size:1rem;border:0;border-radius:.5rem;background:#2aa3b5;color:#00151b}
+  #error{white-space:pre-wrap;background:#2b1b1b;border:1px solid #4b2a2a;padding:.75rem;border-radius:.5rem;color:#ffd6d6;margin-top:.75rem;display:none}
+</style>
+<noscript><strong>This page requires JavaScript.</strong></noscript>
+</head>
+<body>
+<div class="wrap">
+  <div class="card">
+    <h2>Nearby Photo</h2>
+    <p class="status" id="status">Booting…</p>
+    <div id="result" class="hidden">
+      <h3 id="title"></h3>
+      <img id="photo" alt="Location photo">
+      <p class="status" id="detail"></p>
+    </div>
+    <button id="enable" class="btn hidden">Enable Location</button>
+    <div id="error"></div>
+  </div>
+</div>
+
 <script type="module">
-import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-app.js";
-import { getDatabase, ref, onValue } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-database.js";
+(async () => {
+  const showErr = (e) => {
+    const box = document.getElementById('error');
+    box.style.display = 'block';
+    box.textContent = String(e && e.stack ? e.stack : e);
+    console.error(e);
+  };
+  const setStatus = (t) => document.getElementById('status').textContent = t;
 
-const firebaseConfig = {
-  apiKey: "AIzaSyDM6DpRSeZueVKRpbyJyDmhf8WY66KyCDk",
-  authDomain: "dailyquiz-d5279.firebaseapp.com",
-  databaseURL: "https://dailyquiz-d5279-default-rtdb.firebaseio.com",
-  projectId: "dailyquiz-d5279",
-  storageBucket: "dailyquiz-d5279.firebasestorage.app",
-  messagingSenderId: "94577748034",
-  appId: "1:94577748034:web:c032d3a1d72db1313de5db",
-  measurementId: "G-19DVN7NNH7"
-};
+  try {
+    // 1) IMPORTS
+    const [{ initializeApp }] = await Promise.all([
+      import("https://www.gstatic.com/firebasejs/10.12.4/firebase-app.js"),
+    ]);
+    const [{ getFirestore, collection, getDocs, query, where }] = await Promise.all([
+      import("https://www.gstatic.com/firebasejs/10.12.4/firebase-firestore.js"),
+    ]);
 
-const app = initializeApp(firebaseConfig);
-const db = getDatabase(app);
+    // 2) CONFIG (yours)
+    const firebaseConfig = {
+      apiKey: "AIzaSyDM6DpRSeZueVKRpbyJyDmhf8WY66KyCDk",
+      authDomain: "dailyquiz-d5279.firebaseapp.com",
+      databaseURL: "https://dailyquiz-d5279-default-rtdb.firebaseio.com",
+      projectId: "dailyquiz-d5279",
+      storageBucket: "dailyquiz-d5279.firebasestorage.app",
+      messagingSenderId: "94577748034",
+      appId: "1:94577748034:web:c032d3a1d72db1313de5db",
+      measurementId: "G-19DVN7NNH7"
+    };
 
-let spots = [];
-onValue(ref(db, "spots"), snapshot => {
-  spots = Object.values(snapshot.val() || {});
-});
+    // 3) INIT
+    const app = initializeApp(firebaseConfig);
+    const db = getFirestore(app);
 
-function haversineMeters(lat1, lon1, lat2, lon2) {
-  const toRad = d => d * Math.PI / 180;
-  const R = 6371000;
-  const dLat = toRad(lat2-lat1);
-  const dLon = toRad(lon2-lon1);
-  const a = Math.sin(dLat/2)**2 + Math.cos(toRad(lat1))*Math.cos(toRad(lat2))*Math.sin(dLon/2)**2;
-  return 2 * R * Math.asin(Math.sqrt(a));
-}
-
-navigator.geolocation.watchPosition(pos => {
-  const { latitude, longitude } = pos.coords;
-  let match = null;
-  for (const s of spots) {
-    const dist = haversineMeters(latitude, longitude, s.lat, s.lng);
-    if (s.active && dist <= s.radiusMeters) {
-      match = { spot: s, dist };
-      break;
+    // 4) FETCH SPOTS
+    let spots = [];
+    async function loadSpots(){
+      const q = query(collection(db, "spots"), where("active", "==", true));
+      const snap = await getDocs(q);
+      spots = snap.docs.map(d => ({ id:d.id, ...d.data() }));
+      if (!spots.length) setStatus("No active spots yet.");
     }
+    await loadSpots();
+
+    // 5) GEO HELPERS
+    function haversineMeters(lat1, lon1, lat2, lon2) {
+      const toRad = d => d * Math.PI / 180;
+      const R = 6371000;
+      const dLat = toRad(lat2-lat1);
+      const dLon = toRad(lon2-lon1);
+      const a = Math.sin(dLat/2)**2 + Math.cos(toRad(lat1))*Math.cos(toRad(lat2))*Math.sin(dLon/2)**2;
+      return 2 * R * Math.asin(Math.sqrt(a));
+    }
+
+    function findMatch(userLat, userLng){
+      let best = null;
+      for (const s of spots){
+        const dist = haversineMeters(userLat, userLng, s.lat, s.lng);
+        if (s.radiusMeters != null && s.active && dist <= s.radiusMeters){
+          if (!best || dist < best.dist) best = { spot: s, dist };
+        }
+      }
+      return best;
+    }
+
+    // 6) UI
+    const result = document.getElementById('result');
+    const title = document.getElementById('title');
+    const photo = document.getElementById('photo');
+    const detail = document.getElementById('detail');
+    const enableBtn = document.getElementById('enable');
+
+    function show(spot, dist){
+      result.classList.remove('hidden');
+      title.textContent = spot.title || "Nearby spot";
+      photo.src = spot.imageURL;
+      detail.textContent = `You are ${Math.round(dist)} m from "${spot.title}" (radius ${spot.radiusMeters} m).`;
+    }
+
+    // 7) LOCATION
+    let lastUpdate = 0;
+    const MIN_MS = 4000;
+    function onPosition(pos){
+      const now = Date.now();
+      if (now - lastUpdate < MIN_MS) return;
+      lastUpdate = now;
+
+      const { latitude, longitude, accuracy } = pos.coords;
+      setStatus(`Lat ${latitude.toFixed(5)}, Lng ${longitude.toFixed(5)} (±${Math.round(accuracy)}m)`);
+      const match = findMatch(latitude, longitude);
+      if (match) show(match.spot, match.dist);
+    }
+
+    function onError(err){
+      setStatus(`Location error: ${err.message}`);
+      enableBtn.classList.remove('hidden');
+    }
+
+    if (!('geolocation' in navigator)){
+      setStatus("Geolocation not supported.");
+    } else {
+      try {
+        navigator.geolocation.watchPosition(onPosition, onError, { enableHighAccuracy:true, maximumAge:2000, timeout:10000 });
+        setStatus("Watching your location…");
+      } catch (e){ onError(e); }
+    }
+
+    enableBtn.onclick = () => {
+      enableBtn.classList.add('hidden');
+      try {
+        navigator.geolocation.watchPosition(onPosition, onError, { enableHighAccuracy:true, maximumAge:2000, timeout:10000 });
+      } catch (e){ showErr(e); }
+    };
+
+  } catch (e) {
+    showErr(e);
   }
-  if (match) {
-    document.getElementById("title").textContent = match.spot.title;
-    document.getElementById("photo").src = match.spot.imageURL;
-    document.getElementById("detail").textContent =
-      `Within ${Math.round(match.dist)}m of ${match.spot.title}`;
-  }
-});
+})();
 </script>
+</body>
+</html>
