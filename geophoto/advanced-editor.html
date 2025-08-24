@@ -153,8 +153,12 @@
     </div>
     <div id="overlayShelf" style="margin-top:8px; display:grid; grid-template-columns:repeat(3, 1fr); gap:8px"></div>
 
-    <label style="margin-top:10px">Selected overlay opacity</label>
+    <label style="margin-top:10px">Hue (selected overlay)</label>
+    <input id="overlayHue" type="range" min="-180" max="180" step="1" value="0">
+
+    <label style="margin-top:10px">Opacity</label>
     <input id="overlayOpacity" type="range" min="0.05" max="1" step="0.05" value="1">
+
     <div class="row" style="margin-top:8px">
       <button id="bringFront" class="btn secondary">Bring to Front</button>
       <button id="sendBack" class="btn secondary">Send to Back</button>
@@ -162,38 +166,48 @@
     </div>
 
     <div class="divider"></div>
+    <div class="sectionTitle">Eraser (selected overlay)</div>
+    <div class="row">
+      <button id="eraserStart" class="btn warn">Start Erasing</button>
+      <button id="eraserDone" class="btn">Finish</button>
+      <button id="eraserCancel" class="btn secondary">Cancel</button>
+    </div>
+    <label style="margin-top:8px">Brush Size</label>
+    <input id="eraserSize" type="range" min="5" max="120" step="1" value="30">
+    <div class="pill" id="eraserStatus" style="margin-top:6px">Eraser: off</div>
+
+    <div class="divider"></div>
     <div class="sectionTitle">Hints</div>
     <ul style="margin:6px 0 0 18px; color:var(--muted)">
-      <li>Drag overlays to move; handles to rotate/resize.</li>
-      <li>Use <b>Save Image to RTDB</b> to commit edits.</li>
-      <li>Crop is non-destructive until you click <b>Apply</b>.</li>
+      <li>Click a PNG in the shelf to add it. Move/resize/rotate with handles.</li>
+      <li>Use Hue + Opacity to tune fire/smoke color and intensity.</li>
+      <li><b>Start Erasing</b> affects only the selected overlay. Finish to exit.</li>
+      <li>Use <b>Save Image to RTDB</b> to bake edits into the scenario.</li>
     </ul>
   </div>
 </div>
 
+<!-- Fabric.js (5.x provides EraserBrush) -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/fabric.js/5.3.0/fabric.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
 
 <script type="module">
 (async () => {
-  // ----- Desktop gate (relaxed) -----
+  /* ===== Desktop gate (relaxed) ===== */
   const gate=document.getElementById('gate');
   const app=document.getElementById('app');
   const gateInfo=document.getElementById('gateInfo');
   const forceGo=document.getElementById('forceGo');
-
   const urlForce = new URLSearchParams(location.search).get('force') === '1';
   function decideGate(){
-    const coarse = matchMedia('(pointer: coarse)').matches;
     const narrow = window.innerWidth < 1024;
-    gateInfo.textContent = `pointer: ${coarse?'coarse':'fine'} • width: ${window.innerWidth}px`;
+    gateInfo.textContent = `width: ${window.innerWidth}px`;
     if (urlForce || (!narrow)) { gate.classList.add('hidden'); app.classList.remove('hidden'); return; }
     gate.classList.remove('hidden'); app.classList.add('hidden');
   }
   forceGo.onclick=()=>{ history.replaceState(null,'',location.pathname); app.classList.remove('hidden'); gate.classList.add('hidden'); };
-  decideGate();
-  window.addEventListener('resize', decideGate);
+  decideGate(); window.addEventListener('resize', decideGate);
 
-  // ----- Firebase -----
+  /* ===== Firebase (RTDB only) ===== */
   const [{ initializeApp }] = await Promise.all([ import("https://www.gstatic.com/firebasejs/10.12.4/firebase-app.js") ]);
   const [{ getDatabase, ref, onValue, get, set }] = await Promise.all([ import("https://www.gstatic.com/firebasejs/10.12.4/firebase-database.js") ]);
   const firebaseConfig = {
@@ -207,15 +221,13 @@
   const appFB = initializeApp(firebaseConfig);
   const db = getDatabase(appFB);
 
-  // ----- DOM refs -----
+  /* ===== DOM refs ===== */
   const statusPill=document.getElementById('statusPill');
   const scenarioSel=document.getElementById('scenarioSel');
   const stopList=document.getElementById('stopList');
   const refreshBtn=document.getElementById('refresh');
-
   const metaTitle=document.getElementById('metaTitle');
   const metaDispatch=document.getElementById('metaDispatch');
-
   const stopTitle=document.getElementById('stopTitle');
   const stopCaption=document.getElementById('stopCaption');
   const stopLat=document.getElementById('stopLat');
@@ -224,12 +236,10 @@
   const useGPS=document.getElementById('useGPS');
   const saveMeta=document.getElementById('saveMeta');
   const metaMsg=document.getElementById('metaMsg');
-
   const replaceFile=document.getElementById('replaceFile');
   const replaceApply=document.getElementById('replaceApply');
   const deleteStop=document.getElementById('deleteStop');
   const exportPNG=document.getElementById('exportPNG');
-
   const cInfo=document.getElementById('canvasInfo');
   const fitBtn=document.getElementById('fit');
   const zoomIn=document.getElementById('zoomIn');
@@ -244,18 +254,26 @@
   const cropApply=document.getElementById('cropApply');
   const cropCancel=document.getElementById('cropCancel');
 
-  const overlayShelf = document.getElementById('overlayShelf');
+  const overlayShelf=document.getElementById('overlayShelf');
   const tabBtns = Array.from(document.querySelectorAll('.ol-tab'));
+  const overlayHue=document.getElementById('overlayHue');
   const overlayOpacity=document.getElementById('overlayOpacity');
   const bringFront=document.getElementById('bringFront');
   const sendBack=document.getElementById('sendBack');
   const deleteObj=document.getElementById('deleteObj');
 
-  // ----- State -----
-  let scenarios=[], current=null, stopIndex=-1;
-  let fabricCanvas, baseImage=null, cropRect=null, cropMode=false;
+  const eraserStart=document.getElementById('eraserStart');
+  const eraserDone=document.getElementById('eraserDone');
+  const eraserCancel=document.getElementById('eraserCancel');
+  const eraserSize=document.getElementById('eraserSize');
+  const eraserStatus=document.getElementById('eraserStatus');
 
-  // ----- Fabric canvas -----
+  /* ===== State ===== */
+  let scenarios=[], current=null, stopIndex=-1;
+  let fabricCanvas, baseImage=null, cropRect=null;
+  let erasing=false;
+
+  /* ===== Fabric canvas ===== */
   fabricCanvas = new fabric.Canvas('c', { backgroundColor:'#061621', preserveObjectStacking:true, selection:true });
   function fitCanvas(){
     fabricCanvas.setHeight(window.innerHeight - 160);
@@ -263,8 +281,7 @@
     fabricCanvas.calcOffset();
     fabricCanvas.requestRenderAll();
   }
-  fitCanvas();
-  window.addEventListener('resize', fitCanvas);
+  fitCanvas(); window.addEventListener('resize', fitCanvas);
 
   function setBaseImageFromDataURL(dataURL){
     return new Promise((resolve,reject)=>{
@@ -287,14 +304,13 @@
   }
   const dataURLFromCanvas = () => fabricCanvas.toDataURL({ format:'png', quality:0.92 });
 
-  // ----- Scenario loading (robust with diagnostics) -----
+  /* ===== Load scenarios (robust) ===== */
   function showStatus(msg){ statusPill.textContent = msg; }
   function populateList(){
     scenarioSel.innerHTML = '<option value="">Select scenario…</option>';
     scenarios.forEach(sc => {
       const o=document.createElement('option');
-      o.value=sc.id;
-      o.textContent=(sc.title||'(untitled)') + (sc.active? '':' (inactive)');
+      o.value=sc.id; o.textContent=(sc.title||'(untitled)') + (sc.active? '':' (inactive)');
       scenarioSel.appendChild(o);
     });
   }
@@ -328,8 +344,6 @@
         if (fresh){ current=fresh; renderStopsThumbs(); updateMetaHeader(); }
       }
     }, err => { showStatus('RTDB onValue error: '+(err?.message||err)); });
-
-    // one-time get with timeout (diagnostics)
     const timeout = new Promise((_,rej)=>setTimeout(()=>rej(new Error('RTDB timeout (8s)')),8000));
     await Promise.race([ get(scenariosRef), timeout ]).then(snap=>{
       if (!snap.exists()) showStatus('Connected but /scenarios is empty.');
@@ -337,17 +351,15 @@
   } catch (e) {
     showStatus('Firebase init/permission error: ' + (e?.message||e));
   }
-
   refreshBtn.onclick = populateList;
 
-  // ----- Select scenario & load stop -----
   scenarioSel.onchange = ()=>{
     const id=scenarioSel.value;
     current = scenarios.find(s=>s.id===id) || null;
     stopIndex=-1;
     updateMetaHeader();
     renderStopsThumbs();
-    fabricCanvas.clear(); baseImage=null; cropRect=null; cropMode=false;
+    fabricCanvas.clear(); baseImage=null; cropRect=null;
     fitCanvas();
   };
 
@@ -361,13 +373,13 @@
     stopLng.value=(s.lng ?? '').toString();
     stopRadius.value=(s.radiusMeters ?? 50).toString();
     Array.from(stopList.children).forEach((n,i)=>n.classList.toggle('active', i===idx));
-    fabricCanvas.clear(); baseImage=null; cropRect=null; cropMode=false;
+    fabricCanvas.clear(); baseImage=null; cropRect=null;
     const src=s.imageData||s.imageURL;
     if(!src){ metaMsg.textContent='No image in this stop.'; return; }
     await setBaseImageFromDataURL(src);
   }
 
-  // ----- Meta save / GPS -----
+  /* ===== Meta save / GPS ===== */
   useGPS.onclick=()=>{
     navigator.geolocation.getCurrentPosition(p=>{
       stopLat.value=p.coords.latitude.toFixed(6);
@@ -391,7 +403,7 @@
     }catch(err){ metaMsg.textContent=String(err.message||err); }
   };
 
-  // ----- Replace / Export / Save image -----
+  /* ===== Replace / Export / Save image ===== */
   function readFileAsDataURL(f){ return new Promise((res,rej)=>{ const r=new FileReader(); r.onload=()=>res(r.result); r.onerror=rej; r.readAsDataURL(f); }); }
   replaceApply.onclick=async()=>{
     const f=replaceFile.files?.[0]; if(!f){ metaMsg.textContent='Choose a file first.'; return; }
@@ -415,20 +427,9 @@
     }catch(err){ metaMsg.textContent=String(err.message||err); }
   };
 
-  // ----- Canvas commands -----
-  const rebase = ()=>{ if(!baseImage) return; setBaseImageFromDataURL(baseImage.toDataURL({})); };
-  fitBtn.onclick=rebase;
-  zoomIn.onclick=()=>fabricCanvas.setZoom(fabricCanvas.getZoom()*1.1);
-  zoomOut.onclick=()=>fabricCanvas.setZoom(fabricCanvas.getZoom()/1.1);
-  rotateL.onclick=()=>{ if(baseImage){ baseImage.rotate((baseImage.angle||0)-90); fabricCanvas.requestRenderAll(); } };
-  rotateR.onclick=()=>{ if(baseImage){ baseImage.rotate((baseImage.angle||0)+90); fabricCanvas.requestRenderAll(); } };
-  flipH.onclick=()=>{ if(baseImage){ baseImage.toggle('flipX'); fabricCanvas.requestRenderAll(); } };
-  flipV.onclick=()=>{ if(baseImage){ baseImage.toggle('flipY'); fabricCanvas.requestRenderAll(); } };
-
-  // ----- Crop workflow -----
+  /* ===== Crop workflow ===== */
   cropStart.onclick=()=>{
     if(!baseImage) return;
-    cropMode=true;
     cropRect = new fabric.Rect({
       left: baseImage.left + 20, top: baseImage.top + 20,
       width: Math.min(200, baseImage.getScaledWidth()-40),
@@ -437,9 +438,7 @@
     });
     fabricCanvas.add(cropRect); cropRect.bringToFront(); fabricCanvas.setActiveObject(cropRect);
   };
-  cropCancel.onclick=()=>{
-    cropMode=false; if(cropRect){ fabricCanvas.remove(cropRect); cropRect=null; } fabricCanvas.discardActiveObject(); fabricCanvas.requestRenderAll();
-  };
+  cropCancel.onclick=()=>{ if(cropRect){ fabricCanvas.remove(cropRect); cropRect=null; } fabricCanvas.discardActiveObject(); fabricCanvas.requestRenderAll(); };
   cropApply.onclick=()=>{
     if(!baseImage || !cropRect) return;
     const scale = baseImage.scaleX;
@@ -456,189 +455,47 @@
         const scaleX = tmp.width / fabricCanvas.getWidth();
         const scaleY = tmp.height / fabricCanvas.getHeight();
         ctx.drawImage(tmp, cropRect.left*scaleX, cropRect.top*scaleY, rw*scaleX, rh*scaleY, 0,0, el.width, el.height);
-        setBaseImageFromDataURL(el.toDataURL('image/png', 0.95)).then(()=>{ fabricCanvas.remove(cropRect); cropRect=null; cropMode=false; });
-      }; tmp.src=fullURL; return;
+        setBaseImageFromDataURL(el.toDataURL('image/png', 0.95)).then(()=>{ fabricCanvas.remove(cropRect); cropRect=null; });
+      }; tmp.src=fullURL;
     } else {
       const base = baseImage.getElement();
       ctx.drawImage(base, sx, sy, sw, sh, 0,0, el.width, el.height);
-      setBaseImageFromDataURL(el.toDataURL('image/png', 0.95)).then(()=>{ fabricCanvas.remove(cropRect); cropRect=null; cropMode=false; });
+      setBaseImageFromDataURL(el.toDataURL('image/png', 0.95)).then(()=>{ fabricCanvas.remove(cropRect); cropRect=null; });
     }
   };
 
-  /* ===== Realistic Overlays (SVG data URIs with multiple choices) ===== */
+  /* ===== PNG Overlays (Fire/Smoke) + SVG for others ===== */
+  const OVERLAY_BASE = './overlays/'; // <-- change if your PNGs live elsewhere
   const SPRITES = {
     fire: [
-      `data:image/svg+xml;utf8,` + encodeURIComponent(`
-        <svg xmlns="http://www.w3.org/2000/svg" width="512" height="512">
-          <defs>
-            <radialGradient id="g" cx="50%" cy="60%" r="60%">
-              <stop offset="0%" stop-color="#ffe082"/>
-              <stop offset="40%" stop-color="#ff8f00"/>
-              <stop offset="80%" stop-color="#e65100"/>
-              <stop offset="100%" stop-color="#bf360c"/>
-            </radialGradient>
-            <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
-              <feGaussianBlur stdDeviation="6" result="b"/>
-              <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
-            </filter>
-          </defs>
-          <path d="M256,480 C200,440 140,380 140,300 c0-64 40-104 70-140 16-20 24-48 18-80 50,40 82,90 82,138 0-36 22-62 50-92-4,44 4,74 20,92 24,26 44,60 44,92 0,80-64,132-168,170z" fill="url(#g)" filter="url(#glow)"/>
-        </svg>
-      `),
-      `data:image/svg+xml;utf8,` + encodeURIComponent(`
-        <svg xmlns="http://www.w3.org/2000/svg" width="512" height="512">
-          <defs>
-            <radialGradient id="g2" cx="50%" cy="70%" r="70%">
-              <stop offset="0%" stop-color="#fff59d"/>
-              <stop offset="45%" stop-color="#ff9800"/>
-              <stop offset="85%" stop-color="#e65100"/>
-            </radialGradient>
-            <filter id="glow2"><feGaussianBlur stdDeviation="5"/></filter>
-          </defs>
-          <path d="M256,480 C176,430 128,360 128,280 c0-70 50-120 92-160 10-10 16-36 14-68 54,44 96,100 96,156 0-22 20-56 54-90-8,46-2,80 18,100 26,26 38,60 38,88 0,86-66,138-184,174z" fill="url(#g2)" filter="url(#glow2)"/>
-        </svg>
-      `),
-      `data:image/svg+xml;utf8,` + encodeURIComponent(`
-        <svg xmlns="http://www.w3.org/2000/svg" width="512" height="512">
-          <defs>
-            <radialGradient id="g3" cx="50%" cy="60%" r="65%">
-              <stop offset="0%" stop-color="#fff3e0"/>
-              <stop offset="40%" stop-color="#ffb300"/>
-              <stop offset="75%" stop-color="#f57c00"/>
-              <stop offset="100%" stop-color="#d84315"/>
-            </radialGradient>
-          </defs>
-          <path d="M256,470 C160,420 120,360 120,290 c0-64 44-106 84-142 16-14 22-44 20-70 42,30 92,92 92,144 0-30 26-66 64-96-8,48 2,78 20,96 24,24 42,58 42,90 0,80-60,126-186,158z" fill="url(#g3)"/>
-        </svg>
-      `),
+      'fire_1.png',       // small/vertical
+      'fire_2.png',       // medium
+      'fire_side.png'     // horizontal from side of house
     ],
     smoke: [
-      `data:image/svg+xml;utf8,` + encodeURIComponent(`
-        <svg xmlns="http://www.w3.org/2000/svg" width="512" height="512">
-          <defs>
-            <filter id="blur" x="-20%" y="-20%" width="140%" height="140%">
-              <feGaussianBlur stdDeviation="10"/>
-            </filter>
-            <radialGradient id="sm" cx="50%" cy="50%" r="50%">
-              <stop offset="0%" stop-color="#ffffff" stop-opacity="0.5"/>
-              <stop offset="100%" stop-color="#9ea7ac" stop-opacity="0.2"/>
-            </radialGradient>
-          </defs>
-          <g filter="url(#blur)" fill="url(#sm)">
-            <ellipse cx="200" cy="340" rx="120" ry="90"/>
-            <ellipse cx="280" cy="300" rx="140" ry="100" opacity="0.8"/>
-            <ellipse cx="340" cy="240" rx="110" ry="80" opacity="0.7"/>
-          </g>
-        </svg>
-      `),
-      `data:image/svg+xml;utf8,` + encodeURIComponent(`
-        <svg xmlns="http://www.w3.org/2000/svg" width="512" height="512">
-          <defs>
-            <filter id="blur2"><feGaussianBlur stdDeviation="12"/></filter>
-            <linearGradient id="sm2" x1="0" x2="0" y1="1" y2="0">
-              <stop offset="0%" stop-color="#b0b6bb" stop-opacity="0.2"/>
-              <stop offset="100%" stop-color="#ffffff" stop-opacity="0.5"/>
-            </linearGradient>
-          </defs>
-          <path d="M180,440c-40-60 20-90 20-130s-40-50-20-100 80-40 120,0 10,80 30,120 60,40 40,100c-20,60-150,60-190,10z" fill="url(#sm2)" filter="url(#blur2)"/>
-        </svg>
-      `),
-      `data:image/svg+xml;utf8,` + encodeURIComponent(`
-        <svg xmlns="http://www.w3.org/2000/svg" width="512" height="512">
-          <defs><filter id="blur3"><feGaussianBlur stdDeviation="8"/></filter></defs>
-          <g filter="url(#blur3)" fill="#c7ccd1" fill-opacity="0.25">
-            <ellipse cx="180" cy="360" rx="150" ry="60"/>
-            <ellipse cx="320" cy="360" rx="160" ry="58"/>
-            <ellipse cx="260" cy="330" rx="120" ry="46" fill-opacity="0.3"/>
-          </g>
-        </svg>
-      `),
+      'smoke_light.png',
+      'smoke_heavy.png',
+      'smoke_ground.png'
     ],
+    // Keep these as inline SVG (swap to PNG paths if you add PNGs later)
     people: [
-      `data:image/svg+xml;utf8,` + encodeURIComponent(`
-        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 400">
-          <g fill="#1de9b6">
-            <circle cx="100" cy="60" r="34"/>
-            <path d="M60,140 h80 v60 h-20 v120 h-20 v-120 h-20z"/>
-            <path d="M60,210 h-30 v-20 h30z"/>
-            <path d="M140,210 h30 v-20 h-30z"/>
-          </g>
-        </svg>
-      `),
-      `data:image/svg+xml;utf8,` + encodeURIComponent(`
-        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 400">
-          <g fill="#e0e0e0">
-            <circle cx="100" cy="55" r="32"/>
-            <path d="M70,130 h60 v70 h-16 v120 h-28 v-120 h-16z" />
-            <path d="M70,210 h-28 v-18 h28z"/>
-            <path d="M130,210 h28 v-18 h-28z"/>
-          </g>
-        </svg>
-      `),
-      `data:image/svg+xml;utf8,` + encodeURIComponent(`
-        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 400">
-          <defs><linearGradient id="vest" x1="0" x2="0" y1="0" y2="1"><stop offset="0%" stop-color="#ffea00"/><stop offset="100%" stop-color="#ff6f00"/></linearGradient></defs>
-          <g>
-            <circle cx="100" cy="58" r="32" fill="#fafafa"/>
-            <path d="M60,120 h80 v70 h-24 v120 h-32 v-120 h-24z" fill="url(#vest)"/>
-            <rect x="86" y="150" width="28" height="26" fill="#212121"/>
-          </g>
-        </svg>
-      `),
+      `data:image/svg+xml;utf8,` + encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 400"><g fill="#e0e0e0"><circle cx="100" cy="55" r="32"/><path d="M70,130 h60 v70 h-16 v120 h-28 v-120 h-16z"/><path d="M70,210 h-28 v-18 h28z"/><path d="M130,210 h28 v-18 h-28z"/></g></svg>`),
+      `data:image/svg+xml;utf8,` + encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 400"><defs><linearGradient id="v" x1="0" x2="0" y1="0" y2="1"><stop offset="0%" stop-color="#ffea00"/><stop offset="100%" stop-color="#ff6f00"/></linearGradient></defs><g><circle cx="100" cy="58" r="32" fill="#fafafa"/><path d="M60,120 h80 v70 h-24 v120 h-32 v-120 h-24z" fill="url(#v)"/><rect x="86" y="150" width="28" height="26" fill="#212121"/></g></svg>`),
     ],
     cars: [
-      `data:image/svg+xml;utf8,` + encodeURIComponent(`
-        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 500 220">
-          <rect x="40" y="120" width="420" height="60" rx="20" fill="#90caf9"/>
-          <path d="M80,120 c40-50,120-70,220-70 h50 c30,0,50,20,60,70z" fill="#64b5f6"/>
-          <circle cx="140" cy="190" r="24" fill="#212121"/><circle cx="360" cy="190" r="24" fill="#212121"/>
-          <rect x="220" y="70" width="100" height="40" fill="#e3f2fd"/>
-        </svg>
-      `),
-      `data:image/svg+xml;utf8,` + encodeURIComponent(`
-        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 520 240">
-          <rect x="50" y="120" width="420" height="70" rx="16" fill="#a5d6a7"/>
-          <path d="M90,120 c30-60,140-80,240-80 h40 c30,0,60,20,70,80z" fill="#81c784"/>
-          <circle cx="150" cy="200" r="26" fill="#263238"/><circle cx="380" cy="200" r="26" fill="#263238"/>
-          <rect x="240" y="60" width="110" height="44" fill="#e8f5e9"/>
-        </svg>
-      `),
-      `data:image/svg+xml;utf8,` + encodeURIComponent(`
-        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 520 240">
-          <rect x="50" y="120" width="420" height="66" rx="14" fill="#ef5350"/>
-          <path d="M90,120 c30-60,140-80,240-80 h40 c30,0,60,20,70,80z" fill="#e53935"/>
-          <circle cx="150" cy="196" r="26" fill="#212121"/><circle cx="380" cy="196" r="26" fill="#212121"/>
-          <rect x="240" y="60" width="110" height="44" fill="#ffcdd2"/>
-        </svg>
-      `),
+      `data:image/svg+xml;utf8,` + encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 500 220"><rect x="40" y="120" width="420" height="60" rx="20" fill="#90caf9"/><path d="M80,120 c40-50,120-70,220-70 h50 c30,0,50,20,60,70z" fill="#64b5f6"/><circle cx="140" cy="190" r="24" fill="#212121"/><circle cx="360" cy="190" r="24" fill="#212121"/></svg>`),
+      `data:image/svg+xml;utf8,` + encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 520 240"><rect x="50" y="120" width="420" height="70" rx="16" fill="#a5d6a7"/><path d="M90,120 c30-60,140-80,240-80 h40 c30,0,60,20,70,80z" fill="#81c784"/><circle cx="150" cy="200" r="26" fill="#263238"/><circle cx="380" cy="200" r="26" fill="#263238"/></svg>`),
     ],
     hazard: [
-      `data:image/svg+xml;utf8,` + encodeURIComponent(`
-        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 128">
-          <defs><pattern id="diag" width="40" height="40" patternUnits="userSpaceOnUse" patternTransform="skewX(-20)">
-            <rect width="40" height="40" fill="#ffc107"/>
-            <path d="M-10,40 0,0 10,0 0,40z M30,40 40,0 50,0 40,40z" fill="#212121" opacity="0.75"/>
-          </pattern></defs>
-          <rect x="8" y="44" width="496" height="40" fill="url(#diag)" rx="6"/>
-        </svg>
-      `),
-      `data:image/svg+xml;utf8,` + encodeURIComponent(`
-        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 220">
-          <rect x="20" y="180" width="160" height="24" rx="8" fill="#6d4c41"/>
-          <path d="M100,20 l60,160 h-120z" fill="#ff6f00"/>
-          <rect x="80" y="120" width="40" height="20" fill="#ffcc80"/>
-          <rect x="90" y="80" width="20" height="16" fill="#ffe0b2"/>
-        </svg>
-      `),
-      `data:image/svg+xml;utf8,` + encodeURIComponent(`
-        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 220 220">
-          <rect x="10" y="10" width="200" height="200" rx="16" fill="#ffeb3b" stroke="#212121" stroke-width="10"/>
-          <path d="M110,90 a20,20 0 1,0 0.1,0 z" fill="#212121"/>
-          <path d="M110,50 c40,0 40,40 70,40 -30,0 -30,40 -70,40 -40,0 -40-40 -70-40 30,0 30-40 70-40z" fill="none" stroke="#212121" stroke-width="12"/>
-        </svg>
-      `),
+      `data:image/svg+xml;utf8,` + encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 128"><defs><pattern id="diag" width="40" height="40" patternUnits="userSpaceOnUse" patternTransform="skewX(-20)"><rect width="40" height="40" fill="#ffc107"/><path d="M-10,40 0,0 10,0 0,40z M30,40 40,0 50,0 40,40z" fill="#212121" opacity="0.75"/></pattern></defs><rect x="8" y="44" width="496" height="40" fill="url(#diag)" rx="6"/></svg>`),
     ],
   };
+
+  function resolveSpritePath(uri){
+    if (uri.startsWith('data:')) return uri;
+    // Treat as PNG path relative to OVERLAY_BASE
+    return OVERLAY_BASE + uri;
+  }
 
   function renderShelf(cat) {
     overlayShelf.innerHTML = '';
@@ -647,9 +504,10 @@
       const div = document.createElement('div');
       div.className = 'olThumb';
       const img = document.createElement('img');
-      img.src = uri; img.alt = `${cat}-${i+1}`;
+      img.src = resolveSpritePath(uri); img.alt = `${cat}-${i+1}`;
+      img.onerror = () => { div.style.opacity = .5; div.title = 'Missing file: ' + img.src; };
       div.appendChild(img);
-      div.onclick = () => addOverlayImage(uri);
+      div.onclick = () => addOverlayImage(resolveSpritePath(uri));
       overlayShelf.appendChild(div);
     });
   }
@@ -660,17 +518,18 @@
   });
   if (tabBtns[0]) { tabBtns[0].classList.add('active'); renderShelf(tabBtns[0].dataset.cat); }
 
-  function addOverlayImage(dataURI) {
-    fabric.Image.fromURL(dataURI, img => {
+  function addOverlayImage(src) {
+    fabric.Image.fromURL(src, img => {
       const cw = fabricCanvas.getWidth(), ch = fabricCanvas.getHeight();
-      const targetW = cw * 0.25;
+      const targetW = cw * 0.28; // ~28% canvas width
       const scale = targetW / img.width;
       img.scale(scale);
       img.set({
         left: cw/2 - (img.width*scale)/2,
         top:  ch/2 - (img.height*scale)/2,
         cornerStyle:'circle', transparentCorners:false,
-        shadow:'rgba(0,0,0,0.35) 0 6px 16px'
+        shadow:'rgba(0,0,0,0.35) 0 6px 16px',
+        erasable: true // allow eraser on this object
       });
       fabricCanvas.add(img);
       fabricCanvas.setActiveObject(img);
@@ -678,12 +537,53 @@
     }, { crossOrigin:'anonymous' });
   }
 
+  /* ===== Overlay color + opacity ===== */
+  function ensureHueFilter(img){
+    img.filters = img.filters || [];
+    // remove existing HueRotation
+    img.filters = img.filters.filter(f => !(f && f.type === 'HueRotation'));
+  }
+  overlayHue.oninput = (e)=>{
+    const o = fabricCanvas.getActiveObject();
+    if (o && o.type === 'image') {
+      const deg = parseInt(e.target.value,10) || 0;
+      ensureHueFilter(o);
+      if (deg !== 0) {
+        o.filters.push(new fabric.Image.filters.HueRotation({ rotation: deg * Math.PI/180 }));
+      }
+      o.applyFilters(); fabricCanvas.requestRenderAll();
+    }
+  };
   overlayOpacity.oninput = (e)=>{ const o=fabricCanvas.getActiveObject(); if(o){ o.set('opacity', parseFloat(e.target.value)); fabricCanvas.requestRenderAll(); } };
   bringFront.onclick = ()=>{ const o=fabricCanvas.getActiveObject(); if(o){ o.bringToFront(); fabricCanvas.requestRenderAll(); } };
-  sendBack.onclick = ()=>{ const o=fabricCanvas.getActiveObject(); if(o){ o.sendToBack(); if(baseImage) baseImage.sendToBack(); fabricCanvas.requestRenderAll(); } };
+  sendBack.onclick  = ()=>{ const o=fabricCanvas.getActiveObject(); if(o){ o.sendToBack(); if(baseImage) baseImage.sendToBack(); fabricCanvas.requestRenderAll(); } };
   deleteObj.onclick = ()=>{ const o=fabricCanvas.getActiveObject(); if(o && o!==baseImage){ fabricCanvas.remove(o); fabricCanvas.discardActiveObject(); fabricCanvas.requestRenderAll(); } };
 
-  // ----- Delete stop -----
+  /* ===== Eraser (selected overlay only) =====
+     Requires Fabric 5.x (we're loading 5.3.0). */
+  function setAllErasable(value){
+    fabricCanvas.getObjects().forEach(obj => obj.set('erasable', !!value));
+    if (baseImage) baseImage.set('erasable', false); // never erase base
+  }
+  eraserStart.onclick = ()=>{
+    const sel = fabricCanvas.getActiveObject();
+    if (!sel || sel.type !== 'image') { alert('Select an overlay image first.'); return; }
+    setAllErasable(false); sel.set('erasable', true);
+    fabricCanvas.isDrawingMode = true;
+    fabricCanvas.freeDrawingBrush = new fabric.EraserBrush(fabricCanvas);
+    fabricCanvas.freeDrawingBrush.width = parseInt(eraserSize.value,10) || 30;
+    erasing = true; eraserStatus.textContent = `Eraser: ON (size ${fabricCanvas.freeDrawingBrush.width})`;
+  };
+  eraserSize.oninput = ()=>{ if (fabricCanvas.freeDrawingBrush) { fabricCanvas.freeDrawingBrush.width = parseInt(eraserSize.value,10)||30; if (erasing) eraserStatus.textContent = `Eraser: ON (size ${fabricCanvas.freeDrawingBrush.width})`; } };
+  function stopErasing(){
+    fabricCanvas.isDrawingMode = false; erasing=false;
+    eraserStatus.textContent = 'Eraser: off';
+    // keep erasable true on overlays for future edits, fine.
+  }
+  eraserDone.onclick = stopErasing;
+  eraserCancel.onclick = ()=>{ stopErasing(); fabricCanvas.renderAll(); };
+
+  /* ===== Delete stop ===== */
   deleteStop.onclick=async()=>{
     try{
       if(!current || stopIndex<0) return;
@@ -694,7 +594,6 @@
       stopIndex=-1; fabricCanvas.clear(); baseImage=null; renderStopsThumbs(); metaMsg.textContent='Photo deleted.';
     }catch(e){ metaMsg.textContent=String(e.message||e); }
   };
-
 })();
 </script>
 </body>
