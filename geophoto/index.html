@@ -2,46 +2,48 @@
 <html lang="en">
 <head>
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Geo-Photo Viewer (RTDB Debug)</title>
+<title>Geo-Photo Scenarios</title>
 <style>
   :root{--bg:#0b1e27;--card:#102b36;--border:#1c3a47;--accent:#2aa3b5;--text:#ffffff}
   body{margin:0;font-family:system-ui,Arial;background:var(--bg);color:var(--text);display:flex;min-height:100vh}
-  .wrap{margin:auto;max-width:700px;padding:16px;width:100%}
+  .wrap{margin:auto;max-width:900px;padding:16px;width:100%}
   .card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:16px;margin-bottom:12px}
   .status{opacity:.85}
   img{max-width:100%;border-radius:12px;display:block;margin:.5rem 0}
-  .hidden{display:none}
   .btn{padding:.6rem .9rem;font-size:1rem;border:0;border-radius:10px;background:var(--accent);color:#00151b;cursor:pointer}
+  select{width:100%;padding:.8rem;font-size:1rem;border-radius:10px;border:1px solid var(--border);background:#0f3542;color:#e7fbff}
+  .hidden{display:none}
   #error{white-space:pre-wrap;background:#2b1b1b;border:1px solid #4b2a2a;padding:.75rem;border-radius:.5rem;color:#ffd6d6;margin-top:.75rem;display:none}
-  .list{display:grid;grid-template-columns:1fr;gap:10px}
-  .spot{display:flex;gap:10px;align-items:center;background:#0f3542;border:1px solid var(--border);border-radius:10px;padding:10px}
-  .thumb{width:72px;height:72px;object-fit:cover;border-radius:8px;background:#0a2230}
-  .grow{flex:1}
-  .muted{opacity:.75;font-size:.9rem}
 </style>
 <noscript><strong>This page requires JavaScript.</strong></noscript>
 </head>
 <body>
 <div class="wrap">
   <div class="card">
-    <h2>Nearby Photo</h2>
-    <p class="status" id="status">Booting…</p>
-    <div id="result" class="hidden">
-      <h3 id="title"></h3>
-      <img id="photo" alt="Location photo">
-      <p class="status" id="detail"></p>
-    </div>
+    <h2>Choose a Scenario</h2>
+    <select id="scenarioSelect"><option value="">Loading…</option></select>
     <div style="display:flex;gap:8px;margin-top:8px">
-      <button id="enable" class="btn hidden">Enable Location</button>
-      <button id="forceShow" class="btn">Test: show newest spot</button>
+      <button id="openBtn" class="btn">Open</button>
+      <button id="forceShow" class="btn">Test: show first stop</button>
     </div>
+    <p class="status" id="status"></p>
     <div id="error"></div>
   </div>
 
-  <div class="card">
-    <h3>Spots (live)</h3>
-    <p class="muted" id="countNote"></p>
-    <div id="spotList" class="list"></div>
+  <div class="card hidden" id="viewer">
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:8px">
+      <h3 id="scTitle">(scenario)</h3>
+      <button id="backBtn" class="btn">Back</button>
+    </div>
+    <p id="scNotes" class="status"></p>
+    <p class="status" id="geoStatus">Waiting for location…</p>
+
+    <div id="result" class="hidden">
+      <h3 id="stopTitle"></h3>
+      <img id="photo" alt="Photo">
+      <p id="caption" class="status"></p>
+      <p class="status" id="detail"></p>
+    </div>
   </div>
 </div>
 
@@ -53,10 +55,9 @@
     box.textContent = String(e && e.stack ? e.stack : e);
     console.error(e);
   };
-  const setStatus = (t) => document.getElementById('status').textContent = t;
 
   try {
-    // Firebase (RTDB)
+    // Firebase RTDB
     const [{ initializeApp }] = await Promise.all([
       import("https://www.gstatic.com/firebasejs/10.12.4/firebase-app.js"),
     ]);
@@ -64,7 +65,6 @@
       import("https://www.gstatic.com/firebasejs/10.12.4/firebase-database.js"),
     ]);
 
-    // CONFIG (RTDB-only)
     const firebaseConfig = {
       apiKey: "AIzaSyDM6DpRSeZueVKRpbyJyDmhf8WY66KyCDk",
       authDomain: "dailyquiz-d5279.firebaseapp.com",
@@ -73,61 +73,52 @@
       appId: "1:94577748034:web:c032d3a1d72db1313de5db",
       measurementId: "G-19DVN7NNH7"
     };
-
     const app = initializeApp(firebaseConfig);
     const db = getDatabase(app);
 
-    // Live spots
-    let spots = [];
-    onValue(ref(db, "spots"), snap => {
+    // DOM refs
+    const status = document.getElementById('status');
+    const select = document.getElementById('scenarioSelect');
+    const openBtn = document.getElementById('openBtn');
+    const viewer = document.getElementById('viewer');
+    const backBtn = document.getElementById('backBtn');
+    const scTitle = document.getElementById('scTitle');
+    const scNotes = document.getElementById('scNotes');
+    const geoStatus = document.getElementById('geoStatus');
+    const result = document.getElementById('result');
+    const stopTitle = document.getElementById('stopTitle');
+    const photo = document.getElementById('photo');
+    const caption = document.getElementById('caption');
+    const detail = document.getElementById('detail');
+    const forceBtn = document.getElementById('forceShow');
+
+    // State
+    let scenarios = [];  // [{id, title, notes, active, createdAt, stops: []}]
+    let current = null;
+    let watchId = null;
+
+    // Load scenarios → fill dropdown
+    onValue(ref(db, "scenarios"), snap => {
       const val = snap.val() || {};
-      spots = Object.values(val).filter(s => s && s.active);
-      spots.sort((a,b)=> (b.createdAt||0)-(a.createdAt||0));
-      renderList();
-      document.getElementById('countNote').textContent = `${spots.length} active spot(s)`;
-      if (!spots.length) setStatus("No active spots yet.");
+      scenarios = Object.entries(val)
+        .map(([id, s]) => ({ id, ...s }))
+        .filter(s => s && s.active);
+      scenarios.sort((a,b)=> (b.createdAt||0)-(a.createdAt||0));
+
+      select.innerHTML = '<option value="">Select a scenario…</option>';
+      for (const sc of scenarios){
+        const opt = document.createElement('option');
+        opt.value = sc.id;
+        opt.textContent = sc.title || '(untitled)';
+        select.appendChild(opt);
+      }
+      status.textContent = scenarios.length ? `${scenarios.length} active scenario(s)` : 'No scenarios yet.';
     }, err => showErr(err));
 
-    // Helpers
-    function haversineMeters(lat1, lon1, lat2, lon2) {
-      const toRad = d => d * Math.PI / 180;
-      const R = 6371000;
-      const dLat = toRad(lat2-lat1);
-      const dLon = toRad(lon2-lon1);
-      const a = Math.sin(dLat/2)**2 + Math.cos(toRad(lat1))*Math.cos(toRad(lat2))*Math.sin(dLon/2)**2;
-      return 2 * R * Math.asin(Math.sqrt(a));
-    }
-
-    function findMatch(userLat, userLng){
-      let best = null;
-      for (const s of spots){
-        if (typeof s.lat !== 'number') s.lat = parseFloat(s.lat);
-        if (typeof s.lng !== 'number') s.lng = parseFloat(s.lng);
-        if (typeof s.radiusMeters !== 'number') s.radiusMeters = parseFloat(s.radiusMeters);
-        if (Number.isNaN(s.lat) || Number.isNaN(s.lng) || Number.isNaN(s.radiusMeters)) continue;
-        const dist = haversineMeters(userLat, userLng, s.lat, s.lng);
-        if (dist <= s.radiusMeters){
-          if (!best || dist < best.dist) best = { spot: s, dist };
-        }
-      }
-      return best;
-    }
-
-    // UI
-    const result = document.getElementById('result');
-    const title = document.getElementById('title');
-    const photo = document.getElementById('photo');
-    const detail = document.getElementById('detail');
-    const enableBtn = document.getElementById('enable');
-    const forceBtn = document.getElementById('forceShow');
-    const listEl = document.getElementById('spotList');
-
-    function setImage(imgEl, spot) {
-      const src = spot.imageData || spot.imageURL || "";
-      imgEl.src = src;
-      imgEl.onerror = () => {
-        setStatus("Image failed to load (blocked URL or bad data). Showing placeholder.");
-        imgEl.src = "data:image/svg+xml;utf8," + encodeURIComponent(
+    function setImage(el, stop){
+      el.src = stop.imageData || stop.imageURL || "";
+      el.onerror = () => {
+        el.src = "data:image/svg+xml;utf8," + encodeURIComponent(
           `<svg xmlns='http://www.w3.org/2000/svg' width='600' height='400'>
              <rect width='100%' height='100%' fill='#0a2230'/>
              <text x='50%' y='50%' fill='#9ecbd6' font-size='18' text-anchor='middle'>Image failed to load</text>
@@ -136,88 +127,91 @@
       };
     }
 
-    function show(spot, dist){
+    function showStop(s, dist){
       result.classList.remove('hidden');
-      title.textContent = spot.title || "Nearby spot";
-      setImage(photo, spot);
-      detail.textContent = `Distance: ${Math.round(dist)} m (radius ${spot.radiusMeters} m).`;
+      stopTitle.textContent = s.title || "Stop";
+      setImage(photo, s);
+      caption.textContent = s.caption || "";
+      detail.textContent = `Distance: ${Math.round(dist)} m (radius ${s.radiusMeters} m).`;
     }
 
-    function renderList(){
-      listEl.innerHTML = "";
-      for (const s of spots){
-        const row = document.createElement('div');
-        row.className = 'spot';
-        const img = document.createElement('img');
-        img.className = 'thumb';
-        img.alt = 'thumb';
-        setImage(img, s);
-        const meta = document.createElement('div');
-        meta.className = 'grow';
-        const h = document.createElement('div');
-        h.textContent = s.title || "(untitled)";
-        const sub = document.createElement('div');
-        sub.className = 'muted';
-        sub.textContent = `Lat ${s.lat}, Lng ${s.lng}, R ${s.radiusMeters}m`;
-        row.appendChild(img);
-        meta.appendChild(h); meta.appendChild(sub);
-        row.appendChild(meta);
+    function haversineMeters(lat1, lon1, lat2, lon2){
+      const toRad = d => d * Math.PI / 180, R = 6371000;
+      const dLat = toRad(lat2-lat1), dLon = toRad(lon2-lon1);
+      const a = Math.sin(dLat/2)**2 + Math.cos(toRad(lat1))*Math.cos(toRad(lat2))*Math.sin(dLon/2)**2;
+      return 2 * R * Math.asin(Math.sqrt(a));
+    }
 
-        // click to force show this spot
-        row.onclick = () => show(s, 0);
-        listEl.appendChild(row);
+    function nearestMatch(stops, lat, lng){
+      let best = null;
+      for (const s of (stops||[])){
+        const la = parseFloat(s.lat), ln = parseFloat(s.lng), r = parseFloat(s.radiusMeters);
+        if (Number.isNaN(la)||Number.isNaN(ln)||Number.isNaN(r)) continue;
+        const d = haversineMeters(lat, lng, la, ln);
+        if (d <= r) { if (!best || d < best.dist) best = { s, dist: d }; }
+      }
+      return best;
+    }
+
+    function openScenarioById(id){
+      const sc = scenarios.find(s => s.id === id);
+      if (!sc) { status.textContent = "Scenario not found."; return; }
+      current = sc;
+      viewer.classList.remove('hidden');
+      scTitle.textContent = sc.title || '(scenario)';
+      scNotes.textContent = sc.notes || '';
+      startLocationWatch();
+    }
+
+    function startLocationWatch(){
+      geoStatus.textContent = "Watching your location…";
+      try {
+        if (watchId) navigator.geolocation.clearWatch(watchId);
+        watchId = navigator.geolocation.watchPosition(pos=>{
+          const { latitude, longitude, accuracy } = pos.coords;
+          geoStatus.textContent = `Lat ${latitude.toFixed(5)}, Lng ${longitude.toFixed(5)} (±${Math.round(accuracy)}m)`;
+          const hit = nearestMatch(current.stops, latitude, longitude);
+          if (hit) showStop(hit.s, hit.dist);
+        }, err=>{
+          geoStatus.textContent = `Location error: ${err.message}`;
+        }, { enableHighAccuracy:true, maximumAge:2000, timeout:10000 });
+      } catch(e){
+        geoStatus.textContent = `Location error: ${e.message}`;
       }
     }
 
-    // Location
-    let lastUpdate = 0;
-    const MIN_MS = 4000;
-    function onPosition(pos){
-      const now = Date.now();
-      if (now - lastUpdate < MIN_MS) return;
-      lastUpdate = now;
-
-      const { latitude, longitude, accuracy } = pos.coords;
-      setStatus(`Lat ${latitude.toFixed(5)}, Lng ${longitude.toFixed(5)} (±${Math.round(accuracy)}m)`);
-      const match = findMatch(latitude, longitude);
-      if (match) show(match.spot, match.dist);
-      else if (spots.length) {
-        // show nearest distance for debugging
-        let nearest = null;
-        for (const s of spots){
-          const d = haversineMeters(latitude, longitude, parseFloat(s.lat), parseFloat(s.lng));
-          if (!nearest || d < nearest.d) nearest = { s, d };
-        }
-        if (nearest) setStatus(`Nearest: "${nearest.s.title}" is ${Math.round(nearest.d)} m away (radius ${nearest.s.radiusMeters} m).`);
-      }
-    }
-
-    function onError(err){
-      setStatus(`Location error: ${err.message}`);
-      enableBtn.classList.remove('hidden');
-    }
-
-    if (!('geolocation' in navigator)){
-      setStatus("Geolocation not supported.");
-    } else {
-      try {
-        navigator.geolocation.watchPosition(onPosition, onError, { enableHighAccuracy:true, maximumAge:2000, timeout:10000 });
-        setStatus("Watching your location…");
-      } catch (e){ onError(e); }
-    }
-
-    enableBtn.onclick = () => {
-      enableBtn.classList.add('hidden');
-      try {
-        navigator.geolocation.watchPosition(onPosition, onError, { enableHighAccuracy:true, maximumAge:2000, timeout:10000 });
-      } catch (e){ showErr(e); }
+    // Open button
+    openBtn.onclick = () => {
+      const id = select.value;
+      if (!id) { status.textContent = "Choose a scenario from the dropdown."; return; }
+      openScenarioById(id);
     };
 
-    // Force show newest spot for quick verification
+    // Back button
+    backBtn.onclick = () => {
+      viewer.classList.add('hidden');
+      if (watchId) navigator.geolocation.clearWatch(watchId);
+      status.textContent = "Choose a scenario.";
+    };
+
+    // Force show first stop (for quick visual test)
     forceBtn.onclick = () => {
-      if (!spots.length) { setStatus("No spots yet."); return; }
-      show(spots[0], 0);
+      if (!current || !current.stops || !current.stops[0]) { status.textContent = "Open a scenario first."; return; }
+      showStop(current.stops[0], 0);
     };
+
+    // If URL has ?id=SCENARIO_ID, auto-select it
+    const params = new URLSearchParams(location.search);
+    const pre = params.get('id');
+    if (pre) {
+      const check = setInterval(()=>{
+        if (select.options.length > 1) {
+          clearInterval(check);
+          select.value = pre;
+          openScenarioById(pre);
+        }
+      }, 200);
+    }
 
   } catch (e) {
     showErr(e);
