@@ -17,12 +17,14 @@
   .row2{grid-template-columns:1fr 1fr}
   .row3{grid-template-columns:1fr 1fr 1fr}
   .btn{background:var(--accent);color:#00151b;border:0;cursor:pointer}
+  .btn-inline{width:auto}
   .hint{opacity:.85;font-size:.95rem}
   .small{opacity:.8;font-size:.9rem}
   img{max-width:100%;display:block;border-radius:12px;margin:.5rem 0}
   #error{white-space:pre-wrap;background:#2b1b1b;border:1px solid #4b2a2a;padding:.75rem;border-radius:.5rem;color:#ffd6d6;margin-top:.75rem;display:none}
   .stop{display:grid;grid-template-columns:92px 1fr auto;gap:10px;align-items:center;background:#0f3542;border:1px solid var(--border);border-radius:10px;padding:10px;margin-top:8px}
   .thumb{width:92px;height:92px;object-fit:cover;border-radius:8px;background:#0a2230}
+  .btnbar{display:flex;gap:10px;flex-wrap:wrap}
 </style>
 <noscript><strong>This page requires JavaScript.</strong></noscript>
 </head>
@@ -43,9 +45,10 @@
     </select>
   </div>
 
-  <!-- Add a stop -->
+  <!-- Stop form -->
   <div class="card">
-    <h3 style="margin-top:0">Add Stop</h3>
+    <h3 style="margin-top:0">Add Location & Photo</h3>
+
     <div class="row row2">
       <div>
         <label>Latitude</label>
@@ -83,7 +86,14 @@
     <textarea id="caption" placeholder="What should the user read at this stop?"></textarea>
 
     <p class="small" id="sizeInfo"></p>
-    <button id="btnAddStop" class="btn">Add Stop to Scenario</button>
+
+    <!-- Flow buttons appear after the first photo/URL is present -->
+    <div class="btnbar">
+      <button id="btnAddAnother" class="btn btn-inline" style="display:none">Add another location</button>
+      <button id="btnEndScenario" class="btn btn-inline" style="display:none">End scenario</button>
+      <button id="btnQuickAdd" class="btn btn-inline">Add this location</button>
+    </div>
+
     <p id="msgAdd" class="hint"></p>
   </div>
 
@@ -94,10 +104,7 @@
     <p class="small" id="countNote">0 stops</p>
   </div>
 
-  <!-- Save -->
   <div class="card">
-    <button id="btnSaveScenario" class="btn">Save Scenario</button>
-    <p id="msgSave" class="hint"></p>
     <div id="error"></div>
   </div>
 </div>
@@ -139,7 +146,10 @@
     const fileEl = el('file'), urlEl = el('imageUrl'), captionEl = el('caption');
     const preview = el('preview'), sizeInfo = el('sizeInfo');
     const stopsList = el('stopsList'), countNote = el('countNote');
-    const msgAdd = el('msgAdd'), msgSave = el('msgSave');
+    const msgAdd = el('msgAdd');
+    const btnQuickAdd = el('btnQuickAdd');
+    const btnAddAnother = el('btnAddAnother');
+    const btnEndScenario = el('btnEndScenario');
 
     // ---- helpers
     function renderStops() {
@@ -180,6 +190,12 @@
       return canvas.toDataURL('image/jpeg', quality);
     }
 
+    function showFlowButtonsIfReady() {
+      const hasImage = !!dataURL || !!urlEl.value.trim();
+      btnAddAnother.style.display = hasImage ? 'inline-block' : 'none';
+      btnEndScenario.style.display = hasImage || stops.length ? 'inline-block' : 'none';
+    }
+
     // ---- state
     let dataURL = null;
     let stops = [];
@@ -203,40 +219,72 @@
         const bytes = Math.ceil((dataURL.length - 'data:image/jpeg;base64,'.length) * 3/4);
         sizeInfo.textContent = `Compressed image ~${Math.round(bytes/1024)} KB`;
         msgAdd.textContent = "";
+        showFlowButtonsIfReady();
       } catch (err) { msgAdd.textContent = "Failed to process image."; }
     };
 
-    el('btnAddStop').onclick = () => {
+    urlEl.addEventListener('input', showFlowButtonsIfReady);
+
+    function captureStopFromForm() {
+      const lat = parseFloat(latEl.value), lng = parseFloat(lngEl.value);
+      const radius = Math.max(5, parseInt(radiusEl.value || "50", 10));
+      const sTitle = stopTitle.value.trim();
+      const caption = captionEl.value.trim();
+      const imageURL = urlEl.value.trim();
+      if (Number.isNaN(lat) || Number.isNaN(lng)) throw new Error("Set a location first.");
+      if (!dataURL && !imageURL) throw new Error("Choose a photo or paste an image URL.");
+      return {
+        title: sTitle, caption,
+        lat, lng, radiusMeters: radius, active: true,
+        createdAt: Date.now(),
+        imageData: dataURL || null,
+        imageURL: imageURL || null
+      };
+    }
+
+    function clearStopForm() {
+      stopTitle.value = ""; captionEl.value = ""; urlEl.value = "";
+      fileEl.value = ""; dataURL = null; preview.style.display = 'none'; sizeInfo.textContent = "";
+      msgAdd.textContent = "";
+      showFlowButtonsIfReady();
+    }
+
+    // Quick add (adds to the list; you can keep adding)
+    btnQuickAdd.onclick = () => {
       try {
-        const lat = parseFloat(latEl.value), lng = parseFloat(lngEl.value);
-        const radius = Math.max(5, parseInt(radiusEl.value || "50", 10));
-        const sTitle = stopTitle.value.trim();
-        const caption = captionEl.value.trim();
-        const imageURL = urlEl.value.trim();
-
-        if (Number.isNaN(lat) || Number.isNaN(lng)) throw new Error("Set a location first.");
-        if (!dataURL && !imageURL) throw new Error("Choose a photo or paste an image URL.");
-
-        stops.push({
-          title: sTitle, caption,
-          lat, lng, radiusMeters: radius, active: true,
-          createdAt: Date.now(),
-          imageData: dataURL || null,
-          imageURL: imageURL || null
-        });
-        // reset stop form
-        stopTitle.value = ""; captionEl.value = ""; urlEl.value = ""; fileEl.value = "";
-        dataURL = null; preview.style.display = 'none'; sizeInfo.textContent = "";
-        msgAdd.textContent = "Stop added.";
+        const stop = captureStopFromForm();
+        stops.push(stop);
         renderStops();
+        clearStopForm();
+        // After first add, reveal the “Add another / End scenario” flow
+        btnAddAnother.style.display = 'inline-block';
+        btnEndScenario.style.display = 'inline-block';
+        msgAdd.textContent = "Location added.";
       } catch (e) { msgAdd.textContent = e.message; }
     };
 
-    el('btnSaveScenario').onclick = async () => {
+    // After first photo, allow “Add another location” (adds current stop then clears form)
+    btnAddAnother.onclick = () => {
+      try {
+        const stop = captureStopFromForm();
+        stops.push(stop);
+        renderStops();
+        clearStopForm();
+        msgAdd.textContent = "Location added. You can add another.";
+      } catch (e) { msgAdd.textContent = e.message; }
+    };
+
+    // End scenario → save scenario with all collected stops
+    btnEndScenario.onclick = async () => {
       try {
         if (!scTitle.value.trim()) throw new Error("Scenario title is required.");
-        if (!stops.length) throw new Error("Add at least one stop.");
-        msgSave.textContent = "Saving scenario…";
+        // If the stop form currently has data, capture it as the last stop
+        if (dataURL || urlEl.value.trim()){
+          const lastStop = captureStopFromForm();
+          stops.push(lastStop);
+        }
+        if (!stops.length) throw new Error("Add at least one location.");
+        msgAdd.textContent = "Saving scenario…";
 
         const newRef = push(ref(db, "scenarios"));
         await set(newRef, {
@@ -244,18 +292,19 @@
           notes: scNotes.value.trim(),
           active: (scActive.value === "true"),
           createdAt: Date.now(),
-          stops // store as array
+          stops
         });
 
-        msgSave.textContent = "Scenario saved! 🎉";
-        // reset scenario builder
+        msgAdd.textContent = "Scenario saved! 🎉";
+        // reset everything
         scTitle.value = ""; scNotes.value = ""; scActive.value = "true";
-        stops = []; renderStops();
-      } catch (e) { msgSave.textContent = e.message; }
+        stops = []; renderStops(); clearStopForm();
+        btnAddAnother.style.display = 'none'; btnEndScenario.style.display = 'none';
+      } catch (e) { msgAdd.textContent = e.message; }
     };
 
     // initial
-    renderStops();
+    renderStops(); showFlowButtonsIfReady();
 
   } catch (e) {
     showErr(e);
