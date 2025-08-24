@@ -15,7 +15,7 @@
   *{box-sizing:border-box}
   html,body{height:100%}
   body{margin:0;background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial}
-  header{padding:10px 14px;border-bottom:1px solid var(--border);background:color-mix(in hsl, var(--bg) 88%, transparent);backdrop-filter:blur(6px)}
+  header{padding:10px 14px;border-bottom:1px solid var(--border);background:#0d1822}
   h1{margin:0;font-size:18px}
   .app{display:grid;grid-template-columns:320px 1fr 360px;gap:12px;padding:12px;max-height:calc(100vh - 58px)}
   .col{background:var(--surface);border:1px solid var(--border);border-radius:var(--br);box-shadow:var(--shadow);padding:12px;overflow:auto}
@@ -41,22 +41,23 @@
   .divider{height:1px;background:var(--border);opacity:.6;margin:10px 0}
   .hidden{display:none}
   .desktopGate{max-width:740px;margin:48px auto;background:var(--surface);border:1px solid var(--border);border-radius:16px;box-shadow:var(--shadow);padding:18px}
-
-  /* Readability overrides */
+  /* form readability */
   select, input, textarea { color: var(--text) !important; background: var(--panel) !important; border-color: var(--border) !important; }
-  select option { color: #0b1e27; }
+  select option { color:#0b1e27; }
   @media (prefers-color-scheme: dark){ select option { color:#eaf7fb; background:#0d2430; } }
-  ::placeholder { color: color-mix(in srgb, var(--muted) 90%, transparent); opacity: 1; }
-
-  /* Overlay shelf */
+  ::placeholder { color: #7fb2c1; opacity: 1; }
+  /* overlay shelf */
   .olThumb { width:100%; aspect-ratio:1/1; border-radius:10px; border:1px solid var(--border);
              background:#0b2130; display:flex; align-items:center; justify-content:center; cursor:pointer; }
   .olThumb img { max-width:88%; max-height:88%; display:block; }
   .ol-tab.active { outline:3px solid var(--accent); }
+  /* error banner */
+  #errbar{position:fixed;left:10px;bottom:10px;background:#2b0d0d;color:#ffd7d7;border:1px solid #7a2b2b;border-radius:12px;padding:8px 12px;max-width:80vw;display:none;z-index:9999}
 </style>
 </head>
 <body>
 <header><h1>Geo Scenarios — Advanced Editor (Desktop Only)</h1></header>
+<div id="errbar"></div>
 
 <!-- Desktop gate -->
 <div id="gate" class="desktopGate hidden">
@@ -122,7 +123,6 @@
       <button id="zoomOut" class="btn secondary">Zoom −</button>
       <button id="rotateL" class="btn secondary">Rotate ⟲</button>
       <button id="rotateR" class="btn secondary">Rotate ⟳</button>
-      <!-- Flip removed from background toolbar -->
       <span class="pill" id="canvasInfo">Canvas</span>
       <button id="saveImage" class="btn">Save Image to RTDB</button>
     </div>
@@ -189,6 +189,11 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/fabric.js/5.3.0/fabric.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
 
 <script type="module">
+/* Error banner helper */
+const ERR = (msg) => { const b=document.getElementById('errbar'); b.textContent=msg; b.style.display='block'; };
+window.addEventListener('error', e => ERR(e.message));
+window.addEventListener('unhandledrejection', e => ERR(String(e.reason?.message||e.reason||e)));
+
 (async () => {
   /* ===== Desktop gate ===== */
   const gate=document.getElementById('gate');
@@ -245,11 +250,9 @@
   const rotateL=document.getElementById('rotateL');
   const rotateR=document.getElementById('rotateR');
   const saveImage=document.getElementById('saveImage');
-
   const cropStart=document.getElementById('cropStart');
   const cropApply=document.getElementById('cropApply');
   const cropCancel=document.getElementById('cropCancel');
-
   const overlayShelf=document.getElementById('overlayShelf');
   const tabBtns = Array.from(document.querySelectorAll('.ol-tab'));
   const overlayHue=document.getElementById('overlayHue');
@@ -257,13 +260,11 @@
   const bringFront=document.getElementById('bringFront');
   const sendBack=document.getElementById('sendBack');
   const deleteObj=document.getElementById('deleteObj');
-
   const eraserStart=document.getElementById('eraserStart');
   const eraserDone=document.getElementById('eraserDone');
   const eraserCancel=document.getElementById('eraserCancel');
   const eraserSize=document.getElementById('eraserSize');
   const eraserStatus=document.getElementById('eraserStatus');
-
   const rotSelLeft=document.getElementById('rotSelLeft');
   const rotSelRight=document.getElementById('rotSelRight');
   const rotSelSlider=document.getElementById('rotSelSlider');
@@ -273,7 +274,7 @@
   /* ===== State + canvas ===== */
   let scenarios=[], current=null, stopIndex=-1;
   const fabricCanvas = new fabric.Canvas('c', { backgroundColor:'#061621', preserveObjectStacking:true, selection:true });
-  let baseImage=null, cropRect=null, erasing=false;
+  let baseImage=null, cropRect=null, erasing=false;  /* <— cropRect declared ONCE here */
 
   function fitCanvas(){
     fabricCanvas.setHeight(window.innerHeight - 160);
@@ -303,7 +304,7 @@
       }, { crossOrigin:'anonymous' });
     });
   }
-  const dataURLFromCanvas = () => fabricCanvas.toDataURL({ format:'png', quality:0.92 });
+  const dataURLFromCanvas = () => fabricCanvas.toDataURL({ format:'png', quality:0.92 }); /* <— DECLARED ONCE */
 
   /* ===== Scenarios load ===== */
   function showStatus(msg){ statusPill.textContent = msg; }
@@ -415,7 +416,6 @@
     const url=dataURLFromCanvas();
     const a=document.createElement('a'); a.href=url; a.download=(current?.title||'image')+'-edited.png'; a.click();
   };
-  const dataURLFromCanvas = () => fabricCanvas.toDataURL({ format:'png', quality:0.92 });
   saveImage.onclick=async()=>{
     try{
       if(!current || stopIndex<0) throw new Error('Select a stop first.');
@@ -516,7 +516,7 @@
         top:  ch/2 - (img.height*scale)/2,
         cornerStyle:'circle', transparentCorners:false,
         shadow:'rgba(0,0,0,0.35) 0 6px 16px',
-        erasable:true // overlays are erasable
+        erasable:true
       });
       fabricCanvas.add(img);
       fabricCanvas.setActiveObject(img);
@@ -553,9 +553,7 @@
   eraserStart.onclick = ()=>{
     const sel = fabricCanvas.getActiveObject();
     if (!sel || sel.type !== 'image' || sel===baseImage) { alert('Select an overlay image first.'); return; }
-    // Lock background
     if (baseImage) baseImage.set('erasable', false);
-    // Only selected overlay erasable
     fabricCanvas.getObjects().forEach(o => o.set('erasable', false));
     sel.set('erasable', true);
     fabricCanvas.isDrawingMode = true;
