@@ -30,21 +30,21 @@
     .eyebrow{font-size:12px; color:var(--muted); margin-bottom:8px}
     h1,h2,h3{margin:0} h2{font-size:20px} p,.status{color:var(--muted); font-size:14px; margin:6px 0 0}
 
+    #viewer .card-inner{padding:12px}
+    #photoWrap{ margin-top:10px; border-radius:16px; border:1px solid rgba(255,255,255,.12); background:#000; overflow:hidden; }
+    #photo{ width:100%; height:min(78vh, calc(100vh - 220px)); object-fit:contain; background:#000; }
+    #caption{font-size:15px; color:#e9f1ff}
+
+    footer{max-width:1100px; margin:34px auto; padding:0 20px; color:#a9b6c9; font-size:13px; border-top:1px solid rgba(255,255,255,.06); display:flex; justify-content:space-between; gap:16px; flex-wrap:wrap}
+    #runTimer{font-size:13px; color:#cfe1ff}
+    #debug{font-size:12px; color:#ffdede; margin-top:6px; white-space:pre-wrap}
+
     .btn{appearance:none; border:0; border-radius:12px; cursor:pointer; padding:14px 16px; font-weight:800; font-size:16px; color:#03131b; background:linear-gradient(180deg,#54a6ff,var(--blue)); box-shadow:var(--shadow); text-align:center}
     .btn[disabled]{opacity:.65; cursor:not-allowed}
     .btn.secondary{background:transparent; color:var(--text); border:1px solid rgba(255,255,255,.14)}
     select{width:100%; padding:14px 12px; font-size:16px; border-radius:12px; border:1px solid rgba(255,255,255,.14); background:#0f1624; color:var(--text); outline:none}
     input[type="range"]{accent-color:#54a6ff}
     .row{display:flex; gap:10px; flex-wrap:wrap; align-items:center}
-
-    #viewer .card-inner{padding:12px}
-    #photoWrap{ margin-top:10px; border-radius:16px; border:1px solid rgba(255,255,255,.12); background:#000; overflow:hidden; }
-    #photo{ width:100%; height:min(78vh, calc(100vh - 220px)); object-fit:contain; background:#000; }
-    #caption{font-size:15px; color:#e9f1ff}
-
-    footer{max-width:1100px; margin:34px auto; padding:0 20px; color:var(--muted); font-size:13px; border-top:1px solid rgba(255,255,255,.06); display:flex; justify-content:space-between; gap:16px; flex-wrap:wrap}
-    #runTimer{font-size:13px; color:#cfe1ff}
-    #debug{font-size:12px; color:#ffdede; margin-top:6px; white-space:pre-wrap}
   </style>
 </head>
 <body>
@@ -129,7 +129,7 @@
     const startBtn=$('startScenario'), muteToggle=$('muteToggle'), vol=$('vol'), runTimer=$('runTimer');
     const log = (m)=>{ console.log('[viewer]', m); debug.textContent=String(m); };
 
-    // ---------- Helpers (kept from your file) ----------
+    // ---------- Helpers (unchanged) ----------
     const toRad = x => x*Math.PI/180;
     const hav=(a,b,c,d)=>{ const R=6371000, dA=toRad(c-a), dB=toRad(d-b);
       return 2*R*Math.asin(Math.sqrt(Math.sin(dA/2)**2 + Math.cos(toRad(a))*Math.cos(toRad(c))*Math.sin(dB/2)**2)); };
@@ -147,7 +147,7 @@
         const image = s.imageData || s.imageURL || s.imageUrl || s.url || s.photoURL || s.photo || s.img || '';
         return { ...s, lat, lng, radiusMeters, title, caption, image };
       }).filter(s => typeof s.lat === 'number' && typeof s.lng === 'number');
-    }  /* cites your original normalize + image mapping. :contentReference[oaicite:1]{index=1} */
+    }
 
     function setImage(img, stop){
       const src = stop.image || '';
@@ -184,7 +184,7 @@
     }
     log('Firebase mode: ' + mode);
 
-    // Connection indicator (compat + modular)
+    // Connection indicator
     try{
       const infoRef = (mode==='modular') ? refFn(db, '.info/connected') : refFn('.info/connected');
       onValueFn(infoRef, snap=>{
@@ -194,7 +194,7 @@
       });
     }catch{}
 
-    // ---------- Scenario loading (your dual path + 1st-get + REST safety) ----------
+    // ---------- Scenario loading (unchanged, working) ----------
     let scenarios=[], populated=false;
     function mapSnapshot(val){
       const obj = val || {};
@@ -212,7 +212,6 @@
       populated = list.length>0;
     }
 
-    // 1) Prefer geophoto/scenarios; 2) fallback to scenarios — same as your file. :contentReference[oaicite:2]{index=2}
     try{
       const a = (mode==='modular') ? refFn(db,'geophoto/scenarios') : refFn('geophoto/scenarios');
       onValueFn(a, snap=>{
@@ -228,7 +227,6 @@
       }, err=>log('SDK scenarios error: '+(err?.message||err)));
     }catch(e){ log('attach scenarios failed: '+e.message); }
 
-    // 3) One-time GET backups (handles listeners that don't fire)
     setTimeout(async ()=>{
       if(!populated){
         try{ const s1 = await getFn((mode==='modular') ? refFn(db,'geophoto/scenarios') : refFn('geophoto/scenarios'));
@@ -240,7 +238,6 @@
              const list=mapSnapshot(s2?.val?.() ?? s2.val()); if(list.length){ scenarios=list; populateDropdown(list); log('GET scenarios '+list.length); } }
         catch(e){ log('GET scenarios error: '+e.message); }
       }
-      // 4) REST fetch as last resort (works with your open rules)
       if(!populated){
         try{
           const url = 'https://dailyquiz-d5279-default-rtdb.firebaseio.com/scenarios.json';
@@ -253,22 +250,18 @@
     }, 1200);
 
     // ---------- Geofence + display (unchanged) ----------
-    function within(hitDist, stopRadius, accuracy){
-      const r = (Number(stopRadius)||0) + Math.max(Number(accuracy)||0, 10);
-      return hitDist <= r;
-    }
-    function findHit(stops, la, ln, acc){
+    const within=(d, r, acc)=> d <= ((Number(r)||0) + Math.max(Number(acc)||0, 10));
+    const findHit=(stops, la, ln, acc)=>{
       let best=null; (stops||[]).forEach((s,i)=>{
         const d=hav(la,ln,Number(s.lat),Number(s.lng));
         if(within(d, s.radiusMeters, acc)){ if(!best || d<best.dist) best={s,index:i,dist:d}; }
       }); return best;
-    }
+    };
     function showDispatchIntro(sc){
       const txt=(sc.dispatch||sc.notes||'').trim();
       dispatchBlock.textContent = txt ? `Dispatch: ${txt}` : 'Dispatch: (none)';
       setTimeout(()=>say(txt || `${sc.title || 'scenario'} started.`),120);
     }
-
     let current=null, watchId=null, lastStopIndex=-1;
     function openScenarioById(id){
       const sc=scenarios.find(s=>s.id===id);
@@ -295,54 +288,140 @@
             setImage(photo, hit.s);
             caption.textContent=hit.s.caption||'';
             detail.textContent=`Distance: ${Math.round(hit.dist)} m (radius ${hit.s.radiusMeters} m)`;
-            beep(); setTimeout(()=>say(`${hit.s.title?hit.s.title+'. ':''}${hit.s.caption||''}`),120);
+            beep(); setTimeout(()=>say(`${hit.s.title?hit.s.title+'. ':''}${hit.s.caption||''}`), IOS_TTS_DELAY);
             viewer.scrollIntoView({behavior:'smooth', block:'start'});
           }
         }, err=>{ geoStatus.textContent='Location error: '+err.message; }, { enableHighAccuracy:true, maximumAge:0, timeout:20000 });
       }catch(e){ geoStatus.textContent='Location error: '+e.message; }
     }
 
-    // ---------- Audio / TTS ----------
+    // ---------- Audio / TTS (iPhone-safe, minimal change) ----------
+    const synth = window.speechSynthesis;
+    const isIOS = /iP(ad|hone|od)/.test(navigator.userAgent) ||
+                  (navigator.userAgent.includes('Mac') && navigator.maxTouchPoints>2);
+    const IOS_TTS_DELAY = isIOS ? 600 : 120; // small gap after beep
+
     let audioEnabled=false, muted=false, volume=1.0, audioCtx=null, wakeLock=null, wakeFallbackInterval=null, runInterval=null, startMs=0;
-    const synth=window.speechSynthesis; let speaking=false; const q=[];
+    let speaking=false; const q=[]; let preferredVoice=null;
+
+    function pickPreferredVoice(){
+      const voices = synth.getVoices() || [];
+      const prefer = ['Samantha','Alex','Daniel','Karen','Moira','Victoria','Serena'];
+      for(const name of prefer){ const v = voices.find(v => v.name && v.name.startsWith(name)); if(v) return v; }
+      return voices.find(v => v.lang && v.lang.startsWith('en')) || voices[0] || null;
+    }
+    function ensureVoices(){
+      return new Promise(resolve=>{
+        let vs = synth.getVoices();
+        if(vs && vs.length){ preferredVoice = pickPreferredVoice(); return resolve(vs); }
+        const onvc = ()=>{ vs = synth.getVoices(); if(vs && vs.length){ synth.removeEventListener('voiceschanged', onvc); preferredVoice = pickPreferredVoice(); resolve(vs); } };
+        synth.addEventListener('voiceschanged', onvc);
+        let tries=0; const iv=setInterval(()=>{ vs = synth.getVoices(); if((vs && vs.length) || ++tries>10){ clearInterval(iv); preferredVoice = pickPreferredVoice(); resolve(vs||[]); } }, 200);
+      });
+    }
+    async function primeTTS(){
+      // Run only on iOS, during Start tap (user gesture)
+      if(!isIOS) return;
+      try{
+        await ensureVoices();
+        await new Promise(res=>{
+          const u = new SpeechSynthesisUtterance(' ');
+          if(preferredVoice) u.voice = preferredVoice;
+          u.volume = 0.01; u.rate = 1.0; u.pitch = 1.0;
+          u.onend = res; u.onerror = res;
+          synth.cancel(); synth.speak(u);
+          setTimeout(res, 700); // safety
+        });
+      }catch{}
+    }
+
     function say(text){ if(!audioEnabled || muted || !text) return; q.push(text); if(!speaking) playNext(); }
-    function playNext(){ if(!audioEnabled || muted || !q.length){ speaking=false; return; }
-      speaking=true; const u=new SpeechSynthesisUtterance(q.shift()); u.volume=volume;
-      u.onend=()=>{ speaking=false; playNext(); }; u.onerror=()=>{ speaking=false; };
-      try{ synth.speak(u); }catch(e){ speaking=false; } }
+    function playNext(){
+      if(!audioEnabled || muted || !q.length){ speaking=false; return; }
+      speaking=true;
+      const u=new SpeechSynthesisUtterance(q.shift());
+      u.volume = volume; u.rate = 1.0; u.pitch = 1.0;
+      if(preferredVoice) u.voice = preferredVoice;
+      u.onend=()=>{ speaking=false; playNext(); };
+      u.onerror=()=>{ speaking=false; };
+
+      // iOS quirk: cancel any pending utterances and delay slightly
+      if(isIOS){
+        synth.cancel();
+        setTimeout(()=>{ try{ synth.speak(u); }catch{ speaking=false; } }, IOS_TTS_DELAY);
+      } else {
+        try{ synth.speak(u); }catch{ speaking=false; }
+      }
+    }
+
     function formatTime(ms){ const s=Math.floor(ms/1000), m=Math.floor(s/60), sec=s%60; return String(m).padStart(2,'0')+':'+String(sec).padStart(2,'0'); }
     function startTimer(){ startMs=Date.now(); clearInterval(runInterval); runInterval=setInterval(()=>{ runTimer.textContent=formatTime(Date.now()-startMs); },500); }
     function stopTimer(){ clearInterval(runInterval); runInterval=null; runTimer.textContent='00:00'; }
-    async function lockWake(){ try{
-      if('wakeLock' in navigator){ wakeLock=await navigator.wakeLock.request('screen'); wakeLock.addEventListener('release',()=>{}); }
-      else { if(!audioCtx) audioCtx=new (window.AudioContext||window.webkitAudioContext)();
-             wakeFallbackInterval=setInterval(()=>{ try{ const src=audioCtx.createBufferSource(); src.buffer=audioCtx.createBuffer(1,1,audioCtx.sampleRate); src.connect(audioCtx.destination); src.start(0);}catch(e){} },30000); }
-    }catch{} }
-    function releaseWake(){ try{ if(wakeLock){ wakeLock.release(); wakeLock=null; } }catch{} if(wakeFallbackInterval){ clearInterval(wakeFallbackInterval); wakeFallbackInterval=null; } }
-    function beep(){ if(!audioEnabled || muted) return; try{
-      if(!audioCtx) audioCtx=new (window.AudioContext||window.webkitAudioContext)(); const o=audioCtx.createOscillator(), g=audioCtx.createGain();
-      o.type='sine'; o.frequency.value=880; g.gain.value=0.001; o.connect(g).connect(audioCtx.destination);
-      const now=audioCtx.currentTime; g.gain.setValueAtTime(0.0001, now); g.gain.linearRampToValueAtTime(0.2*volume, now+0.02); g.gain.exponentialRampToValueAtTime(0.0001, now+0.25); o.start(now); o.stop(now+0.3);
-    }catch{} }
 
+    async function lockWake(){
+      try{
+        if('wakeLock' in navigator){ wakeLock = await navigator.wakeLock.request('screen'); wakeLock.addEventListener('release',()=>{}); }
+        else {
+          if(!audioCtx) audioCtx=new (window.AudioContext||window.webkitAudioContext)();
+          wakeFallbackInterval=setInterval(()=>{ try{ const src=audioCtx.createBufferSource(); src.buffer=audioCtx.createBuffer(1,1,audioCtx.sampleRate); src.connect(audioCtx.destination); src.start(0);}catch{} },30000);
+        }
+      }catch{}
+    }
+    function releaseWake(){ try{ if(wakeLock){ wakeLock.release(); wakeLock=null; } }catch{} if(wakeFallbackInterval){ clearInterval(wakeFallbackInterval); wakeFallbackInterval=null; } }
+    function beep(){
+      if(!audioEnabled || muted) return;
+      try{
+        if(!audioCtx) audioCtx=new (window.AudioContext||window.webkitAudioContext)();
+        const o=audioCtx.createOscillator(), g=audioCtx.createGain();
+        o.type='sine'; o.frequency.value=880; g.gain.value=0.001; o.connect(g).connect(audioCtx.destination);
+        const now=audioCtx.currentTime;
+        g.gain.setValueAtTime(0.0001, now);
+        g.gain.linearRampToValueAtTime(0.2*volume, now+0.02);
+        g.gain.exponentialRampToValueAtTime(0.0001, now+0.25);
+        o.start(now); o.stop(now+0.3);
+      }catch{}
+    }
     muteToggle.onclick=()=>{ muted=!muted; muteToggle.textContent=muted?'Unmute':'Mute'; };
     vol.oninput=e=>{ volume=parseFloat(e.target.value||'1')||1; };
 
-    startBtn.onclick=async()=>{
+    // ---------- Controls ----------
+    startBtn.onclick = async function(){
       try{
         audioEnabled=true;
         if(!audioCtx) audioCtx=new (window.AudioContext||window.webkitAudioContext)();
-        await audioCtx.resume(); await lockWake(); startTimer(); beep();
+        await audioCtx.resume();
+        await lockWake();
+
+        // iPhone unlock: voices + tiny silent utterance (during the tap)
+        await primeTTS();
+
+        startTimer(); beep();
         startBtn.textContent='Scenario Running'; startBtn.disabled=true;
       }catch(e){ alert('Could not enable audio: '+e.message); return; }
+
       const id=select.value;
-      if(!id){ status.textContent='Choose a scenario first.'; startBtn.disabled=false; startBtn.textContent='Start Scenario'; audioEnabled=false; releaseWake(); stopTimer(); return; }
+      if(!id){
+        status.textContent='Choose a scenario first.';
+        startBtn.disabled=false; startBtn.textContent='Start Scenario'; audioEnabled=false; releaseWake(); stopTimer();
+        return;
+      }
       openScenarioById(id);
     };
-    backBtn.onclick=()=>{ viewer.style.display='none'; try{ navigator.geolocation.clearWatch(watchId); }catch{} status.textContent='Choose a scenario and press Start Scenario.'; window.speechSynthesis.cancel(); startBtn.disabled=false; startBtn.textContent='Start Scenario'; audioEnabled=false; releaseWake(); stopTimer(); };
 
+    backBtn.onclick=()=>{
+      viewer.style.display='none';
+      try{ if(watchId) navigator.geolocation.clearWatch(watchId); }catch{}
+      status.textContent='Choose a scenario and press Start Scenario.';
+      window.speechSynthesis.cancel();
+      startBtn.disabled=false; startBtn.textContent='Start Scenario'; audioEnabled=false;
+      releaseWake(); stopTimer();
+    };
+
+    // Preselect ?id=
     (function(){ const pre=new URLSearchParams(location.search).get('id'); if(!pre) return; const iv=setInterval(()=>{ if(select.options.length>1){ clearInterval(iv); select.value=pre; } },200); })();
-    document.getElementById('year').textContent = new Date().getFullYear();
+
+    // Footer year + surface errors
+    $('year').textContent = new Date().getFullYear();
     window.addEventListener('error', e => log('Error: ' + (e.message||e)));
     window.addEventListener('unhandledrejection', e => log('Promise error: ' + (e.reason && e.reason.message ? e.reason.message : e.reason)));
   })();
