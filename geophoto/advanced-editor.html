@@ -197,13 +197,13 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/fabric.js/5.3.0/fabric.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
 
 <script type="module">
-/* Error banner helper */
+/* Error banner helper — if anything crashes, you’ll see it */
 const ERR = (msg) => { const b=document.getElementById('errbar'); b.textContent=msg; b.style.display='block'; };
 window.addEventListener('error', e => ERR(e.message));
 window.addEventListener('unhandledrejection', e => ERR(String(e.reason?.message||e.reason||e)));
 
 (async () => {
-  /* ===== Desktop gate ===== */
+  /* ===== Desktop gate (unchanged old logic) ===== */
   const gate=document.getElementById('gate');
   const app=document.getElementById('app');
   const gateInfo=document.getElementById('gateInfo');
@@ -218,7 +218,7 @@ window.addEventListener('unhandledrejection', e => ERR(String(e.reason?.message|
   forceGo.onclick=()=>{ history.replaceState(null,'',location.pathname); app.classList.remove('hidden'); gate.classList.add('hidden'); };
   decideGate(); window.addEventListener('resize', decideGate);
 
-  /* ===== Firebase RTDB ===== */
+  /* ===== Firebase RTDB (old working approach) ===== */
   const [{ initializeApp }] = await Promise.all([ import("https://www.gstatic.com/firebasejs/10.12.4/firebase-app.js") ]);
   const [{ getDatabase, ref, onValue, get, set }] = await Promise.all([ import("https://www.gstatic.com/firebasejs/10.12.4/firebase-database.js") ]);
   const firebaseConfig = {
@@ -287,7 +287,7 @@ window.addEventListener('unhandledrejection', e => ERR(String(e.reason?.message|
   const relinkOverlaysBtn=document.getElementById('relinkOverlays');
   const bulkMsg=document.getElementById('bulkMsg');
 
-  /* ===== State + canvas ===== */
+  /* ===== State + canvas (old working initialization) ===== */
   let scenarios=[], current=null, stopIndex=-1;
   const fabricCanvas = new fabric.Canvas('c', { backgroundColor:'#061621', preserveObjectStacking:true, selection:true });
   let baseImage=null, cropRect=null, erasing=false;
@@ -320,9 +320,11 @@ window.addEventListener('unhandledrejection', e => ERR(String(e.reason?.message|
       }, { crossOrigin:'anonymous' });
     });
   }
-  const dataURLFromCanvas = () => fabricCanvas.toDataURL({ format:'png', quality:0.92 });
 
-  /* ===== Scenarios load ===== */
+  const dataURLFromCanvas = () =>
+    fabricCanvas.toDataURL({ format:'png', quality:0.92 });
+
+  /* ===== Scenarios load (unchanged) ===== */
   function showStatus(msg){ statusPill.textContent = msg; }
   function populateList(){
     scenarioSel.innerHTML = '<option value="">Select scenario…</option>';
@@ -432,7 +434,6 @@ window.addEventListener('unhandledrejection', e => ERR(String(e.reason?.message|
     const url=dataURLFromCanvas();
     const a=document.createElement('a'); a.href=url; a.download=(current?.title||'image')+'-edited.png'; a.click();
   };
-  const dataURLFromCanvas = () => fabricCanvas.toDataURL({ format:'png', quality:0.92 });
   saveImage.onclick=async()=>{
     try{
       if(!current || stopIndex<0) throw new Error('Select a stop first.');
@@ -446,7 +447,7 @@ window.addEventListener('unhandledrejection', e => ERR(String(e.reason?.message|
     }catch(err){ metaMsg.textContent=String(err.message||err); }
   };
 
-  /* ===== Crop workflow ===== */
+  /* ===== Crop workflow (old logic) ===== */
   cropStart.onclick=()=>{
     if(!baseImage) return;
     cropRect = new fabric.Rect({
@@ -534,12 +535,15 @@ window.addEventListener('unhandledrejection', e => ERR(String(e.reason?.message|
     }, { crossOrigin:'anonymous' });
   }
 
-  /* ===== Overlay Hue & Opacity ===== */
+  /* ===== Overlay Hue & Opacity (with safety check) ===== */
+  const supportsHue = !!(fabric.Image && fabric.Image.filters && fabric.Image.filters.HueRotation);
+  overlayHue.disabled = !supportsHue;
   function ensureHueFilter(img){
     img.filters = img.filters || [];
     img.filters = img.filters.filter(f => !(f && f.type === 'HueRotation'));
   }
   overlayHue.oninput = (e)=>{
+    if(!supportsHue) return;
     const o = fabricCanvas.getActiveObject();
     if (o && o.type === 'image' && o !== baseImage) {
       const deg = parseInt(e.target.value,10) || 0;
@@ -553,13 +557,14 @@ window.addEventListener('unhandledrejection', e => ERR(String(e.reason?.message|
   sendBack.onclick  = ()=>{ const o=fabricCanvas.getActiveObject(); if(o && o!==baseImage){ o.sendToBack(); if(baseImage) baseImage.sendToBack(); fabricCanvas.requestRenderAll(); } };
   deleteObj.onclick = ()=>{ const o=fabricCanvas.getActiveObject(); if(o && o!==baseImage){ fabricCanvas.remove(o); fabricCanvas.discardActiveObject(); fabricCanvas.requestRenderAll(); } };
 
-  /* ===== Eraser (selected overlay only) ===== */
+  /* ===== Eraser (selected overlay only; old approach) ===== */
   function stopErasing(){
     fabricCanvas.isDrawingMode = false;
     erasing=false;
     eraserStatus.textContent = 'Eraser: off';
   }
   eraserStart.onclick = ()=>{
+    if (!fabric.EraserBrush) { alert('Eraser brush not available in this Fabric build.'); return; }
     const sel = fabricCanvas.getActiveObject();
     if (!sel || sel.type !== 'image' || sel===baseImage) { alert('Select an overlay image first.'); return; }
     if (baseImage) baseImage.set('erasable', false);
@@ -650,7 +655,7 @@ window.addEventListener('unhandledrejection', e => ERR(String(e.reason?.message|
   }
 
   async function relinkOverlaySources(){
-    // Only needed if you previously stored overlay URLs in stops[].overlays[].src
+    // Only needed if you ever stored overlay URLs under stops[].overlays[].src
     const OLD_PREFIXES = [
       'https://old-domain.example.com/overlays/',
       'https://fireopssim.com/oldpath/'
@@ -696,6 +701,18 @@ window.addEventListener('unhandledrejection', e => ERR(String(e.reason?.message|
 
   normalizeLocsBtn?.addEventListener('click', normalizeAllLocations);
   relinkOverlaysBtn?.addEventListener('click', relinkOverlaySources);
+
+  /* ===== Delete stop ===== */
+  deleteStop.onclick=async()=>{
+    try{
+      if(!current || stopIndex<0) return;
+      if(!confirm('Delete this photo from the scenario?')) return;
+      current.stops.splice(stopIndex,1);
+      const { id, ...payload } = current;
+      await set(ref(db,'scenarios/'+current.id), payload);
+      stopIndex=-1; fabricCanvas.clear(); baseImage=null; renderStopsThumbs(); metaMsg.textContent='Photo deleted.';
+    }catch(e){ metaMsg.textContent=String(e.message||e); }
+  };
 
 })();
 </script>
