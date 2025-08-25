@@ -62,11 +62,11 @@
     }
     #caption{font-size:15px; color:#e9f1ff}
 
-    footer{max-width:1100px; margin:34px auto; padding:0 20px; color:var(--muted); font-size:13px;
+    footer{max-width:1100px; margin:34px auto; padding:0 20px; color:#a9b6c9; font-size:13px;
       border-top:1px solid rgba(255,255,255,.06); display:flex; justify-content:space-between; gap:16px; flex-wrap:wrap}
 
     #runTimer{font-size:13px; color:#cfe1ff}
-    #debug{font-size:12px; color:#ffd3d3; margin-top:6px}
+    #debug{font-size:12px; color:#ffdede; margin-top:6px; white-space:pre-wrap}
   </style>
 </head>
 <body>
@@ -139,10 +139,10 @@
 
   <footer>
     <div>© <span id="year"></span> FireOps SIM</div>
-    <div></div>
+    <div id="connStatus"></div>
   </footer>
 
-  <!-- Firebase compat (no modules; iOS-friendly) -->
+  <!-- Firebase compat (iOS-friendly) -->
   <script src="https://www.gstatic.com/firebasejs/10.12.4/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.4/firebase-database-compat.js"></script>
 
@@ -150,13 +150,13 @@
   (function(){
     const $ = id => document.getElementById(id);
     const viewer = $('viewer'), backBtn = $('backBtn');
-    const select = $('scenarioSelect'), status = $('status'), debug = $('debug');
+    const select = $('scenarioSelect'), status = $('status'), debug = $('debug'), connStatus = $('connStatus');
     const dispatchBlock = $('dispatchBlock'), geoStatus = $('geoStatus');
     const result = $('result'), stopTitle = $('stopTitle'), photo = $('photo'), caption = $('caption'), detail = $('detail');
     const scTitle = $('scTitle');
     const startBtn = $('startScenario'), muteToggle = $('muteToggle'), vol = $('vol'), runTimer = $('runTimer');
 
-    /* ---------- Small helpers ---------- */
+    /* ---------- Helpers ---------- */
     const toRad = x => x*Math.PI/180;
     const hav=(a,b,c,d)=>{
       const R=6371000, dA=toRad(c-a), dB=toRad(d-b);
@@ -165,7 +165,6 @@
     const num = v => (v===0||v===null)?v:parseFloat(v);
     function log(msg){ console.log(msg); debug.textContent = String(msg); }
 
-    // normalize stops (lat/lng variants, radius, title, caption, image fields)
     function normalizeStops(stopsLike){
       if(!stopsLike) return [];
       let arr = Array.isArray(stopsLike) ? stopsLike : Object.values(stopsLike);
@@ -176,12 +175,11 @@
         const title = s.title || s.name || '';
         const cap = s.caption || s.text || s.note || '';
         const image =
-          s.imageData || s.imageURL || s.imageUrl || s.url || s.photoURL || s.photo || s.img || '';
+          s.imageData || s.imageURL || s.imageUrl || s.url || s.photoURL || s.photo || s.img || s.image || '';
         return { ...s, lat, lng, radiusMeters, title, caption: cap, image };
       }).filter(s => typeof s.lat === 'number' && typeof s.lng === 'number');
     }
 
-    // old working image setter (imageData || imageURL first)
     function setImage(img, stop){
       const src =
         stop.imageData || stop.imageURL || stop.imageUrl ||
@@ -196,7 +194,7 @@
       };
     }
 
-    /* ---------- Firebase init (compat) ---------- */
+    /* ---------- Firebase init ---------- */
     const firebaseConfig = {
       apiKey:"AIzaSyDM6DpRSeZueVKRpbyJyDmhf8WY66KyCDk",
       authDomain:"dailyquiz-d5279.firebaseapp.com",
@@ -207,6 +205,13 @@
     };
     try{ firebase.initializeApp(firebaseConfig); }catch(e){ /* already initialized */ }
     const db = firebase.database();
+
+    // Connection indicator
+    db.ref(".info/connected").on("value", snap=>{
+      const ok = snap.val() === true;
+      connStatus.textContent = ok ? "Connected" : "Offline";
+      connStatus.style.color = ok ? "#89ffb2" : "#ffdede";
+    });
 
     /* ---------- Audio / TTS ---------- */
     let audioEnabled=false, muted=false, volume=1.0, audioCtx=null;
@@ -285,16 +290,37 @@
     muteToggle.onclick=()=>{ muted=!muted; muteToggle.textContent=muted?'Unmute':'Mute'; };
     vol.oninput=e=>{ volume=parseFloat(e.target.value||'1')||1; };
 
-    /* ---------- Scenario Loading (old working logic) ---------- */
+    /* ---------- Scenario Loading (auto-detect path) ---------- */
     let scenariosArr = [];
-    db.ref('scenarios').on('value', function(snap){
-      const v = snap.val() || {};
-      scenariosArr = Object.entries(v)
-        .map(([id, s]) => ({ id, ...(s || {}) }))
-        .filter(s => s && (s.active === undefined || s.active)) // keep active (or default true)
+    let chosenPath = null;  // show in debug
+
+    function mapScenarioContainer(val){
+      if(!val) return [];
+      if(Array.isArray(val)){
+        return val.map((s,i)=>({id:String(i), ...(s||{})}));
+      }
+      if(typeof val === 'object'){
+        return Object.keys(val).map(k=>({id:String(k), ...(val[k]||{})}));
+      }
+      return [];
+    }
+
+    function looksLikeScenarios(arr){
+      // heuristic: items with title or stops
+      let score = 0;
+      arr.forEach(it=>{
+        if(it && (it.title || it.stops)) score++;
+      });
+      return score;
+    }
+
+    function adoptScenarios(list){
+      scenariosArr = (list||[])
+        .map(s => ({...s}))
+        .filter(s => s && (s.active === undefined || s.active))
         .sort((a,b) => (b.createdAt || 0) - (a.createdAt || 0));
 
-      // populate dropdown
+      // Populate dropdown
       select.innerHTML = '<option value="">Select a scenario…</option>';
       scenariosArr.forEach(sc => {
         const o = document.createElement('option');
@@ -305,15 +331,78 @@
       status.textContent = scenariosArr.length
         ? `${scenariosArr.length} active scenario(s)`
         : 'No scenarios yet.';
-      log(`Loaded ${scenariosArr.length} from /scenarios`);
-    }, function(err){
-      log('DB error: ' + err.message);
-    });
+      log(`Using path: ${chosenPath || '(unknown)'} — loaded ${scenariosArr.length}`);
+    }
+
+    function subscribe(path){
+      if(!path) return;
+      chosenPath = path;
+      db.ref(path).on('value', function(snap){
+        const arr = mapScenarioContainer(snap.val());
+        adoptScenarios(arr);
+      }, function(err){
+        log('DB error ['+path+']: ' + err.message);
+      });
+    }
+
+    // Try common paths first, then scan root if needed
+    const CANDIDATES = [
+      'scenarios',
+      'geophoto/scenarios',
+      'geophoto/public/scenarios',
+      'public/scenarios'
+    ];
+
+    function tryCandidates(i){
+      if(i >= CANDIDATES.length){
+        // root scan fallback
+        db.ref('/').once('value').then(root=>{
+          const val = root.val() || {};
+          const keys = Object.keys(val);
+          let best = { path:null, score:-1, list:[] };
+
+          keys.forEach(k=>{
+            const arr = mapScenarioContainer(val[k]);
+            const score = looksLikeScenarios(arr);
+            if(score > best.score){
+              best = { path: k, score, list: arr };
+            }
+          });
+
+          if(best.path && best.score > 0){
+            chosenPath = best.path;
+            adoptScenarios(best.list);
+            subscribe(chosenPath); // also live-subscribe
+          }else{
+            log('No scenarios found in root scan.');
+            status.textContent = 'No scenarios found.';
+          }
+        }).catch(e=>{
+          log('Root scan error: '+e.message);
+        });
+        return;
+      }
+
+      const path = CANDIDATES[i];
+      db.ref(path).once('value').then(snap=>{
+        const arr = mapScenarioContainer(snap.val());
+        if(arr.length){
+          chosenPath = path;
+          adoptScenarios(arr);
+          subscribe(chosenPath);
+        }else{
+          tryCandidates(i+1);
+        }
+      }).catch(_=> tryCandidates(i+1));
+    }
+
+    // Kick off detection
+    tryCandidates(0);
 
     /* ---------- Image Preload Cache ---------- */
     const imgCache = new Map();
-    async function preloadImages(stops){
-      await Promise.all((stops||[]).map(s=>new Promise(res=>{
+    function preloadImages(stops){
+      Promise.all((stops||[]).map(s=>new Promise(res=>{
         const src =
           s.imageData || s.imageURL || s.imageUrl || s.url || s.photoURL || s.photo || s.image || '';
         if(!src || imgCache.has(src)) return res();
@@ -321,17 +410,18 @@
         im.onload=()=>{ if(im.decode) im.decode().catch(()=>{}).finally(res); else res(); };
         im.onerror=()=>res();
         im.src=src;
-      })));
-      (stops||[]).forEach(s=>{
-        const src =
-          s.imageData || s.imageURL || s.imageUrl || s.url || s.photoURL || s.photo || s.image || '';
-        if(src) imgCache.set(src,true);
+      }))).then(()=>{
+        (stops||[]).forEach(s=>{
+          const src =
+            s.imageData || s.imageURL || s.imageUrl || s.url || s.photoURL || s.photo || s.image || '';
+          if(src) imgCache.set(src,true);
+        });
       });
     }
 
     /* ---------- Geofence + Display ---------- */
     function within(hitDist, stopRadius, accuracy){
-      const r = (Number(stopRadius)||0) + Math.max(Number(accuracy)||0, 10); // allow GPS error
+      const r = (Number(stopRadius)||0) + Math.max(Number(accuracy)||0, 10);
       return hitDist <= r;
     }
     function findHit(stops, la, ln, acc){
@@ -353,7 +443,7 @@
 
     let current=null, currentStops=[], watchId=null, lastStopIndex=-1;
 
-    async function openScenarioById(id){
+    function openScenarioById(id){
       const sc = scenariosArr.find(s => s.id === id);
       if(!sc){ status.textContent='Scenario not found.'; return; }
       current=sc;
@@ -406,26 +496,28 @@
     const isIOS = /iP(ad|hone|od)/.test(navigator.userAgent) ||
                   (navigator.userAgent.includes('Mac') && navigator.maxTouchPoints>2);
 
-    startBtn.onclick = async function(){
-      try{
-        audioEnabled=true;
-        if(!audioCtx) audioCtx=new (window.AudioContext||window.webkitAudioContext)();
-        await audioCtx.resume();
-        await lockWake();
-        if(isIOS) await primeTTS();   // iOS needs the prime on user gesture
-        startTimer();
-        beep();
-        startBtn.textContent='Scenario Running';
-        startBtn.disabled=true;
-      }catch(e){ alert('Could not enable audio: '+e.message); return; }
+    startBtn.onclick = function(){
+      (async function(){
+        try{
+          audioEnabled=true;
+          if(!audioCtx) audioCtx=new (window.AudioContext||window.webkitAudioContext)();
+          await audioCtx.resume();
+          await lockWake();
+          if(isIOS) await primeTTS();   // iOS needs the prime on user gesture
+          startTimer();
+          beep();
+          startBtn.textContent='Scenario Running';
+          startBtn.disabled=true;
+        }catch(e){ alert('Could not enable audio: '+e.message); return; }
 
-      const id=select.value;
-      if(!id){
-        status.textContent='Choose a scenario first.';
-        startBtn.disabled=false; startBtn.textContent='Start Scenario'; audioEnabled=false; releaseWake(); stopTimer();
-        return;
-      }
-      openScenarioById(id);
+        const id=select.value;
+        if(!id){
+          status.textContent='Choose a scenario first.';
+          startBtn.disabled=false; startBtn.textContent='Start Scenario'; audioEnabled=false; releaseWake(); stopTimer();
+          return;
+        }
+        openScenarioById(id);
+      })();
     };
 
     backBtn.onclick=function(){
