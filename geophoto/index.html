@@ -57,7 +57,7 @@
     }
     #photo{
       width:100%;
-      height:min(78vh, calc(100vh - 220px));  /* fills most of the screen */
+      height:min(78vh, calc(100vh - 220px));
       object-fit:contain; background:#000;
     }
     #caption{font-size:15px; color:#e9f1ff}
@@ -173,16 +173,6 @@
       }).filter(s => typeof s.lat === 'number' && typeof s.lng === 'number');
     }
 
-    function setImage(img,stop){
-      const src = stop.image || '';
-      img.src = src;
-      img.onerror = () => {
-        img.src = "data:image/svg+xml;utf8,"+encodeURIComponent(
-          "<svg xmlns='http://www.w3.org/2000/svg' width='1200' height='720'><rect width='100%' height='100%' fill='#000'/><text x='50%' y='50%' fill='#9ecbd6' font-size='24' text-anchor='middle'>Image failed to load</text></svg>"
-        );
-      };
-    }
-
     /* ---------- Firebase ---------- */
     const { initializeApp } = await import("https://www.gstatic.com/firebasejs/10.12.4/firebase-app.js");
     const { getDatabase, ref, onValue } = await import("https://www.gstatic.com/firebasejs/10.12.4/firebase-database.js");
@@ -201,32 +191,27 @@
     let audioEnabled=false, muted=false, volume=1.0, audioCtx=null;
     let wakeLock=null, wakeFallbackInterval=null, runInterval=null, startMs=0;
 
+    const isIOS = /iP(ad|hone|od)/.test(navigator.userAgent) ||
+                  (navigator.userAgent.includes('Mac') && navigator.maxTouchPoints>2);
+
     function formatTime(ms){
       const s = Math.floor(ms/1000), m = Math.floor(s/60), sec = s%60;
       return String(m).padStart(2,'0')+':'+String(sec).padStart(2,'0');
     }
-
-    function startTimer(){
-      startMs = Date.now();
-      runInterval && clearInterval(runInterval);
+    function startTimer(){ startMs = Date.now(); clearInterval(runInterval);
       runInterval = setInterval(()=>{ runTimer.textContent = formatTime(Date.now()-startMs); }, 500);
     }
-    function stopTimer(){
-      runInterval && clearInterval(runInterval); runInterval=null;
-      runTimer.textContent = '00:00';
-    }
+    function stopTimer(){ clearInterval(runInterval); runInterval=null; runTimer.textContent = '00:00'; }
 
     async function lockWake(){
       try{
         if ('wakeLock' in navigator) {
           wakeLock = await navigator.wakeLock.request('screen');
-          wakeLock.addEventListener('release', ()=>{}); // no-op
+          wakeLock.addEventListener('release', ()=>{});
         } else {
-          // Fallback: play a silent buffer every 30s
           if(!audioCtx) audioCtx=new (window.AudioContext||window.webkitAudioContext)();
           wakeFallbackInterval = setInterval(()=>{
-            try{
-              const src = audioCtx.createBufferSource();
+            try{ const src = audioCtx.createBufferSource();
               src.buffer = audioCtx.createBuffer(1,1,audioCtx.sampleRate);
               src.connect(audioCtx.destination); src.start(0);
             }catch(e){}
@@ -234,10 +219,7 @@
         }
       }catch(e){}
     }
-    function releaseWake(){
-      try{ if(wakeLock){ wakeLock.release(); wakeLock=null; } }catch(e){}
-      if(wakeFallbackInterval){ clearInterval(wakeFallbackInterval); wakeFallbackInterval=null; }
-    }
+    function releaseWake(){ try{ if(wakeLock){ wakeLock.release(); wakeLock=null; } }catch(e){}
     document.addEventListener('visibilitychange', () => {
       if(document.visibilityState === 'visible' && audioEnabled) lockWake();
     });
@@ -257,24 +239,31 @@
       }catch(e){}
     }
 
-    function voicesReady(){
-      return new Promise(resolve=>{
-        const v = window.speechSynthesis.getVoices();
-        if (v && v.length) return resolve();
-        const t = setTimeout(()=>resolve(), 1500);
-        window.speechSynthesis.onvoiceschanged = ()=>{ clearTimeout(t); resolve(); };
-      });
+    // ---- iOS-safe TTS queue with priming ----
+    const synth = window.speechSynthesis;
+    let speaking=false; const q=[];
+    function say(text){ if(!audioEnabled || muted || !text) return; q.push(text); if(!speaking) playNext(); }
+    function playNext(){
+      if(!audioEnabled || muted || !q.length) { speaking=false; return; }
+      speaking=true;
+      const u=new SpeechSynthesisUtterance(q.shift());
+      u.lang = navigator.language || 'en-US';
+      u.rate = 1.0; u.volume = volume;
+      u.onend = ()=>{ speaking=false; playNext(); };
+      u.onerror = ()=>{ speaking=false; };
+      try{ synth.speak(u); }catch(e){ speaking=false; }
     }
-
-    async function speak(text){
-      if(!audioEnabled || muted || !text) return;
-      try{
-        await voicesReady();                 // ensure mobile loads voices
-        window.speechSynthesis.cancel();     // prevent overlapping
-        const u = new SpeechSynthesisUtterance(text);
-        u.volume = volume;
-        window.speechSynthesis.speak(u);
-      }catch(e){}
+    function primeTTS(){
+      return new Promise(resolve=>{
+        try{
+          const u=new SpeechSynthesisUtterance(' ');
+          u.volume = 0.01; u.rate=1.0; u.lang=navigator.language||'en-US';
+          u.onend = ()=>resolve();
+          synth.speak(u);
+          // Fallback resolve if iOS swallows onend
+          setTimeout(resolve, 700);
+        }catch(e){ resolve(); }
+      });
     }
 
     muteToggle.onclick=()=>{ muted=!muted; muteToggle.textContent=muted?'Unmute':'Mute'; };
@@ -313,9 +302,34 @@
     }
     startLoadingScenarios();
 
+    /* ---------- Image Preload/Decode Cache ---------- */
+    const imgCache = new Map();
+    async function preloadImages(stops){
+      await Promise.all((stops||[]).map(s=>new Promise(res=>{
+        if(!s.image || imgCache.has(s.image)) return res();
+        const im=new Image();
+        im.onload=()=>{ if(im.decode) im.decode().catch(()=>{}).finally(res); else res(); };
+        im.onerror=()=>res();
+        im.src=s.image;
+      })));
+      (stops||[]).forEach(s=>{ if(s.image) imgCache.set(s.image,true); });
+    }
+    function setImage(img,stop){
+      const src = stop.image || '';
+      // If cached, swap immediately; browser should show without delay
+      img.src = src || "data:image/svg+xml;utf8,"+encodeURIComponent(
+        "<svg xmlns='http://www.w3.org/2000/svg' width='1200' height='720'><rect width='100%' height='100%' fill='#000'/><text x='50%' y='50%' fill='#9ecbd6' font-size='24' text-anchor='middle'>No image</text></svg>"
+      );
+      img.onerror = () => {
+        img.src = "data:image/svg+xml;utf8,"+encodeURIComponent(
+          "<svg xmlns='http://www.w3.org/2000/svg' width='1200' height='720'><rect width='100%' height='100%' fill='#000'/><text x='50%' y='50%' fill='#9ecbd6' font-size='24' text-anchor='middle'>Image failed to load</text></svg>"
+        );
+      };
+    }
+
     /* ---------- Geofence + Display ---------- */
     function within(hitDist, stopRadius, accuracy){
-      const r = (Number(stopRadius)||0) + Math.max(Number(accuracy)||0, 10); // allow for GPS error
+      const r = (Number(stopRadius)||0) + Math.max(Number(accuracy)||0, 10);
       return hitDist <= r;
     }
     function findHit(stops, la, ln, acc){
@@ -332,12 +346,11 @@
     function showDispatchIntro(sc){
       const txt = (sc.dispatch || '').trim();
       dispatchBlock.textContent = txt ? `Dispatch: ${txt}` : 'Dispatch: (none)';
-      dispatchBlock.classList.remove('hidden');
-      // slight delay to avoid being cut by beep unlock
-      setTimeout(()=>speak(txt || `${sc.title || 'scenario'} started.`), 120);
+      // small delay so iOS doesn't clip the first syllable
+      setTimeout(()=> say(txt || `${sc.title || 'scenario'} started.`), 120);
     }
 
-    function openScenarioById(id){
+    async function openScenarioById(id){
       const sc=scenarios.find(s=>s.id===id);
       if(!sc){ status.textContent='Scenario not found.'; return; }
       current=sc;
@@ -348,8 +361,13 @@
       stopTitle.textContent=''; caption.textContent=''; detail.textContent='';
       lastStopIndex = -1;
 
+      // Preload all images for snappy swaps
+      preloadImages(current.stops);
+
+      // Speak/Show dispatch now
       showDispatchIntro(sc);
 
+      // Start fast GPS updates
       if(watchId) navigator.geolocation.clearWatch(watchId);
       geoStatus.textContent='Watching your location…';
       try{
@@ -368,27 +386,26 @@
             // Audible cue + read caption every time a new stop unlocks
             beep();
             const spoken = `${hit.s.title ? hit.s.title + '. ' : ''}${hit.s.caption || ''}`;
-            // delay briefly to ensure voices are ready and not interrupted by beep
-            setTimeout(()=>speak(spoken), 120);
+            setTimeout(()=> say(spoken), 120);
 
-            // keep photo at top
             viewer.scrollIntoView({behavior:'smooth', block:'start'});
           }
         }, err=>{ geoStatus.textContent='Location error: '+err.message; }, {
-          enableHighAccuracy:true, maximumAge:0, timeout:20000
+          enableHighAccuracy:true, maximumAge:1000, timeout:10000
         });
       }catch(e){ geoStatus.textContent='Location error: '+e.message; }
     }
 
     /* ---------- Controls ---------- */
     startBtn.onclick=async()=>{
-      // User gesture: unlock audio + wake lock + start timer
       try{
         audioEnabled=true;
         if(!audioCtx) audioCtx=new (window.AudioContext||window.webkitAudioContext)();
         await audioCtx.resume();
         await lockWake();
         startTimer();
+        // iOS: prime TTS on a user gesture BEFORE first real speak
+        if(isIOS) await primeTTS();
         beep();
         startBtn.textContent='Scenario Running';
         startBtn.disabled=true;
