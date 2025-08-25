@@ -203,7 +203,7 @@ window.addEventListener('error', e => ERR(e.message));
 window.addEventListener('unhandledrejection', e => ERR(String(e.reason?.message||e.reason||e)));
 
 (async () => {
-  /* ===== Desktop gate (unchanged old logic) ===== */
+  /* ===== Desktop gate (old logic) ===== */
   const gate=document.getElementById('gate');
   const app=document.getElementById('app');
   const gateInfo=document.getElementById('gateInfo');
@@ -218,7 +218,7 @@ window.addEventListener('unhandledrejection', e => ERR(String(e.reason?.message|
   forceGo.onclick=()=>{ history.replaceState(null,'',location.pathname); app.classList.remove('hidden'); gate.classList.add('hidden'); };
   decideGate(); window.addEventListener('resize', decideGate);
 
-  /* ===== Firebase RTDB (old working approach) ===== */
+  /* ===== Firebase RTDB (working approach) ===== */
   const [{ initializeApp }] = await Promise.all([ import("https://www.gstatic.com/firebasejs/10.12.4/firebase-app.js") ]);
   const [{ getDatabase, ref, onValue, get, set }] = await Promise.all([ import("https://www.gstatic.com/firebasejs/10.12.4/firebase-database.js") ]);
   const firebaseConfig = {
@@ -287,7 +287,7 @@ window.addEventListener('unhandledrejection', e => ERR(String(e.reason?.message|
   const relinkOverlaysBtn=document.getElementById('relinkOverlays');
   const bulkMsg=document.getElementById('bulkMsg');
 
-  /* ===== State + canvas (old working initialization) ===== */
+  /* ===== State + canvas ===== */
   let scenarios=[], current=null, stopIndex=-1;
   const fabricCanvas = new fabric.Canvas('c', { backgroundColor:'#061621', preserveObjectStacking:true, selection:true });
   let baseImage=null, cropRect=null, erasing=false;
@@ -320,11 +320,9 @@ window.addEventListener('unhandledrejection', e => ERR(String(e.reason?.message|
       }, { crossOrigin:'anonymous' });
     });
   }
+  const dataURLFromCanvas = () => fabricCanvas.toDataURL({ format:'png', quality:0.92 });
 
-  const dataURLFromCanvas = () =>
-    fabricCanvas.toDataURL({ format:'png', quality:0.92 });
-
-  /* ===== Scenarios load (unchanged) ===== */
+  /* ===== Scenarios load ===== */
   function showStatus(msg){ statusPill.textContent = msg; }
   function populateList(){
     scenarioSel.innerHTML = '<option value="">Select scenario…</option>';
@@ -434,6 +432,7 @@ window.addEventListener('unhandledrejection', e => ERR(String(e.reason?.message|
     const url=dataURLFromCanvas();
     const a=document.createElement('a'); a.href=url; a.download=(current?.title||'image')+'-edited.png'; a.click();
   };
+  const dataURLFromCanvas = () => fabricCanvas.toDataURL({ format:'png', quality:0.92 });
   saveImage.onclick=async()=>{
     try{
       if(!current || stopIndex<0) throw new Error('Select a stop first.');
@@ -447,7 +446,7 @@ window.addEventListener('unhandledrejection', e => ERR(String(e.reason?.message|
     }catch(err){ metaMsg.textContent=String(err.message||err); }
   };
 
-  /* ===== Crop workflow (old logic) ===== */
+  /* ===== Crop workflow ===== */
   cropStart.onclick=()=>{
     if(!baseImage) return;
     cropRect = new fabric.Rect({
@@ -484,7 +483,9 @@ window.addEventListener('unhandledrejection', e => ERR(String(e.reason?.message|
     }
   };
 
-  /* ===== PNG overlays (absolute URLs) ===== */
+  /* ===== PNG overlays with foldered paths =====
+     Example: https://fireopssim.com/geophoto/overlays/fire/fire1.png
+  */
   const OVERLAY_BASE = 'https://fireopssim.com/geophoto/overlays/';
   const SPRITES = {
     fire   : ['fire1.png','fire2.png','fire3.png','fire4.png','fire5.png','fire_side.png'],
@@ -493,19 +494,20 @@ window.addEventListener('unhandledrejection', e => ERR(String(e.reason?.message|
     cars   : ['car1.png','car2.png','car3.png'],
     hazard : ['hazard1.png','hazard2.png','hazard3.png']
   };
-  function resolveSpritePath(uri){ return OVERLAY_BASE + uri; }
+  const resolveSpritePath = (cat, name) => `${OVERLAY_BASE}${cat}/${name}`;
 
   function renderShelf(cat){
     overlayShelf.innerHTML = '';
     const items = SPRITES[cat] || [];
-    items.forEach((uri, i) => {
+    items.forEach((name, i) => {
       const div = document.createElement('div');
       div.className = 'olThumb';
       const img = document.createElement('img');
-      img.src = resolveSpritePath(uri); img.alt = `${cat}-${i+1}`;
+      img.src = resolveSpritePath(cat, name);
+      img.alt = `${cat}-${i+1}`;
       img.onerror = () => { div.style.opacity = .5; div.title = 'Missing: ' + img.src; };
       div.appendChild(img);
-      div.onclick = () => addOverlayImage(resolveSpritePath(uri));
+      div.onclick = () => addOverlayImage(resolveSpritePath(cat, name));
       overlayShelf.appendChild(div);
     });
   }
@@ -535,7 +537,7 @@ window.addEventListener('unhandledrejection', e => ERR(String(e.reason?.message|
     }, { crossOrigin:'anonymous' });
   }
 
-  /* ===== Overlay Hue & Opacity (with safety check) ===== */
+  /* ===== Overlay Hue & Opacity (guarded) ===== */
   const supportsHue = !!(fabric.Image && fabric.Image.filters && fabric.Image.filters.HueRotation);
   overlayHue.disabled = !supportsHue;
   function ensureHueFilter(img){
@@ -557,7 +559,7 @@ window.addEventListener('unhandledrejection', e => ERR(String(e.reason?.message|
   sendBack.onclick  = ()=>{ const o=fabricCanvas.getActiveObject(); if(o && o!==baseImage){ o.sendToBack(); if(baseImage) baseImage.sendToBack(); fabricCanvas.requestRenderAll(); } };
   deleteObj.onclick = ()=>{ const o=fabricCanvas.getActiveObject(); if(o && o!==baseImage){ fabricCanvas.remove(o); fabricCanvas.discardActiveObject(); fabricCanvas.requestRenderAll(); } };
 
-  /* ===== Eraser (selected overlay only; old approach) ===== */
+  /* ===== Eraser (selected overlay only) ===== */
   function stopErasing(){
     fabricCanvas.isDrawingMode = false;
     erasing=false;
@@ -679,7 +681,13 @@ window.addEventListener('unhandledrejection', e => ERR(String(e.reason?.message|
               for (const pref of OLD_PREFIXES) {
                 if (old.startsWith(pref)) {
                   const file = old.substring(pref.length);
-                  ov.src = OVERLAY_BASE + file;
+                  // map to new foldered structure best-effort: keep filename, guess cat by substring
+                  const guessCat = file.includes('fire') ? 'fire'
+                                  : file.includes('smoke') ? 'smoke'
+                                  : file.includes('car') ? 'cars'
+                                  : file.includes('hazard') ? 'hazard'
+                                  : 'people';
+                  ov.src = `${OVERLAY_BASE}${guessCat}/${file}`;
                   changed = true;
                   break;
                 }
@@ -701,6 +709,14 @@ window.addEventListener('unhandledrejection', e => ERR(String(e.reason?.message|
 
   normalizeLocsBtn?.addEventListener('click', normalizeAllLocations);
   relinkOverlaysBtn?.addEventListener('click', relinkOverlaySources);
+
+  /* ===== Canvas tools ===== */
+  const rebase = ()=>{ if(!baseImage) return; setBaseImageFromDataURL(baseImage.toDataURL({})); };
+  fitBtn.onclick=rebase;
+  zoomIn.onclick=()=>fabricCanvas.setZoom(fabricCanvas.getZoom()*1.1);
+  zoomOut.onclick=()=>fabricCanvas.setZoom(fabricCanvas.getZoom()/1.1);
+  rotateL.onclick=()=>{ if(baseImage){ baseImage.rotate((baseImage.angle||0)-90); fabricCanvas.requestRenderAll(); } };
+  rotateR.onclick=()=>{ if(baseImage){ baseImage.rotate((baseImage.angle||0)+90); fabricCanvas.requestRenderAll(); } };
 
   /* ===== Delete stop ===== */
   deleteStop.onclick=async()=>{
