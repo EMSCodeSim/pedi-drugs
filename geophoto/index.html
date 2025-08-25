@@ -10,7 +10,6 @@
 
   <style>
     :root{
-      /* Brand palette & tokens (same as home) */
       --bg:#0b0f14;
       --bg2:#101726;
       --card:#121823;
@@ -21,7 +20,6 @@
       --shadow:0 12px 34px rgba(0,0,0,.38);
       --radius:18px;
     }
-
     *{box-sizing:border-box}
     html,body{
       margin:0; padding:0; color:var(--text);
@@ -36,7 +34,7 @@
     a{color:inherit; text-decoration:none}
     img{max-width:100%; height:auto; display:block}
 
-    /* Sticky top bar (same look as home) */
+    /* Sticky top bar */
     .topbar{
       position:sticky; top:0; z-index:20;
       background:rgba(12,15,22,.75);
@@ -52,19 +50,9 @@
       width:40px; height:40px; border-radius:10px; box-shadow:var(--shadow); object-fit:cover;
       background:#0f1624;
     }
-    .tag{color:var(--muted); font-size:12px}
 
-    /* Page frame */
     .wrap{max-width:1100px; margin:0 auto; padding:18px 20px 100px}
-    .intro{
-      margin-top:10px; color:#e9f1ff; font-size:14px;
-      border-left:4px solid var(--blue);
-      background:linear-gradient(180deg, rgba(10,132,255,.10), rgba(10,132,255,.05));
-      border-radius:14px; padding:14px 16px; box-shadow:var(--shadow);
-      border:1px solid rgba(255,255,255,.10);
-    }
 
-    /* Cards & buttons (match home) */
     .grid{display:grid; gap:14px; grid-template-columns:1fr}
     .card{
       position:relative; border-radius:var(--radius); background:var(--card);
@@ -98,14 +86,11 @@
     input[type="range"]{accent-color:#54a6ff}
 
     .row{ display:flex; gap:10px; flex-wrap:wrap; align-items:center }
-    .pill{display:inline-flex;align-items:center;gap:8px;padding:6px 10px;border-radius:999px;background:#0f2a2f;border:1px solid #1d3a41;color:var(--muted);font-size:12px}
 
-    /* Media block */
     img.media{
       width:100%; height:auto; border-radius:14px; background:#0a2230; border:1px solid rgba(255,255,255,.12); margin:8px 0
     }
 
-    /* Footer (optional, small) */
     footer{
       max-width:1100px; margin:34px auto; padding:0 20px; color:var(--muted); font-size:13px;
       border-top:1px solid rgba(255,255,255,.06); display:flex; justify-content:space-between; gap:16px; flex-wrap:wrap;
@@ -113,31 +98,20 @@
   </style>
 </head>
 <body>
-  <!-- Sticky Top Navigation (same as home) -->
+  <!-- Sticky Top Navigation -->
   <div class="topbar">
     <div class="topnav">
       <div class="brandmini">
         <div class="logo" aria-hidden="true">
           <img src="/assets/logo/fire-ops-sim.png" alt="FireOps SIM logo" />
         </div>
-        <div>
-          <div style="line-height:1.1; font-size:15px; font-weight:900">FireOps SIM</div>
-          <div class="tag">Geo Scenarios — Viewer</div>
-        </div>
+        <div style="line-height:1.1; font-size:15px; font-weight:900">FireOps SIM</div>
       </div>
-      <div style="margin-left:auto" class="tag">Part of the EMS Code Sim ecosystem</div>
     </div>
   </div>
 
   <div class="wrap">
-    <!-- Short explainer banner to match home tone -->
-    <div class="intro">
-      <strong>How this viewer works:</strong> select a scenario, press <em>Start Scenario</em> to enable audio,
-      then move into each geofence. Photos unlock near the top, a beep plays, and the caption is read aloud.
-      Use radio comms over your training channel to give size-ups, assignments, and confirmations.
-    </div>
-
-    <div class="grid" style="margin-top:14px">
+    <div class="grid">
       <!-- Scenario picker -->
       <article class="card">
         <div class="card-inner">
@@ -155,7 +129,7 @@
       <article class="card" id="viewer" style="display:none">
         <div class="card-inner">
           <div class="row" style="justify-content:space-between; align-items:center">
-            <div class="pill" id="scTitle">(scenario)</div>
+            <h3 id="scTitle" style="margin:0; font-size:18px">(scenario)</h3>
             <button id="backBtn" class="btn secondary" type="button">Back</button>
           </div>
 
@@ -180,7 +154,7 @@
           <div class="row" style="margin-top:10px">
             <button id="startScenario" class="btn" type="button">Start Scenario</button>
             <button id="muteToggle" class="btn secondary" type="button">Mute</button>
-            <label class="tag" style="margin-left:auto">Volume
+            <label style="margin-left:auto; color:var(--muted)">Volume
               <input id="vol" type="range" min="0" max="1" step="0.05" value="1" />
             </label>
           </div>
@@ -191,10 +165,10 @@
 
   <footer>
     <div>© <span id="year"></span> FireOps SIM</div>
-    <div class="tag">Visit <a href="https://emscodesim.com" rel="noopener">emscodesim.com</a></div>
+    <div></div>
   </footer>
 
-  <!-- Viewer Logic (unchanged core, wrapped to fit new UI) -->
+  <!-- Viewer Logic -->
   <script type="module">
   (async () => {
     const $ = id => document.getElementById(id);
@@ -207,20 +181,36 @@
 
     // Utils
     const setImage=(img,stop)=>{ img.src=stop.imageData||stop.imageURL||''; img.onerror=()=>{ img.src="data:image/svg+xml;utf8,"+encodeURIComponent("<svg xmlns='http://www.w3.org/2000/svg' width='600' height='400'><rect width='100%' height='100%' fill='#0a2230'/><text x='50%' y='50%' fill='#9ecbd6' font-size='18' text-anchor='middle'>Image failed to load</text></svg>"); }; };
-    const hav=(a,b,c,d)=>{ const t=x=>x*Math.PI/180,R=6371000, dA=t(c-a), dB=t(d-b); return 2*R*Math.asin(Math.sqrt(Math.sin(dA/2)**2 + Math.cos(t(a))*Math.cos(t(c))*Math.sin(dB/2)**2)); };
+    const toRad = x => x*Math.PI/180;
+    const hav=(a,b,c,d)=>{
+      const R=6371000, dA=toRad(c-a), dB=toRad(d-b);
+      return 2*R*Math.asin(Math.sqrt(Math.sin(dA/2)**2 + Math.cos(toRad(a))*Math.cos(toRad(c))*Math.sin(dB/2)**2));
+    };
     const nearestWithin=(st,la,ln)=>{ let best=null; (st||[]).forEach((s,i)=>{ const d=hav(la,ln,parseFloat(s.lat),parseFloat(s.lng)); if(d<=parseFloat(s.radiusMeters||0)){ if(!best||d<best.dist) best={s,index:i,dist:d}; } }); return best; };
 
-    // Firebase RTDB
-    const [{ initializeApp }] = await Promise.all([ import("https://www.gstatic.com/firebasejs/10.12.4/firebase-app.js") ]);
-    const [{ getDatabase, ref, onValue }] = await Promise.all([ import("https://www.gstatic.com/firebasejs/10.12.4/firebase-database.js") ]);
-    const firebaseConfig={ apiKey:"AIzaSyDM6DpRSeZueVKRpbyJyDmhf8WY66KyCDk", authDomain:"dailyquiz-d5279.firebaseapp.com", databaseURL:"https://dailyquiz-d5279-default-rtdb.firebaseio.com", projectId:"dailyquiz-d5279", appId:"1:94577748034:web:c032d3a1d72db1313de5db", measurementId:"G-19DVN7NNH7" };
-    const app=initializeApp(firebaseConfig); const db=getDatabase(app);
+    // Firebase
+    const { initializeApp } = await import("https://www.gstatic.com/firebasejs/10.12.4/firebase-app.js");
+    const { getDatabase, ref, onValue } = await import("https://www.gstatic.com/firebasejs/10.12.4/firebase-database.js");
 
-    // Audio state
+    const firebaseConfig = {
+      apiKey:"AIzaSyDM6DpRSeZueVKRpbyJyDmhf8WY66KyCDk",
+      authDomain:"dailyquiz-d5279.firebaseapp.com",
+      databaseURL:"https://dailyquiz-d5279-default-rtdb.firebaseio.com",
+      projectId:"dailyquiz-d5279",
+      appId:"1:94577748034:web:c032d3a1d72db1313de5db",
+      measurementId:"G-19DVN7NNH7"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const db = getDatabase(app);
+
+    // Audio / TTS state
     let audioEnabled=false, muted=false, volume=1.0, audioCtx=null;
+
     function speak(text){
       if(!audioEnabled || muted || !text) return;
       try{
+        // Cancel any pending utterances to avoid overlaps
         window.speechSynthesis.cancel();
         const u=new SpeechSynthesisUtterance(text);
         u.volume=volume;
@@ -249,15 +239,50 @@
     // State
     let scenarios=[], current=null, watchId=null, lastStopIndex=-1;
 
-    // Load scenarios -> dropdown
-    const { onValue, ref } = await import("https://www.gstatic.com/firebasejs/10.12.4/firebase-database.js").then(m=>({onValue:m.onValue, ref:m.ref}));
-    onValue(ref(db,'scenarios'), snap=>{
-      const v=snap.val()||{};
-      scenarios=Object.entries(v).map(([id,s])=>({id,...s})).filter(s=>s && s.active).sort((a,b)=>(b.createdAt||0)-(a.createdAt||0));
+    // Robust scenario loader: try geophoto/scenarios, then scenarios
+    function mapSnapshot(val){
+      const obj = val || {};
+      return Object.entries(obj).map(([id,s])=>({id, ...(s||{})}));
+    }
+    function populateDropdown(list){
       select.innerHTML='<option value="">Select a scenario…</option>';
-      scenarios.forEach(sc=>{ const o=document.createElement('option'); o.value=sc.id; o.textContent=sc.title||'(untitled)'; select.appendChild(o); });
-      status.textContent=scenarios.length ? `${scenarios.length} active scenario(s)` : 'No scenarios yet.';
-    });
+      list.forEach(sc=>{
+        const o=document.createElement('option');
+        o.value=sc.id;
+        o.textContent=sc.title || '(untitled)';
+        select.appendChild(o);
+      });
+      status.textContent = list.length ? `${list.length} scenario(s) found` : 'No scenarios yet.';
+    }
+    function attachLoaderAt(path, onLoaded){
+      return onValue(ref(db, path), snap=>{
+        const vals = mapSnapshot(snap.val());
+        if(vals.length){ onLoaded(vals, path); }
+      });
+    }
+
+    let unsubscribeA=null, unsubscribeB=null;
+    function startLoadingScenarios(){
+      // Clear existing
+      scenarios=[]; populateDropdown([]);
+      if (unsubscribeA) unsubscribeA(); if (unsubscribeB) unsubscribeB();
+
+      // Prefer geophoto/scenarios; also listen on scenarios as a fallback
+      unsubscribeA = attachLoaderAt('geophoto/scenarios', (list, path)=>{
+        scenarios = list;
+        populateDropdown(scenarios);
+        console.log('Loaded scenarios from', path, scenarios.length);
+      });
+      unsubscribeB = attachLoaderAt('scenarios', (list, path)=>{
+        // Only adopt if current list is empty (fallback)
+        if(!scenarios.length){
+          scenarios = list;
+          populateDropdown(scenarios);
+          console.log('Loaded scenarios from', path, scenarios.length);
+        }
+      });
+    }
+    startLoadingScenarios();
 
     function showDispatchIntro(sc){
       const txt = (sc.dispatch || '').trim();
@@ -267,7 +292,8 @@
     }
 
     function openScenarioById(id){
-      const sc=scenarios.find(s=>s.id===id); if(!sc){ status.textContent='Scenario not found.'; return; }
+      const sc=scenarios.find(s=>s.id===id);
+      if(!sc){ status.textContent='Scenario not found.'; return; }
       current=sc;
       viewer.style.display='';
       scTitle.textContent=sc.title||'(scenario)';
@@ -295,8 +321,12 @@
             setImage(photo,hit.s);
             caption.textContent=hit.s.caption||'';
             detail.textContent=`Distance: ${Math.round(hit.dist)} m (radius ${hit.s.radiusMeters} m)`;
+
+            // Beep + TTS the caption every time a new stop unlocks
             beep();
-            speak(`${hit.s.title ? hit.s.title + '. ' : ''}${hit.s.caption || ''}`);
+            const spoken = `${hit.s.title ? hit.s.title + '. ' : ''}${hit.s.caption || ''}`;
+            speak(spoken);
+
             // keep photo near top when unlocked
             viewer.scrollIntoView({behavior:'smooth', block:'start'});
           }
@@ -320,7 +350,11 @@
       }catch(e){ alert('Could not enable audio: '+e.message); return; }
 
       const id=select.value;
-      if(!id){ status.textContent='Choose a scenario first.'; startBtn.disabled=false; startBtn.textContent='Start Scenario'; audioEnabled=false; return; }
+      if(!id){
+        status.textContent='Choose a scenario first.';
+        startBtn.disabled=false; startBtn.textContent='Start Scenario'; audioEnabled=false;
+        return;
+      }
       openScenarioById(id);
     };
 
