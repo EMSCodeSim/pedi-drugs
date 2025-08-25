@@ -63,7 +63,7 @@
         <div class="card-inner">
           <div class="eyebrow">Scenario</div>
           <h2>Select & Start</h2>
-          <p>Choose a scenario below, then start it to enable audio/voice prompts.</p>
+          <p>Choose a scenario below, then start it to enable voice prompts.</p>
           <div class="row" style="margin-top:10px; width:100%">
             <select id="scenarioSelect" aria-label="Choose a scenario"><option value="">Loading…</option></select>
           </div>
@@ -95,7 +95,7 @@
         <div class="card-inner">
           <div class="eyebrow">Audio & TTS</div>
           <h2>Scenario Controls</h2>
-          <p>This enables audio, reads the dispatch, beeps on each geofence, and reads each caption.</p>
+          <p>This enables audio and reads the dispatch and each caption.</p>
           <div class="row" style="margin-top:10px; align-items:flex-start">
             <button id="startScenario" class="btn" type="button">Start Scenario</button>
             <button id="muteToggle" class="btn secondary" type="button">Mute</button>
@@ -129,7 +129,7 @@
     const startBtn=$('startScenario'), muteToggle=$('muteToggle'), vol=$('vol'), runTimer=$('runTimer');
     const log = (m)=>{ console.log('[viewer]', m); debug.textContent=String(m); };
 
-    // ---------- Helpers (unchanged) ----------
+    /* ---------- Helpers ---------- */
     const toRad = x => x*Math.PI/180;
     const hav=(a,b,c,d)=>{ const R=6371000, dA=toRad(c-a), dB=toRad(d-b);
       return 2*R*Math.asin(Math.sqrt(Math.sin(dA/2)**2 + Math.cos(toRad(a))*Math.cos(toRad(c))*Math.sin(dB/2)**2)); };
@@ -159,7 +159,7 @@
       ); };
     }
 
-    // ---------- Firebase (modular first; compat fallback) ----------
+    /* ---------- Firebase (modular first; compat fallback) ---------- */
     const firebaseConfig = {
       apiKey:"AIzaSyDM6DpRSeZueVKRpbyJyDmhf8WY66KyCDk",
       authDomain:"dailyquiz-d5279.firebaseapp.com",
@@ -194,7 +194,7 @@
       });
     }catch{}
 
-    // ---------- Scenario loading (unchanged, working) ----------
+    /* ---------- Scenario loading (working loader) ---------- */
     let scenarios=[], populated=false;
     function mapSnapshot(val){
       const obj = val || {};
@@ -249,7 +249,7 @@
       if(!populated){ status.textContent='No scenarios found.'; }
     }, 1200);
 
-    // ---------- Geofence + display (unchanged) ----------
+    /* ---------- Geofence + display ---------- */
     const within=(d, r, acc)=> d <= ((Number(r)||0) + Math.max(Number(acc)||0, 10));
     const findHit=(stops, la, ln, acc)=>{
       let best=null; (stops||[]).forEach((s,i)=>{
@@ -257,11 +257,14 @@
         if(within(d, s.radiusMeters, acc)){ if(!best || d<best.dist) best={s,index:i,dist:d}; }
       }); return best;
     };
+
     function showDispatchIntro(sc){
       const txt=(sc.dispatch||sc.notes||'').trim();
       dispatchBlock.textContent = txt ? `Dispatch: ${txt}` : 'Dispatch: (none)';
-      setTimeout(()=>say(txt || `${sc.title || 'scenario'} started.`),120);
+      // No beep; speak immediately
+      say(txt || `${sc.title || 'scenario'} started.`);
     }
+
     let current=null, watchId=null, lastStopIndex=-1;
     function openScenarioById(id){
       const sc=scenarios.find(s=>s.id===id);
@@ -288,18 +291,18 @@
             setImage(photo, hit.s);
             caption.textContent=hit.s.caption||'';
             detail.textContent=`Distance: ${Math.round(hit.dist)} m (radius ${hit.s.radiusMeters} m)`;
-            beep(); setTimeout(()=>say(`${hit.s.title?hit.s.title+'. ':''}${hit.s.caption||''}`), IOS_TTS_DELAY);
+            // No beep; speak immediately
+            say(`${hit.s.title?hit.s.title+'. ':''}${hit.s.caption||''}`);
             viewer.scrollIntoView({behavior:'smooth', block:'start'});
           }
         }, err=>{ geoStatus.textContent='Location error: '+err.message; }, { enableHighAccuracy:true, maximumAge:0, timeout:20000 });
       }catch(e){ geoStatus.textContent='Location error: '+e.message; }
     }
 
-    // ---------- Audio / TTS (iPhone-safe, minimal change) ----------
+    /* ---------- Audio / TTS (no cancel-before-speak, no beep) ---------- */
     const synth = window.speechSynthesis;
     const isIOS = /iP(ad|hone|od)/.test(navigator.userAgent) ||
                   (navigator.userAgent.includes('Mac') && navigator.maxTouchPoints>2);
-    const IOS_TTS_DELAY = isIOS ? 600 : 120; // small gap after beep
 
     let audioEnabled=false, muted=false, volume=1.0, audioCtx=null, wakeLock=null, wakeFallbackInterval=null, runInterval=null, startMs=0;
     let speaking=false; const q=[]; let preferredVoice=null;
@@ -320,22 +323,27 @@
       });
     }
     async function primeTTS(){
-      // Run only on iOS, during Start tap (user gesture)
+      // Minimal prime on iOS without cancel()
       if(!isIOS) return;
       try{
         await ensureVoices();
         await new Promise(res=>{
-          const u = new SpeechSynthesisUtterance(' ');
+          const u = new SpeechSynthesisUtterance('.');
           if(preferredVoice) u.voice = preferredVoice;
           u.volume = 0.01; u.rate = 1.0; u.pitch = 1.0;
           u.onend = res; u.onerror = res;
-          synth.cancel(); synth.speak(u);
-          setTimeout(res, 700); // safety
+          // IMPORTANT: no synth.cancel() here
+          synth.speak(u);
+          setTimeout(res, 800);
         });
       }catch{}
     }
 
-    function say(text){ if(!audioEnabled || muted || !text) return; q.push(text); if(!speaking) playNext(); }
+    function say(text){
+      if(!audioEnabled || muted || !text) return;
+      q.push(text);
+      if(!speaking) playNext();
+    }
     function playNext(){
       if(!audioEnabled || muted || !q.length){ speaking=false; return; }
       speaking=true;
@@ -344,14 +352,7 @@
       if(preferredVoice) u.voice = preferredVoice;
       u.onend=()=>{ speaking=false; playNext(); };
       u.onerror=()=>{ speaking=false; };
-
-      // iOS quirk: cancel any pending utterances and delay slightly
-      if(isIOS){
-        synth.cancel();
-        setTimeout(()=>{ try{ synth.speak(u); }catch{ speaking=false; } }, IOS_TTS_DELAY);
-      } else {
-        try{ synth.speak(u); }catch{ speaking=false; }
-      }
+      try{ synth.speak(u); }catch{ speaking=false; }
     }
 
     function formatTime(ms){ const s=Math.floor(ms/1000), m=Math.floor(s/60), sec=s%60; return String(m).padStart(2,'0')+':'+String(sec).padStart(2,'0'); }
@@ -368,19 +369,7 @@
       }catch{}
     }
     function releaseWake(){ try{ if(wakeLock){ wakeLock.release(); wakeLock=null; } }catch{} if(wakeFallbackInterval){ clearInterval(wakeFallbackInterval); wakeFallbackInterval=null; } }
-    function beep(){
-      if(!audioEnabled || muted) return;
-      try{
-        if(!audioCtx) audioCtx=new (window.AudioContext||window.webkitAudioContext)();
-        const o=audioCtx.createOscillator(), g=audioCtx.createGain();
-        o.type='sine'; o.frequency.value=880; g.gain.value=0.001; o.connect(g).connect(audioCtx.destination);
-        const now=audioCtx.currentTime;
-        g.gain.setValueAtTime(0.0001, now);
-        g.gain.linearRampToValueAtTime(0.2*volume, now+0.02);
-        g.gain.exponentialRampToValueAtTime(0.0001, now+0.25);
-        o.start(now); o.stop(now+0.3);
-      }catch{}
-    }
+
     muteToggle.onclick=()=>{ muted=!muted; muteToggle.textContent=muted?'Unmute':'Mute'; };
     vol.oninput=e=>{ volume=parseFloat(e.target.value||'1')||1; };
 
@@ -391,12 +380,11 @@
         if(!audioCtx) audioCtx=new (window.AudioContext||window.webkitAudioContext)();
         await audioCtx.resume();
         await lockWake();
-
-        // iPhone unlock: voices + tiny silent utterance (during the tap)
+        // iPhone unlock: minimal prime WITHOUT cancel()
         await primeTTS();
-
-        startTimer(); beep();
-        startBtn.textContent='Scenario Running'; startBtn.disabled=true;
+        startTimer();
+        startBtn.textContent='Scenario Running';
+        startBtn.disabled=true;
       }catch(e){ alert('Could not enable audio: '+e.message); return; }
 
       const id=select.value;
@@ -412,7 +400,7 @@
       viewer.style.display='none';
       try{ if(watchId) navigator.geolocation.clearWatch(watchId); }catch{}
       status.textContent='Choose a scenario and press Start Scenario.';
-      window.speechSynthesis.cancel();
+      window.speechSynthesis.cancel(); // OK to cancel when backing out
       startBtn.disabled=false; startBtn.textContent='Start Scenario'; audioEnabled=false;
       releaseWake(); stopTimer();
     };
