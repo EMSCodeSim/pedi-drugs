@@ -2,24 +2,24 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <title>FireOps SIM — Geo-Photo Training</title>
+  <title>FireOps SIM — Real-Time Fire Scene Simulator</title>
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <meta name="description" content="Location-triggered fire/EMS training scenarios with dispatch intros, geofenced photos, and narrated captions." />
+  <meta name="description" content="Real-time fire scene simulator with geofenced photos, audio/visual cues, and radio communications training." />
   <link rel="canonical" href="https://fireopssim.com/" />
   <meta name="theme-color" content="#0b0f14" />
   <link rel="icon" href="data:," />
 
   <!-- Open Graph -->
-  <meta property="og:title" content="FireOps SIM — Geo-Photo Training" />
-  <meta property="og:description" content="Location-triggered fire/EMS scenarios with geofenced photos and TTS narration." />
+  <meta property="og:title" content="FireOps SIM — Real-Time Fire Scene Simulator" />
+  <meta property="og:description" content="Run live, location-triggered scenarios with audio/visual cues and practice radio comms on a training channel." />
   <meta property="og:type" content="website" />
   <meta property="og:url" content="https://fireopssim.com/" />
   <meta property="og:image" content="https://fireopssim.com/assets/og/geophoto-hero.jpg" />
 
   <!-- Twitter -->
   <meta name="twitter:card" content="summary_large_image" />
-  <meta name="twitter:title" content="FireOps SIM — Geo-Photo Training" />
-  <meta name="twitter:description" content="Location-triggered fire/EMS scenarios with geofenced photos and TTS narration." />
+  <meta name="twitter:title" content="FireOps SIM — Real-Time Fire Scene Simulator" />
+  <meta name="twitter:description" content="Location-triggered scenarios with audio/visual cues and radio training." />
   <meta name="twitter:image" content="https://fireopssim.com/assets/og/geophoto-hero.jpg" />
 
   <!-- Schema.org -->
@@ -39,17 +39,16 @@
 
   <style>
     :root{
-      /* Brand knobs — adjust to match your identity */
       --brandName: "FireOps SIM";
-      --brandTag: "Geo-Photo Training Scenarios";
-      --bg:#0b0f14;        /* deep slate */
-      --bg2:#101726;       /* secondary */
-      --card:#121823;      /* dark card */
-      --muted:#8ea0b3;     /* muted text */
-      --text:#eaf2ff;      /* primary text */
-      --blue:#0a84ff;      /* EMS blue accent */
-      --teal:#2dd4bf;      /* secondary accent */
-      --red:#ff3b30;       /* fire accent */
+      --brandTag: "Real-Time Fire Scene Simulator";
+      --bg:#0b0f14;
+      --bg2:#101726;
+      --card:#121823;
+      --muted:#8ea0b3;
+      --text:#eaf2ff;
+      --blue:#0a84ff;
+      --teal:#2dd4bf;
+      --red:#ff3b30;
       --shadow:0 12px 34px rgba(0,0,0,.38);
       --radius:18px;
       --radiusSm:14px;
@@ -67,10 +66,8 @@
       scroll-behavior:smooth;
     }
     a{color:inherit; text-decoration:none}
-    img{max-width:100%; height:auto}
-    button,input,select,textarea{font-size:16px} /* avoid iOS zoom */
+    img{max-width:100%; height:auto; display:block}
 
-    /* Sticky top bar */
     .topbar{
       position:sticky; top:0; z-index:20;
       background:rgba(12,15,22,.75);
@@ -82,14 +79,12 @@
       display:flex; align-items:center; gap:14px; flex-wrap:wrap;
     }
     .brandmini{display:flex; align-items:center; gap:12px; font-weight:800; letter-spacing:.3px}
-    .logo{
-      width:36px; height:36px; border-radius:10px;
-      background: linear-gradient(145deg, var(--blue), #3da0ff);
-      display:grid; place-items:center; font-size:14px; color:#fff; box-shadow:var(--shadow);
+    .logo img{
+      width:40px; height:40px; border-radius:10px; box-shadow:var(--shadow); object-fit:cover;
+      background:#0f1624;
     }
     .tag{color:var(--muted); font-size:12px}
 
-    /* Hero */
     header.hero{
       position:relative; overflow:hidden;
       padding: clamp(26px, 6vw, 64px) 20px;
@@ -97,14 +92,25 @@
     }
     .hero-inner{max-width:1100px; margin:0 auto; display:flex; gap:18px; align-items:center; flex-wrap:wrap}
     .hero-logo{
-      width:96px; height:96px; border-radius:20px; overflow:hidden; flex:0 0 96px; box-shadow:var(--shadow);
-      background: linear-gradient(145deg, #113457, #1a4a78);
-      display:grid; place-items:center; color:#cfe2ff; font-weight:900; letter-spacing:.6px;
+      width:112px; height:112px; border-radius:20px; overflow:hidden; flex:0 0 112px; box-shadow:var(--shadow);
+      background:#0f1624; display:grid; place-items:center; padding:8px;
     }
+    .hero-logo img{width:100%; height:100%; object-fit:contain}
     .hero-text h1{margin:0 0 8px; font-size:clamp(22px, 3.4vw, 40px)}
     .hero-text p{margin:6px 0 0; font-size:clamp(14px, 2vw, 18px); color:#e9f1ff}
 
-    /* Main wrapper */
+    .notice{
+      max-width:1100px; margin:14px auto 0; padding:0 20px;
+    }
+    .notice .banner{
+      background:linear-gradient(180deg, rgba(255,59,48,.12), rgba(255,59,48,.06));
+      border:1px solid rgba(255,255,255,.12);
+      border-left:4px solid var(--red);
+      border-radius:14px; padding:14px 16px; box-shadow:var(--shadow);
+      color:#ffecec;
+      font-size:14px; line-height:1.45;
+    }
+
     main{max-width:1100px; margin:24px auto 80px; padding:0 20px}
     .grid{display:grid; gap:14px; grid-template-columns:repeat(auto-fit, minmax(280px,1fr))}
     .card{
@@ -113,43 +119,27 @@
       transition:transform .15s ease, border-color .2s ease, box-shadow .2s ease;
     }
     .card:hover{ transform:translateY(-2px); border-color:rgba(10,132,255,.35); box-shadow:0 16px 40px rgba(0,0,0,.5) }
-
     .card-inner{ padding:18px }
     .eyebrow{font-size:12px; color:var(--muted); margin-bottom:8px}
     .card h2{ margin:0 0 6px; font-size:20px }
     .card p{ margin:6px 0 14px; color:var(--muted); font-size:14px }
-
     .btn{
       appearance:none; border:0; border-radius:12px; width:100%; cursor:pointer;
       padding:14px 16px; font-weight:800; font-size:16px; color:#03131b;
       background:linear-gradient(180deg,#54a6ff,var(--blue)); box-shadow:var(--shadow);
+      text-align:center;
     }
     .btn.secondary{
       background:transparent; color:var(--text);
       border:1px solid rgba(255,255,255,.14);
     }
-    .btn:active{ transform:translateY(1px) }
-
     .row{ display:flex; gap:10px; flex-wrap:wrap; align-items:center }
-    .muted{ color:var(--muted); font-size:12px }
-    .hidden{ display:none }
 
     footer{
       max-width:1100px; margin:40px auto; padding:18px 20px; color:var(--muted); font-size:13px;
       border-top:1px solid rgba(255,255,255,.06); display:flex; justify-content:space-between; gap:16px; flex-wrap:wrap;
     }
-
-    /* Small admin panel within hero */
-    .admin-panel{
-      display:grid; gap:10px; grid-template-columns:1fr; max-width:480px;
-      background:rgba(255,255,255,.03); border:1px solid rgba(255,255,255,.08);
-      padding:12px; border-radius:var(--radiusSm);
-    }
-    .admin-panel input{
-      width:100%; padding:12px; border-radius:10px; outline:none;
-      background:#0f1624; color:var(--text); border:1px solid rgba(255,255,255,.14);
-    }
-    .admin-panel .btn{ width:auto }
+    .external a{ text-decoration:underline }
   </style>
 </head>
 <body>
@@ -158,29 +148,47 @@
   <div class="topbar">
     <div class="topnav">
       <div class="brandmini">
-        <div class="logo" id="logo">FS</div>
+        <!-- Top-left logo -->
+        <div class="logo" aria-hidden="true">
+          <img src="/assets/logo/fire-ops-sim.png" alt="FireOps SIM logo" />
+        </div>
         <div>
           <div id="brandName" style="line-height:1.1; font-size:15px; font-weight:900">FireOps SIM</div>
-          <div class="tag" id="brandTag">Geo-Photo Training Scenarios</div>
+          <div class="tag" id="brandTag">Real-Time Fire Scene Simulator</div>
         </div>
       </div>
-      <!-- (No extra menu items until more projects are ready) -->
     </div>
   </div>
 
   <!-- Hero -->
   <header class="hero">
     <div class="hero-inner">
-      <div class="hero-logo" id="heroLogo">FS</div>
+      <!-- Big hero logo -->
+      <div class="hero-logo" aria-hidden="true">
+        <img src="/assets/logo/fire-ops-sim.png" alt="FireOps SIM logo" />
+      </div>
       <div class="hero-text">
         <h1 id="heroTitle">Train where it matters — on scene.</h1>
-        <p id="heroLead">Location-triggered photos, dispatch intros, and narrated captions designed for realistic field drills.</p>
+        <p id="heroLead">
+          FireOps SIM runs live, location-triggered scenarios with audio and visual cues that guide your actions in real time.
+          Crews practice size-up, decision-making, and communications just like the street.
+        </p>
         <div class="row" style="margin-top:14px">
           <a class="btn" href="https://fireopssim.com/geophoto/" aria-label="Open Geo-Photo Viewer">Open Geo-Photo Viewer</a>
+          <a class="btn secondary" href="https://emscodesim.com" rel="noopener">Visit EMSCodeSim.com</a>
         </div>
       </div>
     </div>
   </header>
+
+  <!-- Training banner -->
+  <div class="notice" role="region" aria-label="How it works">
+    <div class="banner">
+      <strong>How it works:</strong> When your unit enters a scenario’s geofence, relevant photos unlock and are paired with
+      audible prompts and on-screen captions. <strong>Use radio communications over your training channel</strong> to deliver
+      size-ups, give assignments, request resources, and confirm actions throughout the scenario.
+    </div>
+  </div>
 
   <!-- Main -->
   <main>
@@ -196,34 +204,35 @@
             <!-- Unlock -->
             <div id="adminLocked" class="admin-panel">
               <input id="adminPass" type="password" placeholder="Enter admin password" inputmode="text" autocomplete="current-password" />
-              <div class="row">
+              <div class="row" style="margin-top:6px">
                 <button id="unlockBtn" class="btn secondary" type="button">Unlock Admin</button>
-                <div class="muted">Hint: <code>Franktown</code></div>
+                <div class="tag">Hint: <code>Franktown</code></div>
               </div>
             </div>
 
             <!-- Links show only after unlock -->
-            <div id="adminLinks" class="hidden">
-              <div class="row" style="margin-top:6px">
+            <div id="adminLinks" class="hidden" style="display:none">
+              <div class="row" style="margin-top:10px">
                 <a class="btn" href="https://fireopssim.com/geophoto/admin" aria-label="Open Scenario Builder">Scenario Builder</a>
                 <a class="btn" href="https://fireopssim.com/geophoto/advanced-editor.html" aria-label="Open Advanced Editor">Advanced Editor</a>
               </div>
-              <p class="muted" style="margin-top:8px">Admin unlocked for this session. Close the tab to lock again.</p>
+              <p class="tag" style="margin-top:8px">Admin unlocked for this session. Close the tab to lock again.</p>
             </div>
           </div>
         </article>
 
-        <!-- About / SEO copy -->
+        <!-- About / Highlights -->
         <article class="card">
           <div class="card-inner">
             <div class="eyebrow">About</div>
-            <h2>Geo-Photo Training</h2>
-            <p>Photos unlock only inside their geofence, encouraging true size-up and decision-making. Each caption is read aloud with TTS so crews keep eyes on scene.</p>
+            <h2>Live, Geofenced Training</h2>
+            <p>Photos unlock only inside their geofence, encouraging true size-up and decision-making. Each caption is read aloud so crews keep eyes on scene.</p>
             <div class="eyebrow" style="margin-top:10px">Highlights</div>
             <ul style="margin:6px 0 0 18px; color:var(--muted); line-height:1.5">
-              <li>Dispatch intro on scenario start</li>
-              <li>Beep alert + caption TTS per photo</li>
-              <li>Fast GPS updates reduce missed tags</li>
+              <li>Dispatch intro at scenario start</li>
+              <li>Beep alert + TTS caption per photo (audio & visual cues)</li>
+              <li>Fast GPS updates to reduce missed tags</li>
+              <li>Practice radio traffic on your training channel</li>
               <li>Mobile capture & desktop refinement</li>
             </ul>
           </div>
@@ -234,52 +243,48 @@
 
   <footer>
     <div>© <span id="year"></span> <span id="brandNameFoot">FireOps SIM</span></div>
-    <div>Train smart • Geo-Photo</div>
+    <div class="external">Part of the <a href="https://emscodesim.com" rel="noopener">EMS Code Sim</a> training ecosystem</div>
   </footer>
 
   <script>
-    // --- Branding (edit here later or wire to CMS) ---
+    // Branding copy + year
     const BRAND = {
       name: 'FireOps SIM',
-      tagline: 'Geo-Photo Training Scenarios',
-      initials: 'FS',
+      tagline: 'Real-Time Fire Scene Simulator',
       heroTitle: 'Train where it matters — on scene.',
-      heroLead: 'Location-triggered photos, dispatch intros, and narrated captions designed for realistic field drills.'
+      heroLead: 'FireOps SIM runs live, location-triggered scenarios with audio and visual cues that guide your actions in real time. Crews practice size-up, decision-making, and communications just like the street.'
     };
     document.getElementById('brandName').textContent = BRAND.name;
     document.getElementById('brandNameFoot').textContent = BRAND.name;
     document.getElementById('brandTag').textContent = BRAND.tagline;
-    document.getElementById('logo').textContent = BRAND.initials;
-    document.getElementById('heroLogo').textContent = BRAND.initials;
     document.getElementById('heroTitle').textContent = BRAND.heroTitle;
     document.getElementById('heroLead').textContent = BRAND.heroLead;
     document.getElementById('year').textContent = new Date().getFullYear();
 
-    // --- Simple Admin gate (temporary; replace with real auth later) ---
+    // Simple Admin gate (temporary)
     const PASS = 'Franktown';
     const adminPass = document.getElementById('adminPass');
     const unlockBtn = document.getElementById('unlockBtn');
     const adminLocked = document.getElementById('adminLocked');
     const adminLinks = document.getElementById('adminLinks');
 
-    // Restore session unlock
     if (sessionStorage.getItem('adminUnlocked') === '1') {
-      adminLocked.classList.add('hidden');
-      adminLinks.classList.remove('hidden');
+      adminLocked.style.display = 'none';
+      adminLinks.style.display = '';
     }
 
     unlockBtn.addEventListener('click', () => {
       const v = (adminPass.value || '').trim();
       if (v === PASS) {
         sessionStorage.setItem('adminUnlocked', '1');
-        adminLocked.classList.add('hidden');
-        adminLinks.classList.remove('hidden');
+        adminLocked.style.display = 'none';
+        adminLinks.style.display = '';
       } else {
         alert('Incorrect password.');
         adminPass.focus();
       }
     });
-    // Enter key to unlock
+
     adminPass.addEventListener('keydown', (e)=>{
       if(e.key==='Enter') unlockBtn.click();
     });
