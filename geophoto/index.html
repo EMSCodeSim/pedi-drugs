@@ -65,6 +65,7 @@
     footer{max-width:1100px; margin:34px auto; padding:0 20px; color:var(--muted); font-size:13px;
       border-top:1px solid rgba(255,255,255,.06); display:flex; justify-content:space-between; gap:16px; flex-wrap:wrap}
     #runTimer{font-size:13px; color:#cfe1ff}
+    #debug{font-size:12px; color:#ffd3d3; margin-top:6px}
   </style>
 </head>
 <body>
@@ -91,7 +92,8 @@
           <div class="row" style="margin-top:10px; width:100%">
             <select id="scenarioSelect" aria-label="Choose a scenario"><option value="">Loading…</option></select>
           </div>
-          <div class="status" id="status" aria-live="polite" style="margin-top:8px"></div>
+          <div class="status" id="status" aria-live="polite" style="margin-top:8px">Connecting…</div>
+          <div id="debug" aria-live="polite"></div>
         </div>
       </article>
 
@@ -139,24 +141,29 @@
     <div></div>
   </footer>
 
-  <!-- Viewer Logic -->
-  <script type="module">
-  (async () => {
+  <!-- Firebase compat (no modules; iOS-friendly) -->
+  <script src="https://www.gstatic.com/firebasejs/10.12.4/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.4/firebase-database-compat.js"></script>
+
+  <script>
+  (function(){
     const $ = id => document.getElementById(id);
     const viewer = $('viewer'), backBtn = $('backBtn');
-    const select = $('scenarioSelect'), status = $('status');
+    const select = $('scenarioSelect'), status = $('status'), debug = $('debug');
     const dispatchBlock = $('dispatchBlock'), geoStatus = $('geoStatus');
     const result = $('result'), stopTitle = $('stopTitle'), photo = $('photo'), caption = $('caption'), detail = $('detail');
     const scTitle = $('scTitle');
     const startBtn = $('startScenario'), muteToggle = $('muteToggle'), vol = $('vol'), runTimer = $('runTimer');
 
-    /* ---------- Utilities ---------- */
+    /* ---------- Small helpers ---------- */
     const toRad = x => x*Math.PI/180;
     const hav=(a,b,c,d)=>{
       const R=6371000, dA=toRad(c-a), dB=toRad(d-b);
       return 2*R*Math.asin(Math.sqrt(Math.sin(dA/2)**2 + Math.cos(toRad(a))*Math.cos(toRad(c))*Math.sin(dB/2)**2));
     };
     const num = v => (v===0||v===null)?v:parseFloat(v);
+
+    function log(msg){ console.log(msg); debug.textContent = String(msg); }
 
     function normalizeStops(stopsLike){
       if(!stopsLike) return [];
@@ -166,16 +173,26 @@
         const lng = num(s.lng ?? s.lon ?? s.long ?? s.longitude ?? s.lngDeg);
         const radiusMeters = num(s.radiusMeters ?? s.radius ?? s.r) || 40;
         const title = s.title || s.name || '';
-        const caption = s.caption || s.text || s.note || '';
+        const cap = s.caption || s.text || s.note || '';
         const image =
           s.imageData || s.imageURL || s.imageUrl || s.url || s.photoURL || s.photo || s.img || '';
-        return { ...s, lat, lng, radiusMeters, title, caption, image };
+        return { ...s, lat, lng, radiusMeters, title, caption: cap, image };
       }).filter(s => typeof s.lat === 'number' && typeof s.lng === 'number');
     }
 
-    /* ---------- Firebase ---------- */
-    const { initializeApp } = await import("https://www.gstatic.com/firebasejs/10.12.4/firebase-app.js");
-    const { getDatabase, ref, onValue } = await import("https://www.gstatic.com/firebasejs/10.12.4/firebase-database.js");
+    function setImage(img,stop){
+      const src = stop.image || '';
+      img.src = src || "data:image/svg+xml;utf8,"+encodeURIComponent(
+        "<svg xmlns='http://www.w3.org/2000/svg' width='1200' height='720'><rect width='100%' height='100%' fill='#000'/><text x='50%' y='50%' fill='#9ecbd6' font-size='24' text-anchor='middle'>No image</text></svg>"
+      );
+      img.onerror = () => {
+        img.src = "data:image/svg+xml;utf8,"+encodeURIComponent(
+          "<svg xmlns='http://www.w3.org/2000/svg' width='1200' height='720'><rect width='100%' height='100%' fill='#000'/><text x='50%' y='50%' fill='#9ecbd6' font-size='24' text-anchor='middle'>Image failed to load</text></svg>"
+        );
+      };
+    }
+
+    /* ---------- Firebase init (compat) ---------- */
     const firebaseConfig = {
       apiKey:"AIzaSyDM6DpRSeZueVKRpbyJyDmhf8WY66KyCDk",
       authDomain:"dailyquiz-d5279.firebaseapp.com",
@@ -184,15 +201,17 @@
       appId:"1:94577748034:web:c032d3a1d72db1313de5db",
       measurementId:"G-19DVN7NNH7"
     };
-    const app = initializeApp(firebaseConfig);
-    const db = getDatabase(app);
+    try{
+      firebase.initializeApp(firebaseConfig);
+    }catch(e){ /* already initialized is fine */ }
+
+    const db = firebase.database();
 
     /* ---------- Audio / TTS ---------- */
     let audioEnabled=false, muted=false, volume=1.0, audioCtx=null;
     let wakeLock=null, wakeFallbackInterval=null, runInterval=null, startMs=0;
-
-    const isIOS = /iP(ad|hone|od)/.test(navigator.userAgent) ||
-                  (navigator.userAgent.includes('Mac') && navigator.maxTouchPoints>2);
+    const synth = window.speechSynthesis;
+    let speaking=false; const q=[];
 
     function formatTime(ms){
       const s = Math.floor(ms/1000), m = Math.floor(s/60), sec = s%60;
@@ -239,9 +258,6 @@
       }catch(e){}
     }
 
-    // ---- iOS-safe TTS queue with priming ----
-    const synth = window.speechSynthesis;
-    let speaking=false; const q=[];
     function say(text){ if(!audioEnabled || muted || !text) return; q.push(text); if(!speaking) playNext(); }
     function playNext(){
       if(!audioEnabled || muted || !q.length) { speaking=false; return; }
@@ -260,7 +276,6 @@
           u.volume = 0.01; u.rate=1.0; u.lang=navigator.language||'en-US';
           u.onend = ()=>resolve();
           synth.speak(u);
-          // Fallback resolve if iOS swallows onend
           setTimeout(resolve, 700);
         }catch(e){ resolve(); }
       });
@@ -269,38 +284,49 @@
     muteToggle.onclick=()=>{ muted=!muted; muteToggle.textContent=muted?'Unmute':'Mute'; };
     vol.oninput=e=>{ volume=parseFloat(e.target.value||'1')||1; };
 
-    /* ---------- Scenario Loading (dual path) ---------- */
-    let scenarios=[], current=null, watchId=null, lastStopIndex=-1;
-
-    function mapSnapshot(val){
-      const obj = val || {};
-      return Object.entries(obj).map(([id,s])=>({
-        id, ...s, stops: normalizeStops(s?.stops)
-      })).filter(sc=>Array.isArray(sc.stops));
+    /* ---------- Scenario Loading (merge both paths) ---------- */
+    let scenarios = new Map(); // id -> scenario
+    function scenariosFromVal(val){
+      if(!val) return [];
+      if(Array.isArray(val)){
+        return val.map((s,i)=>({id:String(i), ...(s||{})}));
+      } else {
+        return Object.keys(val).map(id=>({id, ...(val[id]||{})}));
+      }
     }
-    function populateDropdown(list){
-      select.innerHTML='<option value="">Select a scenario…</option>';
-      list.forEach(sc=>{
+    function upsert(list, sourceTag){
+      list.forEach(s=>{
+        const prev = scenarios.get(s.id) || {};
+        scenarios.set(s.id, {...prev, ...s, stops: normalizeStops(s.stops)});
+      });
+      const arr = Array.from(scenarios.values());
+      // sort newest first if createdAt exists
+      arr.sort((a,b)=> (b.createdAt||0) - (a.createdAt||0));
+      // populate
+      select.innerHTML = '<option value="">Select a scenario…</option>';
+      arr.forEach(sc=>{
         const o=document.createElement('option');
         o.value=sc.id; o.textContent=sc.title || '(untitled)';
         select.appendChild(o);
       });
-      status.textContent = list.length ? `${list.length} scenario(s) found` : 'No scenarios yet.';
+      status.textContent = arr.length ? `${arr.length} scenario(s) found` : 'No scenarios yet.';
+      log(`Loaded ${arr.length} from ${sourceTag}`);
     }
-    let unsubA=null, unsubB=null;
-    function startLoadingScenarios(){
-      scenarios=[]; populateDropdown([]);
-      if (unsubA) unsubA(); if (unsubB) unsubB();
-      unsubA = onValue(ref(db,'geophoto/scenarios'), snap=>{
-        const list = mapSnapshot(snap.val());
-        if(list.length){ scenarios=list; populateDropdown(scenarios); }
-      });
-      unsubB = onValue(ref(db,'scenarios'), snap=>{
-        const list = mapSnapshot(snap.val());
-        if(!scenarios.length && list.length){ scenarios=list; populateDropdown(scenarios); }
-      });
+
+    // Listen to both paths
+    try{
+      db.ref('geophoto/scenarios').on('value', snap=>{
+        try{ upsert(scenariosFromVal(snap.val()), 'geophoto/scenarios'); }
+        catch(e){ log('Parse error (geophoto/scenarios): '+e.message); }
+      }, err=>{ log('DB error (geophoto/scenarios): '+err.message); });
+
+      db.ref('scenarios').on('value', snap=>{
+        try{ if (scenarios.size===0) upsert(scenariosFromVal(snap.val()), 'scenarios'); }
+        catch(e){ log('Parse error (scenarios): '+e.message); }
+      }, err=>{ log('DB error (scenarios): '+err.message); });
+    }catch(e){
+      log('Firebase attach error: '+e.message);
     }
-    startLoadingScenarios();
 
     /* ---------- Image Preload/Decode Cache ---------- */
     const imgCache = new Map();
@@ -313,18 +339,6 @@
         im.src=s.image;
       })));
       (stops||[]).forEach(s=>{ if(s.image) imgCache.set(s.image,true); });
-    }
-    function setImage(img,stop){
-      const src = stop.image || '';
-      // If cached, swap immediately; browser should show without delay
-      img.src = src || "data:image/svg+xml;utf8,"+encodeURIComponent(
-        "<svg xmlns='http://www.w3.org/2000/svg' width='1200' height='720'><rect width='100%' height='100%' fill='#000'/><text x='50%' y='50%' fill='#9ecbd6' font-size='24' text-anchor='middle'>No image</text></svg>"
-      );
-      img.onerror = () => {
-        img.src = "data:image/svg+xml;utf8,"+encodeURIComponent(
-          "<svg xmlns='http://www.w3.org/2000/svg' width='1200' height='720'><rect width='100%' height='100%' fill='#000'/><text x='50%' y='50%' fill='#9ecbd6' font-size='24' text-anchor='middle'>Image failed to load</text></svg>"
-        );
-      };
     }
 
     /* ---------- Geofence + Display ---------- */
@@ -346,32 +360,32 @@
     function showDispatchIntro(sc){
       const txt = (sc.dispatch || '').trim();
       dispatchBlock.textContent = txt ? `Dispatch: ${txt}` : 'Dispatch: (none)';
-      // small delay so iOS doesn't clip the first syllable
       setTimeout(()=> say(txt || `${sc.title || 'scenario'} started.`), 120);
     }
 
+    let current=null, watchId=null, lastStopIndex=-1;
+
     async function openScenarioById(id){
-      const sc=scenarios.find(s=>s.id===id);
+      const sc = Array.from(scenarios.values()).find(s=>s.id===id);
       if(!sc){ status.textContent='Scenario not found.'; return; }
       current=sc;
       viewer.style.display='';
       scTitle.textContent=sc.title||'(scenario)';
-
       result.style.display='none';
       stopTitle.textContent=''; caption.textContent=''; detail.textContent='';
       lastStopIndex = -1;
 
-      // Preload all images for snappy swaps
+      // Preload images
       preloadImages(current.stops);
 
       // Speak/Show dispatch now
       showDispatchIntro(sc);
 
-      // Start fast GPS updates
-      if(watchId) navigator.geolocation.clearWatch(watchId);
+      // Start GPS watch
+      if(watchId){ navigator.geolocation.clearWatch(watchId); watchId=null; }
       geoStatus.textContent='Watching your location…';
       try{
-        watchId=navigator.geolocation.watchPosition(p=>{
+        watchId=navigator.geolocation.watchPosition(function(p){
           const { latitude:la, longitude:ln, accuracy:acc }=p.coords;
           geoStatus.textContent=`Lat ${la.toFixed(5)}, Lng ${ln.toFixed(5)} (±${Math.round(acc)}m)`;
           const hit=findHit(current.stops, la, ln, acc);
@@ -383,29 +397,33 @@
             caption.textContent=hit.s.caption||'';
             detail.textContent=`Distance: ${Math.round(hit.dist)} m (radius ${hit.s.radiusMeters} m)`;
 
-            // Audible cue + read caption every time a new stop unlocks
+            // Beep + TTS caption
             beep();
             const spoken = `${hit.s.title ? hit.s.title + '. ' : ''}${hit.s.caption || ''}`;
             setTimeout(()=> say(spoken), 120);
 
             viewer.scrollIntoView({behavior:'smooth', block:'start'});
           }
-        }, err=>{ geoStatus.textContent='Location error: '+err.message; }, {
+        }, function(err){
+          geoStatus.textContent='Location error: '+err.message;
+        }, {
           enableHighAccuracy:true, maximumAge:1000, timeout:10000
         });
       }catch(e){ geoStatus.textContent='Location error: '+e.message; }
     }
 
     /* ---------- Controls ---------- */
-    startBtn.onclick=async()=>{
+    const isIOS = /iP(ad|hone|od)/.test(navigator.userAgent) ||
+                  (navigator.userAgent.includes('Mac') && navigator.maxTouchPoints>2);
+
+    startBtn.onclick = async function(){
       try{
         audioEnabled=true;
         if(!audioCtx) audioCtx=new (window.AudioContext||window.webkitAudioContext)();
         await audioCtx.resume();
         await lockWake();
+        if(isIOS) await primeTTS();   // iOS needs the prime on user gesture
         startTimer();
-        // iOS: prime TTS on a user gesture BEFORE first real speak
-        if(isIOS) await primeTTS();
         beep();
         startBtn.textContent='Scenario Running';
         startBtn.disabled=true;
@@ -420,7 +438,7 @@
       openScenarioById(id);
     };
 
-    backBtn.onclick=()=>{
+    backBtn.onclick=function(){
       viewer.style.display='none';
       if(watchId) navigator.geolocation.clearWatch(watchId);
       status.textContent='Choose a scenario and press Start Scenario.';
@@ -430,12 +448,22 @@
     };
 
     // Preselect ?id=
-    const pre=new URLSearchParams(location.search).get('id');
-    if(pre){
-      const iv=setInterval(()=>{ if(select.options.length>1){ clearInterval(iv); select.value=pre; }}, 200);
-    }
+    (function(){
+      const pre=new URLSearchParams(location.search).get('id');
+      if(!pre) return;
+      const iv=setInterval(()=>{
+        if(select.options.length>1){
+          clearInterval(iv); select.value=pre;
+        }
+      }, 200);
+    })();
 
-    document.getElementById('year').textContent = new Date().getFullYear();
+    // Footer year
+    $('year').textContent = new Date().getFullYear();
+
+    // Basic global error -> show in UI for quick diagnosis
+    window.addEventListener('error', e => log('Error: ' + (e.message||e)));
+    window.addEventListener('unhandledrejection', e => log('Promise error: ' + (e.reason && e.reason.message ? e.reason.message : e.reason)));
   })();
   </script>
 </body>
