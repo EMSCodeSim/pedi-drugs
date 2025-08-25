@@ -144,6 +144,7 @@
 
   <!-- Firebase compat (iOS-friendly) -->
   <script src="https://www.gstatic.com/firebasejs/10.12.4/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.4/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.4/firebase-database-compat.js"></script>
 
   <script>
@@ -290,114 +291,60 @@
     muteToggle.onclick=()=>{ muted=!muted; muteToggle.textContent=muted?'Unmute':'Mute'; };
     vol.oninput=e=>{ volume=parseFloat(e.target.value||'1')||1; };
 
-    /* ---------- Scenario Loading (auto-detect path) ---------- */
+    /* ---------- Scenario Loading (requires or ignores auth) ---------- */
     let scenariosArr = [];
-    let chosenPath = null;  // show in debug
-
-    function mapScenarioContainer(val){
-      if(!val) return [];
-      if(Array.isArray(val)){
-        return val.map((s,i)=>({id:String(i), ...(s||{})}));
-      }
-      if(typeof val === 'object'){
-        return Object.keys(val).map(k=>({id:String(k), ...(val[k]||{})}));
-      }
-      return [];
-    }
-
-    function looksLikeScenarios(arr){
-      // heuristic: items with title or stops
-      let score = 0;
-      arr.forEach(it=>{
-        if(it && (it.title || it.stops)) score++;
-      });
-      return score;
-    }
-
-    function adoptScenarios(list){
+    function populate(list){
       scenariosArr = (list||[])
-        .map(s => ({...s}))
-        .filter(s => s && (s.active === undefined || s.active))
-        .sort((a,b) => (b.createdAt || 0) - (a.createdAt || 0));
+        .map(([id, s]) => ({ id, ...(s||{}) }))
+        .filter(s => s && (s.active === undefined || s.active))   // active only
+        .sort((a,b) => (b.createdAt || 0) - (a.createdAt || 0));  // newest first
 
-      // Populate dropdown
+      // dropdown label: title | name | notes | (untitled)
       select.innerHTML = '<option value="">Select a scenario…</option>';
       scenariosArr.forEach(sc => {
+        const label = sc.title || sc.name || sc.notes || '(untitled)';
         const o = document.createElement('option');
-        o.value = sc.id;
-        o.textContent = sc.title || '(untitled)';
+        o.value = sc.id; o.textContent = label;
         select.appendChild(o);
       });
       status.textContent = scenariosArr.length
         ? `${scenariosArr.length} active scenario(s)`
         : 'No scenarios yet.';
-      log(`Using path: ${chosenPath || '(unknown)'} — loaded ${scenariosArr.length}`);
+      log(`Loaded ${scenariosArr.length} from /scenarios`);
     }
 
-    function subscribe(path){
-      if(!path) return;
-      chosenPath = path;
-      db.ref(path).on('value', function(snap){
-        const arr = mapScenarioContainer(snap.val());
-        adoptScenarios(arr);
+    function startScenarioListener(){
+      db.ref('scenarios').on('value', function(snap){
+        const v = snap.val() || {};
+        populate(Object.entries(v));
       }, function(err){
-        log('DB error ['+path+']: ' + err.message);
+        log('DB error: ' + err.message);
+        status.textContent = 'Could not load scenarios.';
       });
     }
 
-    // Try common paths first, then scan root if needed
-    const CANDIDATES = [
-      'scenarios',
-      'geophoto/scenarios',
-      'geophoto/public/scenarios',
-      'public/scenarios'
-    ];
-
-    function tryCandidates(i){
-      if(i >= CANDIDATES.length){
-        // root scan fallback
-        db.ref('/').once('value').then(root=>{
-          const val = root.val() || {};
-          const keys = Object.keys(val);
-          let best = { path:null, score:-1, list:[] };
-
-          keys.forEach(k=>{
-            const arr = mapScenarioContainer(val[k]);
-            const score = looksLikeScenarios(arr);
-            if(score > best.score){
-              best = { path: k, score, list: arr };
-            }
-          });
-
-          if(best.path && best.score > 0){
-            chosenPath = best.path;
-            adoptScenarios(best.list);
-            subscribe(chosenPath); // also live-subscribe
-          }else{
-            log('No scenarios found in root scan.');
-            status.textContent = 'No scenarios found.';
-          }
-        }).catch(e=>{
-          log('Root scan error: '+e.message);
-        });
-        return;
-      }
-
-      const path = CANDIDATES[i];
-      db.ref(path).once('value').then(snap=>{
-        const arr = mapScenarioContainer(snap.val());
-        if(arr.length){
-          chosenPath = path;
-          adoptScenarios(arr);
-          subscribe(chosenPath);
-        }else{
-          tryCandidates(i+1);
-        }
-      }).catch(_=> tryCandidates(i+1));
+    // If rules need auth, sign in anonymously first; if not, we still proceed.
+    function begin(){
+      // connection indicator
+      db.ref(".info/connected").on("value", snap=>{
+        const ok = snap.val() === true;
+        connStatus.textContent = ok ? "Connected" : "Offline";
+        connStatus.style.color = ok ? "#89ffb2" : "#ffdede";
+      });
+      startScenarioListener();
     }
 
-    // Kick off detection
-    tryCandidates(0);
+    if (firebase.auth) {
+      firebase.auth().onAuthStateChanged(function(user){
+        if(user){ log('Auth: signed in anonymously'); begin(); }
+      });
+      firebase.auth().signInAnonymously().catch(function(err){
+        log('Anon auth error: ' + err.message + ' (continuing without auth)');
+        begin(); // try anyway if rules are public
+      });
+    } else {
+      begin(); // no auth lib? just try reading
+    }
 
     /* ---------- Image Preload Cache ---------- */
     const imgCache = new Map();
@@ -436,9 +383,9 @@
     }
 
     function showDispatchIntro(sc){
-      const txt = (sc.dispatch || '').trim();
+      const txt = (sc.dispatch || sc.notes || '').trim(); // fall back to notes
       dispatchBlock.textContent = txt ? `Dispatch: ${txt}` : 'Dispatch: (none)';
-      setTimeout(()=> say(txt || `${sc.title || 'scenario'} started.`), 120);
+      setTimeout(()=> say(txt || `${sc.title || sc.notes || 'scenario'} started.`), 120);
     }
 
     let current=null, currentStops=[], watchId=null, lastStopIndex=-1;
@@ -450,7 +397,7 @@
       currentStops = normalizeStops(sc.stops);
 
       viewer.style.display='';
-      scTitle.textContent=sc.title||'(scenario)';
+      scTitle.textContent=sc.title || sc.name || sc.notes || '(scenario)';
       result.style.display='none';
       stopTitle.textContent=''; caption.textContent=''; detail.textContent='';
       lastStopIndex = -1;
