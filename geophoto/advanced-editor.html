@@ -1,8 +1,8 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
 <title>Geo Scenarios — Advanced Editor (Desktop)</title>
 <style>
   :root{
@@ -17,7 +17,7 @@
   body{margin:0;background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial}
   header{padding:10px 14px;border-bottom:1px solid var(--border);background:#0d1822}
   h1{margin:0;font-size:18px}
-  .app{display:grid;grid-template-columns:320px 1fr 360px;gap:12px;padding:12px;max-height:calc(100vh - 58px)}
+  .app{display:grid;grid-template-columns:320px 1fr 380px;gap:12px;padding:12px;max-height:calc(100vh - 58px)}
   .col{background:var(--surface);border:1px solid var(--border);border-radius:var(--br);box-shadow:var(--shadow);padding:12px;overflow:auto}
   label{display:block;margin:8px 0 6px 2px;font-size:12px;color:var(--muted)}
   select,input,textarea,button{font-size:14px}
@@ -41,11 +41,11 @@
   .divider{height:1px;background:var(--border);opacity:.6;margin:10px 0}
   .hidden{display:none}
   .desktopGate{max-width:740px;margin:48px auto;background:var(--surface);border:1px solid var(--border);border-radius:16px;box-shadow:var(--shadow);padding:18px}
-  /* form readability */
+  /* readability */
   select, input, textarea { color: var(--text) !important; background: var(--panel) !important; border-color: var(--border) !important; }
   select option { color:#0b1e27; }
   @media (prefers-color-scheme: dark){ select option { color:#eaf7fb; background:#0d2430; } }
-  ::placeholder { color: #7fb2c1; opacity: 1; }
+  ::placeholder { color:#7fb2c1; opacity:1; }
   /* overlay shelf */
   .olThumb { width:100%; aspect-ratio:1/1; border-radius:10px; border:1px solid var(--border);
              background:#0b2130; display:flex; align-items:center; justify-content:center; cursor:pointer; }
@@ -88,17 +88,17 @@
     <div id="stopList" class="row"></div>
     <div class="divider"></div>
     <div class="sectionTitle">Selected stop meta</div>
-    <label>Title</label><input id="stopTitle" type="text" placeholder="Stop title">
+    <label>Title</label><input id="stopTitle" type="text" placeholder="Stop title" />
     <label>Caption</label><textarea id="stopCaption" placeholder="Caption / text"></textarea>
     <div class="row">
       <div style="flex:1">
-        <label>Latitude</label><input id="stopLat" type="text" placeholder="e.g. 39.7392">
+        <label>Latitude</label><input id="stopLat" type="text" placeholder="e.g. 39.7392" />
       </div>
       <div style="flex:1">
-        <label>Longitude</label><input id="stopLng" type="text" placeholder="-104.9903">
+        <label>Longitude</label><input id="stopLng" type="text" placeholder="-104.9903" />
       </div>
     </div>
-    <label>Radius (meters)</label><input id="stopRadius" type="text" placeholder="50">
+    <label>Radius (meters)</label><input id="stopRadius" type="text" placeholder="50" />
     <div class="row" style="margin-top:6px">
       <button id="useGPS" class="btn secondary">Use my location</button>
       <button id="saveMeta" class="btn">Save Meta</button>
@@ -106,7 +106,7 @@
     <div id="metaMsg" class="pill" style="margin-top:6px">Ready</div>
     <div class="divider"></div>
     <div class="row">
-      <input id="replaceFile" type="file" accept="image/*">
+      <input id="replaceFile" type="file" accept="image/*" />
       <button id="replaceApply" class="btn">Replace Image</button>
     </div>
     <div class="row" style="margin-top:6px">
@@ -129,7 +129,7 @@
     <div class="canvasWrap"><canvas id="c"></canvas></div>
   </div>
 
-  <!-- Right: crop + overlays + eraser + overlay transforms -->
+  <!-- Right: crop + overlays + eraser + transforms + bulk -->
   <div class="col">
     <div class="sectionTitle">Crop</div>
     <div class="row">
@@ -150,10 +150,10 @@
     <div id="overlayShelf" style="margin-top:8px; display:grid; grid-template-columns:repeat(3, 1fr); gap:8px"></div>
 
     <label style="margin-top:10px">Hue (selected overlay)</label>
-    <input id="overlayHue" type="range" min="-180" max="180" step="1" value="0">
+    <input id="overlayHue" type="range" min="-180" max="180" step="1" value="0" />
 
     <label style="margin-top:10px">Opacity</label>
-    <input id="overlayOpacity" type="range" min="0.05" max="1" step="0.05" value="1">
+    <input id="overlayOpacity" type="range" min="0.05" max="1" step="0.05" value="1" />
 
     <div class="row" style="margin-top:8px">
       <button id="bringFront" class="btn secondary">Bring to Front</button>
@@ -169,7 +169,7 @@
       <button id="eraserCancel" class="btn secondary">Cancel</button>
     </div>
     <label style="margin-top:8px">Brush Size</label>
-    <input id="eraserSize" type="range" min="5" max="120" step="1" value="30">
+    <input id="eraserSize" type="range" min="5" max="120" step="1" value="30" />
     <div class="pill" id="eraserStatus" style="margin-top:6px">Eraser: off</div>
 
     <div class="divider"></div>
@@ -181,7 +181,15 @@
       <button id="flipSelV" class="btn secondary">Flip V</button>
     </div>
     <label style="margin-top:8px">Angle</label>
-    <input id="rotSelSlider" type="range" min="-180" max="180" step="1" value="0">
+    <input id="rotSelSlider" type="range" min="-180" max="180" step="1" value="0" />
+
+    <div class="divider"></div>
+    <div class="sectionTitle">Bulk Tools</div>
+    <div class="row">
+      <button id="normalizeLocs" class="btn warn">Normalize All Locations</button>
+      <button id="relinkOverlays" class="btn secondary">Relink Overlay Sources</button>
+    </div>
+    <div class="pill" id="bulkMsg" style="margin-top:6px">Bulk: idle</div>
   </div>
 </div>
 
@@ -250,9 +258,11 @@ window.addEventListener('unhandledrejection', e => ERR(String(e.reason?.message|
   const rotateL=document.getElementById('rotateL');
   const rotateR=document.getElementById('rotateR');
   const saveImage=document.getElementById('saveImage');
+
   const cropStart=document.getElementById('cropStart');
   const cropApply=document.getElementById('cropApply');
   const cropCancel=document.getElementById('cropCancel');
+
   const overlayShelf=document.getElementById('overlayShelf');
   const tabBtns = Array.from(document.querySelectorAll('.ol-tab'));
   const overlayHue=document.getElementById('overlayHue');
@@ -260,21 +270,27 @@ window.addEventListener('unhandledrejection', e => ERR(String(e.reason?.message|
   const bringFront=document.getElementById('bringFront');
   const sendBack=document.getElementById('sendBack');
   const deleteObj=document.getElementById('deleteObj');
+
   const eraserStart=document.getElementById('eraserStart');
   const eraserDone=document.getElementById('eraserDone');
   const eraserCancel=document.getElementById('eraserCancel');
   const eraserSize=document.getElementById('eraserSize');
   const eraserStatus=document.getElementById('eraserStatus');
+
   const rotSelLeft=document.getElementById('rotSelLeft');
   const rotSelRight=document.getElementById('rotSelRight');
   const rotSelSlider=document.getElementById('rotSelSlider');
   const flipSelH=document.getElementById('flipSelH');
   const flipSelV=document.getElementById('flipSelV');
 
+  const normalizeLocsBtn=document.getElementById('normalizeLocs');
+  const relinkOverlaysBtn=document.getElementById('relinkOverlays');
+  const bulkMsg=document.getElementById('bulkMsg');
+
   /* ===== State + canvas ===== */
   let scenarios=[], current=null, stopIndex=-1;
   const fabricCanvas = new fabric.Canvas('c', { backgroundColor:'#061621', preserveObjectStacking:true, selection:true });
-  let baseImage=null, cropRect=null, erasing=false;  /* <— cropRect declared ONCE here */
+  let baseImage=null, cropRect=null, erasing=false;
 
   function fitCanvas(){
     fabricCanvas.setHeight(window.innerHeight - 160);
@@ -304,7 +320,7 @@ window.addEventListener('unhandledrejection', e => ERR(String(e.reason?.message|
       }, { crossOrigin:'anonymous' });
     });
   }
-  const dataURLFromCanvas = () => fabricCanvas.toDataURL({ format:'png', quality:0.92 }); /* <— DECLARED ONCE */
+  const dataURLFromCanvas = () => fabricCanvas.toDataURL({ format:'png', quality:0.92 });
 
   /* ===== Scenarios load ===== */
   function showStatus(msg){ statusPill.textContent = msg; }
@@ -397,7 +413,7 @@ window.addEventListener('unhandledrejection', e => ERR(String(e.reason?.message|
       s.caption=stopCaption.value.trim();
       s.lat=parseFloat(stopLat.value);
       s.lng=parseFloat(stopLng.value);
-      s.radiusMeters=Math.max(5, parseInt(stopRadius.value||'50',10));
+      s.radiusMeters=Math.max(5, Math.min(1000, Math.round(parseInt(stopRadius.value||'50',10))));
       if(Number.isNaN(s.lat)||Number.isNaN(s.lng)) throw new Error('Invalid GPS coordinates.');
       const { id, ...payload } = current;
       await set(ref(db,'scenarios/'+current.id), payload);
@@ -416,6 +432,7 @@ window.addEventListener('unhandledrejection', e => ERR(String(e.reason?.message|
     const url=dataURLFromCanvas();
     const a=document.createElement('a'); a.href=url; a.download=(current?.title||'image')+'-edited.png'; a.click();
   };
+  const dataURLFromCanvas = () => fabricCanvas.toDataURL({ format:'png', quality:0.92 });
   saveImage.onclick=async()=>{
     try{
       if(!current || stopIndex<0) throw new Error('Select a stop first.');
@@ -428,14 +445,6 @@ window.addEventListener('unhandledrejection', e => ERR(String(e.reason?.message|
       renderStopsThumbs();
     }catch(err){ metaMsg.textContent=String(err.message||err); }
   };
-
-  /* ===== Canvas commands (background only) ===== */
-  const rebase = ()=>{ if(!baseImage) return; setBaseImageFromDataURL(baseImage.toDataURL({})); };
-  fitBtn.onclick=rebase;
-  zoomIn.onclick=()=>fabricCanvas.setZoom(fabricCanvas.getZoom()*1.1);
-  zoomOut.onclick=()=>fabricCanvas.setZoom(fabricCanvas.getZoom()/1.1);
-  rotateL.onclick=()=>{ if(baseImage){ baseImage.rotate((baseImage.angle||0)-90); fabricCanvas.requestRenderAll(); } };
-  rotateR.onclick=()=>{ if(baseImage){ baseImage.rotate((baseImage.angle||0)+90); fabricCanvas.requestRenderAll(); } };
 
   /* ===== Crop workflow ===== */
   cropStart.onclick=()=>{
@@ -477,11 +486,11 @@ window.addEventListener('unhandledrejection', e => ERR(String(e.reason?.message|
   /* ===== PNG overlays (absolute URLs) ===== */
   const OVERLAY_BASE = 'https://fireopssim.com/geophoto/overlays/';
   const SPRITES = {
-    fire   : ['fire1.png','fire2.png','fire_side.png'],
-    smoke  : ['smoke1.png','smoke2.png','smoke_ground.png'],
-    people : ['people1.png','people2.png'],
-    cars   : ['car1.png','car2.png'],
-    hazard : ['hazard1.png']
+    fire   : ['fire1.png','fire2.png','fire3.png','fire4.png','fire5.png','fire_side.png'],
+    smoke  : ['smoke1.png','smoke2.png','smoke3.png','smoke_ground.png'],
+    people : ['people1.png','people2.png','people3.png'],
+    cars   : ['car1.png','car2.png','car3.png'],
+    hazard : ['hazard1.png','hazard2.png','hazard3.png']
   };
   function resolveSpritePath(uri){ return OVERLAY_BASE + uri; }
 
@@ -591,17 +600,103 @@ window.addEventListener('unhandledrejection', e => ERR(String(e.reason?.message|
   flipSelH.onclick = ()=> flipSelected('x');
   flipSelV.onclick = ()=> flipSelected('y');
 
-  /* ===== Delete stop ===== */
-  deleteStop.onclick=async()=>{
-    try{
-      if(!current || stopIndex<0) return;
-      if(!confirm('Delete this photo from the scenario?')) return;
-      current.stops.splice(stopIndex,1);
-      const { id, ...payload } = current;
-      await set(ref(db,'scenarios/'+current.id), payload);
-      stopIndex=-1; fabricCanvas.clear(); baseImage=null; renderStopsThumbs(); metaMsg.textContent='Photo deleted.';
-    }catch(e){ metaMsg.textContent=String(e.message||e); }
-  };
+  /* ===== Bulk tools ===== */
+  async function normalizeAllLocations(){
+    const DEFAULT_RADIUS = 50;
+    const MAX_RADIUS = 1000;
+    const MIN_RADIUS = 5;
+    const ROUND_DECIMALS = 6;
+
+    try {
+      bulkMsg.textContent = 'Bulk: reading scenarios…';
+      const snap = await get(ref(db, 'scenarios'));
+      if (!snap.exists()) { bulkMsg.textContent = 'Bulk: no scenarios found.'; return; }
+      const obj = snap.val() || {};
+      let touched = 0, fixed = 0;
+
+      for (const [sid, sc] of Object.entries(obj)) {
+        if (!Array.isArray(sc.stops)) continue;
+        let changed = false;
+
+        sc.stops = sc.stops.map(st => {
+          const out = { ...st };
+
+          const lat = Number(out.lat);
+          const lng = Number(out.lng);
+          if (!Number.isFinite(lat) || Math.abs(lat) > 90) { out.lat = null; changed = true; }
+          else out.lat = Number(lat.toFixed(ROUND_DECIMALS));
+
+          if (!Number.isFinite(lng) || Math.abs(lng) > 180) { out.lng = null; changed = true; }
+          else out.lng = Number(lng.toFixed(ROUND_DECIMALS));
+
+          let r = Number(out.radiusMeters);
+          if (!Number.isFinite(r)) { r = DEFAULT_RADIUS; changed = true; }
+          r = Math.max(MIN_RADIUS, Math.min(MAX_RADIUS, Math.round(r)));
+          if (r !== out.radiusMeters) { out.radiusMeters = r; changed = true; }
+
+          return out;
+        });
+
+        if (changed) {
+          touched++;
+          await set(ref(db, 'scenarios/' + sid), sc);
+          fixed += sc.stops.length;
+        }
+      }
+      bulkMsg.textContent = `Bulk: normalized ${fixed} stops in ${touched} scenario(s).`;
+    } catch (e) {
+      bulkMsg.textContent = 'Bulk error: ' + (e?.message || e);
+    }
+  }
+
+  async function relinkOverlaySources(){
+    // Only needed if you previously stored overlay URLs in stops[].overlays[].src
+    const OLD_PREFIXES = [
+      'https://old-domain.example.com/overlays/',
+      'https://fireopssim.com/oldpath/'
+    ];
+    try {
+      bulkMsg.textContent = 'Bulk: relinking overlay sources…';
+      const snap = await get(ref(db,'scenarios'));
+      if (!snap.exists()) { bulkMsg.textContent = 'Bulk: no scenarios.'; return; }
+      const obj = snap.val() || {};
+      let updated = 0;
+
+      for (const [sid, sc] of Object.entries(obj)) {
+        let changed = false;
+        if (!Array.isArray(sc.stops)) continue;
+
+        for (const st of sc.stops) {
+          if (!Array.isArray(st.overlays)) continue;
+          for (const ov of st.overlays) {
+            if (ov && typeof ov.src === 'string') {
+              const old = ov.src;
+              for (const pref of OLD_PREFIXES) {
+                if (old.startsWith(pref)) {
+                  const file = old.substring(pref.length);
+                  ov.src = OVERLAY_BASE + file;
+                  changed = true;
+                  break;
+                }
+              }
+            }
+          }
+        }
+
+        if (changed) {
+          await set(ref(db,'scenarios/'+sid), sc);
+          updated++;
+        }
+      }
+      bulkMsg.textContent = `Bulk: relinked overlay sources in ${updated} scenario(s).`;
+    } catch (e) {
+      bulkMsg.textContent = 'Bulk relink error: ' + (e?.message||e);
+    }
+  }
+
+  normalizeLocsBtn?.addEventListener('click', normalizeAllLocations);
+  relinkOverlaysBtn?.addEventListener('click', relinkOverlaySources);
+
 })();
 </script>
 </body>
