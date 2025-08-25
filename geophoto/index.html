@@ -142,12 +142,8 @@
     <div id="connStatus"></div>
   </footer>
 
-  <!-- Firebase compat -->
-  <script src="https://www.gstatic.com/firebasejs/10.12.4/firebase-app-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.12.4/firebase-database-compat.js"></script>
-
-  <script>
-  (function(){
+  <!-- Firebase (modular) -->
+  <script type="module">
     const $ = id => document.getElementById(id);
     const viewer = $('viewer'), backBtn = $('backBtn');
     const select = $('scenarioSelect'), status = $('status'), debug = $('debug'), connStatus = $('connStatus');
@@ -156,9 +152,9 @@
     const scTitle = $('scTitle');
     const startBtn = $('startScenario'), muteToggle = $('muteToggle'), vol = $('vol'), runTimer = $('runTimer');
 
-    function log(msg){ console.log('[viewer]', msg); debug.textContent = String(msg); }
+    const log = (m) => { console.log('[viewer]', m); debug.textContent = String(m); };
 
-    /* ---------- Helpers ---------- */
+    /* ---------- Small helpers ---------- */
     const toRad = x => x*Math.PI/180;
     const hav=(a,b,c,d)=>{
       const R=6371000, dA=toRad(c-a), dB=toRad(d-b);
@@ -176,15 +172,15 @@
         const title = s.title || s.name || '';
         const cap = s.caption || s.text || s.note || '';
         const image =
-          s.imageData || s.imageURL || s.imageUrl || s.url || s.photoURL || s.photo || s.img || s.image || '';
+          s.image || s.imageData || s.imageURL || s.imageUrl || s.url || s.photoURL || s.photo || s.img || '';
         return { ...s, lat, lng, radiusMeters, title, caption: cap, image };
-      }).filter(s => typeof s.lat === 'number' && typeof s.lng === 'number');
+      }).filter(s => Number.isFinite(s.lat) && Number.isFinite(s.lng));
     }
 
     function setImage(img, stop){
       const src =
-        stop.imageData || stop.imageURL || stop.imageUrl ||
-        stop.url || stop.photoURL || stop.photo || stop.image || '';
+        stop.image || stop.imageData || stop.imageURL || stop.imageUrl ||
+        stop.url || stop.photoURL || stop.photo || '';
       img.src = src || "data:image/svg+xml;utf8,"+encodeURIComponent(
         "<svg xmlns='http://www.w3.org/2000/svg' width='1200' height='720'><rect width='100%' height='100%' fill='#000'/><text x='50%' y='50%' fill='#9ecbd6' font-size='24' text-anchor='middle'>No image</text></svg>"
       );
@@ -196,6 +192,10 @@
     }
 
     /* ---------- Firebase init ---------- */
+    const { initializeApp } = await import('https://www.gstatic.com/firebasejs/10.12.4/firebase-app.js');
+    const { getDatabase, ref, onValue, get, child } =
+      await import('https://www.gstatic.com/firebasejs/10.12.4/firebase-database.js');
+
     const firebaseConfig = {
       apiKey:"AIzaSyDM6DpRSeZueVKRpbyJyDmhf8WY66KyCDk",
       authDomain:"dailyquiz-d5279.firebaseapp.com",
@@ -204,24 +204,24 @@
       appId:"1:94577748034:web:c032d3a1d72db1313de5db",
       measurementId:"G-19DVN7NNH7"
     };
-    try{ firebase.initializeApp(firebaseConfig); }catch(e){ /* already initialized */ }
-    const db = firebase.database();
+    const app = initializeApp(firebaseConfig);
+    const db = getDatabase(app);
 
     // Connection indicator
-    db.ref(".info/connected").on("value", snap=>{
-      const ok = snap.val() === true;
-      connStatus.textContent = ok ? "Connected" : "Offline";
-      connStatus.style.color = ok ? "#89ffb2" : "#ffdede";
-    });
+    try {
+      const infoRef = ref(db, '.info/connected');
+      onValue(infoRef, snap => {
+        const ok = snap.val() === true;
+        connStatus.textContent = ok ? 'Connected' : 'Offline';
+        connStatus.style.color = ok ? '#89ffb2' : '#ffdede';
+      });
+    } catch {}
 
-    /* ---------- Scenario loading (SDK + REST fallback) ---------- */
+    /* ---------- Scenario Loading (working logic + safety nets) ---------- */
     let scenariosArr = [];
-    let sdkFired = false;
-
-    function renderScenarios(obj){
-      const entries = Object.entries(obj || {});
-      scenariosArr = entries
-        .map(([id, s]) => ({ id, ...(s||{}) }))
+    let populated = false;
+    function populate(list){
+      scenariosArr = list
         .filter(s => s && (s.active === undefined || s.active))
         .sort((a,b) => (b.createdAt || 0) - (a.createdAt || 0));
 
@@ -232,39 +232,71 @@
         o.value = sc.id; o.textContent = label;
         select.appendChild(o);
       });
-      status.textContent = scenariosArr.length ? `${scenariosArr.length} active scenario(s)` : 'No scenarios yet.';
+      status.textContent = scenariosArr.length
+        ? `${scenariosArr.length} scenario(s) found`
+        : 'No scenarios yet.';
+      populated = scenariosArr.length > 0;
     }
+    const mapSnapshot = (val) => {
+      const obj = val || {};
+      return Object.entries(obj).map(([id, s]) => ({
+        id, ...(s||{}), stops: normalizeStops(s?.stops)
+      }));
+    };
 
-    // 1) SDK subscription
-    try{
-      db.ref('scenarios').on('value', function(snap){
-        sdkFired = true;
-        const data = snap.val() || {};
-        renderScenarios(data);
-        log('SDK loaded ' + Object.keys(data).length);
-      }, function(err){
-        log('SDK error: ' + err.message);
-      });
-    }catch(e){
-      log('SDK attach error: ' + e.message);
-    }
+    // 1) Prefer geophoto/scenarios (matches your working file)
+    try {
+      onValue(ref(db, 'geophoto/scenarios'), snap => {
+        const list = mapSnapshot(snap.val());
+        if (list.length) {
+          populate(list);
+          log('Loaded from geophoto/scenarios: '+list.length);
+        }
+      }, err => log('geophoto/scenarios error: '+err.message));
+    } catch(e){ log('attach geophoto failed: '+e.message); }
 
-    // 2) REST fallback if SDK didn’t populate quickly
-    setTimeout(function(){
-      if (scenariosArr.length === 0) {
-        const url = (firebase.app().options.databaseURL || '').replace(/\/$/,'') + '/scenarios.json';
-        fetch(url, { method:'GET' })
-          .then(r => r.ok ? r.json() : Promise.reject(new Error('HTTP '+r.status)))
-          .then(json => {
-            if (json) {
-              renderScenarios(json);
-              log('REST loaded ' + Object.keys(json).length);
-            } else {
-              log('REST: empty /scenarios');
-            }
-          })
-          .catch(err => log('REST error: ' + err.message));
+    // 2) Fallback to scenarios only if nothing has populated yet
+    try {
+      onValue(ref(db, 'scenarios'), snap => {
+        const list = mapSnapshot(snap.val());
+        if (!populated && list.length) {
+          populate(list);
+          log('Loaded from scenarios: '+list.length);
+        }
+      }, err => log('scenarios error: '+err.message));
+    } catch(e){ log('attach scenarios failed: '+e.message); }
+
+    // 3) One-time GET backup (handles rare listener stalls)
+    setTimeout(async () => {
+      if (!populated) {
+        try {
+          const s1 = await get(ref(db, 'geophoto/scenarios'));
+          const list = mapSnapshot(s1.val());
+          if (list.length) { populate(list); log('GET geophoto/scenarios'); }
+        } catch(e){ log('GET geophoto error: '+e.message); }
       }
+      if (!populated) {
+        try {
+          const s2 = await get(ref(db, 'scenarios'));
+          const list = mapSnapshot(s2.val());
+          if (list.length) { populate(list); log('GET scenarios'); }
+        } catch(e){ log('GET scenarios error: '+e.message); }
+      }
+      // 4) REST fallback (open rules)
+      if (!populated) {
+        try {
+          const dbUrl = 'https://dailyquiz-d5279-default-rtdb.firebaseio.com/scenarios.json';
+          const r = await fetch(dbUrl);
+          if (r.ok) {
+            const json = await r.json();
+            const list = mapSnapshot(json);
+            if (list.length) { populate(list); log('REST scenarios'); }
+          } else {
+            log('REST HTTP '+r.status);
+          }
+        } catch(e){ log('REST error: '+e.message); }
+      }
+      if (!populated) status.textContent = 'No scenarios found.';
     }, 1500);
 
     /* ---------- Image Preload Cache ---------- */
@@ -272,7 +304,7 @@
     function preloadImages(stops){
       Promise.all((stops||[]).map(s=>new Promise(res=>{
         const src =
-          s.imageData || s.imageURL || s.imageUrl || s.url || s.photoURL || s.photo || s.image || '';
+          s.image || s.imageData || s.imageURL || s.imageUrl || s.url || s.photoURL || s.photo || '';
         if(!src || imgCache.has(src)) return res();
         const im=new Image();
         im.onload=()=>{ if(im.decode) im.decode().catch(()=>{}).finally(res); else res(); };
@@ -281,7 +313,7 @@
       }))).then(()=>{
         (stops||[]).forEach(s=>{
           const src =
-            s.imageData || s.imageURL || s.imageUrl || s.url || s.photoURL || s.photo || s.image || '';
+            s.image || s.imageData || s.imageURL || s.imageUrl || s.url || s.photoURL || s.photo || '';
           if(src) imgCache.set(src,true);
         });
       });
@@ -424,7 +456,7 @@
           u.volume = 0.01; u.rate=1.0; u.lang=navigator.language||'en-US';
           u.onend = ()=>resolve();
           synth.speak(u);
-          setTimeout(resolve, 700);
+          setTimeout(resolve, 700); // fallback
         }catch(e){ resolve(); }
       });
     }
@@ -436,35 +468,31 @@
     const isIOS = /iP(ad|hone|od)/.test(navigator.userAgent) ||
                   (navigator.userAgent.includes('Mac') && navigator.maxTouchPoints>2);
 
-    startBtn.onclick = function(){
-      (async function(){
-        try{
-          audioEnabled=true;
-          if(!audioCtx) audioCtx=new (window.AudioContext||window.webkitAudioContext)();
-          await audioCtx.resume();
-          await lockWake();
-          if(isIOS) await primeTTS();
-          startTimer();
-          beep();
-          startBtn.textContent='Scenario Running';
-          startBtn.disabled=true;
-        }catch(e){ alert('Could not enable audio: '+e.message); return; }
+    startBtn.onclick = async function(){
+      try{
+        audioEnabled=true;
+        if(!audioCtx) audioCtx=new (window.AudioContext||window.webkitAudioContext)();
+        await audioCtx.resume();
+        await lockWake();
+        if(isIOS) await primeTTS();   // iOS needs the prime on user gesture
+        startTimer();
+        beep();
+        startBtn.textContent='Scenario Running';
+        startBtn.disabled=true;
+      }catch(e){ alert('Could not enable audio: '+e.message); return; }
 
-        const id=select.value;
-        if(!id){
-          status.textContent='Choose a scenario first.';
-          startBtn.disabled=false; startBtn.textContent='Start Scenario'; audioEnabled=false; releaseWake(); stopTimer();
-          return;
-        }
-        openScenarioById(id);
-      })();
+      const id=select.value;
+      if(!id){
+        status.textContent='Choose a scenario first.';
+        startBtn.disabled=false; startBtn.textContent='Start Scenario'; audioEnabled=false; releaseWake(); stopTimer();
+        return;
+      }
+      openScenarioById(id);
     };
 
     backBtn.onclick=function(){
       viewer.style.display='none';
-      if(typeof navigator!=='undefined' && navigator.geolocation){
-        try{ /* best-effort */ } finally { /* no-op */ }
-      }
+      if(watchId) navigator.geolocation.clearWatch(watchId);
       status.textContent='Choose a scenario and press Start Scenario.';
       window.speechSynthesis.cancel();
       startBtn.disabled=false; startBtn.textContent='Start Scenario'; audioEnabled=false;
@@ -483,12 +511,11 @@
     })();
 
     // Footer year
-    document.getElementById('year').textContent = new Date().getFullYear();
+    $('year').textContent = new Date().getFullYear();
 
     // Show JS/runtime errors in the tiny debug line
     window.addEventListener('error', e => log('Error: ' + (e.message||e)));
     window.addEventListener('unhandledrejection', e => log('Promise error: ' + (e.reason && e.reason.message ? e.reason.message : e.reason)));
-  })();
   </script>
 </body>
 </html>
