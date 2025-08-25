@@ -320,6 +320,7 @@ window.addEventListener('unhandledrejection', e => ERR(String(e.reason?.message|
       }, { crossOrigin:'anonymous' });
     });
   }
+  /* DECLARED ONCE — duplicate here would break the page */
   const dataURLFromCanvas = () => fabricCanvas.toDataURL({ format:'png', quality:0.92 });
 
   /* ===== Scenarios load ===== */
@@ -432,7 +433,6 @@ window.addEventListener('unhandledrejection', e => ERR(String(e.reason?.message|
     const url=dataURLFromCanvas();
     const a=document.createElement('a'); a.href=url; a.download=(current?.title||'image')+'-edited.png'; a.click();
   };
-  const dataURLFromCanvas = () => fabricCanvas.toDataURL({ format:'png', quality:0.92 });
   saveImage.onclick=async()=>{
     try{
       if(!current || stopIndex<0) throw new Error('Select a stop first.');
@@ -681,7 +681,6 @@ window.addEventListener('unhandledrejection', e => ERR(String(e.reason?.message|
               for (const pref of OLD_PREFIXES) {
                 if (old.startsWith(pref)) {
                   const file = old.substring(pref.length);
-                  // map to new foldered structure best-effort: keep filename, guess cat by substring
                   const guessCat = file.includes('fire') ? 'fire'
                                   : file.includes('smoke') ? 'smoke'
                                   : file.includes('car') ? 'cars'
