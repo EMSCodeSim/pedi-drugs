@@ -30,7 +30,6 @@
     .logo img{width:40px; height:40px; border-radius:10px; box-shadow:var(--shadow); object-fit:cover; background:#0f1624}
 
     .wrap{max-width:1100px; margin:0 auto; padding:18px 20px 100px}
-
     .grid{display:grid; gap:14px; grid-template-columns:1fr}
     .card{border-radius:var(--radius); background:var(--card); border:1px solid rgba(255,255,255,.07);
       box-shadow:var(--shadow); overflow:hidden; transition:transform .15s ease, border-color .2s ease}
@@ -129,386 +128,327 @@
     <div id="connStatus"></div>
   </footer>
 
-  <!-- Firebase (modular) -->
+  <!-- Compat present so we can fall back if needed -->
+  <script src="https://www.gstatic.com/firebasejs/10.12.4/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.4/firebase-database-compat.js"></script>
+
   <script type="module">
-  const $ = id => document.getElementById(id);
-  const viewer = $('viewer'), backBtn = $('backBtn');
-  const select = $('scenarioSelect'), status = $('status'), debug = $('debug'), connStatus = $('connStatus');
-  const dispatchBlock = $('dispatchBlock'), geoStatus = $('geoStatus');
-  const result = $('result'), stopTitle = $('stopTitle'), photo = $('photo'), caption = $('caption'), detail = $('detail');
-  const scTitle = $('scTitle');
-  const startBtn = $('startScenario'), muteToggle = $('muteToggle'), vol = $('vol'), runTimer = $('runTimer');
-  const log = (m) => { console.log('[viewer]', m); debug.textContent = String(m); };
+  (async () => {
+    const $ = id => document.getElementById(id);
+    const viewer=$('viewer'), backBtn=$('backBtn');
+    const select=$('scenarioSelect'), status=$('status'), debug=$('debug'), connStatus=$('connStatus');
+    const dispatchBlock=$('dispatchBlock'), geoStatus=$('geoStatus');
+    const result=$('result'), stopTitle=$('stopTitle'), photo=$('photo'), caption=$('caption'), detail=$('detail');
+    const scTitle=$('scTitle');
+    const startBtn=$('startScenario'), muteToggle=$('muteToggle'), vol=$('vol'), runTimer=$('runTimer');
+    const log = (m)=>{ console.log('[viewer]', m); debug.textContent=String(m); };
 
-  /* ---------- Helpers ---------- */
-  const toRad = x => x*Math.PI/180;
-  const hav=(a,b,c,d)=>{
-    const R=6371000, dA=toRad(c-a), dB=toRad(d-b);
-    return 2*R*Math.asin(Math.sqrt(Math.sin(dA/2)**2 + Math.cos(toRad(a))*Math.cos(toRad(c))*Math.sin(dB/2)**2));
-  };
-  const num = v => (v===0||v===null)?v:parseFloat(v);
-
-  function normalizeStops(stopsLike){
-    if(!stopsLike) return [];
-    let arr = Array.isArray(stopsLike) ? stopsLike : Object.values(stopsLike);
-    return arr.map(s=>{
-      const lat = num(s.lat ?? s.latitude ?? s.latDeg);
-      const lng = num(s.lng ?? s.lon ?? s.long ?? s.longitude ?? s.lngDeg);
-      const radiusMeters = num(s.radiusMeters ?? s.radius ?? s.r) || 40;
-      const title = s.title || s.name || '';
-      const cap = s.caption || s.text || s.note || '';
-      const image =
-        s.image || s.imageData || s.imageURL || s.imageUrl || s.url || s.photoURL || s.photo || s.img || '';
-      return { ...s, lat, lng, radiusMeters, title, caption: cap, image };
-    }).filter(s => Number.isFinite(s.lat) && Number.isFinite(s.lng));
-  }
-
-  function setImage(img, stop){
-    const src =
-      stop.image || stop.imageData || stop.imageURL || stop.imageUrl ||
-      stop.url || stop.photoURL || stop.photo || '';
-    img.src = src || "data:image/svg+xml;utf8,"+encodeURIComponent(
-      "<svg xmlns='http://www.w3.org/2000/svg' width='1200' height='720'><rect width='100%' height='100%' fill='#000'/><text x='50%' y='50%' fill='#9ecbd6' font-size='24' text-anchor='middle'>No image</text></svg>"
-    );
-    img.onerror = () => {
-      img.src = "data:image/svg+xml;utf8,"+encodeURIComponent(
-        "<svg xmlns='http://www.w3.org/2000/svg' width='1200' height='720'><rect width='100%' height='100%' fill='#000'/><text x='50%' y='50%' fill='#9ecbd6' font-size='24' text-anchor='middle'>Image failed to load</text></svg>"
+    /* ---------- Helpers ---------- */
+    const toRad = x => x*Math.PI/180;
+    const hav=(a,b,c,d)=>{ const R=6371000, dA=toRad(c-a), dB=toRad(d-b);
+      return 2*R*Math.asin(Math.sqrt(Math.sin(dA/2)**2 + Math.cos(toRad(a))*Math.cos(toRad(c))*Math.sin(dB/2)**2)); };
+    const num=v=>(v===0||v===null)?v:parseFloat(v);
+    function normalizeStops(stopsLike){
+      if(!stopsLike) return [];
+      let arr = Array.isArray(stopsLike) ? stopsLike : Object.values(stopsLike);
+      return arr.map(s=>{
+        const lat = num(s.lat ?? s.latitude ?? s.latDeg);
+        const lng = num(s.lng ?? s.lon ?? s.long ?? s.longitude ?? s.lngDeg);
+        const radiusMeters = num(s.radiusMeters ?? s.radius ?? s.r) || 40;
+        const title = s.title || s.name || '';
+        const caption = s.caption || s.text || s.note || '';
+        const image = s.image || s.imageData || s.imageURL || s.imageUrl || s.url || s.photoURL || s.photo || s.img || '';
+        return { ...s, lat, lng, radiusMeters, title, caption, image };
+      }).filter(s => Number.isFinite(s.lat) && Number.isFinite(s.lng));
+    }
+    function setImage(img, stop){
+      const src = stop.image || stop.imageData || stop.imageURL || stop.imageUrl || stop.url || stop.photoURL || stop.photo || '';
+      img.src = src || "data:image/svg+xml;utf8,"+encodeURIComponent(
+        "<svg xmlns='http://www.w3.org/2000/svg' width='1200' height='720'><rect width='100%' height='100%' fill='#000'/><text x='50%' y='50%' fill='#9ecbd6' font-size='24' text-anchor='middle'>No image</text></svg>"
       );
+      img.onerror=()=>{ img.src="data:image/svg+xml;utf8,"+encodeURIComponent(
+        "<svg xmlns='http://www.w3.org/2000/svg' width='1200' height='720'><rect width='100%' height='100%' fill='#000'/><text x='50%' y='50%' fill='#9ecbd6' font-size='24' text-anchor='middle'>Image failed to load</text></svg>"
+      ); };
+    }
+
+    /* ---------- Firebase init (modular first, compat fallback) ---------- */
+    const firebaseConfig = {
+      apiKey:"AIzaSyDM6DpRSeZueVKRpbyJyDmhf8WY66KyCDk",
+      authDomain:"dailyquiz-d5279.firebaseapp.com",
+      databaseURL:"https://dailyquiz-d5279-default-rtdb.firebaseio.com",
+      projectId:"dailyquiz-d5279",
+      appId:"1:94577748034:web:c032d3a1d72db1313de5db",
+      measurementId:"G-19DVN7NNH7"
     };
-  }
 
-  /* ---------- Firebase init ---------- */
-  const { initializeApp } = await import('https://www.gstatic.com/firebasejs/10.12.4/firebase-app.js');
-  const { getDatabase, ref, onValue, get } =
-    await import('https://www.gstatic.com/firebasejs/10.12.4/firebase-database.js');
-
-  const firebaseConfig = {
-    apiKey:"AIzaSyDM6DpRSeZueVKRpbyJyDmhf8WY66KyCDk",
-    authDomain:"dailyquiz-d5279.firebaseapp.com",
-    databaseURL:"https://dailyquiz-d5279-default-rtdb.firebaseio.com",
-    projectId:"dailyquiz-d5279",
-    appId:"1:94577748034:web:c032d3a1d72db1313de5db",
-    measurementId:"G-19DVN7NNH7"
-  };
-  const app = initializeApp(firebaseConfig);
-  const db = getDatabase(app);
-
-  // Connection indicator
-  try {
-    const infoRef = ref(db, '.info/connected');
-    onValue(infoRef, snap => {
-      const ok = snap.val() === true;
-      connStatus.textContent = ok ? 'Connected' : 'Offline';
-      connStatus.style.color = ok ? '#89ffb2' : '#ffdede';
-    });
-  } catch {}
-
-  /* ---------- Scenario loading (same as before, now working) ---------- */
-  let scenariosArr = [];
-  let populated = false;
-  function populate(list){
-    scenariosArr = list
-      .filter(s => s && (s.active === undefined || s.active))
-      .sort((a,b) => (b.createdAt || 0) - (a.createdAt || 0));
-
-    select.innerHTML = '<option value="">Select a scenario…</option>';
-    scenariosArr.forEach(sc => {
-      const label = sc.title || sc.name || sc.notes || '(untitled)';
-      const o = document.createElement('option');
-      o.value = sc.id; o.textContent = label;
-      select.appendChild(o);
-    });
-    status.textContent = scenariosArr.length
-      ? `${scenariosArr.length} scenario(s) found`
-      : 'No scenarios yet.';
-    populated = scenariosArr.length > 0;
-  }
-  const mapSnapshot = (val) => {
-    const obj = val || {};
-    return Object.entries(obj).map(([id, s]) => ({
-      id, ...(s||{}), stops: normalizeStops(s?.stops)
-    }));
-  };
-
-  onValue(ref(db, 'geophoto/scenarios'), snap => {
-    const list = mapSnapshot(snap.val());
-    if (list.length) { populate(list); log('Loaded from geophoto/scenarios'); }
-  });
-  onValue(ref(db, 'scenarios'), snap => {
-    const list = mapSnapshot(snap.val());
-    if (!populated && list.length) { populate(list); log('Loaded from scenarios'); }
-  });
-  setTimeout(async () => {
-    if (!populated) {
-      try { const s1 = await get(ref(db, 'geophoto/scenarios'));
-            const list = mapSnapshot(s1.val()); if (list.length) { populate(list); log('GET geophoto/scenarios'); } } catch {}
-    }
-    if (!populated) {
-      try { const s2 = await get(ref(db, 'scenarios'));
-            const list = mapSnapshot(s2.val()); if (list.length) { populate(list); log('GET scenarios'); } } catch {}
-    }
-    if (!populated) status.textContent = 'No scenarios found.';
-  }, 1200);
-
-  /* ---------- iPhone-safe TTS (new) ---------- */
-  const synth = window.speechSynthesis;
-  const isIOS = /iP(ad|hone|od)/.test(navigator.userAgent) ||
-                (navigator.userAgent.includes('Mac') && navigator.maxTouchPoints>2);
-  const TTSDLY = isIOS ? 600 : 120; // extra gap after beep on iOS
-
-  let audioEnabled=false, muted=false, volume=1.0, audioCtx=null;
-  let wakeLock=null, wakeFallbackInterval=null, runInterval=null, startMs=0;
-
-  let speaking=false; const q=[];
-  let preferredVoice = null;
-
-  function pickPreferredVoice(){
-    const voices = synth.getVoices() || [];
-    const prefer = ['Samantha','Alex','Daniel','Karen','Moira','Victoria','Ting-Ting','Serena'];
-    for (const name of prefer){
-      const v = voices.find(v => v.name && v.name.startsWith(name));
-      if (v) return v;
-    }
-    return voices.find(v => v.lang && v.lang.startsWith('en')) || voices[0] || null;
-  }
-
-  function ensureVoices(){
-    return new Promise(resolve=>{
-      let vs = synth.getVoices();
-      if (vs && vs.length){
-        preferredVoice = pickPreferredVoice();
-        return resolve(vs);
-      }
-      const onvc = () => {
-        vs = synth.getVoices();
-        if (vs && vs.length){
-          synth.removeEventListener('voiceschanged', onvc);
-          preferredVoice = pickPreferredVoice();
-          resolve(vs);
-        }
-      };
-      synth.addEventListener('voiceschanged', onvc);
-      // iOS sometimes doesn't fire; poll a few times
-      let tries=0;
-      const iv=setInterval(()=>{
-        vs = synth.getVoices();
-        if ((vs && vs.length) || ++tries>10){
-          clearInterval(iv);
-          preferredVoice = pickPreferredVoice();
-          resolve(vs||[]);
-        }
-      }, 200);
-    });
-  }
-
-  async function primeTTS(){
+    let mode='modular', app, db, refFn, onValueFn, getFn;
     try{
-      await ensureVoices();
-      return await new Promise(res=>{
-        const u = new SpeechSynthesisUtterance(' ');
-        if (preferredVoice) u.voice = preferredVoice;
-        u.volume = 0.01; u.rate = 1.0; u.pitch = 1.0;
-        u.onend = ()=>res();
-        u.onerror = ()=>res();
-        synth.cancel();        // clear any stuck iOS utterance
-        synth.speak(u);        // “unlock” TTS
-        setTimeout(res, 700);  // fallback resolve
+      const { initializeApp } = await import('https://www.gstatic.com/firebasejs/10.12.4/firebase-app.js');
+      const { getDatabase, ref, onValue, get } = await import('https://www.gstatic.com/firebasejs/10.12.4/firebase-database.js');
+      app = initializeApp(firebaseConfig); db = getDatabase(app);
+      refFn = (dbRefPath)=>ref(db, dbRefPath);
+      onValueFn = onValue; getFn = get;
+    }catch(e){
+      mode='compat';
+      app = window.firebase.initializeApp(firebaseConfig);
+      db = window.firebase.database();
+      refFn = (dbRefPath)=>db.ref(dbRefPath);
+      onValueFn = (r, cb, err)=>r.on('value', s=>cb(s), err);
+      getFn = (r)=>r.get ? r.get() : r.once('value');
+    }
+    log('Firebase mode: ' + mode);
+
+    // Connection indicator
+    try{
+      const infoRef = (mode==='modular') ? refFn('.info/connected') : refFn('.info/connected');
+      onValueFn(infoRef, snap=>{
+        const ok = snap.val() === true;
+        connStatus.textContent = ok ? 'Connected' : 'Offline';
+        connStatus.style.color = ok ? '#89ffb2' : '#ffdede';
       });
-    }catch{ /* noop */ }
-  }
+    }catch{}
 
-  function say(text){
-    if(!audioEnabled || muted || !text) return;
-    q.push(text);
-    if(!speaking) playNext();
-  }
+    /* ---------- Scenario loading (old logic + GET + REST) ---------- */
+    let scenarios = [], populated = false;
 
-  function playNext(){
-    if(!audioEnabled || muted || !q.length) { speaking=false; return; }
-    speaking = true;
-    const u = new SpeechSynthesisUtterance(q.shift());
-    u.rate = 1.0; u.pitch = 1.0; u.volume = volume;
-    if (preferredVoice) u.voice = preferredVoice;
-    u.onend = ()=>{ speaking=false; playNext(); };
-    u.onerror = ()=>{ speaking=false; };
+    const mapSnapshot = (val) => {
+      const obj = val || {};
+      return Object.entries(obj).map(([id, s])=>({ id, ...(s||{}), stops: normalizeStops(s?.stops) }));
+    };
+    function populateDropdown(list){
+      select.innerHTML = '<option value="">Select a scenario…</option>';
+      list.forEach(sc=>{
+        const o=document.createElement('option');
+        o.value=sc.id;
+        o.textContent=sc.title || sc.name || sc.notes || '(untitled)';
+        select.appendChild(o);
+      });
+      status.textContent = list.length ? `${list.length} scenario(s) found` : 'No scenarios yet.';
+      populated = list.length>0;
+    }
 
+    // 1) Prefer geophoto/scenarios listener
     try{
-      // iOS quirks: cancel before speak; delay a bit to avoid overlap with beep
-      if (isIOS){
-        synth.cancel();
-        setTimeout(()=>{ try{ synth.speak(u); }catch{ speaking=false; } }, TTSDLY);
-      } else {
-        synth.speak(u);
+      const a = refFn('geophoto/scenarios');
+      onValueFn(a, snap=>{
+        const list=mapSnapshot(snap.val());
+        if(list.length){ scenarios=list; populateDropdown(scenarios); log('SDK: geophoto/scenarios '+list.length); }
+      }, err=>log('SDK geophoto error: '+(err?.message||err)));
+    }catch(e){ log('attach geophoto failed: '+e.message); }
+
+    // 2) Fallback to scenarios listener (only if not already populated)
+    try{
+      const b = refFn('scenarios');
+      onValueFn(b, snap=>{
+        const list=mapSnapshot(snap.val());
+        if(!scenarios.length && list.length){ scenarios=list; populateDropdown(scenarios); log('SDK: scenarios '+list.length); }
+      }, err=>log('SDK scenarios error: '+(err?.message||err)));
+    }catch(e){ log('attach scenarios failed: '+e.message); }
+
+    // 3) One-time GET fallbacks (cover listener stalls)
+    setTimeout(async ()=>{
+      if(!populated){
+        try{ const s1 = await getFn(refFn('geophoto/scenarios')); const list=mapSnapshot(s1.val()); if(list.length){ scenarios=list; populateDropdown(list); log('GET geophoto '+list.length); } }catch(e){ log('GET geophoto error: '+e.message); }
       }
-    }catch{ speaking=false; }
-  }
+      if(!populated){
+        try{ const s2 = await getFn(refFn('scenarios')); const list=mapSnapshot(s2.val()); if(list.length){ scenarios=list; populateDropdown(list); log('GET scenarios '+list.length); } }catch(e){ log('GET scenarios error: '+e.message); }
+      }
+      // 4) REST (works with open rules)
+      if(!populated){
+        try{
+          const r = await fetch('https://dailyquiz-d5279-default-rtdb.firebaseio.com/scenarios.json');
+          if(!r.ok) throw new Error('HTTP '+r.status);
+          const json = await r.json();
+          const list = mapSnapshot(json);
+          if(list.length){ scenarios=list; populateDropdown(list); log('REST scenarios '+list.length); }
+        }catch(e){ log('REST error: '+e.message); }
+      }
+      if(!populated){ status.textContent='No scenarios found.'; }
+    }, 1200);
 
-  // Beep + wake lock + timer (unchanged)
-  function formatTime(ms){
-    const s = Math.floor(ms/1000), m = Math.floor(s/60), sec = s%60;
-    return String(m).padStart(2,'0')+':'+String(sec).padStart(2,'0');
-  }
-  function startTimer(){ startMs = Date.now(); clearInterval(runInterval);
-    runInterval = setInterval(()=>{ runTimer.textContent = formatTime(Date.now()-startMs); }, 500);
-  }
-  function stopTimer(){ clearInterval(runInterval); runInterval=null; runTimer.textContent = '00:00'; }
+    /* ---------- Geofence + display ---------- */
+    const within=(d, r, acc)=> d <= ((Number(r)||0) + Math.max(Number(acc)||0, 10));
+    const findHit=(stops, la, ln, acc)=>{
+      let best=null;
+      (stops||[]).forEach((s,i)=>{
+        const d=hav(la,ln,Number(s.lat),Number(s.lng));
+        if(within(d, s.radiusMeters, acc)){ if(!best || d<best.dist) best={s,index:i,dist:d}; }
+      });
+      return best;
+    };
 
-  async function lockWake(){
-    try{
-      if ('wakeLock' in navigator) {
-        wakeLock = await navigator.wakeLock.request('screen');
-        wakeLock.addEventListener('release', ()=>{});
-      } else {
+    function showDispatchIntro(sc){
+      const txt=(sc.dispatch||sc.notes||'').trim();
+      dispatchBlock.textContent = txt ? `Dispatch: ${txt}` : 'Dispatch: (none)';
+      say(txt || `${sc.title || sc.notes || 'scenario'} started.`);
+    }
+
+    let current=null, currentStops=[], watchId=null, lastStopIndex=-1;
+
+    function openScenarioById(id){
+      const sc=scenarios.find(s=>s.id===id);
+      if(!sc){ status.textContent='Scenario not found.'; return; }
+      current=sc; currentStops = normalizeStops(sc.stops);
+
+      viewer.style.display=''; scTitle.textContent=sc.title || sc.name || sc.notes || '(scenario)';
+      result.style.display='none'; stopTitle.textContent=''; caption.textContent=''; detail.textContent='';
+      lastStopIndex=-1;
+
+      showDispatchIntro(sc);
+
+      if(watchId) navigator.geolocation.clearWatch(watchId);
+      geoStatus.textContent='Watching your location…';
+      try{
+        watchId=navigator.geolocation.watchPosition(p=>{
+          const { latitude:la, longitude:ln, accuracy:acc }=p.coords;
+          geoStatus.textContent=`Lat ${la.toFixed(5)}, Lng ${ln.toFixed(5)} (±${Math.round(acc)}m)`;
+          const hit=findHit(currentStops, la, ln, acc);
+          if(hit && hit.index!==lastStopIndex){
+            lastStopIndex=hit.index;
+            result.style.display='';
+            stopTitle.textContent=hit.s.title||'Stop';
+            setImage(photo, hit.s);
+            caption.textContent=hit.s.caption||'';
+            detail.textContent=`Distance: ${Math.round(hit.dist)} m (radius ${hit.s.radiusMeters} m)`;
+
+            beep();
+            setTimeout(()=> say(`${hit.s.title?hit.s.title+'. ':''}${hit.s.caption||''}`), TTSDLY);
+            viewer.scrollIntoView({behavior:'smooth', block:'start'});
+          }
+        }, err=>{ geoStatus.textContent='Location error: '+err.message; }, { enableHighAccuracy:true, maximumAge:1000, timeout:10000 });
+      }catch(e){ geoStatus.textContent='Location error: '+e.message; }
+    }
+
+    /* ---------- iPhone-safe TTS (kept) ---------- */
+    const synth = window.speechSynthesis;
+    const isIOS = /iP(ad|hone|od)/.test(navigator.userAgent) || (navigator.userAgent.includes('Mac') && navigator.maxTouchPoints>2);
+    const TTSDLY = isIOS ? 600 : 120;
+
+    let audioEnabled=false, muted=false, volume=1.0, audioCtx=null;
+    let wakeLock=null, wakeFallbackInterval=null, runInterval=null, startMs=0;
+
+    let speaking=false; const q=[]; let preferredVoice=null;
+
+    function pickPreferredVoice(){
+      const voices = synth.getVoices() || [];
+      const prefer = ['Samantha','Alex','Daniel','Karen','Moira','Victoria','Ting-Ting','Serena'];
+      for (const name of prefer){ const v = voices.find(v => v.name && v.name.startsWith(name)); if (v) return v; }
+      return voices.find(v => v.lang && v.lang.startsWith('en')) || voices[0] || null;
+    }
+    function ensureVoices(){
+      return new Promise(resolve=>{
+        let vs = synth.getVoices();
+        if (vs && vs.length){ preferredVoice = pickPreferredVoice(); return resolve(vs); }
+        const onvc = () => {
+          vs = synth.getVoices();
+          if (vs && vs.length){ synth.removeEventListener('voiceschanged', onvc); preferredVoice = pickPreferredVoice(); resolve(vs); }
+        };
+        synth.addEventListener('voiceschanged', onvc);
+        let tries=0; const iv=setInterval(()=>{
+          vs = synth.getVoices();
+          if ((vs && vs.length) || ++tries>10){ clearInterval(iv); preferredVoice = pickPreferredVoice(); resolve(vs||[]); }
+        }, 200);
+      });
+    }
+    async function primeTTS(){
+      try{
+        await ensureVoices();
+        return await new Promise(res=>{
+          const u = new SpeechSynthesisUtterance(' ');
+          if (preferredVoice) u.voice = preferredVoice;
+          u.volume = 0.01; u.rate = 1.0; u.pitch = 1.0;
+          u.onend = ()=>res(); u.onerror = ()=>res();
+          synth.cancel(); synth.speak(u); setTimeout(res, 700);
+        });
+      }catch{}
+    }
+    function say(text){ if(!audioEnabled || muted || !text) return; q.push(text); if(!speaking) playNext(); }
+    function playNext(){
+      if(!audioEnabled || muted || !q.length) { speaking=false; return; }
+      speaking = true;
+      const u = new SpeechSynthesisUtterance(q.shift());
+      u.rate = 1.0; u.pitch = 1.0; u.volume = volume;
+      if (preferredVoice) u.voice = preferredVoice;
+      u.onend = ()=>{ speaking=false; playNext(); };
+      u.onerror = ()=>{ speaking=false; };
+      try{
+        if (isIOS){ synth.cancel(); setTimeout(()=>{ try{ synth.speak(u); }catch{ speaking=false; } }, TTSDLY); }
+        else { synth.speak(u); }
+      }catch{ speaking=false; }
+    }
+
+    // Beep + wake lock + timer
+    function formatTime(ms){ const s = Math.floor(ms/1000), m = Math.floor(s/60), sec = s%60; return String(m).padStart(2,'0')+':'+String(sec).padStart(2,'0'); }
+    function startTimer(){ startMs = Date.now(); clearInterval(runInterval); runInterval = setInterval(()=>{ runTimer.textContent = formatTime(Date.now()-startMs); }, 500); }
+    function stopTimer(){ clearInterval(runInterval); runInterval=null; runTimer.textContent = '00:00'; }
+    async function lockWake(){
+      try{
+        if ('wakeLock' in navigator) {
+          wakeLock = await navigator.wakeLock.request('screen'); wakeLock.addEventListener('release', ()=>{});
+        } else {
+          if(!audioCtx) audioCtx=new (window.AudioContext||window.webkitAudioContext)();
+          wakeFallbackInterval = setInterval(()=>{
+            try{ const src = audioCtx.createBufferSource(); src.buffer = audioCtx.createBuffer(1,1,audioCtx.sampleRate); src.connect(audioCtx.destination); src.start(0); }catch(e){}
+          }, 30000);
+        }
+      }catch(e){}
+    }
+    function releaseWake(){ try{ if(wakeLock){ wakeLock.release(); wakeLock=null; } }catch(e){}
+    document.addEventListener('visibilitychange', () => { if(document.visibilityState === 'visible' && audioEnabled) lockWake(); });
+    function beep(){
+      if(!audioEnabled || muted) return;
+      try{
         if(!audioCtx) audioCtx=new (window.AudioContext||window.webkitAudioContext)();
-        wakeFallbackInterval = setInterval(()=>{
-          try{ const src = audioCtx.createBufferSource();
-            src.buffer = audioCtx.createBuffer(1,1,audioCtx.sampleRate);
-            src.connect(audioCtx.destination); src.start(0);
-          }catch(e){}
-        }, 30000);
-      }
-    }catch(e){}
-  }
-  function releaseWake(){ try{ if(wakeLock){ wakeLock.release(); wakeLock=null; } }catch(e){}
-  document.addEventListener('visibilitychange', () => {
-    if(document.visibilityState === 'visible' && audioEnabled) lockWake();
-  });
-
-  function beep(){
-    if(!audioEnabled || muted) return;
-    try{
-      if(!audioCtx) audioCtx=new (window.AudioContext||window.webkitAudioContext)();
-      const o=audioCtx.createOscillator(), g=audioCtx.createGain();
-      o.type='sine'; o.frequency.value=880; g.gain.value=0.001;
-      o.connect(g).connect(audioCtx.destination);
-      const now=audioCtx.currentTime;
-      g.gain.setValueAtTime(0.0001, now);
-      g.gain.linearRampToValueAtTime(0.2*volume, now+0.02);
-      g.gain.exponentialRampToValueAtTime(0.0001, now+0.25);
-      o.start(now); o.stop(now+0.3);
-    }catch(e){}
-  }
-
-  muteToggle.onclick=()=>{ muted=!muted; muteToggle.textContent=muted?'Unmute':'Mute'; };
-  vol.oninput=e=>{ volume=parseFloat(e.target.value||'1')||1; };
-
-  /* ---------- Geofence + Display ---------- */
-  function within(hitDist, stopRadius, accuracy){
-    const r = (Number(stopRadius)||0) + Math.max(Number(accuracy)||0, 10);
-    return hitDist <= r;
-  }
-  function findHit(stops, la, ln, acc){
-    let best=null;
-    (stops||[]).forEach((s,i)=>{
-      const d=hav(la,ln,Number(s.lat),Number(s.lng));
-      if(within(d, s.radiusMeters, acc)){
-        if(!best || d<best.dist) best={s,index:i,dist:d};
-      }
-    });
-    return best;
-  }
-
-  function showDispatchIntro(sc){
-    const txt = (sc.dispatch || sc.notes || '').trim();
-    dispatchBlock.textContent = txt ? `Dispatch: ${txt}` : 'Dispatch: (none)';
-    say(txt || `${sc.title || sc.notes || 'scenario'} started.`);
-  }
-
-  let current=null, currentStops=[], watchId=null, lastStopIndex=-1;
-
-  function openScenarioById(id){
-    const sc = scenariosArr.find(s => s.id === id);
-    if(!sc){ status.textContent='Scenario not found.'; return; }
-    current=sc;
-    currentStops = normalizeStops(sc.stops);
-
-    viewer.style.display='';
-    scTitle.textContent=sc.title || sc.name || sc.notes || '(scenario)';
-    result.style.display='none';
-    stopTitle.textContent=''; caption.textContent=''; detail.textContent='';
-    lastStopIndex = -1;
-
-    showDispatchIntro(sc);
-
-    if(watchId){ navigator.geolocation.clearWatch(watchId); watchId=null; }
-    geoStatus.textContent='Watching your location…';
-    try{
-      watchId=navigator.geolocation.watchPosition(function(p){
-        const { latitude:la, longitude:ln, accuracy:acc }=p.coords;
-        geoStatus.textContent=`Lat ${la.toFixed(5)}, Lng ${ln.toFixed(5)} (±${Math.round(acc)}m)`;
-        const hit=findHit(currentStops, la, ln, acc);
-        if(hit && hit.index!==lastStopIndex){
-          lastStopIndex = hit.index;
-          result.style.display='';
-          stopTitle.textContent=hit.s.title||'Stop';
-          setImage(photo, hit.s);
-          caption.textContent=hit.s.caption||'';
-          detail.textContent=`Distance: ${Math.round(hit.dist)} m (radius ${hit.s.radiusMeters} m)`;
-
-          beep();
-          setTimeout(()=> say(`${hit.s.title ? hit.s.title + '. ' : ''}${hit.s.caption || ''}`), TTSDLY);
-          viewer.scrollIntoView({behavior:'smooth', block:'start'});
-        }
-      }, function(err){
-        geoStatus.textContent='Location error: '+err.message;
-      }, {
-        enableHighAccuracy:true, maximumAge:1000, timeout:10000
-      });
-    }catch(e){ geoStatus.textContent='Location error: '+e.message; }
-  }
-
-  /* ---------- Controls ---------- */
-  startBtn.onclick = async function(){
-    try{
-      audioEnabled=true;
-      if(!audioCtx) audioCtx=new (window.AudioContext||window.webkitAudioContext)();
-      await audioCtx.resume();
-      await lockWake();
-
-      // iOS: prime TTS during user gesture BEFORE we beep
-      await primeTTS();
-
-      startTimer();
-      beep();
-      startBtn.textContent='Scenario Running';
-      startBtn.disabled=true;
-    }catch(e){ alert('Could not enable audio: '+e.message); return; }
-
-    const id=select.value;
-    if(!id){
-      status.textContent='Choose a scenario first.';
-      startBtn.disabled=false; startBtn.textContent='Start Scenario'; audioEnabled=false; releaseWake(); stopTimer();
-      return;
+        const o=audioCtx.createOscillator(), g=audioCtx.createGain();
+        o.type='sine'; o.frequency.value=880; g.gain.value=0.001;
+        o.connect(g).connect(audioCtx.destination);
+        const now=audioCtx.currentTime;
+        g.gain.setValueAtTime(0.0001, now);
+        g.gain.linearRampToValueAtTime(0.2*volume, now+0.02);
+        g.gain.exponentialRampToValueAtTime(0.0001, now+0.25);
+        o.start(now); o.stop(now+0.3);
+      }catch(e){}
     }
-    openScenarioById(id);
-  };
+    muteToggle.onclick=()=>{ muted=!muted; muteToggle.textContent=muted?'Unmute':'Mute'; };
+    vol.oninput=e=>{ volume=parseFloat(e.target.value||'1')||1; };
 
-  backBtn.onclick=function(){
-    viewer.style.display='none';
-    if(watchId) navigator.geolocation.clearWatch(watchId);
-    status.textContent='Choose a scenario and press Start Scenario.';
-    window.speechSynthesis.cancel();
-    startBtn.disabled=false; startBtn.textContent='Start Scenario'; audioEnabled=false;
-    releaseWake(); stopTimer();
-  };
+    /* ---------- Controls ---------- */
+    startBtn.onclick = async function(){
+      try{
+        audioEnabled=true;
+        if(!audioCtx) audioCtx=new (window.AudioContext||window.webkitAudioContext)();
+        await audioCtx.resume(); await lockWake(); await primeTTS(); // <- iOS: prime during tap
+        startTimer(); beep();
+        startBtn.textContent='Scenario Running'; startBtn.disabled=true;
+      }catch(e){ alert('Could not enable audio: '+e.message); return; }
 
-  // Preselect ?id=
-  (function(){
-    const pre=new URLSearchParams(location.search).get('id');
-    if(!pre) return;
-    const iv=setInterval(()=>{
-      if(select.options.length>1){
-        clearInterval(iv); select.value=pre;
+      const id=select.value;
+      if(!id){
+        status.textContent='Choose a scenario first.';
+        startBtn.disabled=false; startBtn.textContent='Start Scenario'; audioEnabled=false; releaseWake(); stopTimer();
+        return;
       }
-    }, 200);
+      openScenarioById(id);
+    };
+    backBtn.onclick=function(){
+      viewer.style.display='none';
+      try{ if(watchId) navigator.geolocation.clearWatch(watchId); }catch{}
+      status.textContent='Choose a scenario and press Start Scenario.';
+      window.speechSynthesis.cancel();
+      startBtn.disabled=false; startBtn.textContent='Start Scenario'; audioEnabled=false;
+      releaseWake(); stopTimer();
+    };
+
+    // Preselect ?id=
+    (function(){ const pre=new URLSearchParams(location.search).get('id'); if(!pre) return;
+      const iv=setInterval(()=>{ if(select.options.length>1){ clearInterval(iv); select.value=pre; } },200);
+    })();
+
+    // Footer year & error logs
+    $('year').textContent = new Date().getFullYear();
+    window.addEventListener('error', e => log('Error: ' + (e.message||e)));
+    window.addEventListener('unhandledrejection', e => log('Promise error: ' + (e.reason && e.reason.message ? e.reason.message : e.reason)));
   })();
-
-  // Footer year
-  $('year').textContent = new Date().getFullYear();
-
-  // Show runtime errors in the tiny debug line
-  window.addEventListener('error', e => log('Error: ' + (e.message||e)));
-  window.addEventListener('unhandledrejection', e => log('Promise error: ' + (e.reason && e.reason.message ? e.reason.message : e.reason)));
   </script>
 </body>
 </html>
