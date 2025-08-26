@@ -4,70 +4,151 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
 <title>Geo-Photo — Admin</title>
+
 <style>
   :root{
-    --bg:#081016; --surface:#0f1820; --panel:#0d2430; --text:#e6f6fb; --muted:#86b6c5;
-    --accent:#2dd4bf; --accent2:#0a84ff; --danger:#ff6b6b; --border:#1f3945;
-    --br:14px; --shadow:0 8px 26px rgba(0,0,0,.35);
+    /* Match home index brand */
+    --bg:#0b0f14; --bg2:#101726;
+    --card:#121823; --panel:#0f1624;
+    --text:#eaf2ff; --muted:#8ea0b3;
+    --border:rgba(255,255,255,.10);
+    --blue:#0a84ff; --teal:#2dd4bf; --red:#ff3b30;
+    --shadow:0 12px 34px rgba(0,0,0,.38);
+    --radius:18px; --radiusSm:14px;
   }
   @media (prefers-color-scheme: light){
-    :root{ --bg:#f5fbff; --surface:#ffffff; --panel:#ffffff; --text:#0b1e27; --muted:#4f6b78; --border:#d7e7ee; --shadow:0 8px 26px rgba(0,0,0,.08) }
+    :root{
+      --bg:#f5fbff; --bg2:#ffffff;
+      --card:#ffffff; --panel:#ffffff;
+      --text:#0b1e27; --muted:#4f6b78;
+      --border:#d6e9f1; --shadow:0 12px 34px rgba(0,0,0,.08);
+      --blue:#0a5cff; --teal:#13bfa6; --red:#e53935;
+    }
   }
+
   *{box-sizing:border-box}
-  body{margin:0;background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial}
-  header{position:sticky;top:0;z-index:10;backdrop-filter:blur(6px) saturate(1.05);background:color-mix(in hsl, var(--bg) 82%, transparent);border-bottom:1px solid var(--border);padding:10px 14px}
-  h1{margin:0;font-size:18px}
-  main{max-width:860px;margin:0 auto;padding:12px 14px 60px}
-  .card{background:var(--surface);border:1px solid var(--border);border-radius:var(--br);box-shadow:var(--shadow);padding:14px;margin:12px 0}
-  label{display:block;margin:10px 0 6px 2px;font-size:13px;color:var(--muted)}
-  input,textarea,select,button{font-size:16px}
-  input[type="text"],input[type="number"],textarea,select{
-    width:100%;padding:12px;border-radius:12px;border:1px solid var(--border);background:var(--panel);color:var(--text);outline:none
+  html,body{
+    margin:0; padding:0; color:var(--text);
+    font-family:system-ui,-apple-system,Segoe UI,Roboto,Inter,Arial,sans-serif;
+    background:
+      radial-gradient(1400px 700px at 15% -15%, rgba(10,132,255,.24), transparent 60%),
+      radial-gradient(1200px 600px at 110% 0%, rgba(255,59,48,.18), transparent 60%),
+      linear-gradient(165deg, var(--bg2), var(--bg) 55%);
+    -webkit-text-size-adjust:100%;
   }
-  textarea{min-height:80px;resize:vertical}
-  .btn{appearance:none;border:0;border-radius:12px;padding:12px 14px;cursor:pointer;font-weight:800;box-shadow:var(--shadow)}
-  .btn.primary{background:var(--accent);color:#042a28}
-  .btn.blue{background:var(--accent2);color:#021627}
-  .btn.ghost{background:transparent;color:var(--text);border:2px dashed var(--border)}
-  .btn.danger{background:var(--danger);color:#2a0d0d}
-  .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+
+  /* Sticky brand bar */
+  .topbar{
+    position:sticky; top:0; z-index:20;
+    background:rgba(12,15,22,.75);
+    backdrop-filter:saturate(120%) blur(6px);
+    border-bottom:1px solid rgba(255,255,255,.07);
+  }
+  .topnav{
+    max-width:1100px; margin:0 auto; padding:10px 16px;
+    display:flex; align-items:center; gap:14px; flex-wrap:wrap;
+  }
+  .brandmini{display:flex; align-items:center; gap:12px; font-weight:800; letter-spacing:.3px}
+  .logo{
+    width:36px; height:36px; border-radius:10px;
+    background: linear-gradient(145deg, var(--blue), #3da0ff);
+    display:grid; place-items:center; font-size:14px; color:#fff; box-shadow:var(--shadow);
+  }
+  .tag{color:var(--muted); font-size:12px}
+
+  main{max-width:1100px; margin:18px auto 80px; padding:0 16px}
+
+  .card{
+    border-radius:var(--radius); background:var(--card);
+    border:1px solid var(--border); box-shadow:var(--shadow);
+    padding:16px; margin:12px 0; overflow:hidden;
+  }
+  .sectionTitle{font-weight:900; margin:6px 0 10px}
+  .note{color:var(--muted); font-size:12px}
+  .pill{
+    display:inline-flex; gap:8px; align-items:center;
+    padding:6px 10px; border-radius:999px;
+    border:1px solid var(--border); color:var(--muted); background:rgba(255,255,255,.03)
+  }
+  .hr{height:1px; background:var(--border); margin:12px 0}
+
+  label{display:block; margin:10px 0 6px 2px; font-size:13px; color:var(--muted)}
+  input, textarea, select, button{font-size:16px}
+  input[type="text"], input[type="number"], textarea, select{
+    width:100%; padding:12px; border-radius:12px; outline:none;
+    background:var(--panel); color:var(--text); border:1px solid var(--border);
+  }
+  textarea{min-height:88px; resize:vertical}
+
+  .btn{
+    appearance:none; border:0; border-radius:12px; cursor:pointer; font-weight:800;
+    padding:12px 14px; box-shadow:var(--shadow); width:auto;
+  }
+  .btn.primary{background:linear-gradient(180deg,#54a6ff,var(--blue)); color:#03131b}
+  .btn.teal{background:linear-gradient(180deg,#3ce5d3,var(--teal)); color:#052522}
+  .btn.ghost{background:transparent; color:var(--text); border:1px solid rgba(255,255,255,.14)}
+  .btn.danger{background:var(--red); color:#fff}
+  .btn:active{transform:translateY(1px)}
+
+  .row{display:flex; gap:10px; align-items:center; flex-wrap:wrap}
+  .grid{display:grid; gap:14px; grid-template-columns:repeat(auto-fit, minmax(280px,1fr))}
+
+  /* Sticky actions inside Create panel */
+  .stickyBar{
+    position:sticky; top:60px; z-index:5;
+    background:rgba(12,15,22,.75);
+    backdrop-filter:saturate(120%) blur(6px);
+    border-bottom:1px solid rgba(255,255,255,.07);
+    margin:-16px -16px 10px; padding:8px 12px;
+  }
+
+  .thumbs{display:flex; flex-wrap:wrap; gap:8px; margin-top:10px}
+  .thumb{width:88px; height:88px; object-fit:cover; border-radius:12px; border:1px solid var(--border); background:#0a2230}
+  .listItem{
+    display:flex; justify-content:space-between; align-items:center;
+    padding:10px; border:1px solid var(--border); border-radius:12px; background:var(--panel)
+  }
+
   .hidden{display:none}
-  .pill{display:inline-flex;gap:8px;align-items:center;padding:6px 10px;border-radius:999px;border:1px solid var(--border);color:var(--muted)}
-  .thumbs{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
-  .thumb{width:80px;height:80px;border-radius:10px;border:1px solid var(--border);object-fit:cover;background:#0a2230}
-  .listItem{display:flex;justify-content:space-between;align-items:center;padding:10px;border:1px solid var(--border);border-radius:12px;background:var(--panel)}
-  .sectionTitle{font-weight:900;margin:6px 0}
-  .hr{height:1px;background:var(--border);opacity:.6;margin:12px 0}
-  /* sticky actions (top of create panel) */
-  .stickyBar{position:sticky;top:54px;z-index:5;background:color-mix(in hsl, var(--bg) 92%, transparent);border-bottom:1px solid var(--border);padding:8px 0;margin:-6px -4px 8px -4px}
-  .note{color:var(--muted);font-size:12px}
 </style>
 </head>
 <body>
-<header><h1>Geo-Photo — Admin</h1></header>
+
+<!-- Brand bar -->
+<div class="topbar">
+  <div class="topnav">
+    <div class="brandmini">
+      <div class="logo" id="logo">FS</div>
+      <div>
+        <div id="brandName" style="line-height:1.1; font-size:15px; font-weight:900">FireOps SIM</div>
+        <div class="tag" id="brandTag">Geo-Photo Training Scenarios</div>
+      </div>
+    </div>
+  </div>
+</div>
 
 <main>
   <!-- Landing -->
-  <div class="card" id="landing">
+  <section class="card" id="landing">
     <div class="sectionTitle">Choose an action</div>
     <div class="row" style="margin-top:8px">
       <button id="goCreate" class="btn primary">Create Scenario</button>
       <button id="goEdit" class="btn ghost">Edit Scenario</button>
     </div>
     <div class="pill" id="status">Ready</div>
-  </div>
+  </section>
 
   <!-- Create Scenario -->
-  <div class="card hidden" id="createPanel">
+  <section class="card hidden" id="createPanel">
     <div class="stickyBar">
       <div class="row" style="justify-content:space-between">
         <div class="pill" id="createStatus">New scenario</div>
-        <!-- Top “Add Photo” button removed as requested -->
-        <button id="finalizeScenario" class="btn blue">Save Scenario</button>
+        <!-- Top Add Photo removed previously; Save Scenario remains -->
+        <button id="finalizeScenario" class="btn teal">Save Scenario</button>
       </div>
     </div>
 
-    <!-- FIRST STEP: name + dispatch (auto-collapse after first photo save) -->
+    <!-- Meta (collapses after first photo save) -->
     <div id="scenarioMeta">
       <label>Scenario Name</label>
       <input id="scenarioName" type="text" placeholder="e.g., House Fire on Main St">
@@ -81,6 +162,7 @@
     <!-- Photo entry -->
     <div>
       <div class="sectionTitle">Add Photo</div>
+
       <label>Photo (camera or library)</label>
       <input id="photoInput" type="file" accept="image/*" capture="environment">
 
@@ -89,10 +171,7 @@
           <label>Radius (meters)</label>
           <input id="radius" type="number" inputmode="numeric" min="5" max="1000" value="50">
         </div>
-        <div style="flex:1">
-          <label>Short Label (optional)</label>
-          <input id="shotLabel" type="text" placeholder="Front door, Alpha side...">
-        </div>
+        <!-- Short Label removed per request -->
       </div>
 
       <label>Caption / Notes (read by TTS)</label>
@@ -102,24 +181,23 @@
         <button id="savePhoto" class="btn primary">Save Photo</button>
         <div class="note">GPS is captured automatically on save.</div>
       </div>
-      <!-- “Retry GPS” button removed as requested -->
     </div>
 
     <div class="hr"></div>
 
     <div class="sectionTitle">Photos in this scenario</div>
     <div id="thumbs" class="thumbs"></div>
-  </div>
+  </section>
 
   <!-- Edit Scenario -->
-  <div class="card hidden" id="editPanel">
+  <section class="card hidden" id="editPanel">
     <div class="sectionTitle">Edit Existing Scenario</div>
     <div class="row" style="justify-content:space-between">
       <div class="pill" id="editStatus">Loading…</div>
       <button id="backFromEdit" class="btn ghost">Back</button>
     </div>
     <div id="scenarioList"></div>
-  </div>
+  </section>
 </main>
 
 <!-- Firebase + Logic -->
@@ -139,6 +217,12 @@
   const app = initializeApp(firebaseConfig);
   const db = getDatabase(app);
 
+  // Branding (matches home)
+  const BRAND = { name:'FireOps SIM', tagline:'Geo-Photo Training Scenarios', initials:'FS' };
+  document.getElementById('brandName').textContent = BRAND.name;
+  document.getElementById('brandTag').textContent = BRAND.tagline;
+  document.getElementById('logo').textContent = BRAND.initials;
+
   // DOM
   const landing = document.getElementById('landing');
   const goCreate = document.getElementById('goCreate');
@@ -155,7 +239,6 @@
 
   const photoInput = document.getElementById('photoInput');
   const radius = document.getElementById('radius');
-  const shotLabel = document.getElementById('shotLabel');
   const caption = document.getElementById('caption');
   const savePhoto = document.getElementById('savePhoto');
   const thumbs = document.getElementById('thumbs');
@@ -170,19 +253,18 @@
   let localStops = [];
 
   // Helpers
-  function uiShow(el){ el.classList.remove('hidden'); }
-  function uiHide(el){ el.classList.add('hidden'); }
-  function toast(el, msg){ el.textContent = msg; }
+  const uiShow = el => el.classList.remove('hidden');
+  const uiHide = el => el.classList.add('hidden');
+  const toast = (el, msg) => el.textContent = msg;
 
   function readFileAsDataURL(file){
     return new Promise((res, rej)=>{
-      const r = new FileReader();
-      r.onload = ()=>res(r.result);
-      r.onerror = rej;
+      const r=new FileReader();
+      r.onload=()=>res(r.result);
+      r.onerror=rej;
       r.readAsDataURL(file);
     });
   }
-
   function getGPS(){
     return new Promise((resolve, reject)=>{
       navigator.geolocation.getCurrentPosition(
@@ -192,14 +274,13 @@
       );
     });
   }
-
   function renderThumbs(){
-    thumbs.innerHTML = '';
-    localStops.forEach((s, i)=>{
-      const img = document.createElement('img');
-      img.className = 'thumb';
-      img.title = (s.title || `Stop ${i+1}`);
-      img.src = s.imageData || s.imageURL || '';
+    thumbs.innerHTML='';
+    localStops.forEach((s,i)=>{
+      const img=document.createElement('img');
+      img.className='thumb';
+      img.title=s.title || `Stop ${i+1}`;
+      img.src=s.imageData || s.imageURL || '';
       thumbs.appendChild(img);
     });
   }
@@ -207,25 +288,19 @@
   // Navigation
   goCreate.onclick = ()=>{
     uiHide(landing); uiShow(createPanel);
-    createStatus.textContent = 'New scenario';
-    currentScenarioId = null; localStops = [];
-    scenarioName.value = ''; dispatchInfo.value = '';
-    photoInput.value = ''; radius.value = 50; shotLabel.value=''; caption.value='';
-    uiShow(scenarioMeta); // visible until first photo is saved
+    createStatus.textContent='New scenario';
+    currentScenarioId=null; localStops=[];
+    scenarioName.value=''; dispatchInfo.value='';
+    photoInput.value=''; radius.value=50; caption.value='';
+    uiShow(scenarioMeta); // show name/dispatch until first photo saved
   };
-
-  goEdit.onclick = ()=>{
-    uiHide(landing); uiShow(editPanel);
-    loadForEdit();
-  };
-
+  goEdit.onclick = ()=>{ uiHide(landing); uiShow(editPanel); loadForEdit(); };
   backFromEdit.onclick = ()=>{
     uiHide(editPanel); uiShow(landing);
-    scenarioList.innerHTML = '';
-    editStatus.textContent = 'Ready';
+    scenarioList.innerHTML=''; editStatus.textContent='Ready';
   };
 
-  // Create scenario flow
+  // Create flow
   savePhoto.onclick = async ()=>{
     try{
       const file = photoInput.files?.[0];
@@ -233,131 +308,128 @@
 
       // If first time: create scenario shell with name/dispatch
       if(!currentScenarioId){
-        const name = (scenarioName.value || '').trim();
+        const name=(scenarioName.value||'').trim();
         if(!name){ alert('Please enter a Scenario Name.'); return; }
-        const dispatch = (dispatchInfo.value || '').trim();
-        const newRef = push(ref(db, 'scenarios'));
-        currentScenarioId = newRef.key;
-        await set(newRef, {
-          id: currentScenarioId,
-          title: name,
-          dispatch: dispatch,
-          createdAt: Date.now(),
-          active: true,
-          stops: []
+        const dispatch=(dispatchInfo.value||'').trim();
+        const newRef = push(ref(db,'scenarios'));
+        currentScenarioId=newRef.key;
+        await set(newRef,{
+          id:currentScenarioId,
+          title:name,
+          dispatch:dispatch,
+          createdAt:Date.now(),
+          active:true,
+          stops:[]
         });
-        // Collapse meta after first save (keep old behavior)
-        uiHide(scenarioMeta);
+        uiHide(scenarioMeta); // collapse after first save (old logic)
       }
 
       // Prepare image + GPS
       const dataURL = await readFileAsDataURL(file);
       const gps = await getGPS();
-      const r = Math.max(5, Math.min(1000, Math.round(parseInt(radius.value || '50', 10))));
+      const r = Math.max(5, Math.min(1000, Math.round(parseInt(radius.value||'50',10))));
       const stop = {
-        title: (shotLabel.value || '').trim(),
-        caption: (caption.value || '').trim(),
+        title: '',            // Short label removed per request
+        caption: (caption.value||'').trim(),
         lat: gps.lat,
         lng: gps.lng,
         radiusMeters: r,
         imageData: dataURL
       };
-      // Push into local state and RTDB
-      localStops.push(stop);
-      await set(ref(db, 'scenarios/' + currentScenarioId + '/stops'), localStops);
 
-      // Clear photo-specific fields
-      photoInput.value=''; shotLabel.value=''; caption.value=''; radius.value=50;
+      localStops.push(stop);
+      await set(ref(db,'scenarios/'+currentScenarioId+'/stops'), localStops);
+
+      // Clear photo fields
+      photoInput.value=''; caption.value=''; radius.value=50;
       renderThumbs();
       toast(createStatus, `Saved photo #${localStops.length}.`);
-    } catch (e){
-      alert('Save failed: ' + (e?.message || e));
+    }catch(e){
+      alert('Save failed: ' + (e?.message||e));
     }
   };
 
-  // Finalize scenario (rename from End Scenario ➜ Save Scenario)
+  // Save Scenario (sticky)
   finalizeScenario.onclick = async ()=>{
     try{
       if(!currentScenarioId){
-        // No photos saved yet: if the user wants to save anyway, create an empty scenario shell.
-        const name = (scenarioName.value || '').trim();
+        // Allow saving empty scenario shell if name provided
+        const name=(scenarioName.value||'').trim();
         if(!name){ alert('Enter Scenario Name, then Save a Photo or press Save Scenario again to create empty.'); return; }
-        const dispatch = (dispatchInfo.value || '').trim();
-        const newRef = push(ref(db, 'scenarios'));
-        currentScenarioId = newRef.key;
-        await set(newRef, {
-          id: currentScenarioId,
-          title: name,
-          dispatch: dispatch,
-          createdAt: Date.now(),
-          active: true,
-          stops: []
+        const dispatch=(dispatchInfo.value||'').trim();
+        const newRef=push(ref(db,'scenarios'));
+        currentScenarioId=newRef.key;
+        await set(newRef,{
+          id:currentScenarioId,
+          title:name,
+          dispatch:dispatch,
+          createdAt:Date.now(),
+          active:true,
+          stops:[]
         });
         uiHide(scenarioMeta);
-      } else {
-        // Optionally allow quick rename/dispatch update from the (now hidden) meta using current stored values
-        // Nothing required here; stops already up to date in RTDB.
       }
-      toast(createStatus, 'Scenario saved.');
-      // Reset UI for a fresh create, preserving “old logic” flow
-      currentScenarioId = null; localStops = [];
+      toast(createStatus,'Scenario saved.');
+      // Reset for next create (preserve the old flow)
+      currentScenarioId=null; localStops=[];
       renderThumbs();
-      scenarioName.value = ''; dispatchInfo.value = '';
-      photoInput.value=''; shotLabel.value=''; caption.value=''; radius.value=50;
+      scenarioName.value=''; dispatchInfo.value='';
+      photoInput.value=''; caption.value=''; radius.value=50;
       uiShow(scenarioMeta);
-    } catch(e){
-      alert('Save Scenario failed: ' + (e?.message || e));
+    }catch(e){
+      alert('Save Scenario failed: ' + (e?.message||e));
     }
   };
 
-  // Edit scenario (kept from old logic; quick loader with basic actions)
+  // Edit view (same as before)
   async function loadForEdit(){
     try{
-      editStatus.textContent = 'Loading scenarios…';
-      const snap = await get(ref(db, 'scenarios'));
-      if(!snap.exists()){ editStatus.textContent = 'No scenarios found.'; scenarioList.innerHTML=''; return; }
-      const obj = snap.val() || {};
-      const arr = Object.entries(obj).map(([id, s])=>({id, ...s})).sort((a,b)=>(b.createdAt||0)-(a.createdAt||0));
-      editStatus.textContent = `${arr.length} scenario(s)`;
-      scenarioList.innerHTML = '';
+      editStatus.textContent='Loading scenarios…';
+      const snap=await get(ref(db,'scenarios'));
+      if(!snap.exists()){ editStatus.textContent='No scenarios found.'; scenarioList.innerHTML=''; return; }
+      const obj=snap.val()||{};
+      const arr=Object.entries(obj).map(([id,s])=>({id,...s}))
+        .sort((a,b)=>(b.createdAt||0)-(a.createdAt||0));
+      editStatus.textContent=`${arr.length} scenario(s)`;
+      scenarioList.innerHTML='';
+
       arr.forEach(sc=>{
-        const row = document.createElement('div');
-        row.className = 'listItem';
-        const left = document.createElement('div');
-        left.innerHTML = `<div style="font-weight:800">${sc.title || '(untitled)'}</div>
+        const row=document.createElement('div');
+        row.className='listItem';
+        const left=document.createElement('div');
+        left.innerHTML = `<div style="font-weight:800">${sc.title||'(untitled)'}</div>
                           <div class="note">Stops: ${Array.isArray(sc.stops)? sc.stops.length : 0} • ${new Date(sc.createdAt||Date.now()).toLocaleString()}</div>`;
-        const right = document.createElement('div');
-        const btnOpen = document.createElement('button');
-        btnOpen.className='btn primary'; btnOpen.textContent='Open in Creator';
-        btnOpen.onclick = async ()=>{
-          // Load into creator for additional photos (old logic)
+        const right=document.createElement('div');
+        const openBtn=document.createElement('button');
+        openBtn.className='btn primary'; openBtn.textContent='Open in Creator';
+        openBtn.onclick=()=>{
+          // Load into creator for adding more photos
           uiHide(editPanel); uiShow(createPanel);
-          currentScenarioId = sc.id;
-          localStops = Array.isArray(sc.stops) ? sc.stops : [];
+          currentScenarioId=sc.id;
+          localStops=Array.isArray(sc.stops)? sc.stops : [];
           renderThumbs();
-          // Meta stays hidden while editing existing scenarios
-          uiHide(scenarioMeta);
-          toast(createStatus, `Editing: ${sc.title || '(untitled)'}`);
+          uiHide(scenarioMeta); // editing existing scenarios keeps meta hidden
+          toast(createStatus, `Editing: ${sc.title||'(untitled)'}`);
         };
-        const btnDisable = document.createElement('button');
-        btnDisable.className='btn ghost'; btnDisable.textContent = sc.active ? 'Deactivate' : 'Activate';
-        btnDisable.style.marginLeft='8px';
-        btnDisable.onclick = ()=> update(ref(db,'scenarios/'+sc.id), { active: !sc.active });
-        const btnDelete = document.createElement('button');
-        btnDelete.className='btn danger'; btnDelete.textContent='Delete';
-        btnDelete.style.marginLeft='8px';
-        btnDelete.onclick = async ()=>{
+        const toggleBtn=document.createElement('button');
+        toggleBtn.className='btn ghost'; toggleBtn.style.marginLeft='8px';
+        toggleBtn.textContent=sc.active ? 'Deactivate' : 'Activate';
+        toggleBtn.onclick=()=>update(ref(db,'scenarios/'+sc.id), { active: !sc.active });
+        const delBtn=document.createElement('button');
+        delBtn.className='btn danger'; delBtn.style.marginLeft='8px';
+        delBtn.textContent='Delete';
+        delBtn.onclick=async()=>{
           if(confirm('Delete this scenario? This cannot be undone.')){
             await set(ref(db,'scenarios/'+sc.id), null);
             row.remove();
           }
         };
-        right.appendChild(btnOpen); right.appendChild(btnDisable); right.appendChild(btnDelete);
+        right.appendChild(openBtn); right.appendChild(toggleBtn); right.appendChild(delBtn);
         row.appendChild(left); row.appendChild(right);
         scenarioList.appendChild(row);
       });
-    } catch(e){
-      editStatus.textContent = 'Error: ' + (e?.message || e);
+    }catch(e){
+      editStatus.textContent='Error: '+(e?.message||e);
     }
   }
 </script>
