@@ -142,7 +142,6 @@
           <div class="row" style="justify-content:space-between; width:100%; gap:8px">
             <div class="pill" id="createStatus">New scenario</div>
             <div class="row" style="gap:8px">
-              <!-- One-tap: unlock iOS audio and read dispatch + captions -->
               <button id="startScenarioBtn" class="btn teal">Start Scenario (Enable Voice)</button>
               <button id="finalizeScenario" class="btn">Save Scenario</button>
             </div>
@@ -222,7 +221,6 @@
     const landing = document.getElementById('landing');
     const goCreate = document.getElementById('goCreate');
     const goEdit = document.getElementById('goEdit');
-    const statusPill = document.getElementById('status');
 
     const createPanel = document.getElementById('createPanel');
     const createStatus = document.getElementById('createStatus');
@@ -419,26 +417,37 @@
       }
     }
 
-    // ===================== TTS Queue (NO BEEPS) =====================
+    // ===================== TTS Queue (ZERO BEEPS / iOS-SAFE) =====================
     let sharedAudio = null;
     let audioUnlocked = false;
     let playing = false;
     const queue = [];
 
-    // Short SILENT MP3 (priming only). Not audible; satisfies iOS user-gesture requirement.
-    const SILENT_MP3 =
-      "data:audio/mpeg;base64,//uQZAAAAAAAAAAAAAAAAAAAAAAAWGlinZwAAAA8AAAACAAACcQCAAAAAAABAAACAAACcQCAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";
+    // True-silent 16-bit PCM WAV (0.25s @ 44100Hz, mono). No decoder clicks.
+    const SILENT_WAV =
+      "data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAESsAACJWAAACABAAAAABAACAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA=";
 
     async function primeAudio() {
       if (audioUnlocked) return true;
+
+      // Create shared audio element once
       sharedAudio = new Audio();
       sharedAudio.setAttribute('playsinline','');
       sharedAudio.preload = 'auto';
-      sharedAudio.src = SILENT_MP3;
-      sharedAudio.onended = () => { playing = false; playNext(); };
+      sharedAudio.volume = 0;           // FORCE MUTED during unlock to avoid any click
+      sharedAudio.src = SILENT_WAV;     // guaranteed silent
+
+      sharedAudio.onended = () => {     // after any clip finishes, advance the queue
+        playing = false;
+        playNext();
+      };
+
       try {
-        // Must be called directly by the Start button tap
-        await sharedAudio.play();
+        // MUST be called directly by the Start button tap
+        await sharedAudio.play();       // plays 0.25s of silence, at volume 0
+        sharedAudio.pause();            // immediately stop (no audible output anyway)
+        sharedAudio.currentTime = 0;
+        sharedAudio.volume = 1;         // restore volume for real TTS clips
         audioUnlocked = true;
         return true;
       } catch (e) {
@@ -447,7 +456,7 @@
       }
     }
 
-    // Replace with your backend that returns an MP3 Blob for the text (OpenAI TTS).
+    // Replace with your backend that returns an MP3 or M4A Blob (OpenAI TTS).
     async function fetchOpenAITTS(text){
       // Example:
       // const resp = await fetch('/api/tts', {
@@ -455,11 +464,12 @@
       //   headers:{'Content-Type':'application/json'},
       //   body: JSON.stringify({ text })
       // });
-      // const blob = await resp.blob(); // audio/mpeg
+      // if (!resp.ok) throw new Error('TTS HTTP ' + resp.status);
+      // const blob = await resp.blob(); // audio/mpeg or audio/mp4 (aac)
       // return URL.createObjectURL(blob);
 
-      // Placeholder returns silent clip so flow is testable without audio.
-      return SILENT_MP3;
+      // TEMP placeholder: still silence for safety until your backend is wired.
+      return SILENT_WAV;
     }
 
     function enqueueUrl(url){
@@ -492,7 +502,7 @@
         alert('Tap again to enable audio.');
         return;
       }
-      // Read dispatch first
+      // Speak dispatch first
       const dispatch = (dispatchInfo.value||'').trim();
       if (dispatch) await enqueueText(dispatch);
       // Then each caption
