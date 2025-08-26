@@ -138,19 +138,8 @@
   <main>
     <!-- Error banner -->
     <div id="errbar"></div>
-
-    <!-- Desktop gate -->
-    <div id="gate" class="desktopGate hidden card">
-      <h2 style="margin:0 0 8px">Use a computer to edit</h2>
-      <p>This advanced editor is intended for desktop/laptop. If you’re on a touchscreen laptop or a narrow window, you can still proceed.</p>
-      <div class="row" style="margin-top:10px">
-        <button id="forceGo" class="btn">Continue anyway</button>
-      </div>
-      <p class="pill" id="gateInfo">Gate check…</p>
-    </div>
-
     <!-- App -->
-    <div id="app" class="app hidden">
+    <div id="app" class="app">
       <!-- Left: scenarios + meta -->
       <div class="col" id="leftCol">
         <div class="row" style="justify-content:space-between">
@@ -290,20 +279,7 @@
   window.addEventListener('unhandledrejection', e => ERR(String(e.reason?.message||e.reason||e)));
 
   (async () => {
-    /* ===== Desktop gate (unchanged) ===== */
-    const gate=document.getElementById('gate');
-    const app=document.getElementById('app');
-    const gateInfo=document.getElementById('gateInfo');
-    const forceGo=document.getElementById('forceGo');
-    const urlForce = new URLSearchParams(location.search).get('force') === '1';
-    function decideGate(){
-      const narrow = window.innerWidth < 1024;
-      gateInfo.textContent = `width: ${window.innerWidth}px`;
-      if (urlForce || !narrow) { gate.classList.add('hidden'); app.classList.remove('hidden'); return; }
-      gate.classList.remove('hidden'); app.classList.add('hidden');
-    }
-    forceGo.onclick=()=>{ history.replaceState(null,'',location.pathname); app.classList.remove('hidden'); gate.classList.add('hidden'); };
-    decideGate(); window.addEventListener('resize', decideGate);
+    /* Desktop gate removed — always show the editor on all screen sizes */
 
     /* ===== Branding copy + year ===== */
     const BRAND = {
