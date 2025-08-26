@@ -159,9 +159,13 @@
     <section class="card hidden" id="createPanel">
       <div class="card-inner">
         <div class="stickyBar">
-          <div class="row" style="justify-content:space-between; width:100%">
+          <div class="row" style="justify-content:space-between; width:100%; gap:8px">
             <div class="pill" id="createStatus">New scenario</div>
-            <button id="finalizeScenario" class="btn teal">Save Scenario</button>
+            <div class="row" style="gap:8px">
+              <!-- NEW: One-tap start that unlocks audio and reads dispatch + captions -->
+              <button id="startScenarioBtn" class="btn teal" title="Enable voice and read dispatch then captions">Start Scenario (Enable Voice)</button>
+              <button id="finalizeScenario" class="btn">Save Scenario</button>
+            </div>
           </div>
         </div>
 
@@ -219,9 +223,9 @@
     </section>
   </main>
 
-  <!-- Firebase + Logic (kept the same) -->
+  <!-- Firebase + Logic + TTS Queue -->
   <script type="module">
-    // Firebase
+    // ===================== Firebase (unchanged logic) =====================
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-app.js";
     import { getDatabase, ref, push, set, get, update } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-database.js";
 
@@ -236,7 +240,7 @@
     const app = initializeApp(firebaseConfig);
     const db  = getDatabase(app);
 
-    // DOM
+    // ===================== DOM =====================
     const landing = document.getElementById('landing');
     const goCreate = document.getElementById('goCreate');
     const goEdit = document.getElementById('goEdit');
@@ -257,15 +261,18 @@
     const thumbs = document.getElementById('thumbs');
 
     const editPanel = document.getElementById('editPanel');
-    const editStatus = document.getElementById('editStatus');  /* FIXED: was 'theconst editStatus' */
+    const editStatus = document.getElementById('editStatus');
     const scenarioList = document.getElementById('scenarioList');
     const backFromEdit = document.getElementById('backFromEdit');
 
-    // State
+    // NEW: Start Scenario button (unlocks audio + reads dispatch/captions)
+    const startScenarioBtn = document.getElementById('startScenarioBtn');
+
+    // ===================== State =====================
     let currentScenarioId = null;
     let localStops = [];
 
-    // Helpers
+    // ===================== Helpers =====================
     const uiShow = el => el.classList.remove('hidden');
     const uiHide = el => el.classList.add('hidden');
     const toast = (el, msg) => el.textContent = msg;
@@ -299,7 +306,7 @@
       });
     }
 
-    // Navigation
+    // ===================== Navigation =====================
     goCreate.onclick = ()=>{
       uiHide(landing); uiShow(createPanel);
       createStatus.textContent='New scenario';
@@ -314,7 +321,7 @@
       scenarioList.innerHTML=''; editStatus.textContent='Ready';
     };
 
-    // Create flow (no short label; no extra top add/retry buttons)
+    // ===================== Create flow (unchanged) =====================
     savePhoto.onclick = async ()=>{
       try{
         const file = photoInput.files?.[0];
@@ -389,7 +396,7 @@
       }
     };
 
-    // Edit view (unchanged logic)
+    // ===================== Edit view (unchanged logic) =====================
     async function loadForEdit(){
       try{
         editStatus.textContent='Loading scenarios…';
@@ -418,7 +425,10 @@
             localStops=Array.isArray(sc.stops)? sc.stops : [];
             renderThumbs();
             uiHide(scenarioMeta); // editing existing keeps meta hidden
-            toast(createStatus, `Editing: ${sc.title||'(untitled)'}`);
+            toast(createStatus, `Editing: ${sc.title||('(untitled)')}`);
+            // Also preload dispatch text into the field (non-destructive)
+            dispatchInfo.value = sc.dispatch || '';
+            scenarioName.value = sc.title || '';
           };
           const toggleBtn=document.createElement('button');
           toggleBtn.className='btn secondary'; toggleBtn.style.marginLeft='8px';
@@ -441,6 +451,99 @@
         editStatus.textContent='Error: '+(e?.message||e);
       }
     }
+
+    // ===================== TTS Queue: iOS-safe one-tap playback =====================
+    let sharedAudio = null;
+    let audioUnlocked = false;
+    let playing = false;
+    const queue = [];
+
+    // Tiny silent MP3 data URI (~200ms). Works to resolve play() on iOS.
+    // You can replace with a 0.3s "Voice enabled" MP3 from your TTS if you prefer.
+    const SILENT_MP3 =
+      "data:audio/mpeg;base64,//uQZAAAAAAAAAAAAAAAAAAAAAAAWGluZwAAAA8AAAACAAACcQCAAAAAAABAAACAAACcQCAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";
+
+    async function primeAudio() {
+      if (audioUnlocked) return true;
+      sharedAudio = new Audio();
+      sharedAudio.setAttribute('playsinline','');
+      sharedAudio.preload = 'auto';
+      sharedAudio.src = SILENT_MP3;
+      sharedAudio.onended = () => { playing = false; playNext(); };
+
+      try {
+        // MUST be called directly by the user's first tap
+        await sharedAudio.play();
+        audioUnlocked = true;
+        return true;
+      } catch (e) {
+        console.warn('Audio unlock failed:', e);
+        return false;
+      }
+    }
+
+    // Replace this with your server endpoint that returns an MP3 for the text.
+    // IMPORTANT: Use MP3 or AAC on iOS. WebM/Opus won't play there.
+    async function fetchOpenAITTS(text){
+      // Example: POST to your backend which calls OpenAI TTS and returns MP3
+      // const resp = await fetch('/api/tts', {
+      //   method:'POST',
+      //   headers:{'Content-Type':'application/json'},
+      //   body: JSON.stringify({ text })
+      // });
+      // const blob = await resp.blob(); // should be audio/mpeg
+      // return URL.createObjectURL(blob);
+
+      // Placeholder fallback (uses the silent priming clip just to demo flow)
+      return SILENT_MP3;
+    }
+
+    function enqueueUrl(url){
+      queue.push(url);
+      if (!playing) playNext();
+    }
+
+    function playNext(){
+      if (!audioUnlocked || playing || queue.length === 0) return;
+      const url = queue.shift();
+      sharedAudio.src = url;
+      playing = true;
+      sharedAudio.play().catch(err=>{
+        console.warn('Playback error, skipping clip:', err);
+        playing = false;
+        playNext();
+      });
+    }
+
+    async function enqueueText(text){
+      const clean = (text||'').trim();
+      if (!clean) return;
+      const url = await fetchOpenAITTS(clean);
+      enqueueUrl(url);
+    }
+
+    async function startScenarioAndSpeakAll(){
+      // 1) Unlock audio on the same tap
+      const ok = await primeAudio();
+      if (!ok){
+        alert('Tap again to enable audio.');
+        return;
+      }
+      // 2) Speak dispatch first
+      const dispatch = (dispatchInfo.value||'').trim();
+      if (dispatch) await enqueueText(dispatch);
+
+      // 3) Then each caption in order
+      for (const stop of localStops){
+        if (stop && stop.caption) await enqueueText(stop.caption);
+      }
+
+      toast(createStatus, 'Voice: reading dispatch and all captions…');
+    }
+
+    // Bind the one-tap starter
+    startScenarioBtn.addEventListener('click', startScenarioAndSpeakAll, { once:false });
+
   </script>
 </body>
 </html>
