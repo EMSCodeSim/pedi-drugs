@@ -49,10 +49,8 @@
     .olThumb img{max-width:88%;max-height:88%;display:block}
     .ol-tab.active{outline:3px solid var(--teal)}
 
-    /* Overlays: HUDs */
+    /* HUDs */
     #errbar{position:fixed;left:10px;bottom:10px;background:#2b0d0d;color:#ffd7d7;border:1px solid #7a2b2b;border-radius:12px;padding:8px 12px;max-width:80vw;display:none;z-index:9999}
-
-    /* Loading / Saving overlays */
     .overlayHUD{position:fixed;inset:0;display:none;align-items:center;justify-content:center;background:rgba(0,0,0,.45);backdrop-filter:blur(2px);z-index:9998}
     .hudCard{min-width:220px;padding:18px;border-radius:14px;background:#0c1220;border:1px solid rgba(255,255,255,.12);box-shadow:var(--shadow);display:flex;gap:12px;align-items:center;justify-content:center;font-weight:800}
     .spinner{width:22px;height:22px;border-radius:50%;border:3px solid rgba(255,255,255,.25);border-top-color:#fff;animation:spin 0.9s linear infinite}
@@ -78,12 +76,12 @@
   <main>
     <div id="errbar"></div>
 
-    <!-- Global loading & saving HUDs -->
+    <!-- Loading & Saving HUDs -->
     <div id="loadingHUD" class="overlayHUD" aria-hidden="true">
-      <div class="hudCard"><div class="spinner" aria-hidden="true"></div><div id="loadingLabel">Loading…</div></div>
+      <div class="hudCard"><div class="spinner"></div><div id="loadingLabel">Loading…</div></div>
     </div>
     <div id="savingHUD" class="overlayHUD" aria-hidden="true">
-      <div class="hudCard"><div class="spinner" aria-hidden="true"></div><div>Saving…</div></div>
+      <div class="hudCard"><div class="spinner"></div><div>Saving…</div></div>
     </div>
 
     <div id="app" class="app">
@@ -211,11 +209,10 @@
     const loadingHUD = document.getElementById('loadingHUD');
     const loadingLabel = document.getElementById('loadingLabel');
     const savingHUD  = document.getElementById('savingHUD');
-
-    function showLoading(msg='Loading…'){ loadingLabel.textContent = msg; loadingHUD.style.display='flex'; }
-    function hideLoading(){ loadingHUD.style.display='none'; }
-    function showSaving(){ savingHUD.style.display='flex'; }
-    function hideSaving(){ savingHUD.style.display='none'; }
+    const showLoading = (t='Loading…')=>{ loadingLabel.textContent=t; loadingHUD.style.display='flex'; };
+    const hideLoading = ()=>{ loadingHUD.style.display='none'; };
+    const showSaving  = ()=>{ savingHUD.style.display='flex'; };
+    const hideSaving  = ()=>{ savingHUD.style.display='none'; };
 
     /* Firebase */
     const [{ initializeApp }] = await Promise.all([ import("https://www.gstatic.com/firebasejs/10.12.4/firebase-app.js") ]);
@@ -310,8 +307,10 @@
       });
     }
 
-    /* FULL-RES EXPORT/SAVE */
-    function dataURLFromCanvasFullRes() {
+    /* === SMART FULL-RES EXPORT (keeps payload under ~9 MB) === */
+    // Returns { format: 'png'|'jpeg', data: '<base64-without-prefix>' }
+    function encodeCanvasForRTDB() {
+      const MAX_BYTES = 9_000_000; // safety for RTDB string size
       const zoom = fabricCanvas.getZoom() || 1;
       let multiplier = 1;
       if (baseImage) {
@@ -319,12 +318,54 @@
         multiplier = (1 / s) * (1 / zoom);
       }
       multiplier = Math.max(1, Math.min(8, multiplier));
-      return fabricCanvas.toDataURL({ format: 'png', quality: 0.95, multiplier });
+
+      // Helper to measure base64 payload length in bytes (roughly)
+      const bytesOf = (b64) => Math.floor((b64.length * 3) / 4);
+
+      // Try PNG first
+      let url = fabricCanvas.toDataURL({ format:'png', quality:1, multiplier });
+      let b64 = url.split(',')[1] || '';
+      if (bytesOf(b64) <= MAX_BYTES) return { format:'png', data:b64 };
+
+      // Try JPEG with descending qualities
+      const qSteps = [0.95, 0.9, 0.85, 0.8, 0.75, 0.7, 0.65, 0.6];
+      for (const q of qSteps) {
+        url = fabricCanvas.toDataURL({ format:'jpeg', quality:q, multiplier });
+        b64 = url.split(',')[1] || '';
+        if (bytesOf(b64) <= MAX_BYTES) return { format:'jpeg', data:b64 };
+      }
+      // If still too big, reduce multiplier gradually and retry JPEG
+      let m = multiplier;
+      while (m > 0.7) {
+        m *= 0.85;
+        for (const q of qSteps) {
+          url = fabricCanvas.toDataURL({ format:'jpeg', quality:q, multiplier:m });
+          b64 = url.split(',')[1] || '';
+          if (bytesOf(b64) <= MAX_BYTES) return { format:'jpeg', data:b64 };
+        }
+      }
+      // Final fallback: very compressed JPEG
+      url = fabricCanvas.toDataURL({ format:'jpeg', quality:0.5, multiplier:Math.max(0.6, m) });
+      b64 = url.split(',')[1] || '';
+      return { format:'jpeg', data:b64 };
     }
+
+    // Reconstruct a data URL from {format, data} (backward compatible with existing strings)
+    function toDataURLFromStored(stored) {
+      if (typeof stored === 'string') return stored; // already a data URL
+      if (!stored || !stored.data) return '';
+      const fmt = stored.format === 'jpeg' ? 'jpeg' : 'png';
+      return `data:image/${fmt};base64,${stored.data}`;
+    }
+
     exportPNG.onclick = () => {
-      const url = dataURLFromCanvasFullRes();
+      // Export at current best (PNG/JPEG). For user download, prepend the data URL.
+      const enc = encodeCanvasForRTDB();
+      const url = `data:image/${enc.format};base64,${enc.data}`;
       const a = document.createElement('a');
-      a.href = url; a.download = 'image-edited.png'; a.click();
+      a.href = url;
+      a.download = 'image-edited.' + (enc.format === 'jpeg' ? 'jpg' : 'png');
+      a.click();
     };
 
     /* Scenarios (fixed root '/scenarios') */
@@ -358,7 +399,8 @@
       current._stops.forEach((s,idx)=>{
         const img=document.createElement('img');
         img.className='thumb'+(idx===stopIndex?' active':'');
-        img.src=s.imageData||s.imageURL||'';
+        const src = toDataURLFromStored(s.imageData || s.imageURL);
+        img.src=src||'';
         img.title=s.title||`Stop ${idx+1}`;
         img.onerror=()=>{ img.src="data:image/svg+xml;utf8,"+encodeURIComponent("<svg xmlns='http://www.w3.org/2000/svg' width='80' height='80'><rect width='100%' height='100%' fill='#0a2230'/><text x='50%' y='50%' fill='#9ecbd6' font-size='10' text-anchor='middle'>no image</text></svg>"); };
         img.onclick=()=>loadStop(idx);
@@ -422,7 +464,7 @@
       Array.from(stopList.children).forEach((n,i)=>n.classList.toggle('active', i===idx));
       fabricCanvas.clear(); baseImage=null;
 
-      const src=s.imageData||s.imageURL;
+      const src = toDataURLFromStored(s.imageData || s.imageURL);
       if(!src){ metaMsg.textContent='No image in this stop.'; return; }
 
       showLoading('Loading photo…');
@@ -442,7 +484,6 @@
                   flipX:!!ov.flipX, flipY:!!ov.flipY,
                   erasable:true, cornerStyle:'circle', transparentCorners:false
                 });
-                // reapply mask
                 if (Array.isArray(ov.erase) && ov.erase.length){
                   const circles = ov.erase.map(e => new fabric.Circle({
                     left: e.x, top: e.y, radius: e.r,
@@ -450,7 +491,6 @@
                   }));
                   img.set('clipPath', new fabric.Group(circles, { absolutePositioned:true, inverted:true }));
                 }
-                // attach erase stacks
                 img._eraseUndoStack = []; img._eraseRedoStack = [];
                 fabricCanvas.add(img);
               } finally { res(); }
@@ -514,10 +554,12 @@
       if(!current || stopIndex<0) throw new Error('Select a stop first.');
       showSaving();
       try{
-        const url = dataURLFromCanvasFullRes();
+        const enc = encodeCanvasForRTDB();
         const s = { ...current._stops[stopIndex] };
-        s.imageData=url; s.imageURL=null;
-        s.overlays = serializeOverlays();
+        s.imageData = enc;   // { format, data } — compact & RTDB-safe
+        s.imageURL  = null;
+        s.overlays  = serializeOverlays();
+
         const nextStops = [ ...current._stops ]; nextStops[stopIndex] = s;
         const updated = { ...current._raw };
         setStops(updated, nextStops);
@@ -565,9 +607,7 @@
     function pushUndo(img, prevArr){
       img._eraseUndoStack = img._eraseUndoStack || [];
       img._eraseRedoStack = img._eraseRedoStack || [];
-      // store shallow copies
       img._eraseUndoStack.push(prevArr.map(c=> new fabric.Circle({left:c.left, top:c.top, radius:c.radius, originX:'center', originY:'center', absolutePositioned:true})));
-      // clear redo on new action
       img._eraseRedoStack.length = 0;
     }
 
@@ -624,7 +664,6 @@
       const img = selectedOverlay(); if(!img) return;
       img._eraseUndoStack = img._eraseUndoStack || []; img._eraseRedoStack = img._eraseRedoStack || [];
       const prev = img._eraseUndoStack.pop(); if(!prev) return;
-      // push current to redo
       const curr = getMaskCircles(img);
       img._eraseRedoStack.push(curr.map(c=> new fabric.Circle({left:c.left, top:c.top, radius:c.radius, originX:'center', originY:'center', absolutePositioned:true})));
       setMaskCircles(img, prev);
@@ -634,7 +673,6 @@
       const img = selectedOverlay(); if(!img) return;
       img._eraseRedoStack = img._eraseRedoStack || []; img._eraseUndoStack = img._eraseUndoStack || [];
       const nxt = img._eraseRedoStack.pop(); if(!nxt) return;
-      // push current to undo
       const curr = getMaskCircles(img);
       img._eraseUndoStack.push(curr.map(c=> new fabric.Circle({left:c.left, top:c.top, radius:c.radius, originX:'center', originY:'center', absolutePositioned:true})));
       setMaskCircles(img, nxt);
@@ -648,7 +686,7 @@
       fabricCanvas.requestRenderAll();
     };
 
-    /* Flip only */
+    /* Flip */
     function flipSelected(axis){ const o=fabricCanvas.getActiveObject(); if(!o || o===baseImage) return; if(axis==='x') o.set('flipX', !o.flipX); if(axis==='y') o.set('flipY', !o.flipY); fabricCanvas.requestRenderAll(); }
     flipSelH.onclick=()=>flipSelected('x');
     flipSelV.onclick=()=>flipSelected('y');
