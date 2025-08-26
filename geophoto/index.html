@@ -84,7 +84,7 @@
     // Device / TTS policy
     const isIOS = /iP(hone|ad|od)/i.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
     const synthOK = ('speechSynthesis' in window) && ('SpeechSynthesisUtterance' in window);
-    const autoSpeak = !isIOS && synthOK;   // Android/Desktop autoplay; iOS needs button/gesture
+    const autoSpeak = !isIOS && synthOK;   // Android/Desktop autoplay on entry; iOS needs a gesture
     let lastSpeech = '';
 
     // Wake Lock (prevent sleep)
@@ -126,7 +126,7 @@
     firebase.initializeApp(firebaseConfig);
     const db = firebase.database();
 
-    // Helpers: new imageData format → data URL
+    // Helpers: {format,data} OR legacy string -> data URL
     function toDataURL(stored){
       if (!stored) return '';
       if (typeof stored === 'string') return stored;
@@ -137,7 +137,7 @@
       return '';
     }
 
-    // Load scenarios into dropdown (from geophoto/scenarios and scenarios)
+    // Load scenarios into dropdown (from geophoto/scenarios then scenarios)
     function normalizeStops(stopsLike){
       if(!stopsLike) return [];
       const arr = Array.isArray(stopsLike) ? stopsLike : Object.values(stopsLike);
@@ -153,7 +153,6 @@
         };
       }).filter(s => typeof s.lat==='number' && typeof s.lng==='number');
     }
-
     function populateDropdown(list){
       select.innerHTML='<option value="">Select a scenario…</option>';
       list.sort((a,b)=> (b.createdAt||0)-(a.createdAt||0));
@@ -164,7 +163,6 @@
         select.appendChild(o);
       });
     }
-
     async function loadAllScenarios(){
       const out=[];
       try{
@@ -175,15 +173,11 @@
         const b = await fetch('https://dailyquiz-d5279-default-rtdb.firebaseio.com/scenarios.json',{cache:'no-store'});
         if(b.ok){ const jb=await b.json()||{}; for(const [id,s] of Object.entries(jb)){ out.push({ id, ...(s||{}), stops: normalizeStops(s?.stops) }); } }
       }catch{}
-      // de-dup by id (prefer geophoto/scenarios)
-      const map=new Map();
-      out.forEach(s=>{ if(!map.has(s.id)) map.set(s.id, s); });
+      const map=new Map(); out.forEach(s=>{ if(!map.has(s.id)) map.set(s.id, s); });
       return Array.from(map.values());
     }
 
-    let scenarios=[], current=null, running=false, watchId=null, lastStopIndex=-1;
-
-    // Haversine
+    // Haversine + tight padding (≤ 3 m)
     const toRad = x => x*Math.PI/180;
     const havDistance=(aLat,aLng,bLat,bLng)=>{
       const R=6371000;
@@ -191,14 +185,13 @@
       const A=Math.sin(dLat/2)**2 + Math.cos(toRad(aLat))*Math.cos(toRad(bLat))*Math.sin(dLng/2)**2;
       return 2*R*Math.asin(Math.sqrt(A));
     };
-    // Tight padding: cap at 3 m
     function inside(stop, la, ln, acc){
       const d = havDistance(la, ln, stop.lat, stop.lng);
-      const pad = Math.min(Math.max(Number(acc)||0, 0), 3); // ≤ 3m padding
+      const pad = Math.min(Math.max(Number(acc)||0, 0), 3);
       return d <= (Number(stop.radiusMeters)||0) + pad;
     }
 
-    // Audio + vibration on new photo
+    // Beep + vibrate when showing a new photo
     function buzz(){ if ('vibrate' in navigator) { try { navigator.vibrate([220,80,140]); } catch {} } }
     let audioCtx=null;
     function beep(){
@@ -224,11 +217,6 @@
       u.rate = 1; u.pitch = 1; u.volume = 1;
       try { speechSynthesis.speak(u); } catch {}
     }
-    function unlockTTS(){ // primes iOS on user gesture
-      if (!synthOK) return;
-      try { speechSynthesis.cancel(); const u = new SpeechSynthesisUtterance(' '); u.volume = 0; speechSynthesis.speak(u); } catch {}
-    }
-    readBtn.addEventListener('click', ()=>{ unlockTTS(); speak(lastSpeech || 'Ready.'); });
 
     // UI helpers
     function clearPhoto(){ photo.src=''; caption.style.display='none'; caption.textContent=''; }
@@ -242,6 +230,9 @@
       notifyNewPhoto();
     }
 
+    // Start / Stop logic
+    let running=false, current=null, watchId=null, lastStopIndex=-1;
+
     async function startScenario(){
       if (running) return;
       const id = select.value;
@@ -250,7 +241,7 @@
       startBtn.textContent='Stop';
       await acquireWakeLock();
 
-      // Load this scenario (try geophoto first, then scenarios)
+      // Load scenario (prefer geophoto path, then fallback)
       let sc=null;
       try{
         const rA = await fetch(`https://dailyquiz-d5279-default-rtdb.firebaseio.com/geophoto/scenarios/${id}.json`,{cache:'no-store'});
@@ -271,9 +262,9 @@
         stops: normalizeStops(sc.stops)
       };
 
-      // Read dispatch FIRST (works on iPhone & Android)
+      // **IMPORTANT**: Start button = iOS gesture unlock. Read dispatch FIRST on both platforms.
       const intro = (current.dispatch || current.title || '').toString().trim();
-      if (intro){ unlockTTS(); speak(intro); lastSpeech = intro; }
+      if (intro) { speak(intro); lastSpeech = intro; }
 
       clearPhoto(); lastStopIndex = -1;
 
@@ -312,13 +303,14 @@
     }
 
     startBtn.addEventListener('click', ()=> running ? stopScenario() : startScenario());
-    readBtn.addEventListener('click', ()=>{ try{ if (audioCtx && audioCtx.state==='suspended') audioCtx.resume(); }catch{} });
+    readBtn.addEventListener('click', ()=>{ // Repeat or manual trigger on iPhone
+      try{ if (audioCtx && audioCtx.state==='suspended') audioCtx.resume(); }catch{}
+      speak(lastSpeech || 'Ready.');
+    });
 
-    // Boot: load scenarios into dropdown
+    // Boot: load scenarios into dropdown (+ preselect ?id= if present)
     loadAllScenarios().then(list => {
-      scenarios = list;
       populateDropdown(list);
-      // Preselect ?id= if present
       const pre = new URLSearchParams(location.search).get('id');
       if (pre && list.some(s=>s.id===pre)) select.value = pre;
     });
