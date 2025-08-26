@@ -8,9 +8,15 @@
   <meta name="theme-color" content="#0b0f14" />
   <link rel="icon" href="data:," />
   <style>
-    :root{ --bg:#0b0f14; --bg2:#101726; --card:#121823; --muted:#8ea0b3; --text:#eaf2ff; --blue:#0a84ff; --teal:#2dd4bf; --red:#ff3b30; --shadow:0 12px 34px rgba(0,0,0,.38); --radius:18px; --radiusSm:14px; --border: rgba(255,255,255,.08);} *{box-sizing:border-box}
-    html,body{margin:0;padding:0;color:var(--text);font-family:system-ui,-apple-system,Segoe UI,Roboto,Inter,Arial,sans-serif;background:radial-gradient(1400px 700px at 15% -15%, rgba(10,132,255,.28), transparent 60%),radial-gradient(1200px 600px at 110% 0%, rgba(255,59,48,.22), transparent 60%),linear-gradient(165deg, var(--bg2), var(--bg) 55%)}
-    .topbar{position:sticky;top:0;z-index:50;background:rgba(12,15,22,.78);backdrop-filter:saturate(120%) blur(6px);border-bottom:1px solid rgba(255,255,255,.07)}
+    :root{ --bg:#0b0f14; --bg2:#101726; --card:#121823; --muted:#8ea0b3; --text:#eaf2ff; --blue:#0a84ff; --teal:#2dd4bf; --red:#ff3b30; --shadow:0 12px 34px rgba(0,0,0,.38); --radius:18px; --radiusSm:14px; --border: rgba(255,255,255,.08);}
+    *{box-sizing:border-box}
+    html,body{margin:0;padding:0;color:var(--text);font-family:system-ui,-apple-system,Segoe UI,Roboto,Inter,Arial,sans-serif;background:
+      radial-gradient(1400px 700px at 15% -15%, rgba(10,132,255,.28), transparent 60%),
+      radial-gradient(1200px 600px at 110% 0%, rgba(255,59,48,.22), transparent 60%),
+      linear-gradient(165deg, var(--bg2), var(--bg) 55%)}
+    a{color:inherit;text-decoration:none}
+
+    .topbar{position:sticky;top:0;z-index:50;background:rgba(12,15,22,.78);backdrop-filter:blur(6px) saturate(120%);border-bottom:1px solid rgba(255,255,255,.07)}
     .topnav{max-width:1200px;margin:0 auto;padding:10px 20px;display:flex;align-items:center;gap:14px;flex-wrap:wrap}
     .brandmini{display:flex;align-items:center;gap:12px;font-weight:800}
     .logo img{width:40px;height:40px;border-radius:10px;box-shadow:var(--shadow);object-fit:cover;background:#0f1624}
@@ -28,10 +34,11 @@
     .btn.warn{background:#ffc857;color:#2a1d00}
     .btn.danger{background:var(--red);color:#ffecec}
     .row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+    .sectionTitle{font-weight:800;margin:6px 0}
     .thumb{width:56px;height:56px;border-radius:8px;object-fit:cover;border:1px solid rgba(255,255,255,.15);cursor:pointer;background:#0b2130}
     .thumb.active{outline:3px solid var(--teal)}
     .pill{display:inline-flex;gap:8px;align-items:center;padding:6px 10px;border-radius:999px;border:1px solid rgba(255,255,255,.14);color:var(--muted)}
-    .sectionTitle{font-weight:800;margin:6px 0}
+
     .canvasWrap{position:relative;background:#061621;border:1px solid rgba(255,255,255,.12);border-radius:12px;overflow:hidden}
     #c{display:block;width:100%;height:calc(100vh - 360px);background:transparent}
     .bar{display:flex;gap:8px;flex-wrap:wrap}
@@ -42,10 +49,17 @@
     .olThumb img{max-width:88%;max-height:88%;display:block}
     .ol-tab.active{outline:3px solid var(--teal)}
 
-    footer{max-width:1200px;margin:40px auto;padding:18px 20px;color:var(--muted);font-size:13px;border-top:1px solid rgba(255,255,255,.06);display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap}
-
-    @media (max-width: 1100px){ .app{grid-template-columns:1fr} #c{height:56vh} }
+    /* Overlays: HUDs */
     #errbar{position:fixed;left:10px;bottom:10px;background:#2b0d0d;color:#ffd7d7;border:1px solid #7a2b2b;border-radius:12px;padding:8px 12px;max-width:80vw;display:none;z-index:9999}
+
+    /* Loading / Saving overlays */
+    .overlayHUD{position:fixed;inset:0;display:none;align-items:center;justify-content:center;background:rgba(0,0,0,.45);backdrop-filter:blur(2px);z-index:9998}
+    .hudCard{min-width:220px;padding:18px;border-radius:14px;background:#0c1220;border:1px solid rgba(255,255,255,.12);box-shadow:var(--shadow);display:flex;gap:12px;align-items:center;justify-content:center;font-weight:800}
+    .spinner{width:22px;height:22px;border-radius:50%;border:3px solid rgba(255,255,255,.25);border-top-color:#fff;animation:spin 0.9s linear infinite}
+    @keyframes spin{to{transform:rotate(360deg)}}
+
+    footer{max-width:1200px;margin:40px auto;padding:18px 20px;color:var(--muted);font-size:13px;border-top:1px solid rgba(255,255,255,.06);display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap}
+    @media (max-width:1100px){ .app{grid-template-columns:1fr} #c{height:56vh} }
   </style>
 </head>
 <body>
@@ -64,8 +78,16 @@
   <main>
     <div id="errbar"></div>
 
+    <!-- Global loading & saving HUDs -->
+    <div id="loadingHUD" class="overlayHUD" aria-hidden="true">
+      <div class="hudCard"><div class="spinner" aria-hidden="true"></div><div id="loadingLabel">Loading…</div></div>
+    </div>
+    <div id="savingHUD" class="overlayHUD" aria-hidden="true">
+      <div class="hudCard"><div class="spinner" aria-hidden="true"></div><div>Saving…</div></div>
+    </div>
+
     <div id="app" class="app">
-      <!-- Left: scenarios + meta -->
+      <!-- Left: scenario + meta -->
       <div class="col" id="leftCol">
         <div class="row" style="justify-content:space-between">
           <div class="pill" id="statusPill">Loading…</div>
@@ -146,12 +168,19 @@
         <div class="divider"></div>
         <div class="sectionTitle">Eraser (selected overlay)</div>
         <div class="row">
-          <button id="eraserStart" class="btn warn">Start Erasing</button>
+          <button id="eraserStart" class="btn warn">Start</button>
           <button id="eraserDone" class="btn">Finish</button>
           <button id="eraserCancel" class="btn secondary">Cancel</button>
         </div>
         <label style="margin-top:8px">Brush Size</label>
         <input id="eraserSize" type="range" min="5" max="120" step="1" value="30" />
+        <label style="margin-top:8px">Overlay Opacity</label>
+        <input id="eraserOverlayOpacity" type="range" min="0.05" max="1" step="0.05" value="1" />
+        <div class="row" style="margin-top:8px">
+          <button id="eraserUndo" class="btn secondary">Undo Erase</button>
+          <button id="eraserRedo" class="btn secondary">Redo Erase</button>
+          <button id="eraserClear" class="btn secondary">Clear Erase</button>
+        </div>
         <div class="pill" id="eraserStatus" style="margin-top:6px">Eraser: off</div>
 
         <div class="divider"></div>
@@ -173,15 +202,22 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/fabric.js/5.3.0/fabric.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
 
   <script type="module">
-  // Error banner
+  /* Error banner */
   const ERR = (msg) => { const b=document.getElementById('errbar'); b.textContent=msg; b.style.display='block'; };
-  window.addEventListener('error', e => ERR(e.message));
-  window.addEventListener('unhandledrejection', e => ERR(String(e.reason?.message||e.reason||e)));
 
   (async () => {
     document.getElementById('year').textContent = new Date().getFullYear();
 
-    // Firebase
+    const loadingHUD = document.getElementById('loadingHUD');
+    const loadingLabel = document.getElementById('loadingLabel');
+    const savingHUD  = document.getElementById('savingHUD');
+
+    function showLoading(msg='Loading…'){ loadingLabel.textContent = msg; loadingHUD.style.display='flex'; }
+    function hideLoading(){ loadingHUD.style.display='none'; }
+    function showSaving(){ savingHUD.style.display='flex'; }
+    function hideSaving(){ savingHUD.style.display='none'; }
+
+    /* Firebase */
     const [{ initializeApp }] = await Promise.all([ import("https://www.gstatic.com/firebasejs/10.12.4/firebase-app.js") ]);
     const [{ getDatabase, ref, onValue, get, set }] = await Promise.all([ import("https://www.gstatic.com/firebasejs/10.12.4/firebase-database.js") ]);
     const firebaseConfig = {
@@ -195,12 +231,11 @@
     const appFB = initializeApp(firebaseConfig);
     const db = getDatabase(appFB);
 
-    // DOM
+    /* DOM Refs */
     const statusPill=document.getElementById('statusPill');
     const scenarioSel=document.getElementById('scenarioSel');
     const stopList=document.getElementById('stopList');
     const refreshBtn=document.getElementById('refresh');
-
     const stopTitle=document.getElementById('stopTitle');
     const stopCaption=document.getElementById('stopCaption');
     const stopLat=document.getElementById('stopLat');
@@ -209,7 +244,6 @@
     const useGPS=document.getElementById('useGPS');
     const saveMeta=document.getElementById('saveMeta');
     const metaMsg=document.getElementById('metaMsg');
-
     const replaceFile=document.getElementById('replaceFile');
     const replaceApply=document.getElementById('replaceApply');
     const deleteStop=document.getElementById('deleteStop');
@@ -234,17 +268,20 @@
     const eraserDone=document.getElementById('eraserDone');
     const eraserCancel=document.getElementById('eraserCancel');
     const eraserSize=document.getElementById('eraserSize');
+    const eraserOverlayOpacity=document.getElementById('eraserOverlayOpacity');
+    const eraserUndo=document.getElementById('eraserUndo');
+    const eraserRedo=document.getElementById('eraserRedo');
+    const eraserClear=document.getElementById('eraserClear');
     const eraserStatus=document.getElementById('eraserStatus');
-
     const flipSelH=document.getElementById('flipSelH');
     const flipSelV=document.getElementById('flipSelV');
 
-    // Canvas
+    /* Canvas */
     const fabricCanvas = new fabric.Canvas('c', { backgroundColor:'#061621', preserveObjectStacking:true, selection:true });
-    let baseImage=null, cropRect=null;
+    let baseImage=null;
 
     function fitCanvas(){
-      const reserved = 260; // header/footer budget
+      const reserved = 260;
       const targetH = Math.max(380, window.innerHeight - reserved);
       document.getElementById('c').style.height = targetH + 'px';
       fabricCanvas.setHeight(targetH);
@@ -273,7 +310,7 @@
       });
     }
 
-    // ---- FULL-RES EXPORT/SAVE ----
+    /* FULL-RES EXPORT/SAVE */
     function dataURLFromCanvasFullRes() {
       const zoom = fabricCanvas.getZoom() || 1;
       let multiplier = 1;
@@ -284,16 +321,13 @@
       multiplier = Math.max(1, Math.min(8, multiplier));
       return fabricCanvas.toDataURL({ format: 'png', quality: 0.95, multiplier });
     }
-
     exportPNG.onclick = () => {
       const url = dataURLFromCanvasFullRes();
       const a = document.createElement('a');
-      a.href = url;
-      a.download = (current?.title || 'image') + '-edited.png';
-      a.click();
+      a.href = url; a.download = 'image-edited.png'; a.click();
     };
 
-    // ===== Load scenarios (Admin logic: fixed '/scenarios') =====
+    /* Scenarios (fixed root '/scenarios') */
     function coerceStops(sc){
       if (Array.isArray(sc?.stops))  return sc.stops;
       if (Array.isArray(sc?.photos)) return sc.photos;
@@ -334,15 +368,9 @@
 
     async function loadScenarios(){
       try{
-        showStatus('Loading scenarios…');
+        showLoading('Loading scenarios…');
         const snap = await get(ref(db, ROOT));
-        if (!snap.exists()){
-          scenarios = [];
-          populateList();
-          showStatus('0 scenario(s) loaded');
-          return;
-        }
-        const obj = snap.val() || {};
+        const obj = snap.exists() ? (snap.val()||{}) : {};
         scenarios = Object.entries(obj).map(([id, s])=>({
           id, _raw:s, _stops:coerceStops(s), ...s
         })).sort((a,b)=>(b.createdAt||0)-(a.createdAt||0));
@@ -350,7 +378,8 @@
         showStatus(`${scenarios.length} scenario(s) loaded`);
       }catch(e){
         showStatus('Error: ' + (e?.message || e));
-      }
+        ERR(e?.message || e);
+      } finally { hideLoading(); }
     }
 
     function startLive(){
@@ -372,12 +401,12 @@
     startLive();
     refreshBtn.onclick = loadScenarios;
 
-    scenarioSel.onchange = ()=>{
+    scenarioSel.onchange = async ()=>{
       const id=scenarioSel.value;
       current = scenarios.find(s=>s.id===id) || null;
       stopIndex=-1;
       renderStopsThumbs();
-      fabricCanvas.clear(); baseImage=null; cropRect=null;
+      fabricCanvas.clear(); baseImage=null;
       fitCanvas();
     };
 
@@ -391,9 +420,12 @@
       stopLng.value=(s.lng ?? '').toString();
       stopRadius.value=(s.radiusMeters ?? s.radius ?? 50).toString();
       Array.from(stopList.children).forEach((n,i)=>n.classList.toggle('active', i===idx));
-      fabricCanvas.clear(); baseImage=null; cropRect=null;
+      fabricCanvas.clear(); baseImage=null;
+
       const src=s.imageData||s.imageURL;
       if(!src){ metaMsg.textContent='No image in this stop.'; return; }
+
+      showLoading('Loading photo…');
       await setBaseImageFromDataURL(src);
 
       // Rehydrate overlays + erase masks
@@ -410,8 +442,7 @@
                   flipX:!!ov.flipX, flipY:!!ov.flipY,
                   erasable:true, cornerStyle:'circle', transparentCorners:false
                 });
-
-                // Reapply fallback erase mask if present
+                // reapply mask
                 if (Array.isArray(ov.erase) && ov.erase.length){
                   const circles = ov.erase.map(e => new fabric.Circle({
                     left: e.x, top: e.y, radius: e.r,
@@ -419,7 +450,8 @@
                   }));
                   img.set('clipPath', new fabric.Group(circles, { absolutePositioned:true, inverted:true }));
                 }
-
+                // attach erase stacks
+                img._eraseUndoStack = []; img._eraseRedoStack = [];
                 fabricCanvas.add(img);
               } finally { res(); }
             }, { crossOrigin:'anonymous' });
@@ -427,33 +459,29 @@
         }
         fabricCanvas.requestRenderAll();
       }
+      hideLoading();
     }
 
-    // GPS + Meta save
+    /* GPS + Meta save */
     useGPS.onclick=()=>{ navigator.geolocation.getCurrentPosition(p=>{ stopLat.value=p.coords.latitude.toFixed(6); stopLng.value=p.coords.longitude.toFixed(6); metaMsg.textContent='GPS captured.'; }, e=>{ metaMsg.textContent='GPS error: '+e.message; }, { enableHighAccuracy:true, timeout:10000 }); };
 
     function serializeOverlays(){
       const out=[];
       fabricCanvas.getObjects('image').forEach(img=>{
         if (img===baseImage) return;
-
-        // Persist clipPath circles when present (fallback eraser)
         let erase = null;
         if (img.clipPath && img.clipPath.type === 'group' && img.clipPath.inverted) {
           erase = (img.clipPath._objects || []).map(o => ({
-            type: o.type,
-            x: o.left, y: o.top,
-            r: o.radius || 0,
+            type: o.type, x: o.left, y: o.top, r: o.radius || 0,
           }));
         }
-
         out.push({
           src: img.getSrc ? img.getSrc() : img._originalElement?.src || img.src || '',
           left: img.left||0, top: img.top||0,
           scaleX: img.scaleX||1, scaleY: img.scaleY||1,
           angle: img.angle||0, opacity: img.opacity??1,
           flipX: !!img.flipX,  flipY: !!img.flipY,
-          erase // array of circles or null
+          erase
         });
       });
       return out;
@@ -461,6 +489,7 @@
 
     saveMeta.onclick=async()=>{ try{
       if(!current || stopIndex<0) throw new Error('Select a stop first.');
+      showSaving();
       const s = { ...current._stops[stopIndex] };
       s.title=stopTitle.value.trim();
       s.caption=stopCaption.value.trim();
@@ -475,105 +504,156 @@
       await set(ref(db, `${ROOT}/${current.id}`), updated);
       current._raw = updated; current._stops = nextStops;
       metaMsg.textContent='Meta saved.';
-    }catch(err){ metaMsg.textContent=String(err.message||err); } };
+    }catch(err){ metaMsg.textContent=String(err.message||err); }
+     finally { hideSaving(); } };
 
     function readFileAsDataURL(f){ return new Promise((res,rej)=>{ const r=new FileReader(); r.onload=()=>res(r.result); r.onerror=rej; r.readAsDataURL(f); }); }
     replaceApply.onclick=async()=>{ const f=replaceFile.files?.[0]; if(!f){ metaMsg.textContent='Choose a file first.'; return; } const data=await readFileAsDataURL(f); await setBaseImageFromDataURL(data); };
 
     async function persistCurrentStopImageAndOverlays(){
       if(!current || stopIndex<0) throw new Error('Select a stop first.');
-      const url = dataURLFromCanvasFullRes();
-      const s = { ...current._stops[stopIndex] };
-      s.imageData=url; s.imageURL=null;
-      s.overlays = serializeOverlays();
-      const nextStops = [ ...current._stops ]; nextStops[stopIndex] = s;
-      const updated = { ...current._raw };
-      setStops(updated, nextStops);
-      await set(ref(db, `${ROOT}/${current.id}`), updated);
-      current._raw = updated; current._stops = nextStops;
-      renderStopsThumbs();
-      metaMsg.textContent='Image + overlays saved.';
+      showSaving();
+      try{
+        const url = dataURLFromCanvasFullRes();
+        const s = { ...current._stops[stopIndex] };
+        s.imageData=url; s.imageURL=null;
+        s.overlays = serializeOverlays();
+        const nextStops = [ ...current._stops ]; nextStops[stopIndex] = s;
+        const updated = { ...current._raw };
+        setStops(updated, nextStops);
+        await set(ref(db, `${ROOT}/${current.id}`), updated);
+        current._raw = updated; current._stops = nextStops;
+        renderStopsThumbs();
+        metaMsg.textContent='Image + overlays saved.';
+      } finally { hideSaving(); }
     }
     saveImage.onclick=()=>persistCurrentStopImageAndOverlays().catch(e=> metaMsg.textContent=String(e.message||e));
 
-    // Overlay shelf
+    /* Overlay shelf */
     const OVERLAY_BASE='https://fireopssim.com/geophoto/overlays/';
     const SPRITES={ fire:['fire1.png','fire2.png','fire3.png','fire4.png','fire5.png','fire_side.png'], smoke:['smoke1.png','smoke2.png','smoke3.png','smoke_ground.png'], people:['people1.png','people2.png','people3.png'], cars:['car1.png','car2.png','car3.png'], hazard:['hazard1.png','hazard2.png','hazard3.png'] };
     const resolveSpritePath=(cat,name)=>`${OVERLAY_BASE}${cat}/${name}`;
     function renderShelf(cat){ overlayShelf.innerHTML=''; (SPRITES[cat]||[]).forEach((name,i)=>{ const div=document.createElement('div'); div.className='olThumb'; const img=document.createElement('img'); img.src=resolveSpritePath(cat,name); img.alt=`${cat}-${i+1}`; img.onerror=()=>{ div.style.opacity=.5; div.title='Missing: '+img.src; }; div.appendChild(img); div.onclick=()=>addOverlayImage(resolveSpritePath(cat,name)); overlayShelf.appendChild(div); }); }
     tabBtns.forEach(btn => btn.onclick = () => { tabBtns.forEach(b => b.classList.remove('active')); btn.classList.add('active'); renderShelf(btn.dataset.cat); });
     if (tabBtns[0]) { tabBtns[0].classList.add('active'); renderShelf(tabBtns[0].dataset.cat); }
-    function addOverlayImage(src){ fabric.Image.fromURL(src, img => { const cw=fabricCanvas.getWidth(), ch=fabricCanvas.getHeight(); const targetW=cw*0.28; const scale=targetW/img.width; img.scale(scale); img.set({ left:cw/2-(img.width*scale)/2, top:ch/2-(img.height*scale)/2, cornerStyle:'circle', transparentCorners:false, shadow:'rgba(0,0,0,0.35) 0 6px 16px', erasable:true }); fabricCanvas.add(img); fabricCanvas.setActiveObject(img); fabricCanvas.requestRenderAll(); }, { crossOrigin:'anonymous' }); }
+    function addOverlayImage(src){ fabric.Image.fromURL(src, img => { const cw=fabricCanvas.getWidth(), ch=fabricCanvas.getHeight(); const targetW=cw*0.28; const scale=targetW/img.width; img.scale(scale); img.set({ left:cw/2-(img.width*scale)/2, top:ch/2-(img.height*scale)/2, cornerStyle:'circle', transparentCorners:false, shadow:'rgba(0,0,0,0.35) 0 6px 16px', erasable:true }); img._eraseUndoStack=[]; img._eraseRedoStack=[]; fabricCanvas.add(img); fabricCanvas.setActiveObject(img); fabricCanvas.requestRenderAll(); }, { crossOrigin:'anonymous' }); }
 
-    // Hue/Opacity/Order
+    /* Hue/Opacity/Order */
     const supportsHue = !!(fabric.Image && fabric.Image.filters && fabric.Image.filters.HueRotation);
     overlayHue.disabled = !supportsHue;
     function ensureHueFilter(img){ img.filters = img.filters || []; img.filters = img.filters.filter(f => !(f && f.type === 'HueRotation')); }
     overlayHue.oninput = (e)=>{ if(!supportsHue) return; const o=fabricCanvas.getActiveObject(); if(o && o.type==='image' && o!==baseImage){ const deg=parseInt(e.target.value,10)||0; ensureHueFilter(o); if (deg !== 0) o.filters.push(new fabric.Image.filters.HueRotation({ rotation: deg * Math.PI/180 })); o.applyFilters(); fabricCanvas.requestRenderAll(); } };
     overlayOpacity.oninput = (e)=>{ const o=fabricCanvas.getActiveObject(); if(o && o!==baseImage){ o.set('opacity', parseFloat(e.target.value)); fabricCanvas.requestRenderAll(); } };
+
     bringFront.onclick = ()=>{ const o=fabricCanvas.getActiveObject(); if(o && o!==baseImage){ o.bringToFront(); fabricCanvas.requestRenderAll(); } };
     sendBack.onclick  = ()=>{ const o=fabricCanvas.getActiveObject(); if(o && o!==baseImage){ o.sendToBack(); if(baseImage) baseImage.sendToBack(); fabricCanvas.requestRenderAll(); } };
     deleteObj.onclick = ()=>{ const o=fabricCanvas.getActiveObject(); if(o && o!==baseImage){ fabricCanvas.remove(o); fabricCanvas.discardActiveObject(); fabricCanvas.requestRenderAll(); } };
 
-    // ---- Eraser (native brush if present; fallback clip-mask otherwise) ----
-    let erasing = false, fallbackEraserActive = false, fallbackCircles = [], pointerDown = false;
+    /* Eraser — clip-mask with Undo/Redo/Opacity */
+    let erasing=false, pointerDown=false;
+    function selectedOverlay(){ const o=fabricCanvas.getActiveObject(); return (o && o.type==='image' && o!==baseImage) ? o : null; }
+
+    function getMaskCircles(img){
+      if (img.clipPath && img.clipPath.type==='group' && img.clipPath.inverted){
+        return img.clipPath._objects || [];
+      }
+      return [];
+    }
+    function setMaskCircles(img, arr){
+      img.set('clipPath', new fabric.Group(arr, { absolutePositioned:true, inverted:true }));
+    }
+    function pushUndo(img, prevArr){
+      img._eraseUndoStack = img._eraseUndoStack || [];
+      img._eraseRedoStack = img._eraseRedoStack || [];
+      // store shallow copies
+      img._eraseUndoStack.push(prevArr.map(c=> new fabric.Circle({left:c.left, top:c.top, radius:c.radius, originX:'center', originY:'center', absolutePositioned:true})));
+      // clear redo on new action
+      img._eraseRedoStack.length = 0;
+    }
+
+    function applyCircle(img, p, radius){
+      const prev = getMaskCircles(img);
+      pushUndo(img, prev);
+      const next = prev.slice();
+      next.push(new fabric.Circle({ left:p.x, top:p.y, radius, originX:'center', originY:'center', absolutePositioned:true }));
+      setMaskCircles(img, next);
+    }
+
+    function onMouseDown(opt){
+      const img = selectedOverlay(); if(!img) return;
+      pointerDown = true;
+      const p = fabricCanvas.getPointer(opt.e);
+      const r = (parseInt(eraserSize.value,10)||30) * 0.5;
+      applyCircle(img, p, r);
+      fabricCanvas.requestRenderAll();
+    }
+    function onMouseMove(opt){
+      if(!pointerDown) return;
+      const img = selectedOverlay(); if(!img) return;
+      const p = fabricCanvas.getPointer(opt.e);
+      const r = (parseInt(eraserSize.value,10)||30) * 0.5;
+      applyCircle(img, p, r);
+      fabricCanvas.requestRenderAll();
+    }
+    function onMouseUp(){ pointerDown=false; }
 
     function stopErasing(){
-      fabricCanvas.isDrawingMode = false;
-      erasing = false;
-      fallbackEraserActive = false;
-      pointerDown = false;
-      eraserStatus.textContent = 'Eraser: off';
-      fabricCanvas.off('mouse:down', onMouseDownFallback);
-      fabricCanvas.off('mouse:move', onMouseMoveFallback);
-      fabricCanvas.off('mouse:up',   onMouseUpFallback);
+      erasing=false; pointerDown=false;
+      eraserStatus.textContent='Eraser: off';
+      fabricCanvas.off('mouse:down', onMouseDown);
+      fabricCanvas.off('mouse:move', onMouseMove);
+      fabricCanvas.off('mouse:up', onMouseUp);
     }
-
-    function ensureOverlaySelected(){
-      const sel = fabricCanvas.getActiveObject();
-      if (!sel || sel.type!=='image' || sel===baseImage) { alert('Select an overlay image first.'); return null; }
-      return sel;
-    }
-
-    function applyFallbackCircleAt(sel, canvasPoint, radius){
-      const c = new fabric.Circle({ left: canvasPoint.x, top: canvasPoint.y, radius, originX:'center', originY:'center', absolutePositioned:true });
-      fallbackCircles.push(c);
-      const clipGroup = new fabric.Group(fallbackCircles, { absolutePositioned:true, inverted:true });
-      sel.set('clipPath', clipGroup);
-    }
-    function onMouseDownFallback(opt){ const sel=ensureOverlaySelected(); if(!sel) return; pointerDown = true; const p=fabricCanvas.getPointer(opt.e); const r=(parseInt(eraserSize.value,10)||30)*0.5; applyFallbackCircleAt(sel, p, r); fabricCanvas.requestRenderAll(); }
-    function onMouseMoveFallback(opt){ if(!pointerDown) return; const sel=ensureOverlaySelected(); if(!sel) return; const p=fabricCanvas.getPointer(opt.e); const r=(parseInt(eraserSize.value,10)||30)*0.5; applyFallbackCircleAt(sel, p, r); fabricCanvas.requestRenderAll(); }
-    function onMouseUpFallback(){ pointerDown = false; }
 
     eraserStart.onclick = ()=>{
-      const sel = ensureOverlaySelected(); if(!sel) return;
-      if (fabric.EraserBrush) {
-        fabricCanvas.getObjects().forEach(o=>o.set('erasable', false));
-        sel.set('erasable', true);
-        fabricCanvas.isDrawingMode = true;
-        fabricCanvas.freeDrawingBrush = new fabric.EraserBrush(fabricCanvas);
-        fabricCanvas.freeDrawingBrush.width = parseInt(eraserSize.value,10)||30;
-        erasing = true;
-        eraserStatus.textContent = `Eraser: ON (brush ${fabricCanvas.freeDrawingBrush.width})`;
-      } else {
-        fallbackEraserActive = true;
-        fallbackCircles = (sel.clipPath && sel.clipPath._objects) ? [...sel.clipPath._objects] : [];
-        fabricCanvas.on('mouse:down', onMouseDownFallback);
-        fabricCanvas.on('mouse:move', onMouseMoveFallback);
-        fabricCanvas.on('mouse:up',   onMouseUpFallback);
-        eraserStatus.textContent = `Eraser: ON (fallback, size ${parseInt(eraserSize.value,10)||30})`;
-      }
+      const img = selectedOverlay(); if(!img){ alert('Select an overlay image first.'); return; }
+      erasing = true;
+      eraserStatus.textContent = `Eraser: ON (size ${parseInt(eraserSize.value,10)||30})`;
+      fabricCanvas.on('mouse:down', onMouseDown);
+      fabricCanvas.on('mouse:move', onMouseMove);
+      fabricCanvas.on('mouse:up', onMouseUp);
     };
-    eraserSize.oninput = ()=>{ if (fabricCanvas.freeDrawingBrush) { fabricCanvas.freeDrawingBrush.width = parseInt(eraserSize.value,10)||30; if (erasing) eraserStatus.textContent = `Eraser: ON (brush ${fabricCanvas.freeDrawingBrush.width})`; } else if (fallbackEraserActive) { eraserStatus.textContent = `Eraser: ON (fallback, size ${parseInt(eraserSize.value,10)||30})`; } };
     eraserDone.onclick = stopErasing;
     eraserCancel.onclick = ()=>{ stopErasing(); fabricCanvas.renderAll(); };
 
-    // Flip only
+    eraserOverlayOpacity.oninput = (e)=>{
+      const img = selectedOverlay(); if(img){ img.set('opacity', parseFloat(e.target.value)); fabricCanvas.requestRenderAll(); }
+    };
+
+    eraserUndo.onclick = ()=>{
+      const img = selectedOverlay(); if(!img) return;
+      img._eraseUndoStack = img._eraseUndoStack || []; img._eraseRedoStack = img._eraseRedoStack || [];
+      const prev = img._eraseUndoStack.pop(); if(!prev) return;
+      // push current to redo
+      const curr = getMaskCircles(img);
+      img._eraseRedoStack.push(curr.map(c=> new fabric.Circle({left:c.left, top:c.top, radius:c.radius, originX:'center', originY:'center', absolutePositioned:true})));
+      setMaskCircles(img, prev);
+      fabricCanvas.requestRenderAll();
+    };
+    eraserRedo.onclick = ()=>{
+      const img = selectedOverlay(); if(!img) return;
+      img._eraseRedoStack = img._eraseRedoStack || []; img._eraseUndoStack = img._eraseUndoStack || [];
+      const nxt = img._eraseRedoStack.pop(); if(!nxt) return;
+      // push current to undo
+      const curr = getMaskCircles(img);
+      img._eraseUndoStack.push(curr.map(c=> new fabric.Circle({left:c.left, top:c.top, radius:c.radius, originX:'center', originY:'center', absolutePositioned:true})));
+      setMaskCircles(img, nxt);
+      fabricCanvas.requestRenderAll();
+    };
+    eraserClear.onclick = ()=>{
+      const img = selectedOverlay(); if(!img) return;
+      const curr = getMaskCircles(img);
+      pushUndo(img, curr);
+      setMaskCircles(img, []);
+      fabricCanvas.requestRenderAll();
+    };
+
+    /* Flip only */
     function flipSelected(axis){ const o=fabricCanvas.getActiveObject(); if(!o || o===baseImage) return; if(axis==='x') o.set('flipX', !o.flipX); if(axis==='y') o.set('flipY', !o.flipY); fabricCanvas.requestRenderAll(); }
     flipSelH.onclick=()=>flipSelected('x');
     flipSelV.onclick=()=>flipSelected('y');
 
-    // Canvas utilities
+    /* Canvas utilities */
     const rebase=()=>{ if(!baseImage) return; setBaseImageFromDataURL(baseImage.toDataURL({})); };
     fitBtn.onclick=rebase;
     zoomIn.onclick=()=>fabricCanvas.setZoom(fabricCanvas.getZoom()*1.1);
@@ -581,9 +661,10 @@
     rotateL.onclick=()=>{ if(baseImage){ baseImage.rotate((baseImage.angle||0)-90); fabricCanvas.requestRenderAll(); } };
     rotateR.onclick=()=>{ if(baseImage){ baseImage.rotate((baseImage.angle||0)+90); fabricCanvas.requestRenderAll(); } };
 
-    // Delete stop
-    deleteStop.onclick=async()=>{ try{ if(!current || stopIndex<0) return; if(!confirm('Delete this photo from the scenario?')) return; current._stops.splice(stopIndex,1); const updated={ ...current._raw }; setStops(updated, current._stops); await set(ref(db, `${ROOT}/${current.id}`), updated); stopIndex=-1; fabricCanvas.clear(); baseImage=null; renderStopsThumbs(); metaMsg.textContent='Photo deleted.'; }catch(e){ metaMsg.textContent=String(e.message||e); } };
-  })();
+    /* Delete stop */
+    deleteStop.onclick=async()=>{ try{ if(!current || stopIndex<0) return; if(!confirm('Delete this photo from the scenario?')) return; const next=[...current._stops]; next.splice(stopIndex,1); const updated={ ...current._raw }; setStops(updated, next); await set(ref(db, `${ROOT}/${current.id}`), updated); current._stops=next; stopIndex=-1; fabricCanvas.clear(); baseImage=null; renderStopsThumbs(); metaMsg.textContent='Photo deleted.'; }catch(e){ metaMsg.textContent=String(e.message||e); } };
+
+  })().catch(e=>ERR(e?.message||e));
   </script>
 </body>
 </html>
