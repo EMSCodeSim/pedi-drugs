@@ -1,735 +1,769 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="utf-8" />
-<meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>Geo Scenarios — Advanced Editor (Desktop)</title>
-<style>
-  :root{
-    --bg:#0a0f14; --panel:#0f1820; --surface:#0f1820; --muted:#9bc6d2; --text:#eaf7fb; --border:#244656;
-    --accent:#2dd4bf; --accentText:#042e2a; --danger:#ff6b6b; --warn:#ffc857; --br:14px; --shadow:0 8px 28px rgba(0,0,0,.45);
-  }
-  @media (prefers-color-scheme: light){
-    :root{ --bg:#f5fbff; --panel:#ffffff; --surface:#ffffff; --muted:#4f6b78; --text:#0b1e27; --border:#d3e5ec; --shadow:0 8px 28px rgba(0,0,0,.08) }
-  }
-  *{box-sizing:border-box}
-  html,body{height:100%}
-  body{margin:0;background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial}
-  header{padding:10px 14px;border-bottom:1px solid var(--border);background:#0d1822}
-  h1{margin:0;font-size:18px}
-  .app{display:grid;grid-template-columns:320px 1fr 380px;gap:12px;padding:12px;max-height:calc(100vh - 58px)}
-  .col{background:var(--surface);border:1px solid var(--border);border-radius:var(--br);box-shadow:var(--shadow);padding:12px;overflow:auto}
-  label{display:block;margin:8px 0 6px 2px;font-size:12px;color:var(--muted)}
-  select,input,textarea,button{font-size:14px}
-  select,input[type="text"],textarea{
-    width:100%;padding:10px;border-radius:10px;border:1px solid var(--border);background:#0d2430;color:var(--text);outline:none
-  }
-  textarea{min-height:72px;resize:vertical}
-  .btn{appearance:none;border:0;border-radius:10px;padding:10px 12px;background:var(--accent);color:var(--accentText);font-weight:700;cursor:pointer;box-shadow:var(--shadow)}
-  .btn.secondary{background:transparent;color:var(--text);border:2px dashed var(--border)}
-  .btn.warn{background:var(--warn);color:#2a1d00}
-  .btn.danger{background:var(--danger);color:#2a0a0a}
-  .row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
-  .thumb{width:56px;height:56px;border-radius:8px;object-fit:cover;border:1px solid var(--border);cursor:pointer}
-  .thumb.active{outline:3px solid var(--accent)}
-  .pill{display:inline-flex;gap:8px;align-items:center;padding:6px 10px;border-radius:999px;border:1px solid var(--border);color:var(--muted)}
-  .spacer{height:10px}
-  .sectionTitle{font-weight:800;margin:6px 0}
-  .canvasWrap{position:relative;background:#061621;border:1px solid var(--border);border-radius:12px;overflow:hidden}
-  #c{display:block;width:100%;height:calc(100vh - 160px);background:transparent}
-  .bar{display:flex;gap:8px;flex-wrap:wrap}
-  .divider{height:1px;background:var(--border);opacity:.6;margin:10px 0}
-  .hidden{display:none}
-  .desktopGate{max-width:740px;margin:48px auto;background:var(--surface);border:1px solid var(--border);border-radius:16px;box-shadow:var(--shadow);padding:18px}
-  /* readability */
-  select, input, textarea { color: var(--text) !important; background: var(--panel) !important; border-color: var(--border) !important; }
-  select option { color:#0b1e27; }
-  @media (prefers-color-scheme: dark){ select option { color:#eaf7fb; background:#0d2430; } }
-  ::placeholder { color:#7fb2c1; opacity:1; }
-  /* overlay shelf */
-  .olThumb { width:100%; aspect-ratio:1/1; border-radius:10px; border:1px solid var(--border);
-             background:#0b2130; display:flex; align-items:center; justify-content:center; cursor:pointer; }
-  .olThumb img { max-width:88%; max-height:88%; display:block; }
-  .ol-tab.active { outline:3px solid var(--accent); }
-  /* error banner */
-  #errbar{position:fixed;left:10px;bottom:10px;background:#2b0d0d;color:#ffd7d7;border:1px solid #7a2b2b;border-radius:12px;padding:8px 12px;max-width:80vw;display:none;z-index:9999}
-</style>
+  <meta charset="utf-8" />
+  <title>FireOps SIM — Advanced Editor</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="description" content="Advanced desktop editor for FireOps SIM geo‑photo scenarios with overlays, crop, and RTDB save." />
+  <link rel="canonical" href="https://fireopssim.com/geophoto/advanced-editor.html" />
+  <meta name="theme-color" content="#0b0f14" />
+  <link rel="icon" href="data:," />
+
+  <!-- Open Graph -->
+  <meta property="og:title" content="FireOps SIM — Advanced Editor" />
+  <meta property="og:description" content="Desktop editor for geofenced scenarios: crop, overlays, eraser, and RTDB save." />
+  <meta property="og:type" content="website" />
+  <meta property="og:url" content="https://fireopssim.com/geophoto/advanced-editor.html" />
+  <meta property="og:image" content="https://fireopssim.com/assets/og/geophoto-hero.jpg" />
+
+  <!-- Twitter -->
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="FireOps SIM — Advanced Editor" />
+  <meta name="twitter:description" content="Desktop editor for geofenced scenarios: crop, overlays, eraser, and RTDB save." />
+  <meta name="twitter:image" content="https://fireopssim.com/assets/og/geophoto-hero.jpg" />
+
+  <style>
+    /* ===== Brand theme pulled from home page ===== */
+    :root{
+      --brandName: "FireOps SIM";
+      --brandTag: "Real-Time Fire Scene Simulator";
+      --bg:#0b0f14; --bg2:#101726; --card:#121823; --muted:#8ea0b3; --text:#eaf2ff;
+      --blue:#0a84ff; --teal:#2dd4bf; --red:#ff3b30; --shadow:0 12px 34px rgba(0,0,0,.38);
+      --radius:18px; --radiusSm:14px; --border: rgba(255,255,255,.08);
+    }
+    *{box-sizing:border-box}
+    html,body{margin:0; padding:0; color:var(--text);
+      font-family:system-ui,-apple-system,Segoe UI,Roboto,Inter,Arial,sans-serif;
+      background:
+        radial-gradient(1400px 700px at 15% -15%, rgba(10,132,255,.28), transparent 60%),
+        radial-gradient(1200px 600px at 110% 0%, rgba(255,59,48,.22), transparent 60%),
+        linear-gradient(165deg, var(--bg2), var(--bg) 55%);
+      -webkit-text-size-adjust:100%; scroll-behavior:smooth;
+    }
+    a{color:inherit; text-decoration:none}
+    img{max-width:100%; height:auto; display:block}
+
+    /* Sticky brand topbar */
+    .topbar{position:sticky; top:0; z-index:50; background:rgba(12,15,22,.78);
+      backdrop-filter:saturate(120%) blur(6px); border-bottom:1px solid rgba(255,255,255,.07)}
+    .topnav{max-width:1200px; margin:0 auto; padding:10px 20px; display:flex; align-items:center; gap:14px; flex-wrap:wrap}
+    .brandmini{display:flex; align-items:center; gap:12px; font-weight:800; letter-spacing:.3px}
+    .logo img{width:40px; height:40px; border-radius:10px; box-shadow:var(--shadow); object-fit:cover; background:#0f1624}
+    .tag{color:var(--muted); font-size:12px}
+
+    /* Hero */
+    header.hero{position:relative; overflow:hidden; padding: clamp(18px, 4.6vw, 40px) 20px; border-bottom:1px solid rgba(255,255,255,.06)}
+    .hero-inner{max-width:1200px; margin:0 auto; display:flex; gap:18px; align-items:center; flex-wrap:wrap}
+    .hero-logo{width:88px; height:88px; border-radius:18px; overflow:hidden; flex:0 0 88px; box-shadow:var(--shadow); background:#0f1624; display:grid; place-items:center; padding:8px}
+    .hero-text h1{margin:0 0 6px; font-size:clamp(20px, 3.2vw, 32px)}
+    .hero-text p{margin:6px 0 0; font-size:clamp(13px, 1.9vw, 17px); color:#e9f1ff}
+
+    /* Layout shell for editor */
+    main{max-width:1200px; margin:20px auto 80px; padding:0 20px}
+    .card{position:relative; border-radius:var(--radius); background:var(--card);
+      border:1px solid var(--border); box-shadow:var(--shadow); overflow:hidden}
+
+    /* Error bar */
+    #errbar{position:fixed;left:10px;bottom:10px;background:#2b0d0d;color:#ffd7d7;border:1px solid #7a2b2b;border-radius:12px;padding:8px 12px;max-width:80vw;display:none;z-index:9999}
+
+    /* ===== Advanced editor UI (original, rethemed) ===== */
+    .app{display:grid;grid-template-columns:320px 1fr 380px;gap:12px;max-height:calc(100vh - 260px)}
+    .col{background:var(--card);border:1px solid var(--border);border-radius:var(--radiusSm);box-shadow:var(--shadow);padding:12px;overflow:auto}
+    label{display:block;margin:8px 0 6px 2px;font-size:12px;color:var(--muted)}
+    select,input,textarea,button{font-size:14px}
+    select,input[type="text"],textarea{width:100%;padding:10px;border-radius:10px;border:1px solid rgba(255,255,255,.12);background:#0d2430;color:var(--text);outline:none}
+    textarea{min-height:72px;resize:vertical}
+    .btn{appearance:none;border:0;border-radius:12px;padding:10px 12px;background:linear-gradient(180deg,#54a6ff,var(--blue));color:#03131b;font-weight:800;cursor:pointer;box-shadow:var(--shadow)}
+    .btn.secondary{background:transparent;color:var(--text);border:1px solid rgba(255,255,255,.18)}
+    .btn.warn{background:#ffc857;color:#2a1d00}
+    .btn.danger{background:var(--red);color:#ffecec}
+    .row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+    .thumb{width:56px;height:56px;border-radius:8px;object-fit:cover;border:1px solid rgba(255,255,255,.15);cursor:pointer; background:#0b2130}
+    .thumb.active{outline:3px solid var(--teal)}
+    .pill{display:inline-flex;gap:8px;align-items:center;padding:6px 10px;border-radius:999px;border:1px solid rgba(255,255,255,.14);color:var(--muted)}
+    .spacer{height:10px}
+    .sectionTitle{font-weight:800;margin:6px 0}
+    .canvasWrap{position:relative;background:#061621;border:1px solid rgba(255,255,255,.12);border-radius:12px;overflow:hidden}
+    #c{display:block;width:100%;height:calc(100vh - 360px);background:transparent}
+    .bar{display:flex;gap:8px;flex-wrap:wrap}
+    .divider{height:1px;background:rgba(255,255,255,.1);opacity:.8;margin:10px 0}
+    .hidden{display:none}
+
+    /* Desktop gate card */
+    .desktopGate{max-width:740px;margin:24px auto;background:var(--card);border:1px solid var(--border);border-radius:16px;box-shadow:var(--shadow);padding:18px}
+
+    /* Overlay shelf */
+    .olThumb{width:100%;aspect-ratio:1/1;border-radius:10px;border:1px solid rgba(255,255,255,.12);background:#0b2130;display:flex;align-items:center;justify-content:center;cursor:pointer}
+    .olThumb img{max-width:88%;max-height:88%;display:block}
+    .ol-tab.active{outline:3px solid var(--teal)}
+
+    footer{max-width:1200px;margin:40px auto;padding:18px 20px;color:var(--muted);font-size:13px;border-top:1px solid rgba(255,255,255,.06);display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap}
+
+    @media (max-width: 1100px){ .app{grid-template-columns:1fr; max-height:unset} #c{height:56vh} }
+  </style>
 </head>
 <body>
-<header><h1>Geo Scenarios — Advanced Editor (Desktop Only)</h1></header>
-<div id="errbar"></div>
-
-<!-- Desktop gate -->
-<div id="gate" class="desktopGate hidden">
-  <h2 style="margin:0 0 8px">Use a computer to edit</h2>
-  <p>This advanced editor is intended for desktop/laptop. If you’re on a touchscreen laptop or a narrow window, you can still proceed.</p>
-  <div class="row" style="margin-top:10px">
-    <button id="forceGo" class="btn">Continue anyway</button>
-  </div>
-  <p class="pill" id="gateInfo">Gate check…</p>
-</div>
-
-<div id="app" class="app hidden">
-  <!-- Left: scenarios + meta -->
-  <div class="col" id="leftCol">
-    <div class="row" style="justify-content:space-between">
-      <div class="pill" id="statusPill">Loading…</div>
-      <button id="refresh" class="btn secondary">Refresh</button>
-    </div>
-    <label>Scenario</label>
-    <select id="scenarioSel"><option value="">Loading…</option></select>
-    <div class="spacer"></div>
-    <div class="row">
-      <div class="pill" id="metaTitle">(title)</div>
-      <div class="pill" id="metaDispatch">Dispatch: (none)</div>
-    </div>
-    <div class="divider"></div>
-    <div class="sectionTitle">Photos in scenario</div>
-    <div id="stopList" class="row"></div>
-    <div class="divider"></div>
-    <div class="sectionTitle">Selected stop meta</div>
-    <label>Title</label><input id="stopTitle" type="text" placeholder="Stop title" />
-    <label>Caption</label><textarea id="stopCaption" placeholder="Caption / text"></textarea>
-    <div class="row">
-      <div style="flex:1">
-        <label>Latitude</label><input id="stopLat" type="text" placeholder="e.g. 39.7392" />
-      </div>
-      <div style="flex:1">
-        <label>Longitude</label><input id="stopLng" type="text" placeholder="-104.9903" />
+  <!-- Sticky Top Navigation -->
+  <div class="topbar">
+    <div class="topnav">
+      <div class="brandmini">
+        <div class="logo" aria-hidden="true">
+          <img src="/assets/logo/fire-ops-sim.png" alt="FireOps SIM logo" />
+        </div>
+        <div>
+          <div id="brandName" style="line-height:1.1; font-size:15px; font-weight:900">FireOps SIM</div>
+          <div class="tag" id="brandTag">Real-Time Fire Scene Simulator</div>
+        </div>
       </div>
     </div>
-    <label>Radius (meters)</label><input id="stopRadius" type="text" placeholder="50" />
-    <div class="row" style="margin-top:6px">
-      <button id="useGPS" class="btn secondary">Use my location</button>
-      <button id="saveMeta" class="btn">Save Meta</button>
-    </div>
-    <div id="metaMsg" class="pill" style="margin-top:6px">Ready</div>
-    <div class="divider"></div>
-    <div class="row">
-      <input id="replaceFile" type="file" accept="image/*" />
-      <button id="replaceApply" class="btn">Replace Image</button>
-    </div>
-    <div class="row" style="margin-top:6px">
-      <button id="deleteStop" class="btn danger">Delete This Photo</button>
-      <button id="exportPNG" class="btn secondary">Export PNG</button>
-    </div>
   </div>
 
-  <!-- Center: canvas -->
-  <div class="col">
-    <div class="bar" style="margin-bottom:8px">
-      <button id="fit" class="btn secondary">Fit</button>
-      <button id="zoomIn" class="btn secondary">Zoom +</button>
-      <button id="zoomOut" class="btn secondary">Zoom −</button>
-      <button id="rotateL" class="btn secondary">Rotate ⟲</button>
-      <button id="rotateR" class="btn secondary">Rotate ⟳</button>
-      <span class="pill" id="canvasInfo">Canvas</span>
-      <button id="saveImage" class="btn">Save Image to RTDB</button>
+  <!-- Hero -->
+  <header class="hero">
+    <div class="hero-inner">
+      <div class="hero-logo" aria-hidden="true">
+        <img src="/assets/logo/fire-ops-sim.png" alt="FireOps SIM logo" />
+      </div>
+      <div class="hero-text">
+        <h1 id="heroTitle">Advanced Editor</h1>
+        <p id="heroLead">Desktop editor for geo‑photo scenarios. Crop images, add fire/smoke overlays, erase, rotate, and save directly to your Realtime Database.</p>
+        <div class="row" style="margin-top:10px">
+          <a class="btn secondary" href="/geophoto/" aria-label="Back to Geo‑Photo Viewer">← Back to Viewer</a>
+          <a class="btn secondary" href="/geophoto/admin" aria-label="Open Scenario Builder">Scenario Builder</a>
+        </div>
+      </div>
     </div>
-    <div class="canvasWrap"><canvas id="c"></canvas></div>
-  </div>
+  </header>
 
-  <!-- Right: crop + overlays + eraser + transforms + bulk -->
-  <div class="col">
-    <div class="sectionTitle">Crop</div>
-    <div class="row">
-      <button id="cropStart" class="btn warn">Start Crop</button>
-      <button id="cropApply" class="btn">Apply</button>
-      <button id="cropCancel" class="btn secondary">Cancel</button>
-    </div>
+  <main>
+    <!-- Error banner -->
+    <div id="errbar"></div>
 
-    <div class="divider"></div>
-    <div class="sectionTitle">Overlays</div>
-    <div class="row" style="gap:6px; flex-wrap:nowrap; overflow:auto">
-      <button class="btn secondary ol-tab" data-cat="fire">🔥 Fire</button>
-      <button class="btn secondary ol-tab" data-cat="smoke">🌫️ Smoke</button>
-      <button class="btn secondary ol-tab" data-cat="people">🧍 People</button>
-      <button class="btn secondary ol-tab" data-cat="cars">🚗 Cars</button>
-      <button class="btn secondary ol-tab" data-cat="hazard">⚠️ Hazard</button>
-    </div>
-    <div id="overlayShelf" style="margin-top:8px; display:grid; grid-template-columns:repeat(3, 1fr); gap:8px"></div>
-
-    <label style="margin-top:10px">Hue (selected overlay)</label>
-    <input id="overlayHue" type="range" min="-180" max="180" step="1" value="0" />
-
-    <label style="margin-top:10px">Opacity</label>
-    <input id="overlayOpacity" type="range" min="0.05" max="1" step="0.05" value="1" />
-
-    <div class="row" style="margin-top:8px">
-      <button id="bringFront" class="btn secondary">Bring to Front</button>
-      <button id="sendBack" class="btn secondary">Send to Back</button>
-      <button id="deleteObj" class="btn danger">Delete Selected</button>
+    <!-- Desktop gate -->
+    <div id="gate" class="desktopGate hidden card">
+      <h2 style="margin:0 0 8px">Use a computer to edit</h2>
+      <p>This advanced editor is intended for desktop/laptop. If you’re on a touchscreen laptop or a narrow window, you can still proceed.</p>
+      <div class="row" style="margin-top:10px">
+        <button id="forceGo" class="btn">Continue anyway</button>
+      </div>
+      <p class="pill" id="gateInfo">Gate check…</p>
     </div>
 
-    <div class="divider"></div>
-    <div class="sectionTitle">Eraser (selected overlay)</div>
-    <div class="row">
-      <button id="eraserStart" class="btn warn">Start Erasing</button>
-      <button id="eraserDone" class="btn">Finish</button>
-      <button id="eraserCancel" class="btn secondary">Cancel</button>
+    <!-- App -->
+    <div id="app" class="app hidden">
+      <!-- Left: scenarios + meta -->
+      <div class="col" id="leftCol">
+        <div class="row" style="justify-content:space-between">
+          <div class="pill" id="statusPill">Loading…</div>
+          <button id="refresh" class="btn secondary">Refresh</button>
+        </div>
+        <label>Scenario</label>
+        <select id="scenarioSel"><option value="">Loading…</option></select>
+        <div class="spacer"></div>
+        <div class="row">
+          <div class="pill" id="metaTitle">(title)</div>
+          <div class="pill" id="metaDispatch">Dispatch: (none)</div>
+        </div>
+        <div class="divider"></div>
+        <div class="sectionTitle">Photos in scenario</div>
+        <div id="stopList" class="row"></div>
+        <div class="divider"></div>
+        <div class="sectionTitle">Selected stop meta</div>
+        <label>Title</label><input id="stopTitle" type="text" placeholder="Stop title" />
+        <label>Caption</label><textarea id="stopCaption" placeholder="Caption / text"></textarea>
+        <div class="row">
+          <div style="flex:1">
+            <label>Latitude</label><input id="stopLat" type="text" placeholder="e.g. 39.7392" />
+          </div>
+          <div style="flex:1">
+            <label>Longitude</label><input id="stopLng" type="text" placeholder="-104.9903" />
+          </div>
+        </div>
+        <label>Radius (meters)</label><input id="stopRadius" type="text" placeholder="50" />
+        <div class="row" style="margin-top:6px">
+          <button id="useGPS" class="btn secondary">Use my location</button>
+          <button id="saveMeta" class="btn">Save Meta</button>
+        </div>
+        <div id="metaMsg" class="pill" style="margin-top:6px">Ready</div>
+        <div class="divider"></div>
+        <div class="row">
+          <input id="replaceFile" type="file" accept="image/*" />
+          <button id="replaceApply" class="btn">Replace Image</button>
+        </div>
+        <div class="row" style="margin-top:6px">
+          <button id="deleteStop" class="btn danger">Delete This Photo</button>
+          <button id="exportPNG" class="btn secondary">Export PNG</button>
+        </div>
+      </div>
+
+      <!-- Center: canvas -->
+      <div class="col">
+        <div class="bar" style="margin-bottom:8px">
+          <button id="fit" class="btn secondary">Fit</button>
+          <button id="zoomIn" class="btn secondary">Zoom +</button>
+          <button id="zoomOut" class="btn secondary">Zoom −</button>
+          <button id="rotateL" class="btn secondary">Rotate ⟲</button>
+          <button id="rotateR" class="btn secondary">Rotate ⟳</button>
+          <span class="pill" id="canvasInfo">Canvas</span>
+          <button id="saveImage" class="btn">Save Image to RTDB</button>
+        </div>
+        <div class="canvasWrap"><canvas id="c"></canvas></div>
+      </div>
+
+      <!-- Right: crop + overlays + eraser + transforms + bulk -->
+      <div class="col">
+        <div class="sectionTitle">Crop</div>
+        <div class="row">
+          <button id="cropStart" class="btn warn">Start Crop</button>
+          <button id="cropApply" class="btn">Apply</button>
+          <button id="cropCancel" class="btn secondary">Cancel</button>
+        </div>
+
+        <div class="divider"></div>
+        <div class="sectionTitle">Overlays</div>
+        <div class="row" style="gap:6px; flex-wrap:nowrap; overflow:auto">
+          <button class="btn secondary ol-tab" data-cat="fire">🔥 Fire</button>
+          <button class="btn secondary ol-tab" data-cat="smoke">🌫️ Smoke</button>
+          <button class="btn secondary ol-tab" data-cat="people">🧍 People</button>
+          <button class="btn secondary ol-tab" data-cat="cars">🚗 Cars</button>
+          <button class="btn secondary ol-tab" data-cat="hazard">⚠️ Hazard</button>
+        </div>
+        <div id="overlayShelf" style="margin-top:8px; display:grid; grid-template-columns:repeat(3, 1fr); gap:8px"></div>
+
+        <label style="margin-top:10px">Hue (selected overlay)</label>
+        <input id="overlayHue" type="range" min="-180" max="180" step="1" value="0" />
+
+        <label style="margin-top:10px">Opacity</label>
+        <input id="overlayOpacity" type="range" min="0.05" max="1" step="0.05" value="1" />
+
+        <div class="row" style="margin-top:8px">
+          <button id="bringFront" class="btn secondary">Bring to Front</button>
+          <button id="sendBack" class="btn secondary">Send to Back</button>
+          <button id="deleteObj" class="btn danger">Delete Selected</button>
+        </div>
+
+        <div class="divider"></div>
+        <div class="sectionTitle">Eraser (selected overlay)</div>
+        <div class="row">
+          <button id="eraserStart" class="btn warn">Start Erasing</button>
+          <button id="eraserDone" class="btn">Finish</button>
+          <button id="eraserCancel" class="btn secondary">Cancel</button>
+        </div>
+        <label style="margin-top:8px">Brush Size</label>
+        <input id="eraserSize" type="range" min="5" max="120" step="1" value="30" />
+        <div class="pill" id="eraserStatus" style="margin-top:6px">Eraser: off</div>
+
+        <div class="divider"></div>
+        <div class="sectionTitle">Transform Overlay</div>
+        <div class="row">
+          <button id="rotSelLeft" class="btn secondary">Rotate −15°</button>
+          <button id="rotSelRight" class="btn secondary">Rotate +15°</button>
+          <button id="flipSelH" class="btn secondary">Flip H</button>
+          <button id="flipSelV" class="btn secondary">Flip V</button>
+        </div>
+        <label style="margin-top:8px">Angle</label>
+        <input id="rotSelSlider" type="range" min="-180" max="180" step="1" value="0" />
+
+        <div class="divider"></div>
+        <div class="sectionTitle">Bulk Tools</div>
+        <div class="row">
+          <button id="normalizeLocs" class="btn warn">Normalize All Locations</button>
+          <button id="relinkOverlays" class="btn secondary">Relink Overlay Sources</button>
+        </div>
+        <div class="pill" id="bulkMsg" style="margin-top:6px">Bulk: idle</div>
+      </div>
     </div>
-    <label style="margin-top:8px">Brush Size</label>
-    <input id="eraserSize" type="range" min="5" max="120" step="1" value="30" />
-    <div class="pill" id="eraserStatus" style="margin-top:6px">Eraser: off</div>
+  </main>
 
-    <div class="divider"></div>
-    <div class="sectionTitle">Transform Overlay</div>
-    <div class="row">
-      <button id="rotSelLeft" class="btn secondary">Rotate −15°</button>
-      <button id="rotSelRight" class="btn secondary">Rotate +15°</button>
-      <button id="flipSelH" class="btn secondary">Flip H</button>
-      <button id="flipSelV" class="btn secondary">Flip V</button>
-    </div>
-    <label style="margin-top:8px">Angle</label>
-    <input id="rotSelSlider" type="range" min="-180" max="180" step="1" value="0" />
+  <footer>
+    <div>© <span id="year"></span> <span id="brandNameFoot">FireOps SIM</span></div>
+    <div class="external">Part of the <a href="https://emscodesim.com" rel="noopener">EMS Code Sim</a> training ecosystem</div>
+  </footer>
 
-    <div class="divider"></div>
-    <div class="sectionTitle">Bulk Tools</div>
-    <div class="row">
-      <button id="normalizeLocs" class="btn warn">Normalize All Locations</button>
-      <button id="relinkOverlays" class="btn secondary">Relink Overlay Sources</button>
-    </div>
-    <div class="pill" id="bulkMsg" style="margin-top:6px">Bulk: idle</div>
-  </div>
-</div>
+  <!-- Fabric 5.x -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/fabric.js/5.3.0/fabric.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
 
-<!-- Fabric 5.x -->
-<script src="https://cdnjs.cloudflare.com/ajax/libs/fabric.js/5.3.0/fabric.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+  <script type="module">
+  /* Error banner helper — if anything crashes, you’ll see it */
+  const ERR = (msg) => { const b=document.getElementById('errbar'); b.textContent=msg; b.style.display='block'; };
+  window.addEventListener('error', e => ERR(e.message));
+  window.addEventListener('unhandledrejection', e => ERR(String(e.reason?.message||e.reason||e)));
 
-<script type="module">
-/* Error banner helper — if anything crashes, you’ll see it */
-const ERR = (msg) => { const b=document.getElementById('errbar'); b.textContent=msg; b.style.display='block'; };
-window.addEventListener('error', e => ERR(e.message));
-window.addEventListener('unhandledrejection', e => ERR(String(e.reason?.message||e.reason||e)));
-
-(async () => {
-  /* ===== Desktop gate (old logic) ===== */
-  const gate=document.getElementById('gate');
-  const app=document.getElementById('app');
-  const gateInfo=document.getElementById('gateInfo');
-  const forceGo=document.getElementById('forceGo');
-  const urlForce = new URLSearchParams(location.search).get('force') === '1';
-  function decideGate(){
-    const narrow = window.innerWidth < 1024;
-    gateInfo.textContent = `width: ${window.innerWidth}px`;
-    if (urlForce || !narrow) { gate.classList.add('hidden'); app.classList.remove('hidden'); return; }
-    gate.classList.remove('hidden'); app.classList.add('hidden');
-  }
-  forceGo.onclick=()=>{ history.replaceState(null,'',location.pathname); app.classList.remove('hidden'); gate.classList.add('hidden'); };
-  decideGate(); window.addEventListener('resize', decideGate);
-
-  /* ===== Firebase RTDB (working approach) ===== */
-  const [{ initializeApp }] = await Promise.all([ import("https://www.gstatic.com/firebasejs/10.12.4/firebase-app.js") ]);
-  const [{ getDatabase, ref, onValue, get, set }] = await Promise.all([ import("https://www.gstatic.com/firebasejs/10.12.4/firebase-database.js") ]);
-  const firebaseConfig = {
-    apiKey:"AIzaSyDM6DpRSeZueVKRpbyJyDmhf8WY66KyCDk",
-    authDomain:"dailyquiz-d5279.firebaseapp.com",
-    databaseURL:"https://dailyquiz-d5279-default-rtdb.firebaseio.com",
-    projectId:"dailyquiz-d5279",
-    appId:"1:94577748034:web:c032d3a1d72db1313de5db",
-    measurementId:"G-19DVN7NNH7"
-  };
-  const appFB = initializeApp(firebaseConfig);
-  const db = getDatabase(appFB);
-
-  /* ===== DOM refs ===== */
-  const statusPill=document.getElementById('statusPill');
-  const scenarioSel=document.getElementById('scenarioSel');
-  const stopList=document.getElementById('stopList');
-  const refreshBtn=document.getElementById('refresh');
-  const metaTitle=document.getElementById('metaTitle');
-  const metaDispatch=document.getElementById('metaDispatch');
-  const stopTitle=document.getElementById('stopTitle');
-  const stopCaption=document.getElementById('stopCaption');
-  const stopLat=document.getElementById('stopLat');
-  const stopLng=document.getElementById('stopLng');
-  const stopRadius=document.getElementById('stopRadius');
-  const useGPS=document.getElementById('useGPS');
-  const saveMeta=document.getElementById('saveMeta');
-  const metaMsg=document.getElementById('metaMsg');
-  const replaceFile=document.getElementById('replaceFile');
-  const replaceApply=document.getElementById('replaceApply');
-  const deleteStop=document.getElementById('deleteStop');
-  const exportPNG=document.getElementById('exportPNG');
-  const cInfo=document.getElementById('canvasInfo');
-  const fitBtn=document.getElementById('fit');
-  const zoomIn=document.getElementById('zoomIn');
-  const zoomOut=document.getElementById('zoomOut');
-  const rotateL=document.getElementById('rotateL');
-  const rotateR=document.getElementById('rotateR');
-  const saveImage=document.getElementById('saveImage');
-
-  const cropStart=document.getElementById('cropStart');
-  const cropApply=document.getElementById('cropApply');
-  const cropCancel=document.getElementById('cropCancel');
-
-  const overlayShelf=document.getElementById('overlayShelf');
-  const tabBtns = Array.from(document.querySelectorAll('.ol-tab'));
-  const overlayHue=document.getElementById('overlayHue');
-  const overlayOpacity=document.getElementById('overlayOpacity');
-  const bringFront=document.getElementById('bringFront');
-  const sendBack=document.getElementById('sendBack');
-  const deleteObj=document.getElementById('deleteObj');
-
-  const eraserStart=document.getElementById('eraserStart');
-  const eraserDone=document.getElementById('eraserDone');
-  const eraserCancel=document.getElementById('eraserCancel');
-  const eraserSize=document.getElementById('eraserSize');
-  const eraserStatus=document.getElementById('eraserStatus');
-
-  const rotSelLeft=document.getElementById('rotSelLeft');
-  const rotSelRight=document.getElementById('rotSelRight');
-  const rotSelSlider=document.getElementById('rotSelSlider');
-  const flipSelH=document.getElementById('flipSelH');
-  const flipSelV=document.getElementById('flipSelV');
-
-  const normalizeLocsBtn=document.getElementById('normalizeLocs');
-  const relinkOverlaysBtn=document.getElementById('relinkOverlays');
-  const bulkMsg=document.getElementById('bulkMsg');
-
-  /* ===== State + canvas ===== */
-  let scenarios=[], current=null, stopIndex=-1;
-  const fabricCanvas = new fabric.Canvas('c', { backgroundColor:'#061621', preserveObjectStacking:true, selection:true });
-  let baseImage=null, cropRect=null, erasing=false;
-
-  function fitCanvas(){
-    fabricCanvas.setHeight(window.innerHeight - 160);
-    fabricCanvas.setWidth(document.querySelector('.col:nth-child(2)').clientWidth - 24);
-    fabricCanvas.calcOffset();
-    fabricCanvas.requestRenderAll();
-  }
-  fitCanvas(); window.addEventListener('resize', fitCanvas);
-
-  function setBaseImageFromDataURL(dataURL){
-    return new Promise((resolve,reject)=>{
-      fabric.Image.fromURL(dataURL, (img)=>{
-        if (!img) { reject(new Error('Image load failed')); return; }
-        if (baseImage) fabricCanvas.remove(baseImage);
-        baseImage = img;
-        baseImage.selectable=false; baseImage.evented=false;
-        baseImage.set('erasable', false); // never erasable
-        const cw=fabricCanvas.getWidth(), ch=fabricCanvas.getHeight();
-        const scale=Math.min(cw/img.width, ch/img.height);
-        baseImage.scale(scale);
-        baseImage.set({ left:(cw - img.width*scale)/2, top:(ch - img.height*scale)/2 });
-        fabricCanvas.add(baseImage);
-        baseImage.moveTo(0);
-        fabricCanvas.requestRenderAll();
-        cInfo.textContent=`Image ${Math.round(img.width)}×${Math.round(img.height)} (scale ${scale.toFixed(2)})`;
-        resolve();
-      }, { crossOrigin:'anonymous' });
-    });
-  }
-  /* DECLARED ONCE — duplicate here would break the page */
-  const dataURLFromCanvas = () => fabricCanvas.toDataURL({ format:'png', quality:0.92 });
-
-  /* ===== Scenarios load ===== */
-  function showStatus(msg){ statusPill.textContent = msg; }
-  function populateList(){
-    scenarioSel.innerHTML = '<option value="">Select scenario…</option>';
-    scenarios.forEach(sc => {
-      const o=document.createElement('option'); o.value=sc.id;
-      o.textContent=(sc.title||'(untitled)') + (sc.active? '':' (inactive)');
-      scenarioSel.appendChild(o);
-    });
-  }
-  function renderStopsThumbs(){
-    stopList.innerHTML='';
-    if(!current?.stops?.length){ stopList.innerHTML='<div class="pill">No photos</div>'; return; }
-    current.stops.forEach((s,idx)=>{
-      const img=document.createElement('img');
-      img.className='thumb'+(idx===stopIndex?' active':'');
-      img.src=s.imageData||s.imageURL||'';
-      img.title=s.title||`Stop ${idx+1}`;
-      img.onerror=()=>{ img.src="data:image/svg+xml;utf8,"+encodeURIComponent("<svg xmlns='http://www.w3.org/2000/svg' width='80' height='80'><rect width='100%' height='100%' fill='#0a2230'/><text x='50%' y='50%' fill='#9ecbd6' font-size='10' text-anchor='middle'>no image</text></svg>"); };
-      img.onclick=()=>loadStop(idx);
-      stopList.appendChild(img);
-    });
-  }
-  function updateMetaHeader(){
-    metaTitle.textContent = current ? (current.title || '(untitled)') : '(title)';
-    metaDispatch.textContent = 'Dispatch: ' + (current?.dispatch ? String(current.dispatch).slice(0,120) : '(none)');
-  }
-
-  try {
-    const scenariosRef = ref(db,'scenarios');
-    onValue(scenariosRef, snap=>{
-      const v = snap.val() || {};
-      scenarios = Object.entries(v).map(([id,s])=>({id,...s})).sort((a,b)=>(b.createdAt||0)-(a.createdAt||0));
-      populateList();
-      showStatus(`${scenarios.length} scenario(s) loaded`);
-      if (current) {
-        const fresh=scenarios.find(sc=>sc.id===current.id);
-        if (fresh){ current=fresh; renderStopsThumbs(); updateMetaHeader(); }
-      }
-    }, err => showStatus('RTDB onValue error: '+(err?.message||err)));
-    const timeout = new Promise((_,rej)=>setTimeout(()=>rej(new Error('RTDB timeout (8s)')),8000));
-    await Promise.race([ get(scenariosRef), timeout ]).then(snap=>{
-      if (!snap.exists()) showStatus('Connected but /scenarios is empty.');
-    }).catch(e=> showStatus('RTDB connection issue: '+e.message));
-  } catch (e) {
-    showStatus('Firebase init/permission error: ' + (e?.message||e));
-  }
-  refreshBtn.onclick = populateList;
-
-  scenarioSel.onchange = ()=>{
-    const id=scenarioSel.value;
-    current = scenarios.find(s=>s.id===id) || null;
-    stopIndex=-1;
-    updateMetaHeader();
-    renderStopsThumbs();
-    fabricCanvas.clear(); baseImage=null; cropRect=null; erasing=false;
-    fitCanvas();
-  };
-
-  async function loadStop(idx){
-    if(!current) return;
-    const s=current.stops[idx]; if(!s) return;
-    stopIndex=idx;
-    stopTitle.value=s.title||'';
-    stopCaption.value=s.caption||'';
-    stopLat.value=(s.lat ?? '').toString();
-    stopLng.value=(s.lng ?? '').toString();
-    stopRadius.value=(s.radiusMeters ?? 50).toString();
-    Array.from(stopList.children).forEach((n,i)=>n.classList.toggle('active', i===idx));
-    fabricCanvas.clear(); baseImage=null; cropRect=null; erasing=false;
-    const src=s.imageData||s.imageURL;
-    if(!src){ metaMsg.textContent='No image in this stop.'; return; }
-    await setBaseImageFromDataURL(src);
-  }
-
-  /* ===== Meta save / GPS ===== */
-  useGPS.onclick=()=>{
-    navigator.geolocation.getCurrentPosition(p=>{
-      stopLat.value=p.coords.latitude.toFixed(6);
-      stopLng.value=p.coords.longitude.toFixed(6);
-      metaMsg.textContent='GPS captured.';
-    }, e=>{ metaMsg.textContent='GPS error: '+e.message; }, { enableHighAccuracy:true, timeout:10000 });
-  };
-  saveMeta.onclick=async()=>{
-    try{
-      if(!current || stopIndex<0) throw new Error('Select a stop first.');
-      const s=current.stops[stopIndex];
-      s.title=stopTitle.value.trim();
-      s.caption=stopCaption.value.trim();
-      s.lat=parseFloat(stopLat.value);
-      s.lng=parseFloat(stopLng.value);
-      s.radiusMeters=Math.max(5, Math.min(1000, Math.round(parseInt(stopRadius.value||'50',10))));
-      if(Number.isNaN(s.lat)||Number.isNaN(s.lng)) throw new Error('Invalid GPS coordinates.');
-      const { id, ...payload } = current;
-      await set(ref(db,'scenarios/'+current.id), payload);
-      metaMsg.textContent='Meta saved.';
-    }catch(err){ metaMsg.textContent=String(err.message||err); }
-  };
-
-  /* ===== Replace / Export / Save image ===== */
-  function readFileAsDataURL(f){ return new Promise((res,rej)=>{ const r=new FileReader(); r.onload=()=>res(r.result); r.onerror=rej; r.readAsDataURL(f); }); }
-  replaceApply.onclick=async()=>{
-    const f=replaceFile.files?.[0]; if(!f){ metaMsg.textContent='Choose a file first.'; return; }
-    const data=await readFileAsDataURL(f);
-    await setBaseImageFromDataURL(data);
-  };
-  exportPNG.onclick=()=>{
-    const url=dataURLFromCanvas();
-    const a=document.createElement('a'); a.href=url; a.download=(current?.title||'image')+'-edited.png'; a.click();
-  };
-  saveImage.onclick=async()=>{
-    try{
-      if(!current || stopIndex<0) throw new Error('Select a stop first.');
-      const url=dataURLFromCanvas();
-      current.stops[stopIndex].imageData=url;
-      current.stops[stopIndex].imageURL=null;
-      const { id, ...payload } = current;
-      await set(ref(db,'scenarios/'+current.id), payload);
-      metaMsg.textContent='Image saved to RTDB.';
-      renderStopsThumbs();
-    }catch(err){ metaMsg.textContent=String(err.message||err); }
-  };
-
-  /* ===== Crop workflow ===== */
-  cropStart.onclick=()=>{
-    if(!baseImage) return;
-    cropRect = new fabric.Rect({
-      left: baseImage.left + 20, top: baseImage.top + 20,
-      width: Math.min(240, baseImage.getScaledWidth()-40),
-      height: Math.min(240, baseImage.getScaledHeight()-40),
-      fill: 'rgba(0,0,0,0.15)', stroke:'#2dd4bf', strokeWidth:2, hasRotatingPoint:false
-    });
-    fabricCanvas.add(cropRect); cropRect.bringToFront(); fabricCanvas.setActiveObject(cropRect);
-  };
-  cropCancel.onclick=()=>{ if(cropRect){ fabricCanvas.remove(cropRect); cropRect=null; } fabricCanvas.discardActiveObject(); fabricCanvas.requestRenderAll(); };
-  cropApply.onclick=()=>{
-    if(!baseImage || !cropRect) return;
-    const scale = baseImage.scaleX;
-    const bx = baseImage.left, by = baseImage.top;
-    const rw = cropRect.width * cropRect.scaleX, rh = cropRect.height * cropRect.scaleY;
-    const rx = cropRect.left - bx, ry = cropRect.top - by;
-    const sx = rx / scale, sy = ry / scale, sw = rw / scale, sh = rh / scale;
-    const el = document.createElement('canvas'); el.width=Math.max(1,Math.round(sw)); el.height=Math.max(1,Math.round(sh));
-    const ctx = el.getContext('2d');
-    const angle = (baseImage.angle||0) % 360;
-    if (angle !== 0) {
-      const fullURL = fabricCanvas.toDataURL({ format:'png', quality:1 });
-      const tmp = new Image(); tmp.onload=()=>{
-        const scaleX = tmp.width / fabricCanvas.getWidth();
-        const scaleY = tmp.height / fabricCanvas.getHeight();
-        ctx.drawImage(tmp, cropRect.left*scaleX, cropRect.top*scaleY, rw*scaleX, rh*scaleY, 0,0, el.width, el.height);
-        setBaseImageFromDataURL(el.toDataURL('image/png', 0.95)).then(()=>{ fabricCanvas.remove(cropRect); cropRect=null; });
-      }; tmp.src=fullURL;
-    } else {
-      const base = baseImage.getElement();
-      ctx.drawImage(base, sx, sy, sw, sh, 0,0, el.width, el.height);
-      setBaseImageFromDataURL(el.toDataURL('image/png', 0.95)).then(()=>{ fabricCanvas.remove(cropRect); cropRect=null; });
+  (async () => {
+    /* ===== Desktop gate (unchanged) ===== */
+    const gate=document.getElementById('gate');
+    const app=document.getElementById('app');
+    const gateInfo=document.getElementById('gateInfo');
+    const forceGo=document.getElementById('forceGo');
+    const urlForce = new URLSearchParams(location.search).get('force') === '1';
+    function decideGate(){
+      const narrow = window.innerWidth < 1024;
+      gateInfo.textContent = `width: ${window.innerWidth}px`;
+      if (urlForce || !narrow) { gate.classList.add('hidden'); app.classList.remove('hidden'); return; }
+      gate.classList.remove('hidden'); app.classList.add('hidden');
     }
-  };
+    forceGo.onclick=()=>{ history.replaceState(null,'',location.pathname); app.classList.remove('hidden'); gate.classList.add('hidden'); };
+    decideGate(); window.addEventListener('resize', decideGate);
 
-  /* ===== PNG overlays with foldered paths =====
-     Example: https://fireopssim.com/geophoto/overlays/fire/fire1.png
-  */
-  const OVERLAY_BASE = 'https://fireopssim.com/geophoto/overlays/';
-  const SPRITES = {
-    fire   : ['fire1.png','fire2.png','fire3.png','fire4.png','fire5.png','fire_side.png'],
-    smoke  : ['smoke1.png','smoke2.png','smoke3.png','smoke_ground.png'],
-    people : ['people1.png','people2.png','people3.png'],
-    cars   : ['car1.png','car2.png','car3.png'],
-    hazard : ['hazard1.png','hazard2.png','hazard3.png']
-  };
-  const resolveSpritePath = (cat, name) => `${OVERLAY_BASE}${cat}/${name}`;
+    /* ===== Branding copy + year ===== */
+    const BRAND = {
+      name: 'FireOps SIM',
+      tagline: 'Real-Time Fire Scene Simulator',
+      heroTitle: 'Advanced Editor',
+      heroLead: 'Desktop editor for geo‑photo scenarios. Crop images, add fire/smoke overlays, erase, rotate, and save directly to your Realtime Database.'
+    };
+    document.getElementById('brandName').textContent = BRAND.name;
+    document.getElementById('brandNameFoot').textContent = BRAND.name;
+    document.getElementById('brandTag').textContent = BRAND.tagline;
+    document.getElementById('heroTitle').textContent = BRAND.heroTitle;
+    document.getElementById('heroLead').textContent = BRAND.heroLead;
+    document.getElementById('year').textContent = new Date().getFullYear();
 
-  function renderShelf(cat){
-    overlayShelf.innerHTML = '';
-    const items = SPRITES[cat] || [];
-    items.forEach((name, i) => {
-      const div = document.createElement('div');
-      div.className = 'olThumb';
-      const img = document.createElement('img');
-      img.src = resolveSpritePath(cat, name);
-      img.alt = `${cat}-${i+1}`;
-      img.onerror = () => { div.style.opacity = .5; div.title = 'Missing: ' + img.src; };
-      div.appendChild(img);
-      div.onclick = () => addOverlayImage(resolveSpritePath(cat, name));
-      overlayShelf.appendChild(div);
-    });
-  }
-  tabBtns.forEach(btn => btn.onclick = () => {
-    tabBtns.forEach(b => b.classList.remove('active'));
-    btn.classList.add('active');
-    renderShelf(btn.dataset.cat);
-  });
-  if (tabBtns[0]) { tabBtns[0].classList.add('active'); renderShelf(tabBtns[0].dataset.cat); }
+    /* ===== Firebase RTDB (same working config) ===== */
+    const [{ initializeApp }] = await Promise.all([ import("https://www.gstatic.com/firebasejs/10.12.4/firebase-app.js") ]);
+    const [{ getDatabase, ref, onValue, get, set }] = await Promise.all([ import("https://www.gstatic.com/firebasejs/10.12.4/firebase-database.js") ]);
+    const firebaseConfig = {
+      apiKey:"AIzaSyDM6DpRSeZueVKRpbyJyDmhf8WY66KyCDk",
+      authDomain:"dailyquiz-d5279.firebaseapp.com",
+      databaseURL:"https://dailyquiz-d5279-default-rtdb.firebaseio.com",
+      projectId:"dailyquiz-d5279",
+      appId:"1:94577748034:web:c032d3a1d72db1313de5db",
+      measurementId:"G-19DVN7NNH7"
+    };
+    const appFB = initializeApp(firebaseConfig);
+    const db = getDatabase(appFB);
 
-  function addOverlayImage(src){
-    fabric.Image.fromURL(src, img => {
-      const cw = fabricCanvas.getWidth(), ch = fabricCanvas.getHeight();
-      const targetW = cw * 0.28; const scale = targetW / img.width;
-      img.scale(scale);
-      img.set({
-        left: cw/2 - (img.width*scale)/2,
-        top:  ch/2 - (img.height*scale)/2,
-        cornerStyle:'circle', transparentCorners:false,
-        shadow:'rgba(0,0,0,0.35) 0 6px 16px',
-        erasable:true
-      });
-      fabricCanvas.add(img);
-      fabricCanvas.setActiveObject(img);
-      rotSelSlider.value = Math.round(img.angle || 0);
+    /* ===== DOM refs (unchanged) ===== */
+    const statusPill=document.getElementById('statusPill');
+    const scenarioSel=document.getElementById('scenarioSel');
+    const stopList=document.getElementById('stopList');
+    const refreshBtn=document.getElementById('refresh');
+    const metaTitle=document.getElementById('metaTitle');
+    const metaDispatch=document.getElementById('metaDispatch');
+    const stopTitle=document.getElementById('stopTitle');
+    const stopCaption=document.getElementById('stopCaption');
+    const stopLat=document.getElementById('stopLat');
+    const stopLng=document.getElementById('stopLng');
+    const stopRadius=document.getElementById('stopRadius');
+    const useGPS=document.getElementById('useGPS');
+    const saveMeta=document.getElementById('saveMeta');
+    const metaMsg=document.getElementById('metaMsg');
+    const replaceFile=document.getElementById('replaceFile');
+    const replaceApply=document.getElementById('replaceApply');
+    const deleteStop=document.getElementById('deleteStop');
+    const exportPNG=document.getElementById('exportPNG');
+    const cInfo=document.getElementById('canvasInfo');
+    const fitBtn=document.getElementById('fit');
+    const zoomIn=document.getElementById('zoomIn');
+    const zoomOut=document.getElementById('zoomOut');
+    const rotateL=document.getElementById('rotateL');
+    const rotateR=document.getElementById('rotateR');
+    const saveImage=document.getElementById('saveImage');
+
+    const cropStart=document.getElementById('cropStart');
+    const cropApply=document.getElementById('cropApply');
+    const cropCancel=document.getElementById('cropCancel');
+
+    const overlayShelf=document.getElementById('overlayShelf');
+    const tabBtns = Array.from(document.querySelectorAll('.ol-tab'));
+    const overlayHue=document.getElementById('overlayHue');
+    const overlayOpacity=document.getElementById('overlayOpacity');
+    const bringFront=document.getElementById('bringFront');
+    const sendBack=document.getElementById('sendBack');
+    const deleteObj=document.getElementById('deleteObj');
+
+    const eraserStart=document.getElementById('eraserStart');
+    const eraserDone=document.getElementById('eraserDone');
+    const eraserCancel=document.getElementById('eraserCancel');
+    const eraserSize=document.getElementById('eraserSize');
+    const eraserStatus=document.getElementById('eraserStatus');
+
+    const rotSelLeft=document.getElementById('rotSelLeft');
+    const rotSelRight=document.getElementById('rotSelRight');
+    const rotSelSlider=document.getElementById('rotSelSlider');
+    const flipSelH=document.getElementById('flipSelH');
+    const flipSelV=document.getElementById('flipSelV');
+
+    const normalizeLocsBtn=document.getElementById('normalizeLocs');
+    const relinkOverlaysBtn=document.getElementById('relinkOverlays');
+    const bulkMsg=document.getElementById('bulkMsg');
+
+    /* ===== State + fabric canvas (unchanged) ===== */
+    let scenarios=[], current=null, stopIndex=-1;
+    const fabricCanvas = new fabric.Canvas('c', { backgroundColor:'#061621', preserveObjectStacking:true, selection:true });
+    let baseImage=null, cropRect=null, erasing=false;
+
+    function fitCanvas(){
+      const heroHeight = document.querySelector('header.hero').offsetHeight || 0;
+      const topbarHeight = document.querySelector('.topbar').offsetHeight || 0;
+      const reserved = heroHeight + topbarHeight + 200; // footer + padding budget
+      const targetH = Math.max(380, window.innerHeight - reserved);
+      document.getElementById('c').style.height = targetH + 'px';
+      fabricCanvas.setHeight(targetH);
+      const midCol = document.querySelector('main .col:nth-child(2)');
+      const width = (midCol?.clientWidth || 800) - 24;
+      fabricCanvas.setWidth(width);
+      fabricCanvas.calcOffset();
       fabricCanvas.requestRenderAll();
-    }, { crossOrigin:'anonymous' });
-  }
-
-  /* ===== Overlay Hue & Opacity (guarded) ===== */
-  const supportsHue = !!(fabric.Image && fabric.Image.filters && fabric.Image.filters.HueRotation);
-  overlayHue.disabled = !supportsHue;
-  function ensureHueFilter(img){
-    img.filters = img.filters || [];
-    img.filters = img.filters.filter(f => !(f && f.type === 'HueRotation'));
-  }
-  overlayHue.oninput = (e)=>{
-    if(!supportsHue) return;
-    const o = fabricCanvas.getActiveObject();
-    if (o && o.type === 'image' && o !== baseImage) {
-      const deg = parseInt(e.target.value,10) || 0;
-      ensureHueFilter(o);
-      if (deg !== 0) o.filters.push(new fabric.Image.filters.HueRotation({ rotation: deg * Math.PI/180 }));
-      o.applyFilters(); fabricCanvas.requestRenderAll();
     }
-  };
-  overlayOpacity.oninput = (e)=>{ const o=fabricCanvas.getActiveObject(); if(o && o!==baseImage){ o.set('opacity', parseFloat(e.target.value)); fabricCanvas.requestRenderAll(); } };
-  bringFront.onclick = ()=>{ const o=fabricCanvas.getActiveObject(); if(o && o!==baseImage){ o.bringToFront(); fabricCanvas.requestRenderAll(); } };
-  sendBack.onclick  = ()=>{ const o=fabricCanvas.getActiveObject(); if(o && o!==baseImage){ o.sendToBack(); if(baseImage) baseImage.sendToBack(); fabricCanvas.requestRenderAll(); } };
-  deleteObj.onclick = ()=>{ const o=fabricCanvas.getActiveObject(); if(o && o!==baseImage){ fabricCanvas.remove(o); fabricCanvas.discardActiveObject(); fabricCanvas.requestRenderAll(); } };
+    fitCanvas(); window.addEventListener('resize', fitCanvas);
 
-  /* ===== Eraser (selected overlay only) ===== */
-  function stopErasing(){
-    fabricCanvas.isDrawingMode = false;
-    erasing=false;
-    eraserStatus.textContent = 'Eraser: off';
-  }
-  eraserStart.onclick = ()=>{
-    if (!fabric.EraserBrush) { alert('Eraser brush not available in this Fabric build.'); return; }
-    const sel = fabricCanvas.getActiveObject();
-    if (!sel || sel.type !== 'image' || sel===baseImage) { alert('Select an overlay image first.'); return; }
-    if (baseImage) baseImage.set('erasable', false);
-    fabricCanvas.getObjects().forEach(o => o.set('erasable', false));
-    sel.set('erasable', true);
-    fabricCanvas.isDrawingMode = true;
-    fabricCanvas.freeDrawingBrush = new fabric.EraserBrush(fabricCanvas);
-    fabricCanvas.freeDrawingBrush.width = parseInt(eraserSize.value,10) || 30;
-    erasing = true; eraserStatus.textContent = `Eraser: ON (size ${fabricCanvas.freeDrawingBrush.width})`;
-  };
-  eraserSize.oninput = ()=>{ if (fabricCanvas.freeDrawingBrush) { fabricCanvas.freeDrawingBrush.width = parseInt(eraserSize.value,10)||30; if (erasing) eraserStatus.textContent = `Eraser: ON (size ${fabricCanvas.freeDrawingBrush.width})`; } };
-  eraserDone.onclick = stopErasing;
-  eraserCancel.onclick = ()=>{ stopErasing(); fabricCanvas.renderAll(); };
+    function setBaseImageFromDataURL(dataURL){
+      return new Promise((resolve,reject)=>{
+        fabric.Image.fromURL(dataURL, (img)=>{
+          if (!img) { reject(new Error('Image load failed')); return; }
+          if (baseImage) fabricCanvas.remove(baseImage);
+          baseImage = img; baseImage.selectable=false; baseImage.evented=false; baseImage.set('erasable', false);
+          const cw=fabricCanvas.getWidth(), ch=fabricCanvas.getHeight();
+          const scale=Math.min(cw/img.width, ch/img.height);
+          baseImage.scale(scale);
+          baseImage.set({ left:(cw - img.width*scale)/2, top:(ch - img.height*scale)/2 });
+          fabricCanvas.add(baseImage); baseImage.moveTo(0); fabricCanvas.requestRenderAll();
+          cInfo.textContent=`Image ${Math.round(img.width)}×${Math.round(img.height)} (scale ${scale.toFixed(2)})`;
+          resolve();
+        }, { crossOrigin:'anonymous' });
+      });
+    }
+    const dataURLFromCanvas = () => fabricCanvas.toDataURL({ format:'png', quality:0.92 });
 
-  /* ===== Overlay transform (rotate + flip) ===== */
-  function rotateSelected(delta){
-    const o=fabricCanvas.getActiveObject();
-    if (!o || o===baseImage) return;
-    o.rotate((o.angle||0)+delta);
-    rotSelSlider.value = Math.round(o.angle||0);
-    fabricCanvas.requestRenderAll();
-  }
-  rotSelLeft.onclick = ()=> rotateSelected(-15);
-  rotSelRight.onclick = ()=> rotateSelected(+15);
-  rotSelSlider.oninput = (e)=>{
-    const o=fabricCanvas.getActiveObject();
-    if (!o || o===baseImage) return;
-    o.rotate(parseInt(e.target.value,10)||0);
-    fabricCanvas.requestRenderAll();
-  };
-  function flipSelected(axis){
-    const o=fabricCanvas.getActiveObject();
-    if (!o || o===baseImage) return;
-    if (axis === 'x') o.set('flipX', !o.flipX);
-    if (axis === 'y') o.set('flipY', !o.flipY);
-    fabricCanvas.requestRenderAll();
-  }
-  flipSelH.onclick = ()=> flipSelected('x');
-  flipSelV.onclick = ()=> flipSelected('y');
-
-  /* ===== Bulk tools ===== */
-  async function normalizeAllLocations(){
-    const DEFAULT_RADIUS = 50;
-    const MAX_RADIUS = 1000;
-    const MIN_RADIUS = 5;
-    const ROUND_DECIMALS = 6;
+    /* ===== Load scenarios ===== */
+    function showStatus(msg){ statusPill.textContent = msg; }
+    function populateList(){
+      scenarioSel.innerHTML = '<option value="">Select scenario…</option>';
+      scenarios.forEach(sc => {
+        const o=document.createElement('option'); o.value=sc.id;
+        o.textContent=(sc.title||'(untitled)') + (sc.active? '':' (inactive)');
+        scenarioSel.appendChild(o);
+      });
+    }
+    function renderStopsThumbs(){
+      stopList.innerHTML='';
+      if(!current?.stops?.length){ stopList.innerHTML='<div class="pill">No photos</div>'; return; }
+      current.stops.forEach((s,idx)=>{
+        const img=document.createElement('img');
+        img.className='thumb'+(idx===stopIndex?' active':'');
+        img.src=s.imageData||s.imageURL||'';
+        img.title=s.title||`Stop ${idx+1}`;
+        img.onerror=()=>{ img.src="data:image/svg+xml;utf8,"+encodeURIComponent("<svg xmlns='http://www.w3.org/2000/svg' width='80' height='80'><rect width='100%' height='100%' fill='#0a2230'/><text x='50%' y='50%' fill='#9ecbd6' font-size='10' text-anchor='middle'>no image</text></svg>"); };
+        img.onclick=()=>loadStop(idx);
+        stopList.appendChild(img);
+      });
+    }
+    function updateMetaHeader(){
+      metaTitle.textContent = current ? (current.title || '(untitled)') : '(title)';
+      metaDispatch.textContent = 'Dispatch: ' + (current?.dispatch ? String(current.dispatch).slice(0,120) : '(none)');
+    }
 
     try {
-      bulkMsg.textContent = 'Bulk: reading scenarios…';
-      const snap = await get(ref(db, 'scenarios'));
-      if (!snap.exists()) { bulkMsg.textContent = 'Bulk: no scenarios found.'; return; }
-      const obj = snap.val() || {};
-      let touched = 0, fixed = 0;
-
-      for (const [sid, sc] of Object.entries(obj)) {
-        if (!Array.isArray(sc.stops)) continue;
-        let changed = false;
-
-        sc.stops = sc.stops.map(st => {
-          const out = { ...st };
-
-          const lat = Number(out.lat);
-          const lng = Number(out.lng);
-          if (!Number.isFinite(lat) || Math.abs(lat) > 90) { out.lat = null; changed = true; }
-          else out.lat = Number(lat.toFixed(ROUND_DECIMALS));
-
-          if (!Number.isFinite(lng) || Math.abs(lng) > 180) { out.lng = null; changed = true; }
-          else out.lng = Number(lng.toFixed(ROUND_DECIMALS));
-
-          let r = Number(out.radiusMeters);
-          if (!Number.isFinite(r)) { r = DEFAULT_RADIUS; changed = true; }
-          r = Math.max(MIN_RADIUS, Math.min(MAX_RADIUS, Math.round(r)));
-          if (r !== out.radiusMeters) { out.radiusMeters = r; changed = true; }
-
-          return out;
-        });
-
-        if (changed) {
-          touched++;
-          await set(ref(db, 'scenarios/' + sid), sc);
-          fixed += sc.stops.length;
+      const scenariosRef = ref(db,'scenarios');
+      onValue(scenariosRef, snap=>{
+        const v = snap.val() || {};
+        scenarios = Object.entries(v).map(([id,s])=>({id,...s})).sort((a,b)=>(b.createdAt||0)-(a.createdAt||0));
+        populateList();
+        showStatus(`${scenarios.length} scenario(s) loaded`);
+        if (current) {
+          const fresh=scenarios.find(sc=>sc.id===current.id);
+          if (fresh){ current=fresh; renderStopsThumbs(); updateMetaHeader(); }
         }
-      }
-      bulkMsg.textContent = `Bulk: normalized ${fixed} stops in ${touched} scenario(s).`;
+      }, err => showStatus('RTDB onValue error: '+(err?.message||err)));
+      const timeout = new Promise((_,rej)=>setTimeout(()=>rej(new Error('RTDB timeout (8s)')),8000));
+      await Promise.race([ get(scenariosRef), timeout ]).then(snap=>{
+        if (!snap.exists()) showStatus('Connected but /scenarios is empty.');
+      }).catch(e=> showStatus('RTDB connection issue: '+e.message));
     } catch (e) {
-      bulkMsg.textContent = 'Bulk error: ' + (e?.message || e);
+      showStatus('Firebase init/permission error: ' + (e?.message||e));
     }
-  }
+    refreshBtn.onclick = populateList;
 
-  async function relinkOverlaySources(){
-    // Only needed if you ever stored overlay URLs under stops[].overlays[].src
-    const OLD_PREFIXES = [
-      'https://old-domain.example.com/overlays/',
-      'https://fireopssim.com/oldpath/'
-    ];
-    try {
-      bulkMsg.textContent = 'Bulk: relinking overlay sources…';
-      const snap = await get(ref(db,'scenarios'));
-      if (!snap.exists()) { bulkMsg.textContent = 'Bulk: no scenarios.'; return; }
-      const obj = snap.val() || {};
-      let updated = 0;
+    scenarioSel.onchange = ()=>{
+      const id=scenarioSel.value;
+      current = scenarios.find(s=>s.id===id) || null;
+      stopIndex=-1;
+      updateMetaHeader();
+      renderStopsThumbs();
+      fabricCanvas.clear(); baseImage=null; cropRect=null; erasing=false;
+      fitCanvas();
+    };
 
-      for (const [sid, sc] of Object.entries(obj)) {
-        let changed = false;
-        if (!Array.isArray(sc.stops)) continue;
+    async function loadStop(idx){
+      if(!current) return;
+      const s=current.stops[idx]; if(!s) return;
+      stopIndex=idx;
+      stopTitle.value=s.title||'';
+      stopCaption.value=s.caption||'';
+      stopLat.value=(s.lat ?? '').toString();
+      stopLng.value=(s.lng ?? '').toString();
+      stopRadius.value=(s.radiusMeters ?? 50).toString();
+      Array.from(stopList.children).forEach((n,i)=>n.classList.toggle('active', i===idx));
+      fabricCanvas.clear(); baseImage=null; cropRect=null; erasing=false;
+      const src=s.imageData||s.imageURL;
+      if(!src){ metaMsg.textContent='No image in this stop.'; return; }
+      await setBaseImageFromDataURL(src);
+    }
 
-        for (const st of sc.stops) {
-          if (!Array.isArray(st.overlays)) continue;
-          for (const ov of st.overlays) {
-            if (ov && typeof ov.src === 'string') {
-              const old = ov.src;
-              for (const pref of OLD_PREFIXES) {
-                if (old.startsWith(pref)) {
-                  const file = old.substring(pref.length);
-                  const guessCat = file.includes('fire') ? 'fire'
-                                  : file.includes('smoke') ? 'smoke'
-                                  : file.includes('car') ? 'cars'
-                                  : file.includes('hazard') ? 'hazard'
-                                  : 'people';
-                  ov.src = `${OVERLAY_BASE}${guessCat}/${file}`;
-                  changed = true;
-                  break;
+    /* ===== Meta save / GPS ===== */
+    useGPS.onclick=()=>{
+      navigator.geolocation.getCurrentPosition(p=>{
+        stopLat.value=p.coords.latitude.toFixed(6);
+        stopLng.value=p.coords.longitude.toFixed(6);
+        metaMsg.textContent='GPS captured.';
+      }, e=>{ metaMsg.textContent='GPS error: '+e.message; }, { enableHighAccuracy:true, timeout:10000 });
+    };
+    saveMeta.onclick=async()=>{
+      try{
+        if(!current || stopIndex<0) throw new Error('Select a stop first.');
+        const s=current.stops[stopIndex];
+        s.title=stopTitle.value.trim();
+        s.caption=stopCaption.value.trim();
+        s.lat=parseFloat(stopLat.value);
+        s.lng=parseFloat(stopLng.value);
+        s.radiusMeters=Math.max(5, Math.min(1000, Math.round(parseInt(stopRadius.value||'50',10))));
+        if(Number.isNaN(s.lat)||Number.isNaN(s.lng)) throw new Error('Invalid GPS coordinates.');
+        const { id, ...payload } = current;
+        await set(ref(db,'scenarios/'+current.id), payload);
+        metaMsg.textContent='Meta saved.';
+      }catch(err){ metaMsg.textContent=String(err.message||err); }
+    };
+
+    /* ===== Replace / Export / Save image ===== */
+    function readFileAsDataURL(f){ return new Promise((res,rej)=>{ const r=new FileReader(); r.onload=()=>res(r.result); r.onerror=rej; r.readAsDataURL(f); }); }
+    replaceApply.onclick=async()=>{
+      const f=replaceFile.files?.[0]; if(!f){ metaMsg.textContent='Choose a file first.'; return; }
+      const data=await readFileAsDataURL(f);
+      await setBaseImageFromDataURL(data);
+    };
+    exportPNG.onclick=()=>{
+      const url=dataURLFromCanvas();
+      const a=document.createElement('a'); a.href=url; a.download=(current?.title||'image')+'-edited.png'; a.click();
+    };
+    saveImage.onclick=async()=>{
+      try{
+        if(!current || stopIndex<0) throw new Error('Select a stop first.');
+        const url=dataURLFromCanvas();
+        current.stops[stopIndex].imageData=url;
+        current.stops[stopIndex].imageURL=null;
+        const { id, ...payload } = current;
+        await set(ref(db,'scenarios/'+current.id), payload);
+        metaMsg.textContent='Image saved to RTDB.';
+        renderStopsThumbs();
+      }catch(err){ metaMsg.textContent=String(err.message||err); }
+    };
+
+    /* ===== Crop workflow ===== */
+    let cropRect=null;
+    cropStart.onclick=()=>{
+      if(!baseImage) return;
+      cropRect = new fabric.Rect({
+        left: baseImage.left + 20, top: baseImage.top + 20,
+        width: Math.min(240, baseImage.getScaledWidth()-40),
+        height: Math.min(240, baseImage.getScaledHeight()-40),
+        fill: 'rgba(0,0,0,0.15)', stroke:'#2dd4bf', strokeWidth:2, hasRotatingPoint:false
+      });
+      fabricCanvas.add(cropRect); cropRect.bringToFront(); fabricCanvas.setActiveObject(cropRect);
+    };
+    cropCancel.onclick=()=>{ if(cropRect){ fabricCanvas.remove(cropRect); cropRect=null; } fabricCanvas.discardActiveObject(); fabricCanvas.requestRenderAll(); };
+    cropApply.onclick=()=>{
+      if(!baseImage || !cropRect) return;
+      const scale = baseImage.scaleX;
+      const bx = baseImage.left, by = baseImage.top;
+      const rw = cropRect.width * cropRect.scaleX, rh = cropRect.height * cropRect.scaleY;
+      const rx = cropRect.left - bx, ry = cropRect.top - by;
+      const sx = rx / scale, sy = ry / scale, sw = rw / scale, sh = rh / scale;
+      const el = document.createElement('canvas'); el.width=Math.max(1,Math.round(sw)); el.height=Math.max(1,Math.round(sh));
+      const ctx = el.getContext('2d');
+      const angle = (baseImage.angle||0) % 360;
+      if (angle !== 0) {
+        const fullURL = fabricCanvas.toDataURL({ format:'png', quality:1 });
+        const tmp = new Image(); tmp.onload=()=>{
+          const scaleX = tmp.width / fabricCanvas.getWidth();
+          const scaleY = tmp.height / fabricCanvas.getHeight();
+          ctx.drawImage(tmp, cropRect.left*scaleX, cropRect.top*scaleY, rw*scaleX, rh*scaleY, 0,0, el.width, el.height);
+          setBaseImageFromDataURL(el.toDataURL('image/png', 0.95)).then(()=>{ fabricCanvas.remove(cropRect); cropRect=null; });
+        }; tmp.src=fullURL;
+      } else {
+        const base = baseImage.getElement();
+        ctx.drawImage(base, sx, sy, sw, sh, 0,0, el.width, el.height);
+        setBaseImageFromDataURL(el.toDataURL('image/png', 0.95)).then(()=>{ fabricCanvas.remove(cropRect); cropRect=null; });
+      }
+    };
+
+    /* ===== PNG overlays ===== */
+    const OVERLAY_BASE = 'https://fireopssim.com/geophoto/overlays/';
+    const SPRITES = {
+      fire   : ['fire1.png','fire2.png','fire3.png','fire4.png','fire5.png','fire_side.png'],
+      smoke  : ['smoke1.png','smoke2.png','smoke3.png','smoke_ground.png'],
+      people : ['people1.png','people2.png','people3.png'],
+      cars   : ['car1.png','car2.png','car3.png'],
+      hazard : ['hazard1.png','hazard2.png','hazard3.png']
+    };
+    const resolveSpritePath = (cat, name) => `${OVERLAY_BASE}${cat}/${name}`;
+
+    function renderShelf(cat){
+      overlayShelf.innerHTML = '';
+      const items = SPRITES[cat] || [];
+      items.forEach((name, i) => {
+        const div = document.createElement('div');
+        div.className = 'olThumb';
+        const img = document.createElement('img');
+        img.src = resolveSpritePath(cat, name);
+        img.alt = `${cat}-${i+1}`;
+        img.onerror = () => { div.style.opacity = .5; div.title = 'Missing: ' + img.src; };
+        div.appendChild(img);
+        div.onclick = () => addOverlayImage(resolveSpritePath(cat, name));
+        overlayShelf.appendChild(div);
+      });
+    }
+    tabBtns.forEach(btn => btn.onclick = () => {
+      tabBtns.forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      renderShelf(btn.dataset.cat);
+    });
+    if (tabBtns[0]) { tabBtns[0].classList.add('active'); renderShelf(tabBtns[0].dataset.cat); }
+
+    function addOverlayImage(src){
+      fabric.Image.fromURL(src, img => {
+        const cw = fabricCanvas.getWidth(), ch = fabricCanvas.getHeight();
+        const targetW = cw * 0.28; const scale = targetW / img.width;
+        img.scale(scale);
+        img.set({
+          left: cw/2 - (img.width*scale)/2,
+          top:  ch/2 - (img.height*scale)/2,
+          cornerStyle:'circle', transparentCorners:false,
+          shadow:'rgba(0,0,0,0.35) 0 6px 16px',
+          erasable:true
+        });
+        fabricCanvas.add(img);
+        fabricCanvas.setActiveObject(img);
+        rotSelSlider.value = Math.round(img.angle || 0);
+        fabricCanvas.requestRenderAll();
+      }, { crossOrigin:'anonymous' });
+    }
+
+    /* ===== Hue/Opacity/Order ===== */
+    const supportsHue = !!(fabric.Image && fabric.Image.filters && fabric.Image.filters.HueRotation);
+    overlayHue.disabled = !supportsHue;
+    function ensureHueFilter(img){
+      img.filters = img.filters || [];
+      img.filters = img.filters.filter(f => !(f && f.type === 'HueRotation'));
+    }
+    overlayHue.oninput = (e)=>{
+      if(!supportsHue) return;
+      const o = fabricCanvas.getActiveObject();
+      if (o && o.type === 'image' && o !== baseImage) {
+        const deg = parseInt(e.target.value,10) || 0;
+        ensureHueFilter(o);
+        if (deg !== 0) o.filters.push(new fabric.Image.filters.HueRotation({ rotation: deg * Math.PI/180 }));
+        o.applyFilters(); fabricCanvas.requestRenderAll();
+      }
+    };
+    overlayOpacity.oninput = (e)=>{ const o=fabricCanvas.getActiveObject(); if(o && o!==baseImage){ o.set('opacity', parseFloat(e.target.value)); fabricCanvas.requestRenderAll(); } };
+    bringFront.onclick = ()=>{ const o=fabricCanvas.getActiveObject(); if(o && o!==baseImage){ o.bringToFront(); fabricCanvas.requestRenderAll(); } };
+    sendBack.onclick  = ()=>{ const o=fabricCanvas.getActiveObject(); if(o && o!==baseImage){ o.sendToBack(); if(baseImage) baseImage.sendToBack(); fabricCanvas.requestRenderAll(); } };
+    deleteObj.onclick = ()=>{ const o=fabricCanvas.getActiveObject(); if(o && o!==baseImage){ fabricCanvas.remove(o); fabricCanvas.discardActiveObject(); fabricCanvas.requestRenderAll(); } };
+
+    /* ===== Eraser ===== */
+    function stopErasing(){ fabricCanvas.isDrawingMode = false; erasing=false; eraserStatus.textContent = 'Eraser: off'; }
+    eraserStart.onclick = ()=>{
+      if (!fabric.EraserBrush) { alert('Eraser brush not available in this Fabric build.'); return; }
+      const sel = fabricCanvas.getActiveObject();
+      if (!sel || sel.type !== 'image' || sel===baseImage) { alert('Select an overlay image first.'); return; }
+      if (baseImage) baseImage.set('erasable', false);
+      fabricCanvas.getObjects().forEach(o => o.set('erasable', false));
+      sel.set('erasable', true);
+      fabricCanvas.isDrawingMode = true;
+      fabricCanvas.freeDrawingBrush = new fabric.EraserBrush(fabricCanvas);
+      fabricCanvas.freeDrawingBrush.width = parseInt(eraserSize.value,10) || 30;
+      erasing = true; eraserStatus.textContent = `Eraser: ON (size ${fabricCanvas.freeDrawingBrush.width})`;
+    };
+    eraserSize.oninput = ()=>{ if (fabricCanvas.freeDrawingBrush) { fabricCanvas.freeDrawingBrush.width = parseInt(eraserSize.value,10)||30; if (erasing) eraserStatus.textContent = `Eraser: ON (size ${fabricCanvas.freeDrawingBrush.width})`; } };
+    eraserDone.onclick = stopErasing;
+    eraserCancel.onclick = ()=>{ stopErasing(); fabricCanvas.renderAll(); };
+
+    /* ===== Overlay transform ===== */
+    function rotateSelected(delta){ const o=fabricCanvas.getActiveObject(); if (!o || o===baseImage) return; o.rotate((o.angle||0)+delta); rotSelSlider.value = Math.round(o.angle||0); fabricCanvas.requestRenderAll(); }
+    rotSelLeft.onclick = ()=> rotateSelected(-15);
+    rotSelRight.onclick = ()=> rotateSelected(+15);
+    rotSelSlider.oninput = (e)=>{ const o=fabricCanvas.getActiveObject(); if (!o || o===baseImage) return; o.rotate(parseInt(e.target.value,10)||0); fabricCanvas.requestRenderAll(); };
+    function flipSelected(axis){ const o=fabricCanvas.getActiveObject(); if (!o || o===baseImage) return; if (axis === 'x') o.set('flipX', !o.flipX); if (axis === 'y') o.set('flipY', !o.flipY); fabricCanvas.requestRenderAll(); }
+    flipSelH.onclick = ()=> flipSelected('x');
+    flipSelV.onclick = ()=> flipSelected('y');
+
+    /* ===== Bulk tools ===== */
+    async function normalizeAllLocations(){
+      const DEFAULT_RADIUS = 50; const MAX_RADIUS = 1000; const MIN_RADIUS = 5; const ROUND_DECIMALS = 6;
+      try {
+        bulkMsg.textContent = 'Bulk: reading scenarios…';
+        const snap = await get(ref(db, 'scenarios'));
+        if (!snap.exists()) { bulkMsg.textContent = 'Bulk: no scenarios found.'; return; }
+        const obj = snap.val() || {}; let touched = 0, fixed = 0;
+        for (const [sid, sc] of Object.entries(obj)) {
+          if (!Array.isArray(sc.stops)) continue; let changed = false;
+          sc.stops = sc.stops.map(st => { const out = { ...st };
+            const lat = Number(out.lat); const lng = Number(out.lng);
+            if (!Number.isFinite(lat) || Math.abs(lat) > 90) { out.lat = null; changed = true; } else out.lat = Number(lat.toFixed(ROUND_DECIMALS));
+            if (!Number.isFinite(lng) || Math.abs(lng) > 180) { out.lng = null; changed = true; } else out.lng = Number(lng.toFixed(ROUND_DECIMALS));
+            let r = Number(out.radiusMeters); if (!Number.isFinite(r)) { r = DEFAULT_RADIUS; changed = true; }
+            r = Math.max(MIN_RADIUS, Math.min(MAX_RADIUS, Math.round(r))); if (r !== out.radiusMeters) { out.radiusMeters = r; changed = true; }
+            return out; });
+          if (changed) { touched++; await set(ref(db, 'scenarios/' + sid), sc); fixed += sc.stops.length; }
+        }
+        bulkMsg.textContent = `Bulk: normalized ${fixed} stops in ${touched} scenario(s).`;
+      } catch (e) { bulkMsg.textContent = 'Bulk error: ' + (e?.message || e); }
+    }
+
+    async function relinkOverlaySources(){
+      const OLD_PREFIXES = [ 'https://old-domain.example.com/overlays/', 'https://fireopssim.com/oldpath/' ];
+      try {
+        bulkMsg.textContent = 'Bulk: relinking overlay sources…';
+        const snap = await get(ref(db,'scenarios'));
+        if (!snap.exists()) { bulkMsg.textContent = 'Bulk: no scenarios.'; return; }
+        const obj = snap.val() || {}; let updated = 0;
+        for (const [sid, sc] of Object.entries(obj)) {
+          let changed = false; if (!Array.isArray(sc.stops)) continue;
+          for (const st of sc.stops) {
+            if (!Array.isArray(st.overlays)) continue;
+            for (const ov of st.overlays) {
+              if (ov && typeof ov.src === 'string') {
+                const old = ov.src;
+                for (const pref of OLD_PREFIXES) {
+                  if (old.startsWith(pref)) {
+                    const file = old.substring(pref.length);
+                    const guessCat = file.includes('fire') ? 'fire' : file.includes('smoke') ? 'smoke' : file.includes('car') ? 'cars' : file.includes('hazard') ? 'hazard' : 'people';
+                    ov.src = `${OVERLAY_BASE}${guessCat}/${file}`; changed = true; break;
+                  }
                 }
               }
             }
           }
+          if (changed) { await set(ref(db,'scenarios/'+sid), sc); updated++; }
         }
-
-        if (changed) {
-          await set(ref(db,'scenarios/'+sid), sc);
-          updated++;
-        }
-      }
-      bulkMsg.textContent = `Bulk: relinked overlay sources in ${updated} scenario(s).`;
-    } catch (e) {
-      bulkMsg.textContent = 'Bulk relink error: ' + (e?.message||e);
+        bulkMsg.textContent = `Bulk: relinked overlay sources in ${updated} scenario(s).`;
+      } catch (e) { bulkMsg.textContent = 'Bulk relink error: ' + (e?.message||e); }
     }
-  }
 
-  normalizeLocsBtn?.addEventListener('click', normalizeAllLocations);
-  relinkOverlaysBtn?.addEventListener('click', relinkOverlaySources);
+    normalizeLocsBtn?.addEventListener('click', normalizeAllLocations);
+    relinkOverlaysBtn?.addEventListener('click', relinkOverlaySources);
 
-  /* ===== Canvas tools ===== */
-  const rebase = ()=>{ if(!baseImage) return; setBaseImageFromDataURL(baseImage.toDataURL({})); };
-  fitBtn.onclick=rebase;
-  zoomIn.onclick=()=>fabricCanvas.setZoom(fabricCanvas.getZoom()*1.1);
-  zoomOut.onclick=()=>fabricCanvas.setZoom(fabricCanvas.getZoom()/1.1);
-  rotateL.onclick=()=>{ if(baseImage){ baseImage.rotate((baseImage.angle||0)-90); fabricCanvas.requestRenderAll(); } };
-  rotateR.onclick=()=>{ if(baseImage){ baseImage.rotate((baseImage.angle||0)+90); fabricCanvas.requestRenderAll(); } };
+    /* ===== Canvas tools ===== */
+    const rebase = ()=>{ if(!baseImage) return; setBaseImageFromDataURL(baseImage.toDataURL({})); };
+    fitBtn.onclick=rebase;
+    zoomIn.onclick=()=>fabricCanvas.setZoom(fabricCanvas.getZoom()*1.1);
+    zoomOut.onclick=()=>fabricCanvas.setZoom(fabricCanvas.getZoom()/1.1);
+    rotateL.onclick=()=>{ if(baseImage){ baseImage.rotate((baseImage.angle||0)-90); fabricCanvas.requestRenderAll(); } };
+    rotateR.onclick=()=>{ if(baseImage){ baseImage.rotate((baseImage.angle||0)+90); fabricCanvas.requestRenderAll(); } };
 
-  /* ===== Delete stop ===== */
-  deleteStop.onclick=async()=>{
-    try{
-      if(!current || stopIndex<0) return;
-      if(!confirm('Delete this photo from the scenario?')) return;
-      current.stops.splice(stopIndex,1);
-      const { id, ...payload } = current;
-      await set(ref(db,'scenarios/'+current.id), payload);
-      stopIndex=-1; fabricCanvas.clear(); baseImage=null; renderStopsThumbs(); metaMsg.textContent='Photo deleted.';
-    }catch(e){ metaMsg.textContent=String(e.message||e); }
-  };
-
-})();
-</script>
+    /* ===== Delete stop ===== */
+    deleteStop.onclick=async()=>{
+      try{
+        if(!current || stopIndex<0) return;
+        if(!confirm('Delete this photo from the scenario?')) return;
+        current.stops.splice(stopIndex,1);
+        const { id, ...payload } = current;
+        await set(ref(db,'scenarios/'+current.id), payload);
+        stopIndex=-1; fabricCanvas.clear(); baseImage=null; renderStopsThumbs(); metaMsg.textContent='Photo deleted.';
+      }catch(e){ metaMsg.textContent=String(e.message||e); }
+    };
+  })();
+  </script>
 </body>
 </html>
