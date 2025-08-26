@@ -34,7 +34,6 @@
     .btn[disabled]{opacity:.65; cursor:not-allowed}
     .btn.secondary{background:transparent; color:var(--text); border:1px solid rgba(255,255,255,.14)}
     select{width:100%; padding:14px 12px; font-size:16px; border-radius:12px; border:1px solid rgba(255,255,255,.14); background:#0f1624; color:var(--text); outline:none}
-    input[type="range"]{accent-color:#54a6ff}
     .row{display:flex; gap:10px; flex-wrap:wrap; align-items:center}
 
     #viewer .card-inner{padding:12px}
@@ -45,6 +44,7 @@
     footer{max-width:1100px; margin:34px auto; padding:0 20px; color:var(--muted); font-size:13px; border-top:1px solid rgba(255,255,255,.06); display:flex; justify-content:space-between; gap:16px; flex-wrap:wrap}
     #runTimer{font-size:13px; color:#cfe1ff}
     #debug{font-size:12px; color:#ffdede; margin-top:6px; white-space:pre-wrap}
+    #diag{font-size:12px; color:#b6d7ff; margin-top:6px; white-space:pre-wrap}
   </style>
 </head>
 <body>
@@ -63,11 +63,12 @@
         <div class="card-inner">
           <div class="eyebrow">Scenario</div>
           <h2>Select & Start</h2>
-          <p>Choose a scenario below, then press Start to enable voice.</p>
+          <p>Choose a scenario below, then press Start.</p>
           <div class="row" style="margin-top:10px; width:100%">
             <select id="scenarioSelect" aria-label="Choose a scenario"><option value="">Loading…</option></select>
           </div>
           <div class="status" id="status" aria-live="polite" style="margin-top:8px">Connecting…</div>
+          <div id="diag"></div>
           <div id="debug" aria-live="polite"></div>
         </div>
       </article>
@@ -93,9 +94,9 @@
 
       <article class="card">
         <div class="card-inner">
-          <div class="eyebrow">Audio & TTS</div>
+          <div class="eyebrow">Run</div>
           <h2>Scenario Controls</h2>
-          <p>One tap enables voice. iPhone uses built-in TTS. (No beeps.)</p>
+          <p>Temporary: **iPhone has TTS disabled**. Android/desktop will speak captions.</p>
           <div class="row" style="margin-top:10px; align-items:flex-start">
             <button id="startScenario" class="btn" type="button">Start Scenario</button>
             <button id="muteToggle" class="btn secondary" type="button">Mute</button>
@@ -122,12 +123,16 @@
   (function(){
     const $ = id => document.getElementById(id);
     const viewer=$('viewer'), backBtn=$('backBtn');
-    const select=$('scenarioSelect'), status=$('status'), debug=$('debug'), connStatus=$('connStatus');
+    const select=$('scenarioSelect'), status=$('status'), diag=$('diag'), debug=$('debug'), connStatus=$('connStatus');
     const dispatchBlock=$('dispatchBlock'), geoStatus=$('geoStatus');
     const result=$('result'), stopTitle=$('stopTitle'), photo=$('photo'), caption=$('caption'), detail=$('detail');
     const scTitle=$('scTitle');
     const startBtn=$('startScenario'), muteToggle=$('muteToggle'), rate=$('rate'), runTimer=$('runTimer');
     const log = (m)=>{ console.log('[viewer]', m); debug.textContent=String(m); };
+
+    // ---------- Device flags (disable iOS TTS) ----------
+    const isIOS = /iP(hone|ad|od)/i.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+    const canSpeak = !isIOS && ('speechSynthesis' in window) && ('SpeechSynthesisUtterance' in window);
 
     // ---------- Firebase (compat only) ----------
     const firebaseConfig = {
@@ -148,8 +153,8 @@
       connStatus.style.color = ok ? '#89ffb2' : '#ffdede';
     });
 
-    // ---------- Scenario loading (reliable) ----------
-    let scenarios=[], populated=false;
+    // ---------- Scenario loading (hardened) ----------
+    let scenarios=[], populated=false, pathUsed='';
     function normalizeStops(stopsLike){
       if(!stopsLike) return [];
       const arr = Array.isArray(stopsLike) ? stopsLike : Object.values(stopsLike);
@@ -168,7 +173,9 @@
       const obj = val || {};
       return Object.entries(obj).map(([id, s])=>({ id, ...(s||{}), stops: normalizeStops(s?.stops) }));
     }
-    function populateDropdown(list){
+    function populateDropdown(list, sourceLabel){
+      // Sort newest first if timestamp exists
+      list.sort((a,b)=> (b.createdAt||0)-(a.createdAt||0));
       select.innerHTML = '<option value="">Select a scenario…</option>';
       list.forEach(sc=>{
         const o=document.createElement('option');
@@ -178,9 +185,10 @@
       });
       status.textContent = list.length ? `${list.length} scenario(s) found` : 'No scenarios yet.';
       populated = list.length>0;
+      pathUsed = sourceLabel || pathUsed;
+      diag.textContent = `Loaded from: ${pathUsed || '—'}`;
     }
 
-    // Realtime (primary)
     const refA = db.ref('geophoto/scenarios');
     const refB = db.ref('scenarios');
 
@@ -188,45 +196,58 @@
     refA.on('value', snap=>{
       const list = mapSnapshot(snap.val());
       gotA=true;
-      if(list.length){ scenarios=list; populateDropdown(list); }
+      if(list.length){ scenarios=list; populateDropdown(list, 'geophoto/scenarios (realtime)'); }
       if(!list.length && gotB && scenarios.length===0) status.textContent='No scenarios found.';
     });
     refB.on('value', snap=>{
       const list = mapSnapshot(snap.val());
       gotB=true;
-      if(!scenarios.length && list.length){ scenarios=list; populateDropdown(list); }
+      if(!scenarios.length && list.length){ scenarios=list; populateDropdown(list, 'scenarios (realtime)'); }
       if(!list.length && gotA && scenarios.length===0) status.textContent='No scenarios found.';
     });
 
-    // REST fallback (if both fail to populate after 2s)
+    // One-shot compat fallback after 1.2s
+    setTimeout(()=>{
+      if (scenarios.length) return;
+      refA.once('value').then(snap=>{
+        if (scenarios.length) return;
+        const list = mapSnapshot(snap.val());
+        if(list.length){ scenarios=list; populateDropdown(list, 'geophoto/scenarios (once)'); }
+      }).catch(()=>{});
+      refB.once('value').then(snap=>{
+        if (scenarios.length) return;
+        const list = mapSnapshot(snap.val());
+        if(list.length){ scenarios=list; populateDropdown(list, 'scenarios (once)'); }
+      }).catch(()=>{});
+    }, 1200);
+
+    // REST fallback after 2.0s
     setTimeout(async ()=>{
       if (scenarios.length) return;
       try{
         const r = await fetch('https://dailyquiz-d5279-default-rtdb.firebaseio.com/geophoto/scenarios.json', {cache:'no-store'});
         if(r.ok){
           const j = await r.json(); const list = mapSnapshot(j);
-          if(list.length){ scenarios=list; populateDropdown(list); return; }
+          if(list.length){ scenarios=list; populateDropdown(list, 'geophoto/scenarios (REST)'); return; }
         }
       }catch{}
       try{
         const r2 = await fetch('https://dailyquiz-d5279-default-rtdb.firebaseio.com/scenarios.json', {cache:'no-store'});
         if(r2.ok){
           const j2 = await r2.json(); const list2 = mapSnapshot(j2);
-          if(list2.length){ scenarios=list2; populateDropdown(list2); return; }
+          if(list2.length){ scenarios=list2; populateDropdown(list2, 'scenarios (REST)'); return; }
         }
       }catch{}
-      if(!scenarios.length) status.textContent='No scenarios found.';
+      if(!scenarios.length){ status.textContent='No scenarios found.'; diag.textContent='Loaded from: none (check DB paths/permissions)'; }
     }, 2000);
 
-    // ---------- TTS (iOS-safe Web Speech) ----------
-    const isIOS = /iP(hone|ad|od)/i.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
-    const hasSpeech = 'speechSynthesis' in window && 'SpeechSynthesisUtterance' in window;
-
-    let audioEnabled=false, muted=false, rateVal=1.0, runInterval=null, startMs=0;
-
-    const SpeechTTS = (() => {
-      let unlocked=false, speaking=false, q=[], voices=[], pickVoice=null;
-
+    // ---------- Simple TTS (Android/Desktop only) ----------
+    let muted=false, rateVal=1.0;
+    const TTS = (() => {
+      if(!canSpeak){
+        return { unlockOnce:()=>true, enqueue:()=>{}, stop:()=>{}, setRate:()=>{}, setMuted:()=>{} };
+      }
+      let unlocked=false, speaking=false, q=[];
       function chunk(text, max=240){
         const parts=[]; let t=(text||'').replace(/\s+/g,' ').trim();
         const re=/([,;.?!])\s+/g; let last=0, m;
@@ -234,62 +255,21 @@
         if(last < t.length) parts.push(t.slice(last));
         return parts.flatMap(p=> p.length<=max ? [p] : p.match(new RegExp('.{1,'+max+'}', 'g')));
       }
-
       function speakNext(){
         if(speaking || !q.length) return;
         speaking = true;
         const text = q.shift();
-        const utt = new SpeechSynthesisUtterance(text);
-        if (pickVoice) utt.voice = pickVoice;
-        utt.rate = rateVal;
-        utt.pitch = 1.0;
-        utt.volume = muted ? 0 : 1;
-
-        utt.onend = () => { speaking=false; speakNext(); };
-        utt.onerror = () => { speaking=false; speakNext(); };
-
-        try { window.speechSynthesis.speak(utt); } catch { speaking=false; }
+        const u = new SpeechSynthesisUtterance(text);
+        u.rate = rateVal; u.pitch=1; u.volume = muted?0:1;
+        u.onend=()=>{ speaking=false; speakNext(); };
+        u.onerror=()=>{ speaking=false; speakNext(); };
+        try{ speechSynthesis.speak(u); }catch{ speaking=false; }
       }
-
-      function enqueue(text){
-        if(!unlocked) return;
-        chunk(text).forEach(p => q.push(p));
-        speakNext();
-      }
-
-      function unlockOnce(){
-        if(unlocked) return true;
-        try{
-          window.speechSynthesis.cancel();
-          const loadVoices = () => {
-            voices = window.speechSynthesis.getVoices() || [];
-            pickVoice = voices.find(v => /siri|en-us|english/i.test((v.name||'')+' '+(v.lang||''))) || voices[0] || null;
-          };
-          loadVoices();
-          window.speechSynthesis.onvoiceschanged = loadVoices;
-
-          // IMPORTANT: call speak immediately on the tap
-          const prim = new SpeechSynthesisUtterance(' ');
-          prim.rate = 1; prim.volume = 0; // silent prime
-          prim.onstart = ()=>{ unlocked=true; };
-          try { window.speechSynthesis.speak(prim); } catch {}
-          // Fallback unlock if onstart not firing
-          setTimeout(()=>{ if(!unlocked) unlocked=true; }, 200);
-          return true;
-        }catch(e){
-          log('Speech unlock error: ' + e.message);
-          return false;
-        }
-      }
-
-      function stop(){ try { window.speechSynthesis.cancel(); } catch {} q.length=0; speaking=false; }
+      function enqueue(text){ if(!unlocked) return; chunk(text).forEach(p=>q.push(p)); speakNext(); }
+      function unlockOnce(){ if(unlocked) return true; try{ speechSynthesis.cancel(); const prim=new SpeechSynthesisUtterance(' '); prim.volume=0; speechSynthesis.speak(prim); unlocked=true; return true; }catch{ return false; } }
+      function stop(){ try{ speechSynthesis.cancel(); }catch{} q.length=0; speaking=false; }
       return { unlockOnce, enqueue, stop, setRate:(r)=>{rateVal=r;}, setMuted:(m)=>{muted=m;} };
     })();
-
-    // (Optional) MP3 backend hook — disabled by default to avoid autoplay issues.
-    // Turn on later by replacing SpeechTTS with NetTTS for non-iOS if you want OpenAI voices.
-
-    const TTS = (hasSpeech ? SpeechTTS : SpeechTTS); // fallback to speechSynthesis everywhere for simplicity
 
     // ---------- Geofence + display ----------
     const toRad = x => x*Math.PI/180;
@@ -317,9 +297,9 @@
 
     function showDispatchIntro(sc){
       const txt=(sc.dispatch||sc.notes||'').trim();
-      $('dispatchBlock').textContent = txt ? `Dispatch: ${txt}` : 'Dispatch: (none)';
-      if (txt) setTimeout(()=>TTS.enqueue(txt), 120);
-      else setTimeout(()=>TTS.enqueue(`${sc.title || 'Scenario'} started.`), 120);
+      dispatchBlock.textContent = txt ? `Dispatch: ${txt}` : 'Dispatch: (none)';
+      if (txt && canSpeak) setTimeout(()=>TTS.enqueue(txt), 120);
+      else if(canSpeak) setTimeout(()=>TTS.enqueue(`${sc.title || 'Scenario'} started.`), 120);
     }
 
     let current=null, watchId=null, lastStopIndex=-1;
@@ -350,7 +330,7 @@
             caption.textContent=hit.s.caption||'';
             detail.textContent=`Distance: ${Math.round(hit.dist)} m (radius ${hit.s.radiusMeters} m)`;
             const speech = `${hit.s.title ? (hit.s.title+'. ') : ''}${hit.s.caption || ''}`;
-            setTimeout(()=>TTS.enqueue(speech), 120);
+            if(canSpeak) setTimeout(()=>TTS.enqueue(speech), 120);
             viewer.scrollIntoView({behavior:'smooth', block:'start'});
           }
         }, err=>{ geoStatus.textContent='Location error: '+err.message; }, { enableHighAccuracy:true, maximumAge:0, timeout:20000 });
@@ -358,7 +338,7 @@
     }
 
     // ---------- UI: mute/rate, timer, start/back ----------
-    muteToggle.onclick=()=>{ muted=!muted; muteToggle.textContent=muted?'Unmute':'Mute'; TTS.setMuted(muted); };
+    muteToggle.onclick=()=>{ TTS.setMuted( (muteToggle.textContent!=='Mute') ? false : true ); muteToggle.textContent = (muteToggle.textContent==='Mute') ? 'Unmute' : 'Mute'; };
     rate.oninput=e=>{ const r=parseFloat(e.target.value||'1')||1; TTS.setRate(r); };
 
     function formatTime(ms){ const s=Math.floor(ms/1000), m=Math.floor(s/60), sec=s%60; return String(m).padStart(2,'0')+':'+String(sec).padStart(2,'0'); }
@@ -370,11 +350,9 @@
       const id=select.value;
       if(!id){ status.textContent='Choose a scenario first.'; return; }
 
-      // iOS-safe: call speech immediately (no awaits before this)
-      const ok = TTS.unlockOnce();
-      if (!ok){ alert('Tap Start again to enable voice.'); return; }
+      // Unlock speech (no-op on iOS since disabled)
+      TTS.unlockOnce();
 
-      audioEnabled=true;
       startTimer();
       startBtn.textContent='Scenario Running';
       startBtn.disabled=true;
@@ -388,7 +366,7 @@
       status.textContent='Choose a scenario and press Start Scenario.';
       TTS.stop();
       startBtn.disabled=false; startBtn.textContent='Start Scenario';
-      audioEnabled=false; stopTimer();
+      stopTimer();
     };
 
     // Preselect by ?id=abc if provided
