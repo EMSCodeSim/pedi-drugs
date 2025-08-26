@@ -63,7 +63,7 @@
         <div class="card-inner">
           <div class="eyebrow">Scenario</div>
           <h2>Select & Start</h2>
-          <p>Choose a scenario below, then start it to enable audio/voice prompts.</p>
+          <p>Choose a scenario below, then press Start to enable voice.</p>
           <div class="row" style="margin-top:10px; width:100%">
             <select id="scenarioSelect" aria-label="Choose a scenario"><option value="">Loading…</option></select>
           </div>
@@ -95,12 +95,12 @@
         <div class="card-inner">
           <div class="eyebrow">Audio & TTS</div>
           <h2>Scenario Controls</h2>
-          <p>This enables audio, reads the dispatch, and reads each caption automatically. (No beeps.)</p>
+          <p>One tap enables voice. iPhone uses built-in TTS. (No beeps.)</p>
           <div class="row" style="margin-top:10px; align-items:flex-start">
             <button id="startScenario" class="btn" type="button">Start Scenario</button>
             <button id="muteToggle" class="btn secondary" type="button">Mute</button>
-            <label style="margin-left:auto; color:var(--muted)">Volume
-              <input id="vol" type="range" min="0" max="1" step="0.05" value="1" />
+            <label style="margin-left:auto; color:var(--muted)">Rate
+              <input id="rate" type="range" min="0.7" max="1.3" step="0.05" value="1" />
             </label>
           </div>
           <div id="runTimer" aria-live="polite" style="margin-top:8px">00:00</div>
@@ -126,7 +126,7 @@
     const dispatchBlock=$('dispatchBlock'), geoStatus=$('geoStatus');
     const result=$('result'), stopTitle=$('stopTitle'), photo=$('photo'), caption=$('caption'), detail=$('detail');
     const scTitle=$('scTitle');
-    const startBtn=$('startScenario'), muteToggle=$('muteToggle'), vol=$('vol'), runTimer=$('runTimer');
+    const startBtn=$('startScenario'), muteToggle=$('muteToggle'), rate=$('rate'), runTimer=$('runTimer');
     const log = (m)=>{ console.log('[viewer]', m); debug.textContent=String(m); };
 
     // ---------- Helpers ----------
@@ -212,134 +212,179 @@
       populated = list.length>0;
     }
 
-    // Prefer geophoto/scenarios; fallback to scenarios
     try{
       const a = (mode==='modular') ? refFn(db,'geophoto/scenarios') : refFn('geophoto/scenarios');
       onValueFn(a, snap=>{
         const list=mapSnapshot(snap.val());
-        if(list.length){ scenarios=list; populateDropdown(scenarios); log('SDK: geophoto/scenarios '+list.length); }
-      }, err=>log('SDK geophoto error: '+(err?.message||err)));
-    }catch(e){ log('attach geophoto failed: '+e.message); }
+        if(list.length){ scenarios=list; populateDropdown(scenarios); }
+      });
+    }catch{}
     try{
       const b = (mode==='modular') ? refFn(db,'scenarios') : refFn('scenarios');
       onValueFn(b, snap=>{
         const list=mapSnapshot(snap.val());
-        if(!scenarios.length && list.length){ scenarios=list; populateDropdown(scenarios); log('SDK: scenarios '+list.length); }
-      }, err=>log('SDK scenarios error: '+(err?.message||err)));
-    }catch(e){ log('attach scenarios failed: '+e.message); }
+        if(!scenarios.length && list.length){ scenarios=list; populateDropdown(scenarios); }
+      });
+    }catch{}
 
     setTimeout(async ()=>{
       if(!populated){
         try{ const s1 = await getFn((mode==='modular') ? refFn(db,'geophoto/scenarios') : refFn('geophoto/scenarios'));
-             const list=mapSnapshot(s1?.val?.() ?? s1.val()); if(list.length){ scenarios=list; populateDropdown(list); log('GET geophoto '+list.length); } }
-        catch(e){ log('GET geophoto error: '+e.message); }
+             const list=mapSnapshot(s1?.val?.() ?? s1.val()); if(list.length){ scenarios=list; populateDropdown(list); } }
+        catch(e){}
       }
       if(!populated){
         try{ const s2 = await getFn((mode==='modular') ? refFn(db,'scenarios') : refFn('scenarios'));
-             const list=mapSnapshot(s2?.val?.() ?? s2.val()); if(list.length){ scenarios=list; populateDropdown(list); log('GET scenarios '+list.length); } }
-        catch(e){ log('GET scenarios error: '+e.message); }
+             const list=mapSnapshot(s2?.val?.() ?? s2.val()); if(list.length){ scenarios=list; populateDropdown(list); } }
+        catch(e){}
       }
       if(!populated){
         try{
           const url = 'https://dailyquiz-d5279-default-rtdb.firebaseio.com/scenarios.json';
           const r = await fetch(url); if(!r.ok) throw new Error('HTTP '+r.status);
           const json = await r.json(); const list = mapSnapshot(json);
-          if(list.length){ scenarios=list; populateDropdown(list); log('REST scenarios '+list.length); }
-        }catch(e){ log('REST error: '+e.message); }
+          if(list.length){ scenarios=list; populateDropdown(list); }
+        }catch(e){}
       }
       if(!populated){ status.textContent='No scenarios found.'; }
     }, 1200);
 
-    // ---------- iOS-safe TTS (OpenAI MP3/M4A via one shared <audio>) ----------
-    let audioEnabled=false, muted=false, volume=1.0, runInterval=null, startMs=0;
-    let sharedAudio=null, audioUnlocked=false, speaking=false;
-    const speakQueue=[];
+    // ---------- HYBRID TTS: iOS uses speechSynthesis; others can use MP3 ----------
+    const isIOS = /iP(hone|ad|od)/i.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+    const hasSpeech = 'speechSynthesis' in window && 'SpeechSynthesisUtterance' in window;
 
-    // Truly silent WAV for unlock (no clicks)
-    const SILENT_WAV = "data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAESsAACJWAAACABAAAAABAACAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA=";
+    let audioEnabled=false, muted=false, rateVal=1.0, runInterval=null, startMs=0;
 
-    function setAudioVolume(v){
-      volume = v;
-      if (sharedAudio) sharedAudio.volume = muted ? 0 : volume;
-    }
+    // iOS Speech engine
+    const iOSTTS = (() => {
+      let unlocked=false, speaking=false, q=[], voices=[], pickVoice=null;
 
-    async function primeAudio(){
-      if (audioUnlocked) return true;
-      sharedAudio = new Audio();
-      sharedAudio.setAttribute('playsinline','');
-      sharedAudio.preload = 'auto';
-      sharedAudio.volume = 0;          // force silent during unlock
-      sharedAudio.src = SILENT_WAV;
-
-      sharedAudio.onended = () => {
-        // After any clip, advance the queue
-        speaking = false;
-        playNextFromQueue();
-      };
-
-      try{
-        await sharedAudio.play();      // MUST run on Start tap
-        sharedAudio.pause();
-        sharedAudio.currentTime = 0;
-        audioUnlocked = true;
-        // restore to user volume
-        sharedAudio.volume = muted ? 0 : volume;
-        return true;
-      }catch(e){
-        log('Audio unlock failed: ' + e.message);
-        return false;
-      }
-    }
-
-    // Replace this with your backend that returns an MP3/M4A blob
-    async function fetchOpenAITTS(text){
-      // Example:
-      // const resp = await fetch('/api/tts', {
-      //   method: 'POST',
-      //   headers: {'Content-Type':'application/json'},
-      //   body: JSON.stringify({ text })
-      // });
-      // if (!resp.ok) throw new Error('TTS HTTP ' + resp.status);
-      // const blob = await resp.blob(); // audio/mpeg or audio/mp4
-      // return URL.createObjectURL(blob);
-
-      // TEMP: silence placeholder so flow runs without noise until you wire backend.
-      return SILENT_WAV;
-    }
-
-    function enqueueSpeak(text){
-      const clean = (text||'').trim();
-      if (!audioEnabled || !audioUnlocked || !clean) return;
-      speakQueue.push(clean);
-      if (!speaking) playNextFromQueue();
-    }
-
-    async function playNextFromQueue(){
-      if (speaking || !speakQueue.length || !audioUnlocked || !audioEnabled) return;
-      speaking = true;
-      const text = speakQueue.shift();
-      try{
-        const url = await fetchOpenAITTS(text);
-        sharedAudio.src = url;
-        // volume already set via setAudioVolume
-        await sharedAudio.play();
-      }catch(e){
-        log('Playback error: ' + e.message);
-        speaking = false;
-        playNextFromQueue(); // try next
-      }
-    }
-
-    function stopAllAudio(){
-      try{
-        if (sharedAudio){
-          sharedAudio.pause();
-          sharedAudio.currentTime = 0;
+      function chunk(text, max=240){
+        const parts=[]; let t=(text||'').replace(/\s+/g,' ').trim();
+        const re=/([,;.?!])\s+/g;
+        let last=0, m;
+        while((m=re.exec(t)) && parts.join('').length + (m.index-last) < max){
+          const piece=t.slice(last, m.index+1).trim(); if(piece) parts.push(piece); last=m.index+1;
         }
-      }catch{}
-      speaking = false;
-      speakQueue.length = 0;
-    }
+        if(last < t.length) parts.push(t.slice(last));
+        // final split if any part > max
+        return parts.flatMap(p=>{
+          if(p.length<=max) return [p];
+          const arr=[]; for(let i=0;i<p.length;i+=max) arr.push(p.slice(i,i+max)); return arr;
+        });
+      }
+
+      function speakNext(){
+        if(speaking || !q.length) return;
+        speaking = true;
+        const text = q.shift();
+        const utt = new SpeechSynthesisUtterance(text);
+        if (pickVoice) utt.voice = pickVoice;
+        utt.rate = rateVal;          // user-adjustable
+        utt.pitch = 1.0;
+        utt.volume = muted ? 0 : 1;
+
+        utt.onend = () => { speaking=false; speakNext(); };
+        utt.onerror = () => { speaking=false; speakNext(); };
+
+        try { window.speechSynthesis.speak(utt); } catch { speaking=false; }
+      }
+
+      function enqueue(text){
+        if(!unlocked) return;
+        const parts = chunk(text);
+        parts.forEach(p => q.push(p));
+        speakNext();
+      }
+
+      function unlockOnce(){
+        if(unlocked) return true;
+        try{
+          window.speechSynthesis.cancel();
+          // voices can be async on iOS; populate but don't block
+          const loadVoices = () => {
+            voices = window.speechSynthesis.getVoices() || [];
+            // try to pick a Siri/en-US style voice if available
+            pickVoice = voices.find(v => /siri|en-us|english/i.test(v.name+ ' ' + v.lang)) || voices[0] || null;
+          };
+          loadVoices();
+          window.speechSynthesis.onvoiceschanged = loadVoices;
+
+          // IMPORTANT: speak immediately on the same tap (no awaits beforehand)
+          const prim = new SpeechSynthesisUtterance('Voice enabled');
+          prim.rate = 1; prim.volume = 0; // silent prime to be extra safe
+          prim.onstart = () => { unlocked=true; };
+          prim.onend = () => {};
+          try { window.speechSynthesis.speak(prim); } catch {}
+          // If onstart doesn’t fire on some iOS builds, still consider unlocked
+          setTimeout(()=>{ if(!unlocked) unlocked=true; }, 200);
+          return true;
+        }catch(e){
+          log('iOS unlock error: ' + e.message);
+          return false;
+        }
+      }
+
+      function stop(){
+        try { window.speechSynthesis.cancel(); } catch {}
+        q.length=0; speaking=false;
+      }
+
+      return { unlockOnce, enqueue, stop, setRate:(r)=>{rateVal=r;}, setMuted:(m)=>{muted=m;} };
+    })();
+
+    // Network (MP3) engine for non-iOS if you still want OpenAI audio
+    const NetTTS = (() => {
+      let unlocked=false, speaking=false, q=[], audio=null;
+
+      async function fetchMP3(text){
+        // >>> Replace with your backend route if desired <<<
+        // const resp = await fetch('/api/tts', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ text }) });
+        // const blob = await resp.blob(); // audio/mpeg
+        // return URL.createObjectURL(blob);
+        // Default to no-op silent data for now:
+        return "data:audio/mpeg;base64,//uQZAAAAAAAAAAAAAAAAAAAAAA"; // short silent mp3 header (effectively silent)
+      }
+
+      function playNext(){
+        if(speaking || !q.length || !unlocked) return;
+        speaking=true;
+        const text=q.shift();
+        fetchMP3(text).then(url=>{
+          if(!audio){
+            audio = new Audio();
+            audio.setAttribute('playsinline','');
+          }
+          audio.src=url;
+          audio.volume = muted ? 0 : 1;
+          audio.onended = ()=>{ speaking=false; playNext(); };
+          audio.onerror = ()=>{ speaking=false; playNext(); };
+          audio.play().catch(()=>{ speaking=false; });
+        }).catch(()=>{ speaking=false; });
+      }
+
+      function enqueue(text){
+        if(!unlocked) return;
+        q.push(text);
+        playNext();
+      }
+
+      function unlockOnce(){
+        // Non-iOS generally doesn’t need special unlocks; mark ready.
+        unlocked=true;
+        return true;
+      }
+
+      function stop(){
+        try{ if(audio){ audio.pause(); audio.currentTime=0; } }catch{}
+        q.length=0; speaking=false;
+      }
+
+      return { unlockOnce, enqueue, stop, setRate:(_)=>{}, setMuted:(m)=>{ if(audio) audio.volume = m?0:1; } };
+    })();
+
+    // Pick engine
+    const TTS = (isIOS && hasSpeech) ? iOSTTS : NetTTS;
 
     // ---------- Geofence + display ----------
     function within(hitDist, stopRadius, accuracy){
@@ -352,15 +397,17 @@
         if(within(d, s.radiusMeters, acc)){ if(!best || d<best.dist) best={s,index:i,dist:d}; }
       }); return best;
     }
+
     function showDispatchIntro(sc){
       const txt=(sc.dispatch||sc.notes||'').trim();
       dispatchBlock.textContent = txt ? `Dispatch: ${txt}` : 'Dispatch: (none)';
-      // Speak the dispatch once the scenario opens
-      if (txt) setTimeout(()=>enqueueSpeak(txt), 120);
-      else setTimeout(()=>enqueueSpeak(`${sc.title || 'Scenario'} started.`), 120);
+      // Queue dispatch once engine is unlocked
+      if (txt) setTimeout(()=>TTS.enqueue(txt), 120);
+      else setTimeout(()=>TTS.enqueue(`${sc.title || 'Scenario'} started.`), 120);
     }
 
-    let current=null, watchId=null, lastStopIndex=-1;
+    let scenarios=[], current=null, watchId=null, lastStopIndex=-1, populated=false;
+
     function openScenarioById(id){
       const sc=scenarios.find(s=>s.id===id);
       if(!sc){ status.textContent='Scenario not found.'; return; }
@@ -386,29 +433,29 @@
             setImage(photo, hit.s);
             caption.textContent=hit.s.caption||'';
             detail.textContent=`Distance: ${Math.round(hit.dist)} m (radius ${hit.s.radiusMeters} m)`;
-            // NO BEEP. Speak title + caption.
             const speech = `${hit.s.title ? (hit.s.title+'. ') : ''}${hit.s.caption || ''}`;
-            setTimeout(()=>enqueueSpeak(speech), 120);
+            setTimeout(()=>TTS.enqueue(speech), 120);
             viewer.scrollIntoView({behavior:'smooth', block:'start'});
           }
         }, err=>{ geoStatus.textContent='Location error: '+err.message; }, { enableHighAccuracy:true, maximumAge:0, timeout:20000 });
       }catch(e){ geoStatus.textContent='Location error: '+e.message; }
     }
 
-    // ---------- UI: mute/volume, timer, start/back ----------
-    muteToggle.onclick=()=>{ muted=!muted; muteToggle.textContent=muted?'Unmute':'Mute'; setAudioVolume(volume); };
-    vol.oninput=e=>{ setAudioVolume(parseFloat(e.target.value||'1')||1); };
+    // ---------- UI: mute/rate, timer, start/back ----------
+    muteToggle.onclick=()=>{ muted=!muted; muteToggle.textContent=muted?'Unmute':'Mute'; TTS.setMuted(muted); };
+    rate.oninput=e=>{ const r=parseFloat(e.target.value||'1')||1; rateVal=r; TTS.setRate(r); };
 
     function formatTime(ms){ const s=Math.floor(ms/1000), m=Math.floor(s/60), sec=s%60; return String(m).padStart(2,'0')+':'+String(sec).padStart(2,'0'); }
     function startTimer(){ startMs=Date.now(); clearInterval(runInterval); runInterval=setInterval(()=>{ runTimer.textContent=formatTime(Date.now()-startMs); },500); }
     function stopTimer(){ clearInterval(runInterval); runInterval=null; runTimer.textContent='00:00'; }
 
-    startBtn.onclick=async()=>{
+    // IMPORTANT: Do NOT await anything before unlock on iOS.
+    startBtn.onclick=()=>{
       const id=select.value;
       if(!id){ status.textContent='Choose a scenario first.'; return; }
-      // Unlock audio on same tap
-      const ok = await primeAudio();
-      if (!ok){ alert('Tap Start again to enable audio.'); return; }
+
+      const ok = TTS.unlockOnce();   // calls speechSynthesis immediately on iOS
+      if (!ok){ alert('Tap Start again to enable voice.'); return; }
 
       audioEnabled=true;
       startTimer();
@@ -422,10 +469,60 @@
       viewer.style.display='none';
       try{ navigator.geolocation.clearWatch(watchId); }catch{} 
       status.textContent='Choose a scenario and press Start Scenario.';
-      stopAllAudio();
+      TTS.stop();
       startBtn.disabled=false; startBtn.textContent='Start Scenario';
       audioEnabled=false; stopTimer();
     };
+
+    // Populate scenarios (after Firebase wiring above)
+    function mapSnapshot(val){ const obj = val || {}; return Object.entries(obj).map(([id, s])=>({ id, ...(s||{}), stops: normalizeStops(s?.stops) })); }
+    function populateDropdown(list){
+      select.innerHTML = '<option value="">Select a scenario…</option>';
+      list.forEach(sc=>{
+        const o=document.createElement('option');
+        o.value=sc.id; o.textContent=sc.title || sc.name || sc.notes || '(untitled)';
+        select.appendChild(o);
+      });
+      status.textContent = list.length ? `${list.length} scenario(s) found` : 'No scenarios yet.';
+      populated = list.length>0;
+    }
+
+    try{
+      const a = (mode==='modular') ? refFn(db,'geophoto/scenarios') : refFn('geophoto/scenarios');
+      onValueFn(a, snap=>{
+        const list=mapSnapshot(snap.val());
+        if(list.length){ scenarios=list; populateDropdown(scenarios); }
+      });
+    }catch{}
+    try{
+      const b = (mode==='modular') ? refFn(db,'scenarios') : refFn('scenarios');
+      onValueFn(b, snap=>{
+        const list=mapSnapshot(snap.val());
+        if(!scenarios.length && list.length){ scenarios=list; populateDropdown(scenarios); }
+      });
+    }catch{}
+
+    setTimeout(async ()=>{
+      if(!populated){
+        try{ const s1 = await getFn((mode==='modular') ? refFn(db,'geophoto/scenarios') : refFn('geophoto/scenarios'));
+             const list=mapSnapshot(s1?.val?.() ?? s1.val()); if(list.length){ scenarios=list; populateDropdown(list); } }
+        catch(e){}
+      }
+      if(!populated){
+        try{ const s2 = await getFn((mode==='modular') ? refFn(db,'scenarios') : refFn('scenarios'));
+             const list=mapSnapshot(s2?.val?.() ?? s2.val()); if(list.length){ scenarios=list; populateDropdown(list); } }
+        catch(e){}
+      }
+      if(!populated){
+        try{
+          const url = 'https://dailyquiz-d5279-default-rtdb.firebaseio.com/scenarios.json';
+          const r = await fetch(url); if(!r.ok) throw new Error('HTTP '+r.status);
+          const json = await r.json(); const list = mapSnapshot(json);
+          if(list.length){ scenarios=list; populateDropdown(list); }
+        }catch(e){}
+      }
+      if(!populated){ status.textContent='No scenarios found.'; }
+    }, 1200);
 
     (function(){ const pre=new URLSearchParams(location.search).get('id'); if(!pre) return; const iv=setInterval(()=>{ if(select.options.length>1){ clearInterval(iv); select.value=pre; } },200); })();
     document.getElementById('year').textContent = new Date().getFullYear();
