@@ -2,14 +2,43 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <title>FireOps SIM — Admin (Geo-Photo)</title>
+  <title>FireOps SIM — Real-Time Fire Scene Simulator</title>
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="description" content="Real-time fire scene simulator with geofenced photos, audio/visual cues, and radio communications training." />
+  <link rel="canonical" href="https://fireopssim.com/" />
   <meta name="theme-color" content="#0b0f14" />
-  <meta name="description" content="Create and edit FireOps SIM Geo-Photo training scenarios with dispatch info, geofenced photos, and captions." />
+  <link rel="icon" href="data:," />
+
+  <!-- Open Graph -->
+  <meta property="og:title" content="FireOps SIM — Real-Time Fire Scene Simulator" />
+  <meta property="og:description" content="Run live, location-triggered scenarios with audio/visual cues and practice radio comms on a training channel." />
+  <meta property="og:type" content="website" />
+  <meta property="og:url" content="https://fireopssim.com/" />
+  <meta property="og:image" content="https://fireopssim.com/assets/og/geophoto-hero.jpg" />
+
+  <!-- Twitter -->
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="FireOps SIM — Real-Time Fire Scene Simulator" />
+  <meta name="twitter:description" content="Location-triggered scenarios with audio/visual cues and radio training." />
+  <meta name="twitter:image" content="https://fireopssim.com/assets/og/geophoto-hero.jpg" />
+
+  <!-- Schema.org -->
+  <script type="application/ld+json">
+  {
+    "@context":"https://schema.org",
+    "@type":"WebSite",
+    "name":"FireOps SIM",
+    "url":"https://fireopssim.com/",
+    "potentialAction":{
+      "@type":"SearchAction",
+      "target":"https://fireopssim.com/?q={search_term_string}",
+      "query-input":"required name=search_term_string"
+    }
+  }
+  </script>
 
   <style>
     :root{
-      /* Match homepage palette and style */
       --brandName: "FireOps SIM";
       --brandTag: "Real-Time Fire Scene Simulator";
       --bg:#0b0f14;
@@ -39,7 +68,6 @@
     a{color:inherit; text-decoration:none}
     img{max-width:100%; height:auto; display:block}
 
-    /* Topbar (identical structure to homepage) */
     .topbar{
       position:sticky; top:0; z-index:20;
       background:rgba(12,15,22,.75);
@@ -57,37 +85,46 @@
     }
     .tag{color:var(--muted); font-size:12px}
 
-    /* Page wrapper + cards (copied from homepage) */
-    main{max-width:1100px; margin:24px auto 84px; padding:0 20px}
+    header.hero{
+      position:relative; overflow:hidden;
+      padding: clamp(26px, 6vw, 64px) 20px;
+      border-bottom:1px solid rgba(255,255,255,.06);
+    }
+    .hero-inner{max-width:1100px; margin:0 auto; display:flex; gap:18px; align-items:center; flex-wrap:wrap}
+    .hero-logo{
+      width:112px; height:112px; border-radius:20px; overflow:hidden; flex:0 0 112px; box-shadow:var(--shadow);
+      background:#0f1624; display:grid; place-items:center; padding:8px;
+    }
+    .hero-logo img{width:100%; height:100%; object-fit:contain}
+    .hero-text h1{margin:0 0 8px; font-size:clamp(22px, 3.4vw, 40px)}
+    .hero-text p{margin:6px 0 0; font-size:clamp(14px, 2vw, 18px); color:#e9f1ff}
+
+    .notice{
+      max-width:1100px; margin:14px auto 0; padding:0 20px;
+    }
+    .notice .banner{
+      background:linear-gradient(180deg, rgba(255,59,48,.12), rgba(255,59,48,.06));
+      border:1px solid rgba(255,255,255,.12);
+      border-left:4px solid var(--red);
+      border-radius:14px; padding:14px 16px; box-shadow:var(--shadow);
+      color:#ffecec;
+      font-size:14px; line-height:1.45;
+    }
+
+    main{max-width:1100px; margin:24px auto 80px; padding:0 20px}
+    .grid{display:grid; gap:14px; grid-template-columns:repeat(auto-fit, minmax(280px,1fr))}
     .card{
       position:relative; border-radius:var(--radius); background:var(--card);
       border:1px solid rgba(255,255,255,.07); box-shadow:var(--shadow); overflow:hidden;
       transition:transform .15s ease, border-color .2s ease, box-shadow .2s ease;
-      margin:12px 0;
     }
     .card:hover{ transform:translateY(-2px); border-color:rgba(10,132,255,.35); box-shadow:0 16px 40px rgba(0,0,0,.5) }
     .card-inner{ padding:18px }
-
     .eyebrow{font-size:12px; color:var(--muted); margin-bottom:8px}
-    .sectionTitle{font-weight:900; margin:6px 0 10px}
-    .pill{
-      display:inline-flex; gap:8px; align-items:center;
-      padding:6px 10px; border-radius:999px;
-      border:1px solid rgba(255,255,255,.14); color:var(--muted); background:rgba(255,255,255,.03)
-    }
-    .hr{height:1px; background:rgba(255,255,255,.10); margin:12px 0}
-
-    /* Forms */
-    label{display:block; margin:10px 0 6px 2px; font-size:13px; color:var(--muted)}
-    input, textarea, select, button{font-size:16px}
-    input[type="text"], input[type="number"], textarea, select{
-      width:100%; padding:12px; border-radius:12px; outline:none;
-      background:#0f1624; color:var(--text); border:1px solid rgba(255,255,255,.14);
-    }
-    textarea{min-height:88px; resize:vertical}
-
+    .card h2{ margin:0 0 6px; font-size:20px }
+    .card p{ margin:6px 0 14px; color:var(--muted); font-size:14px }
     .btn{
-      appearance:none; border:0; border-radius:12px; width:auto; cursor:pointer;
+      appearance:none; border:0; border-radius:12px; width:100%; cursor:pointer;
       padding:14px 16px; font-weight:800; font-size:16px; color:#03131b;
       background:linear-gradient(180deg,#54a6ff,var(--blue)); box-shadow:var(--shadow);
       text-align:center;
@@ -96,41 +133,22 @@
       background:transparent; color:var(--text);
       border:1px solid rgba(255,255,255,.14);
     }
-    .btn.teal{
-      background:linear-gradient(180deg,#3ce5d3,var(--teal)); color:#052522;
-    }
-    .btn.danger{
-      background:var(--red); color:#fff;
-    }
     .row{ display:flex; gap:10px; flex-wrap:wrap; align-items:center }
-    .grid{ display:grid; gap:14px; grid-template-columns:repeat(auto-fit, minmax(280px,1fr)) }
-    .hidden{ display:none }
 
-    /* Sticky bar within creator (glass like homepage) */
-    .stickyBar{
-      position:sticky; top:62px; z-index:5;
-      background:rgba(12,15,22,.75);
-      backdrop-filter:saturate(120%) blur(6px);
-      border-bottom:1px solid rgba(255,255,255,.07);
-      padding:8px 12px;
-      margin:-18px -18px 10px -18px;
+    footer{
+      max-width:1100px; margin:40px auto; padding:18px 20px; color:var(--muted); font-size:13px;
+      border-top:1px solid rgba(255,255,255,.06); display:flex; justify-content:space-between; gap:16px; flex-wrap:wrap;
     }
-
-    /* Thumbs + list */
-    .thumbs{display:flex; flex-wrap:wrap; gap:8px; margin-top:10px}
-    .thumb{width:88px; height:88px; object-fit:cover; border-radius:12px; border:1px solid rgba(255,255,255,.14); background:#0a2230}
-    .listItem{
-      display:flex; justify-content:space-between; align-items:center;
-      padding:10px; border:1px solid rgba(255,255,255,.14); border-radius:12px; background:#0f1624
-    }
+    .external a{ text-decoration:underline }
   </style>
 </head>
 <body>
 
-  <!-- Sticky Top Navigation (matches homepage) -->
+  <!-- Sticky Top Navigation -->
   <div class="topbar">
     <div class="topnav">
       <div class="brandmini">
+        <!-- Top-left logo -->
         <div class="logo" aria-hidden="true">
           <img src="/assets/logo/fire-ops-sim.png" alt="FireOps SIM logo" />
         </div>
@@ -142,305 +160,135 @@
     </div>
   </div>
 
+  <!-- Hero -->
+  <header class="hero">
+    <div class="hero-inner">
+      <!-- Big hero logo -->
+      <div class="hero-logo" aria-hidden="true">
+        <img src="/assets/logo/fire-ops-sim.png" alt="FireOps SIM logo" />
+      </div>
+      <div class="hero-text">
+        <h1 id="heroTitle">Train where it matters — on scene.</h1>
+        <p id="heroLead">
+          FireOps SIM runs live, location-triggered scenarios with audio and visual cues that guide your actions in real time.
+          Crews practice size-up, decision-making, and communications just like the street.
+        </p>
+        <div class="row" style="margin-top:14px">
+          <a class="btn" href="https://fireopssim.com/geophoto/" aria-label="Open Geo-Photo Viewer">Open Geo-Photo Viewer</a>
+          <a class="btn secondary" href="https://emscodesim.com" rel="noopener">Visit EMSCodeSim.com</a>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- Training banner -->
+  <div class="notice" role="region" aria-label="How it works">
+    <div class="banner">
+      <strong>How it works:</strong> When your unit enters a scenario’s geofence, relevant photos unlock and are paired with
+      audible prompts and on-screen captions. <strong>Use radio communications over your training channel</strong> to deliver
+      size-ups, give assignments, request resources, and confirm actions throughout the scenario.
+    </div>
+  </div>
+
+  <!-- Main -->
   <main>
-    <!-- Landing -->
-    <section class="card" id="landing">
-      <div class="card-inner">
-        <div class="sectionTitle">Scenario Admin</div>
-        <div class="row" style="margin-top:8px">
-          <button id="goCreate" class="btn">Create Scenario</button>
-          <button id="goEdit" class="btn secondary">Edit Scenario</button>
-        </div>
-        <div class="pill" id="status" style="margin-top:10px">Ready</div>
-      </div>
-    </section>
+    <section aria-label="Admin">
+      <div class="grid">
+        <!-- Admin Access -->
+        <article class="card">
+          <div class="card-inner">
+            <div class="eyebrow">Admin</div>
+            <h2>Scenario Authoring</h2>
+            <p>Create scenarios on mobile with GPS & captions, or refine with our desktop editor. Simple password required (temporary).</p>
 
-    <!-- Create Scenario -->
-    <section class="card hidden" id="createPanel">
-      <div class="card-inner">
-        <div class="stickyBar">
-          <div class="row" style="justify-content:space-between; width:100%">
-            <div class="pill" id="createStatus">New scenario</div>
-            <button id="finalizeScenario" class="btn teal">Save Scenario</button>
-          </div>
-        </div>
-
-        <!-- Meta (collapses after first photo save) -->
-        <div id="scenarioMeta">
-          <label>Scenario Name</label>
-          <input id="scenarioName" type="text" placeholder="e.g., House Fire on Main St">
-
-          <label>Dispatch Information</label>
-          <textarea id="dispatchInfo" placeholder="Example: Engine 1, Engine 2, Medic 1 respond to ..."></textarea>
-        </div>
-
-        <div class="hr"></div>
-
-        <!-- Photo entry -->
-        <div>
-          <div class="sectionTitle">Add Photo</div>
-
-          <label>Photo (camera or library)</label>
-          <input id="photoInput" type="file" accept="image/*" capture="environment">
-
-          <div class="row">
-            <div style="flex:1">
-              <label>Radius (meters)</label>
-              <input id="radius" type="number" inputmode="numeric" min="5" max="1000" value="50">
+            <!-- Unlock -->
+            <div id="adminLocked" class="admin-panel">
+              <input id="adminPass" type="password" placeholder="Enter admin password" inputmode="text" autocomplete="current-password" />
+              <div class="row" style="margin-top:6px">
+                <button id="unlockBtn" class="btn secondary" type="button">Unlock Admin</button>
+                <div class="tag">Hint: <code>Franktown</code></div>
+              </div>
             </div>
-            <!-- Short label intentionally removed -->
+
+            <!-- Links show only after unlock -->
+            <div id="adminLinks" class="hidden" style="display:none">
+              <div class="row" style="margin-top:10px">
+                <a class="btn" href="https://fireopssim.com/geophoto/admin" aria-label="Open Scenario Builder">Scenario Builder</a>
+                <a class="btn" href="https://fireopssim.com/geophoto/advanced-editor.html" aria-label="Open Advanced Editor">Advanced Editor</a>
+              </div>
+              <p class="tag" style="margin-top:8px">Admin unlocked for this session. Close the tab to lock again.</p>
+            </div>
           </div>
+        </article>
 
-          <label>Caption / Notes (read by TTS)</label>
-          <textarea id="caption" placeholder="What should crews observe or do here?"></textarea>
-
-          <div class="row" style="margin-top:8px">
-            <button id="savePhoto" class="btn">Save Photo</button>
-            <div class="tag">GPS is captured automatically on save.</div>
+        <!-- About / Highlights -->
+        <article class="card">
+          <div class="card-inner">
+            <div class="eyebrow">About</div>
+            <h2>Live, Geofenced Training</h2>
+            <p>Photos unlock only inside their geofence, encouraging true size-up and decision-making. Each caption is read aloud so crews keep eyes on scene.</p>
+            <div class="eyebrow" style="margin-top:10px">Highlights</div>
+            <ul style="margin:6px 0 0 18px; color:var(--muted); line-height:1.5">
+              <li>Dispatch intro at scenario start</li>
+              <li>Beep alert + TTS caption per photo (audio & visual cues)</li>
+              <li>Fast GPS updates to reduce missed tags</li>
+              <li>Practice radio traffic on your training channel</li>
+              <li>Mobile capture & desktop refinement</li>
+            </ul>
           </div>
-        </div>
-
-        <div class="hr"></div>
-        <div class="sectionTitle">Photos in this scenario</div>
-        <div id="thumbs" class="thumbs"></div>
-      </div>
-    </section>
-
-    <!-- Edit Scenario -->
-    <section class="card hidden" id="editPanel">
-      <div class="card-inner">
-        <div class="sectionTitle">Edit Existing Scenario</div>
-        <div class="row" style="justify-content:space-between">
-          <div class="pill" id="editStatus">Loading…</div>
-          <button id="backFromEdit" class="btn secondary">Back</button>
-        </div>
-        <div id="scenarioList" style="margin-top:10px"></div>
+        </article>
       </div>
     </section>
   </main>
 
-  <!-- Firebase + Logic (kept the same) -->
-  <script type="module">
-    // Firebase
-    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-app.js";
-    import { getDatabase, ref, push, set, get, update } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-database.js";
+  <footer>
+    <div>© <span id="year"></span> <span id="brandNameFoot">FireOps SIM</span></div>
+    <div class="external">Part of the <a href="https://emscodesim.com" rel="noopener">EMS Code Sim</a> training ecosystem</div>
+  </footer>
 
-    const firebaseConfig = {
-      apiKey:"AIzaSyDM6DpRSeZueVKRpbyJyDmhf8WY66KyCDk",
-      authDomain:"dailyquiz-d5279.firebaseapp.com",
-      databaseURL:"https://dailyquiz-d5279-default-rtdb.firebaseio.com",
-      projectId:"dailyquiz-d5279",
-      appId:"1:94577748034:web:c032d3a1d72db1313de5db",
-      measurementId:"G-19DVN7NNH7"
+  <script>
+    // Branding copy + year
+    const BRAND = {
+      name: 'FireOps SIM',
+      tagline: 'Real-Time Fire Scene Simulator',
+      heroTitle: 'Train where it matters — on scene.',
+      heroLead: 'FireOps SIM runs live, location-triggered scenarios with audio and visual cues that guide your actions in real time. Crews practice size-up, decision-making, and communications just like the street.'
     };
-    const app = initializeApp(firebaseConfig);
-    const db  = getDatabase(app);
+    document.getElementById('brandName').textContent = BRAND.name;
+    document.getElementById('brandNameFoot').textContent = BRAND.name;
+    document.getElementById('brandTag').textContent = BRAND.tagline;
+    document.getElementById('heroTitle').textContent = BRAND.heroTitle;
+    document.getElementById('heroLead').textContent = BRAND.heroLead;
+    document.getElementById('year').textContent = new Date().getFullYear();
 
-    // DOM
-    const landing = document.getElementById('landing');
-    const goCreate = document.getElementById('goCreate');
-    const goEdit = document.getElementById('goEdit');
-    const statusPill = document.getElementById('status');
+    // Simple Admin gate (temporary)
+    const PASS = 'Franktown';
+    const adminPass = document.getElementById('adminPass');
+    const unlockBtn = document.getElementById('unlockBtn');
+    const adminLocked = document.getElementById('adminLocked');
+    const adminLinks = document.getElementById('adminLinks');
 
-    const createPanel = document.getElementById('createPanel');
-    const createStatus = document.getElementById('createStatus');
-    const finalizeScenario = document.getElementById('finalizeScenario');
-
-    const scenarioMeta = document.getElementById('scenarioMeta');
-    const scenarioName = document.getElementById('scenarioName');
-    const dispatchInfo = document.getElementById('dispatchInfo');
-
-    const photoInput = document.getElementById('photoInput');
-    const radius = document.getElementById('radius');
-    const caption = document.getElementById('caption');
-    const savePhoto = document.getElementById('savePhoto');
-    const thumbs = document.getElementById('thumbs');
-
-    const editPanel = document.getElementById('editPanel');
-    theconst editStatus = document.getElementById('editStatus');
-    const scenarioList = document.getElementById('scenarioList');
-    const backFromEdit = document.getElementById('backFromEdit');
-
-    // State
-    let currentScenarioId = null;
-    let localStops = [];
-
-    // Helpers
-    const uiShow = el => el.classList.remove('hidden');
-    const uiHide = el => el.classList.add('hidden');
-    const toast = (el, msg) => el.textContent = msg;
-
-    function readFileAsDataURL(file){
-      return new Promise((res, rej)=>{
-        const r=new FileReader();
-        r.onload=()=>res(r.result);
-        r.onerror=rej;
-        r.readAsDataURL(file);
-      });
-    }
-    function getGPS(){
-      return new Promise((resolve, reject)=>{
-        navigator.geolocation.getCurrentPosition(
-          pos => resolve({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
-          err => reject(err),
-          { enableHighAccuracy:true, timeout:15000, maximumAge:0 }
-        );
-      });
-    }
-    function renderThumbs(){
-      thumbs.innerHTML='';
-      localStops.forEach((s,i)=>{
-        const img=document.createElement('img');
-        img.className='thumb';
-        img.title=s.title || `Stop ${i+1}`;
-        img.src=s.imageData || s.imageURL || '';
-        img.onerror = ()=>{ img.style.opacity=.7; img.title='Image failed to load'; };
-        thumbs.appendChild(img);
-      });
+    if (sessionStorage.getItem('adminUnlocked') === '1') {
+      adminLocked.style.display = 'none';
+      adminLinks.style.display = '';
     }
 
-    // Navigation
-    goCreate.onclick = ()=>{
-      uiHide(landing); uiShow(createPanel);
-      createStatus.textContent='New scenario';
-      currentScenarioId=null; localStops=[];
-      scenarioName.value=''; dispatchInfo.value='';
-      photoInput.value=''; radius.value=50; caption.value='';
-      uiShow(scenarioMeta); // visible until first photo saved
-    };
-    goEdit.onclick = ()=>{ uiHide(landing); uiShow(editPanel); loadForEdit(); };
-    backFromEdit.onclick = ()=>{
-      uiHide(editPanel); uiShow(landing);
-      scenarioList.innerHTML=''; editStatus.textContent='Ready';
-    };
-
-    // Create flow (no short label; no extra top add/retry buttons)
-    savePhoto.onclick = async ()=>{
-      try{
-        const file = photoInput.files?.[0];
-        if(!file){ alert('Please choose a photo first.'); return; }
-
-        // Create scenario shell on first photo
-        if(!currentScenarioId){
-          const name=(scenarioName.value||'').trim();
-          if(!name){ alert('Please enter a Scenario Name.'); return; }
-          const dispatch=(dispatchInfo.value||'').trim();
-          const newRef = push(ref(db,'scenarios'));
-          currentScenarioId=newRef.key;
-          await set(newRef,{
-            id:currentScenarioId,
-            title:name,
-            dispatch:dispatch,
-            createdAt:Date.now(),
-            active:true,
-            stops:[]
-          });
-          uiHide(scenarioMeta); // collapse after first save
-        }
-
-        const dataURL = await readFileAsDataURL(file);
-        const gps = await getGPS();
-        const r = Math.max(5, Math.min(1000, Math.round(parseInt(radius.value||'50',10))));
-        const stop = {
-          title: '', // short label removed
-          caption: (caption.value||'').trim(),
-          lat: gps.lat, lng: gps.lng,
-          radiusMeters: r,
-          imageData: dataURL
-        };
-
-        localStops.push(stop);
-        await set(ref(db,'scenarios/'+currentScenarioId+'/stops'), localStops);
-
-        // Reset fields
-        photoInput.value=''; caption.value=''; radius.value=50;
-        renderThumbs();
-        toast(createStatus, `Saved photo #${localStops.length}.`);
-      }catch(e){
-        alert('Save failed: ' + (e?.message||e));
+    unlockBtn.addEventListener('click', () => {
+      const v = (adminPass.value || '').trim();
+      if (v === PASS) {
+        sessionStorage.setItem('adminUnlocked', '1');
+        adminLocked.style.display = 'none';
+        adminLinks.style.display = '';
+      } else {
+        alert('Incorrect password.');
+        adminPass.focus();
       }
-    };
+    });
 
-    // Save Scenario (sticky button)
-    finalizeScenario.onclick = async ()=>{
-      try{
-        if(!currentScenarioId){
-          const name=(scenarioName.value||'').trim();
-          if(!name){ alert('Enter Scenario Name, then Save a Photo or press Save Scenario again to create empty.'); return; }
-          const dispatch=(dispatchInfo.value||'').trim();
-          const newRef=push(ref(db,'scenarios'));
-          currentScenarioId=newRef.key;
-          await set(newRef,{
-            id:currentScenarioId,
-            title:name, dispatch:dispatch,
-            createdAt:Date.now(), active:true, stops:[]
-          });
-          uiHide(scenarioMeta);
-        }
-        toast(createStatus,'Scenario saved.');
-        // Reset for next create
-        currentScenarioId=null; localStops=[];
-        renderThumbs();
-        scenarioName.value=''; dispatchInfo.value='';
-        photoInput.value=''; caption.value=''; radius.value=50;
-        uiShow(scenarioMeta);
-      }catch(e){
-        alert('Save Scenario failed: ' + (e?.message||e));
-      }
-    };
-
-    // Edit view (unchanged logic)
-    async function loadForEdit(){
-      try{
-        editStatus.textContent='Loading scenarios…';
-        const snap=await get(ref(db,'scenarios'));
-        if(!snap.exists()){ editStatus.textContent='No scenarios found.'; scenarioList.innerHTML=''; return; }
-        const obj=snap.val()||{};
-        const arr=Object.entries(obj).map(([id,s])=>({id,...s}))
-          .sort((a,b)=>(b.createdAt||0)-(a.createdAt||0));
-        editStatus.textContent=`${arr.length} scenario(s)`;
-        scenarioList.innerHTML='';
-
-        arr.forEach(sc=>{
-          const row=document.createElement('div');
-          row.className='listItem';
-          const left=document.createElement('div');
-          left.innerHTML = `<div style="font-weight:800">${sc.title||'(untitled)'}</div>
-                            <div class="tag">Stops: ${Array.isArray(sc.stops)? sc.stops.length : 0} • ${new Date(sc.createdAt||Date.now()).toLocaleString()}</div>`;
-          const right=document.createElement('div');
-          const openBtn=document.createElement('button');
-          openBtn.className='btn'; openBtn.textContent='Open in Creator';
-          openBtn.onclick=()=>{
-            landing.classList.add('hidden');
-            editPanel.classList.add('hidden');
-            createPanel.classList.remove('hidden');
-            currentScenarioId=sc.id;
-            localStops=Array.isArray(sc.stops)? sc.stops : [];
-            renderThumbs();
-            uiHide(scenarioMeta); // editing existing keeps meta hidden
-            toast(createStatus, `Editing: ${sc.title||'(untitled)'}`);
-          };
-          const toggleBtn=document.createElement('button');
-          toggleBtn.className='btn secondary'; toggleBtn.style.marginLeft='8px';
-          toggleBtn.textContent=sc.active ? 'Deactivate' : 'Activate';
-          toggleBtn.onclick=()=>update(ref(db,'scenarios/'+sc.id), { active: !sc.active });
-          const delBtn=document.createElement('button');
-          delBtn.className='btn danger'; delBtn.style.marginLeft='8px';
-          delBtn.textContent='Delete';
-          delBtn.onclick=async()=>{
-            if(confirm('Delete this scenario? This cannot be undone.')){
-              await set(ref(db,'scenarios/'+sc.id), null);
-              row.remove();
-            }
-          };
-          right.appendChild(openBtn); right.appendChild(toggleBtn); right.appendChild(delBtn);
-          row.appendChild(left); row.appendChild(right);
-          scenarioList.appendChild(row);
-        });
-      }catch(e){
-        editStatus.textContent='Error: '+(e?.message||e);
-      }
-    }
+    adminPass.addEventListener('keydown', (e)=>{
+      if(e.key==='Enter') unlockBtn.click();
+    });
   </script>
 </body>
 </html>
+
