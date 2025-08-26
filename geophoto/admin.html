@@ -100,21 +100,11 @@
     .grid{ display:grid; gap:14px; grid-template-columns:repeat(auto-fit, minmax(280px,1fr)) }
     .hidden{ display:none }
 
-    /* Sticky bar fix:
-       - Keep it sticky at the top of the card (top:0)
-       - Add top padding to the card so the first inputs are not covered */
-    .stickyBar{
-      position:sticky; top:0; z-index:5;
-      background:rgba(12,15,22,.75);
-      backdrop-filter:saturate(120%) blur(6px);
-      border-bottom:1px solid rgba(255,255,255,.07);
-      padding:8px 12px;
-      margin:-18px -18px 0 -18px;
-    }
-    /* Extra top padding on any card section that contains a stickyBar */
+    .stickyBar{ position:sticky; top:0; z-index:5; background:rgba(12,15,22,.75);
+      backdrop-filter:saturate(120%) blur(6px); border-bottom:1px solid rgba(255,255,255,.07);
+      padding:8px 12px; margin:-18px -18px 0 -18px; }
     .hasSticky{ padding-top:64px; }
 
-    /* Thumbs + list */
     .thumbs{display:flex; flex-wrap:wrap; gap:8px; margin-top:10px}
     .thumbWrap{position:relative}
     .thumb{
@@ -130,11 +120,8 @@
       padding:10px; border:1px solid rgba(255,255,255,.14); border-radius:12px; background:#0f1624
     }
 
-    /* Modal editor */
-    .modal{
-      position:fixed; inset:0; display:none; align-items:center; justify-content:center;
-      background:rgba(0,0,0,.5); z-index:50; padding:16px;
-    }
+    .modal{ position:fixed; inset:0; display:none; align-items:center; justify-content:center;
+      background:rgba(0,0,0,.5); z-index:50; padding:16px; }
     .modal.show{ display:flex; }
     .modalCard{
       width:min(960px, 96vw); max-height:90vh; overflow:auto;
@@ -189,7 +176,6 @@
           </div>
         </div>
 
-        <!-- Meta (collapses after first photo save) -->
         <div id="scenarioMeta">
           <label>Scenario Name</label>
           <input id="scenarioName" type="text" placeholder="e.g., House Fire on Main St">
@@ -338,9 +324,9 @@
     const editorLat = document.getElementById('editorLat');
     const editorLng = document.getElementById('editorLng');
     const editorStatus = document.getElementById('editorStatus');
-    const useGPS = document.getElementById('useGPS');
-    const saveChanges = document.getElementById('saveChanges');
-    const deletePhoto = document.getElementById('deletePhoto');
+    const useGPSbtn = document.getElementById('useGPS');
+    const saveChangesBtn = document.getElementById('saveChanges');
+    const deletePhotoBtn = document.getElementById('deletePhoto');
 
     // State
     let currentScenarioId = null;
@@ -362,11 +348,69 @@
         r.readAsDataURL(file);
       });
     }
+
+    // --- NEW: image compression pipeline for scenario photos ---
+    function loadImage(src){
+      return new Promise((resolve, reject)=>{
+        const img=new Image();
+        img.onload=()=>resolve(img);
+        img.onerror=reject;
+        img.crossOrigin='anonymous';
+        img.src=src;
+      });
+    }
+    function dataURLToCanvas(img, maxW=1920, maxH=1920){
+      const canvas=document.createElement('canvas');
+      let {width:w, height:h} = img;
+      const ratio=Math.min(maxW/w, maxH/h, 1);
+      const nw=Math.round(w*ratio), nh=Math.round(h*ratio);
+      canvas.width=nw; canvas.height=nh;
+      const ctx=canvas.getContext('2d');
+      ctx.drawImage(img, 0, 0, nw, nh);
+      return canvas;
+    }
+    // keep payload under ~8.5MB to be safe for RTDB
+    function encodeCanvasSmart(canvas){
+      const MAX_BYTES = 8_500_000;
+      const bytesOf = (b64)=>Math.floor((b64.length*3)/4);
+
+      // Try jpeg 0.85 first
+      let url = canvas.toDataURL('image/jpeg', 0.85);
+      let b64 = url.split(',')[1];
+      if (bytesOf(b64) <= MAX_BYTES) return {format:'jpeg', data:b64};
+
+      // drop quality
+      for (const q of [0.8,0.75,0.7,0.65,0.6]){
+        url = canvas.toDataURL('image/jpeg', q);
+        b64 = url.split(',')[1];
+        if (bytesOf(b64) <= MAX_BYTES) return {format:'jpeg', data:b64};
+      }
+      // final fallback: scale down slightly and try 0.6
+      const c2=document.createElement('canvas');
+      c2.width=Math.round(canvas.width*0.85);
+      c2.height=Math.round(canvas.height*0.85);
+      c2.getContext('2d').drawImage(canvas,0,0,c2.width,c2.height);
+      url=c2.toDataURL('image/jpeg',0.6);
+      return {format:'jpeg', data:url.split(',')[1]};
+    }
+    async function compressFileToStorableObject(file){
+      const raw = await readFileAsDataURL(file);
+      const img = await loadImage(raw);
+      const canvas = dataURLToCanvas(img, 1920, 1920);
+      return encodeCanvasSmart(canvas); // -> {format,data}
+    }
+    function dataURLFromStored(objOrString){
+      if (typeof objOrString === 'string') return objOrString;
+      if (!objOrString || !objOrString.data) return '';
+      const fmt = objOrString.format === 'jpeg' ? 'jpeg' : 'png';
+      return `data:image/${fmt};base64,${objOrString.data}`;
+    }
+
     function getGPS(){
       return new Promise((resolve, reject)=>{
         navigator.geolocation.getCurrentPosition(
           pos => resolve({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
-          err => reject(err),
+          err => resolve({ lat:null, lng:null }), // non-blocking if denied
           { enableHighAccuracy:true, timeout:15000, maximumAge:0 }
         );
       });
@@ -379,13 +423,11 @@
         const img=document.createElement('img');
         img.className='thumb';
         img.title=s.title || `Stop ${i+1}`;
-        img.src=s.imageData || s.imageURL || '';
+        img.src=dataURLFromStored(s.imageData) || s.imageURL || '';
         img.onerror = ()=>{ img.style.opacity=.7; img.title='Image failed to load'; };
 
-        // Click to open editor
         img.addEventListener('click', ()=> openPhotoEditor(i));
 
-        // Small delete button (quick)
         const del=document.createElement('button');
         del.className='delBtn';
         del.textContent='Delete';
@@ -407,7 +449,7 @@
       currentScenarioId=null; localStops=[];
       scenarioName.value=''; dispatchInfo.value='';
       photoInput.value=''; radius.value=50; caption.value='';
-      uiShow(scenarioMeta); // visible until first photo saved
+      uiShow(scenarioMeta);
     };
     goEdit.onclick = ()=>{ uiHide(landing); uiShow(editPanel); loadForEdit(); };
     backFromEdit.onclick = ()=>{
@@ -435,10 +477,12 @@
             active:true,
             stops:[]
           });
-          uiHide(scenarioMeta); // collapse after first save
+          uiHide(scenarioMeta);
         }
 
-        const dataURL = await readFileAsDataURL(file);
+        // NEW: compress before save
+        createStatus.textContent='Compressing photo…';
+        const imgObj = await compressFileToStorableObject(file); // {format,data}
         const gps = await getGPS();
         const r = Math.max(5, Math.min(1000, Math.round(parseInt(radius.value||'50',10))));
         const stop = {
@@ -446,7 +490,7 @@
           caption: (caption.value||'').trim(),
           lat: gps.lat, lng: gps.lng,
           radiusMeters: r,
-          imageData: dataURL
+          imageData: imgObj   // compact + RTDB-safe
         };
 
         localStops.push(stop);
@@ -455,7 +499,7 @@
         // Reset fields
         photoInput.value=''; caption.value=''; radius.value=50;
         renderThumbs();
-        toast(createStatus, `Saved photo #${localStops.length}.`);
+        toast(createStatus, `Saved photo #${localStops.length} (compressed to screen-size).`);
       }catch(e){
         alert('Save failed: ' + (e?.message||e));
       }
@@ -478,7 +522,6 @@
           uiHide(scenarioMeta);
         }
         toast(createStatus,'Scenario saved.');
-        // Reset for next create (optional)
         currentScenarioId=null; localStops=[];
         renderThumbs();
         scenarioName.value=''; dispatchInfo.value='';
@@ -517,7 +560,7 @@
             currentScenarioId=sc.id;
             localStops=Array.isArray(sc.stops)? sc.stops : [];
             renderThumbs();
-            uiHide(scenarioMeta); // editing existing keeps meta hidden
+            uiHide(scenarioMeta);
             toast(createStatus, `Editing: ${sc.title||'(untitled)'}`);
           };
           const toggleBtn=document.createElement('button');
@@ -542,13 +585,13 @@
       }
     }
 
-    // --------------- Photo Editor Logic ---------------
+    // --------------- Photo Editor Modal ---------------
     function openPhotoEditor(index){
       const s = localStops[index];
       if(!s){ return; }
       editingIndex = index;
       editorTitle.textContent = `Edit Photo #${index+1}`;
-      editorImg.src = s.imageData || s.imageURL || '';
+      editorImg.src = dataURLFromStored(s.imageData) || s.imageURL || '';
       imgInfo.textContent = s.imageURL ? 'Remote image' : 'Embedded image';
       editorCaption.value = s.caption || '';
       editorRadius.value = s.radiusMeters ?? 50;
@@ -560,19 +603,19 @@
 
     closeEditor.onclick = ()=> hideModal(photoEditor);
 
-    useGPS.onclick = async ()=>{
+    useGPSbtn.onclick = async ()=>{
       try{
         editorStatus.textContent = 'Getting current GPS…';
         const gps = await getGPS();
-        editorLat.value = Number(gps.lat).toFixed(6);
-        editorLng.value = Number(gps.lng).toFixed(6);
+        if (gps.lat!=null) editorLat.value = Number(gps.lat).toFixed(6);
+        if (gps.lng!=null) editorLng.value = Number(gps.lng).toFixed(6);
         editorStatus.textContent = 'GPS updated in editor (remember to Save Changes).';
       }catch(e){
         editorStatus.textContent = 'GPS error: ' + (e?.message || e);
       }
     };
 
-    saveChanges.onclick = async ()=>{
+    saveChangesBtn.onclick = async ()=>{
       try{
         if(editingIndex<0) return;
         const lat = parseFloat(editorLat.value);
@@ -603,14 +646,13 @@
       set(ref(db,'scenarios/'+currentScenarioId+'/stops'), localStops)
         .then(()=>{
           renderThumbs();
-          // If deleting from within modal
           if(editingIndex===index){ hideModal(photoEditor); editingIndex=-1; }
           toast(createStatus, 'Photo deleted.');
         })
         .catch(e=> alert('Delete failed: ' + (e?.message||e)));
     }
 
-    deletePhoto.onclick = ()=>{ if(editingIndex>=0) deletePhotoAt(editingIndex); };
+    deletePhotoBtn.onclick = ()=>{ if(editingIndex>=0) deletePhotoAt(editingIndex); };
 
   </script>
 </body>
