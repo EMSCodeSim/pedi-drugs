@@ -114,12 +114,12 @@
     <div id="connStatus"></div>
   </footer>
 
-  <!-- Compat scripts present so we can fall back if needed -->
+  <!-- Firebase COMPAT ONLY (stable across devices/browsers) -->
   <script src="https://www.gstatic.com/firebasejs/10.12.4/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.4/firebase-database-compat.js"></script>
 
-  <script type="module">
-  (async () => {
+  <script>
+  (function(){
     const $ = id => document.getElementById(id);
     const viewer=$('viewer'), backBtn=$('backBtn');
     const select=$('scenarioSelect'), status=$('status'), debug=$('debug'), connStatus=$('connStatus');
@@ -129,16 +129,32 @@
     const startBtn=$('startScenario'), muteToggle=$('muteToggle'), rate=$('rate'), runTimer=$('runTimer');
     const log = (m)=>{ console.log('[viewer]', m); debug.textContent=String(m); };
 
-    // ---------- Helpers ----------
-    const toRad = x => x*Math.PI/180;
-    const hav=(a,b,c,d)=>{ const R=6371000, dA=toRad(c-a), dB=toRad(d-b);
-      return 2*R*Math.asin(Math.sqrt(Math.sin(dA/2)**2 + Math.cos(toRad(a))*Math.cos(toRad(c))*Math.sin(dB/2)**2)); };
-    const num=v=>(v===0||v===null)?v:parseFloat(v);
+    // ---------- Firebase (compat only) ----------
+    const firebaseConfig = {
+      apiKey:"AIzaSyDM6DpRSeZueVKRpbyJyDmhf8WY66KyCDk",
+      authDomain:"dailyquiz-d5279.firebaseapp.com",
+      databaseURL:"https://dailyquiz-d5279-default-rtdb.firebaseio.com",
+      projectId:"dailyquiz-d5279",
+      appId:"1:94577748034:web:c032d3a1d72db1313de5db",
+      measurementId:"G-19DVN7NNH7"
+    };
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.database();
 
+    // Connection indicator
+    db.ref('.info/connected').on('value', snap=>{
+      const ok = snap.val() === true;
+      connStatus.textContent = ok ? 'Connected' : 'Offline';
+      connStatus.style.color = ok ? '#89ffb2' : '#ffdede';
+    });
+
+    // ---------- Scenario loading (reliable) ----------
+    let scenarios=[], populated=false;
     function normalizeStops(stopsLike){
       if(!stopsLike) return [];
-      let arr = Array.isArray(stopsLike) ? stopsLike : Object.values(stopsLike);
+      const arr = Array.isArray(stopsLike) ? stopsLike : Object.values(stopsLike);
       return arr.map(s=>{
+        const num = v => (v===0||v===null) ? v : parseFloat(v);
         const lat = num(s.lat ?? s.latitude ?? s.latDeg);
         const lng = num(s.lng ?? s.lon ?? s.long ?? s.longitude ?? s.lngDeg);
         const radiusMeters = num(s.radiusMeters ?? s.radius ?? s.r) || 40;
@@ -148,54 +164,6 @@
         return { ...s, lat, lng, radiusMeters, title, caption, image };
       }).filter(s => typeof s.lat === 'number' && typeof s.lng === 'number');
     }
-
-    function setImage(img, stop){
-      const src = stop.image || '';
-      img.src = src || "data:image/svg+xml;utf8,"+encodeURIComponent(
-        "<svg xmlns='http://www.w3.org/2000/svg' width='1200' height='720'><rect width='100%' height='100%' fill='#000'/><text x='50%' y='50%' fill='#9ecbd6' font-size='24' text-anchor='middle'>No image</text></svg>"
-      );
-      img.onerror=()=>{ img.src="data:image/svg+xml;utf8,"+encodeURIComponent(
-        "<svg xmlns='http://www.w3.org/2000/svg' width='1200' height='720'><rect width='100%' height='100%' fill='#000'/><text x='50%' y='50%' fill='#9ecbd6' font-size='24' text-anchor='middle'>Image failed to load</text></svg>"
-      ); };
-    }
-
-    // ---------- Firebase (modular first; compat fallback) ----------
-    const firebaseConfig = {
-      apiKey:"AIzaSyDM6DpRSeZueVKRpbyJyDmhf8WY66KyCDk",
-      authDomain:"dailyquiz-d5279.firebaseapp.com",
-      databaseURL:"https://dailyquiz-d5279-default-rtdb.firebaseio.com",
-      projectId:"dailyquiz-d5279",
-      appId:"1:94577748034:web:c032d3a1d72db1313de5db",
-      measurementId:"G-19DVN7NNH7"
-    };
-
-    let mode='modular', app, db, refFn, onValueFn, getFn;
-    try{
-      const { initializeApp } = await import('https://www.gstatic.com/firebasejs/10.12.4/firebase-app.js');
-      const { getDatabase, ref, onValue, get } = await import('https://www.gstatic.com/firebasejs/10.12.4/firebase-database.js');
-      app = initializeApp(firebaseConfig); db = getDatabase(app); refFn = ref; onValueFn = onValue; getFn = get;
-    }catch(e){
-      mode='compat';
-      app = window.firebase.initializeApp(firebaseConfig);
-      db = window.firebase.database();
-      refFn = (dbRefPath)=>db.ref(dbRefPath);
-      onValueFn = (r, cb, err)=>r.on('value', s=>cb(s), err);
-      getFn = (r)=>r.get();
-    }
-    log('Firebase mode: ' + mode);
-
-    // Connection indicator
-    try{
-      const infoRef = (mode==='modular') ? refFn(db, '.info/connected') : refFn('.info/connected');
-      onValueFn(infoRef, snap=>{
-        const ok = snap.val() === true;
-        connStatus.textContent = ok ? 'Connected' : 'Offline';
-        connStatus.style.color = ok ? '#89ffb2' : '#ffdede';
-      });
-    }catch{}
-
-    // ---------- Scenario loading ----------
-    let scenarios=[], populated=false;
     function mapSnapshot(val){
       const obj = val || {};
       return Object.entries(obj).map(([id, s])=>({ id, ...(s||{}), stops: normalizeStops(s?.stops) }));
@@ -212,66 +180,59 @@
       populated = list.length>0;
     }
 
-    try{
-      const a = (mode==='modular') ? refFn(db,'geophoto/scenarios') : refFn('geophoto/scenarios');
-      onValueFn(a, snap=>{
-        const list=mapSnapshot(snap.val());
-        if(list.length){ scenarios=list; populateDropdown(scenarios); }
-      });
-    }catch{}
-    try{
-      const b = (mode==='modular') ? refFn(db,'scenarios') : refFn('scenarios');
-      onValueFn(b, snap=>{
-        const list=mapSnapshot(snap.val());
-        if(!scenarios.length && list.length){ scenarios=list; populateDropdown(scenarios); }
-      });
-    }catch{}
+    // Realtime (primary)
+    const refA = db.ref('geophoto/scenarios');
+    const refB = db.ref('scenarios');
 
+    let gotA=false, gotB=false;
+    refA.on('value', snap=>{
+      const list = mapSnapshot(snap.val());
+      gotA=true;
+      if(list.length){ scenarios=list; populateDropdown(list); }
+      if(!list.length && gotB && scenarios.length===0) status.textContent='No scenarios found.';
+    });
+    refB.on('value', snap=>{
+      const list = mapSnapshot(snap.val());
+      gotB=true;
+      if(!scenarios.length && list.length){ scenarios=list; populateDropdown(list); }
+      if(!list.length && gotA && scenarios.length===0) status.textContent='No scenarios found.';
+    });
+
+    // REST fallback (if both fail to populate after 2s)
     setTimeout(async ()=>{
-      if(!populated){
-        try{ const s1 = await getFn((mode==='modular') ? refFn(db,'geophoto/scenarios') : refFn('geophoto/scenarios'));
-             const list=mapSnapshot(s1?.val?.() ?? s1.val()); if(list.length){ scenarios=list; populateDropdown(list); } }
-        catch(e){}
-      }
-      if(!populated){
-        try{ const s2 = await getFn((mode==='modular') ? refFn(db,'scenarios') : refFn('scenarios'));
-             const list=mapSnapshot(s2?.val?.() ?? s2.val()); if(list.length){ scenarios=list; populateDropdown(list); } }
-        catch(e){}
-      }
-      if(!populated){
-        try{
-          const url = 'https://dailyquiz-d5279-default-rtdb.firebaseio.com/scenarios.json';
-          const r = await fetch(url); if(!r.ok) throw new Error('HTTP '+r.status);
-          const json = await r.json(); const list = mapSnapshot(json);
-          if(list.length){ scenarios=list; populateDropdown(list); }
-        }catch(e){}
-      }
-      if(!populated){ status.textContent='No scenarios found.'; }
-    }, 1200);
+      if (scenarios.length) return;
+      try{
+        const r = await fetch('https://dailyquiz-d5279-default-rtdb.firebaseio.com/geophoto/scenarios.json', {cache:'no-store'});
+        if(r.ok){
+          const j = await r.json(); const list = mapSnapshot(j);
+          if(list.length){ scenarios=list; populateDropdown(list); return; }
+        }
+      }catch{}
+      try{
+        const r2 = await fetch('https://dailyquiz-d5279-default-rtdb.firebaseio.com/scenarios.json', {cache:'no-store'});
+        if(r2.ok){
+          const j2 = await r2.json(); const list2 = mapSnapshot(j2);
+          if(list2.length){ scenarios=list2; populateDropdown(list2); return; }
+        }
+      }catch{}
+      if(!scenarios.length) status.textContent='No scenarios found.';
+    }, 2000);
 
-    // ---------- HYBRID TTS: iOS uses speechSynthesis; others can use MP3 ----------
+    // ---------- TTS (iOS-safe Web Speech) ----------
     const isIOS = /iP(hone|ad|od)/i.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
     const hasSpeech = 'speechSynthesis' in window && 'SpeechSynthesisUtterance' in window;
 
     let audioEnabled=false, muted=false, rateVal=1.0, runInterval=null, startMs=0;
 
-    // iOS Speech engine
-    const iOSTTS = (() => {
+    const SpeechTTS = (() => {
       let unlocked=false, speaking=false, q=[], voices=[], pickVoice=null;
 
       function chunk(text, max=240){
         const parts=[]; let t=(text||'').replace(/\s+/g,' ').trim();
-        const re=/([,;.?!])\s+/g;
-        let last=0, m;
-        while((m=re.exec(t)) && parts.join('').length + (m.index-last) < max){
-          const piece=t.slice(last, m.index+1).trim(); if(piece) parts.push(piece); last=m.index+1;
-        }
+        const re=/([,;.?!])\s+/g; let last=0, m;
+        while((m=re.exec(t)) && (m.index-last) < max){ const piece=t.slice(last, m.index+1).trim(); if(piece) parts.push(piece); last=m.index+1; }
         if(last < t.length) parts.push(t.slice(last));
-        // final split if any part > max
-        return parts.flatMap(p=>{
-          if(p.length<=max) return [p];
-          const arr=[]; for(let i=0;i<p.length;i+=max) arr.push(p.slice(i,i+max)); return arr;
-        });
+        return parts.flatMap(p=> p.length<=max ? [p] : p.match(new RegExp('.{1,'+max+'}', 'g')));
       }
 
       function speakNext(){
@@ -280,7 +241,7 @@
         const text = q.shift();
         const utt = new SpeechSynthesisUtterance(text);
         if (pickVoice) utt.voice = pickVoice;
-        utt.rate = rateVal;          // user-adjustable
+        utt.rate = rateVal;
         utt.pitch = 1.0;
         utt.volume = muted ? 0 : 1;
 
@@ -292,8 +253,7 @@
 
       function enqueue(text){
         if(!unlocked) return;
-        const parts = chunk(text);
-        parts.forEach(p => q.push(p));
+        chunk(text).forEach(p => q.push(p));
         speakNext();
       }
 
@@ -301,92 +261,40 @@
         if(unlocked) return true;
         try{
           window.speechSynthesis.cancel();
-          // voices can be async on iOS; populate but don't block
           const loadVoices = () => {
             voices = window.speechSynthesis.getVoices() || [];
-            // try to pick a Siri/en-US style voice if available
-            pickVoice = voices.find(v => /siri|en-us|english/i.test(v.name+ ' ' + v.lang)) || voices[0] || null;
+            pickVoice = voices.find(v => /siri|en-us|english/i.test((v.name||'')+' '+(v.lang||''))) || voices[0] || null;
           };
           loadVoices();
           window.speechSynthesis.onvoiceschanged = loadVoices;
 
-          // IMPORTANT: speak immediately on the same tap (no awaits beforehand)
-          const prim = new SpeechSynthesisUtterance('Voice enabled');
-          prim.rate = 1; prim.volume = 0; // silent prime to be extra safe
-          prim.onstart = () => { unlocked=true; };
-          prim.onend = () => {};
+          // IMPORTANT: call speak immediately on the tap
+          const prim = new SpeechSynthesisUtterance(' ');
+          prim.rate = 1; prim.volume = 0; // silent prime
+          prim.onstart = ()=>{ unlocked=true; };
           try { window.speechSynthesis.speak(prim); } catch {}
-          // If onstart doesn’t fire on some iOS builds, still consider unlocked
+          // Fallback unlock if onstart not firing
           setTimeout(()=>{ if(!unlocked) unlocked=true; }, 200);
           return true;
         }catch(e){
-          log('iOS unlock error: ' + e.message);
+          log('Speech unlock error: ' + e.message);
           return false;
         }
       }
 
-      function stop(){
-        try { window.speechSynthesis.cancel(); } catch {}
-        q.length=0; speaking=false;
-      }
-
+      function stop(){ try { window.speechSynthesis.cancel(); } catch {} q.length=0; speaking=false; }
       return { unlockOnce, enqueue, stop, setRate:(r)=>{rateVal=r;}, setMuted:(m)=>{muted=m;} };
     })();
 
-    // Network (MP3) engine for non-iOS if you still want OpenAI audio
-    const NetTTS = (() => {
-      let unlocked=false, speaking=false, q=[], audio=null;
+    // (Optional) MP3 backend hook — disabled by default to avoid autoplay issues.
+    // Turn on later by replacing SpeechTTS with NetTTS for non-iOS if you want OpenAI voices.
 
-      async function fetchMP3(text){
-        // >>> Replace with your backend route if desired <<<
-        // const resp = await fetch('/api/tts', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ text }) });
-        // const blob = await resp.blob(); // audio/mpeg
-        // return URL.createObjectURL(blob);
-        // Default to no-op silent data for now:
-        return "data:audio/mpeg;base64,//uQZAAAAAAAAAAAAAAAAAAAAAA"; // short silent mp3 header (effectively silent)
-      }
-
-      function playNext(){
-        if(speaking || !q.length || !unlocked) return;
-        speaking=true;
-        const text=q.shift();
-        fetchMP3(text).then(url=>{
-          if(!audio){
-            audio = new Audio();
-            audio.setAttribute('playsinline','');
-          }
-          audio.src=url;
-          audio.volume = muted ? 0 : 1;
-          audio.onended = ()=>{ speaking=false; playNext(); };
-          audio.onerror = ()=>{ speaking=false; playNext(); };
-          audio.play().catch(()=>{ speaking=false; });
-        }).catch(()=>{ speaking=false; });
-      }
-
-      function enqueue(text){
-        if(!unlocked) return;
-        q.push(text);
-        playNext();
-      }
-
-      function unlockOnce(){
-        // Non-iOS generally doesn’t need special unlocks; mark ready.
-        unlocked=true;
-        return true;
-      }
-
-      function stop(){
-        try{ if(audio){ audio.pause(); audio.currentTime=0; } }catch{}
-        q.length=0; speaking=false;
-      }
-
-      return { unlockOnce, enqueue, stop, setRate:(_)=>{}, setMuted:(m)=>{ if(audio) audio.volume = m?0:1; } };
-    })();
-
-    // Pick engine
-    const TTS = (isIOS && hasSpeech) ? iOSTTS : NetTTS;
+    const TTS = (hasSpeech ? SpeechTTS : SpeechTTS); // fallback to speechSynthesis everywhere for simplicity
 
     // ---------- Geofence + display ----------
+    const toRad = x => x*Math.PI/180;
+    const hav=(a,b,c,d)=>{ const R=6371000, dA=toRad(c-a), dB=toRad(d-b);
+      return 2*R*Math.asin(Math.sqrt(Math.sin(dA/2)**2 + Math.cos(toRad(a))*Math.cos(toRad(c))*Math.sin(dB/2)**2)); };
     function within(hitDist, stopRadius, accuracy){
       const r = (Number(stopRadius)||0) + Math.max(Number(accuracy)||0, 10);
       return hitDist <= r;
@@ -397,19 +305,27 @@
         if(within(d, s.radiusMeters, acc)){ if(!best || d<best.dist) best={s,index:i,dist:d}; }
       }); return best;
     }
+    function setImage(img, stop){
+      const src = stop.image || '';
+      img.src = src || "data:image/svg+xml;utf8,"+encodeURIComponent(
+        "<svg xmlns='http://www.w3.org/2000/svg' width='1200' height='720'><rect width='100%' height='100%' fill='#000'/><text x='50%' y='50%' fill='#9ecbd6' font-size='24' text-anchor='middle'>No image</text></svg>"
+      );
+      img.onerror=()=>{ img.src="data:image/svg+xml;utf8,"+encodeURIComponent(
+        "<svg xmlns='http://www.w3.org/2000/svg' width='1200' height='720'><rect width='100%' height='100%' fill='#000'/><text x='50%' y='50%' fill='#9ecbd6' font-size='24' text-anchor='middle'>Image failed to load</text></svg>"
+      ); };
+    }
 
     function showDispatchIntro(sc){
       const txt=(sc.dispatch||sc.notes||'').trim();
-      dispatchBlock.textContent = txt ? `Dispatch: ${txt}` : 'Dispatch: (none)';
-      // Queue dispatch once engine is unlocked
+      $('dispatchBlock').textContent = txt ? `Dispatch: ${txt}` : 'Dispatch: (none)';
       if (txt) setTimeout(()=>TTS.enqueue(txt), 120);
       else setTimeout(()=>TTS.enqueue(`${sc.title || 'Scenario'} started.`), 120);
     }
 
-    let scenarios=[], current=null, watchId=null, lastStopIndex=-1, populated=false;
+    let current=null, watchId=null, lastStopIndex=-1;
 
     function openScenarioById(id){
-      const sc=scenarios.find(s=>s.id===id);
+      const sc = scenarios.find(s=>s.id===id);
       if(!sc){ status.textContent='Scenario not found.'; return; }
       current=sc;
       viewer.style.display=''; scTitle.textContent=sc.title||sc.name||sc.notes||'(scenario)';
@@ -425,7 +341,7 @@
         watchId=navigator.geolocation.watchPosition(p=>{
           const { latitude:la, longitude:ln, accuracy:acc }=p.coords;
           geoStatus.textContent=`Lat ${la.toFixed(5)}, Lng ${ln.toFixed(5)} (±${Math.round(acc)}m)`;
-          const hit=findHit(normalizeStops(sc.stops), la, ln, acc);
+          const hit=findHit((sc.stops||[]), la, ln, acc);
           if(hit && hit.index!==lastStopIndex){
             lastStopIndex=hit.index;
             result.style.display='';
@@ -443,18 +359,19 @@
 
     // ---------- UI: mute/rate, timer, start/back ----------
     muteToggle.onclick=()=>{ muted=!muted; muteToggle.textContent=muted?'Unmute':'Mute'; TTS.setMuted(muted); };
-    rate.oninput=e=>{ const r=parseFloat(e.target.value||'1')||1; rateVal=r; TTS.setRate(r); };
+    rate.oninput=e=>{ const r=parseFloat(e.target.value||'1')||1; TTS.setRate(r); };
 
     function formatTime(ms){ const s=Math.floor(ms/1000), m=Math.floor(s/60), sec=s%60; return String(m).padStart(2,'0')+':'+String(sec).padStart(2,'0'); }
+    let runInterval=null, startMs=0;
     function startTimer(){ startMs=Date.now(); clearInterval(runInterval); runInterval=setInterval(()=>{ runTimer.textContent=formatTime(Date.now()-startMs); },500); }
     function stopTimer(){ clearInterval(runInterval); runInterval=null; runTimer.textContent='00:00'; }
 
-    // IMPORTANT: Do NOT await anything before unlock on iOS.
-    startBtn.onclick=()=>{
+    startBtn.addEventListener('click', ()=>{
       const id=select.value;
       if(!id){ status.textContent='Choose a scenario first.'; return; }
 
-      const ok = TTS.unlockOnce();   // calls speechSynthesis immediately on iOS
+      // iOS-safe: call speech immediately (no awaits before this)
+      const ok = TTS.unlockOnce();
       if (!ok){ alert('Tap Start again to enable voice.'); return; }
 
       audioEnabled=true;
@@ -463,7 +380,7 @@
       startBtn.disabled=true;
 
       openScenarioById(id);
-    };
+    });
 
     backBtn.onclick=()=>{ 
       viewer.style.display='none';
@@ -474,56 +391,7 @@
       audioEnabled=false; stopTimer();
     };
 
-    // Populate scenarios (after Firebase wiring above)
-    function mapSnapshot(val){ const obj = val || {}; return Object.entries(obj).map(([id, s])=>({ id, ...(s||{}), stops: normalizeStops(s?.stops) })); }
-    function populateDropdown(list){
-      select.innerHTML = '<option value="">Select a scenario…</option>';
-      list.forEach(sc=>{
-        const o=document.createElement('option');
-        o.value=sc.id; o.textContent=sc.title || sc.name || sc.notes || '(untitled)';
-        select.appendChild(o);
-      });
-      status.textContent = list.length ? `${list.length} scenario(s) found` : 'No scenarios yet.';
-      populated = list.length>0;
-    }
-
-    try{
-      const a = (mode==='modular') ? refFn(db,'geophoto/scenarios') : refFn('geophoto/scenarios');
-      onValueFn(a, snap=>{
-        const list=mapSnapshot(snap.val());
-        if(list.length){ scenarios=list; populateDropdown(scenarios); }
-      });
-    }catch{}
-    try{
-      const b = (mode==='modular') ? refFn(db,'scenarios') : refFn('scenarios');
-      onValueFn(b, snap=>{
-        const list=mapSnapshot(snap.val());
-        if(!scenarios.length && list.length){ scenarios=list; populateDropdown(scenarios); }
-      });
-    }catch{}
-
-    setTimeout(async ()=>{
-      if(!populated){
-        try{ const s1 = await getFn((mode==='modular') ? refFn(db,'geophoto/scenarios') : refFn('geophoto/scenarios'));
-             const list=mapSnapshot(s1?.val?.() ?? s1.val()); if(list.length){ scenarios=list; populateDropdown(list); } }
-        catch(e){}
-      }
-      if(!populated){
-        try{ const s2 = await getFn((mode==='modular') ? refFn(db,'scenarios') : refFn('scenarios'));
-             const list=mapSnapshot(s2?.val?.() ?? s2.val()); if(list.length){ scenarios=list; populateDropdown(list); } }
-        catch(e){}
-      }
-      if(!populated){
-        try{
-          const url = 'https://dailyquiz-d5279-default-rtdb.firebaseio.com/scenarios.json';
-          const r = await fetch(url); if(!r.ok) throw new Error('HTTP '+r.status);
-          const json = await r.json(); const list = mapSnapshot(json);
-          if(list.length){ scenarios=list; populateDropdown(list); }
-        }catch(e){}
-      }
-      if(!populated){ status.textContent='No scenarios found.'; }
-    }, 1200);
-
+    // Preselect by ?id=abc if provided
     (function(){ const pre=new URLSearchParams(location.search).get('id'); if(!pre) return; const iv=setInterval(()=>{ if(select.options.length>1){ clearInterval(iv); select.value=pre; } },200); })();
     document.getElementById('year').textContent = new Date().getFullYear();
     window.addEventListener('error', e => log('Error: ' + (e.message||e)));
