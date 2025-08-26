@@ -2,164 +2,229 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <title>FireOps SIM — Geo Scenarios Viewer</title>
+  <title>FireOps SIM — Admin (Geo-Photo)</title>
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <meta name="theme-color" content="#0b0f14" />
-  <link rel="icon" href="data:," />
+  <meta name="description" content="Create and edit FireOps SIM Geo-Photo training scenarios with dispatch info, geofenced photos, and captions." />
+
   <style>
-    :root{ --bg:#0b0f14; --bg2:#101726; --card:#121823; --muted:#8ea0b3; --text:#eaf2ff; --blue:#0a84ff; --shadow:0 12px 34px rgba(0,0,0,.38); --radius:18px; }
+    :root{
+      /* Match homepage palette and style */
+      --brandName: "FireOps SIM";
+      --brandTag: "Real-Time Fire Scene Simulator";
+      --bg:#0b0f14;
+      --bg2:#101726;
+      --card:#121823;
+      --muted:#8ea0b3;
+      --text:#eaf2ff;
+      --blue:#0a84ff;
+      --teal:#2dd4bf;
+      --red:#ff3b30;
+      --shadow:0 12px 34px rgba(0,0,0,.38);
+      --radius:18px;
+      --radiusSm:14px;
+    }
+
     *{box-sizing:border-box}
-    html,body{ margin:0; padding:0; color:var(--text); font-family:system-ui,-apple-system,Segoe UI,Roboto,Inter,Arial,sans-serif;
+    html,body{
+      margin:0; padding:0; color:var(--text);
+      font-family:system-ui,-apple-system,Segoe UI,Roboto,Inter,Arial,sans-serif;
       background:
         radial-gradient(1400px 700px at 15% -15%, rgba(10,132,255,.28), transparent 60%),
         radial-gradient(1200px 600px at 110% 0%, rgba(255,59,48,.22), transparent 60%),
         linear-gradient(165deg, var(--bg2), var(--bg) 55%);
-      -webkit-text-size-adjust:100%; scroll-behavior:smooth; }
-    a{color:inherit; text-decoration:none} img{max-width:100%; height:auto; display:block}
+      -webkit-text-size-adjust:100%;
+      scroll-behavior:smooth;
+    }
+    a{color:inherit; text-decoration:none}
+    img{max-width:100%; height:auto; display:block}
 
-    .topbar{position:sticky; top:0; z-index:20; background:rgba(12,15,22,.75); backdrop-filter:saturate(120%) blur(6px); border-bottom:1px solid rgba(255,255,255,.07)}
-    .topnav{max-width:1100px; margin:0 auto; padding:10px 20px; display:flex; align-items:center; gap:14px}
-    .brandmini{display:flex; align-items:center; gap:12px; font-weight:800}
-    .logo img{width:40px; height:40px; border-radius:10px; box-shadow:var(--shadow); object-fit:cover; background:#0f1624}
+    /* Topbar (identical structure to homepage) */
+    .topbar{
+      position:sticky; top:0; z-index:20;
+      background:rgba(12,15,22,.75);
+      backdrop-filter:saturate(120%) blur(6px);
+      border-bottom:1px solid rgba(255,255,255,.07);
+    }
+    .topnav{
+      max-width:1100px; margin:0 auto; padding:10px 20px;
+      display:flex; align-items:center; gap:14px; flex-wrap:wrap;
+    }
+    .brandmini{display:flex; align-items:center; gap:12px; font-weight:800; letter-spacing:.3px}
+    .logo img{
+      width:40px; height:40px; border-radius:10px; box-shadow:var(--shadow); object-fit:cover;
+      background:#0f1624;
+    }
+    .tag{color:var(--muted); font-size:12px}
 
-    .wrap{max-width:1100px; margin:0 auto; padding:18px 20px 100px}
-    .grid{display:grid; gap:14px; grid-template-columns:1fr}
-    .card{border-radius:var(--radius); background:var(--card); border:1px solid rgba(255,255,255,.07); box-shadow:var(--shadow); overflow:hidden; transition:transform .15s ease, border-color .2s ease}
-    .card:hover{transform:translateY(-2px); border-color:rgba(10,132,255,.35)}
-    .card-inner{padding:18px}
+    /* Page wrapper + cards (copied from homepage) */
+    main{max-width:1100px; margin:24px auto 84px; padding:0 20px}
+    .card{
+      position:relative; border-radius:var(--radius); background:var(--card);
+      border:1px solid rgba(255,255,255,.07); box-shadow:var(--shadow); overflow:hidden;
+      transition:transform .15s ease, border-color .2s ease, box-shadow .2s ease;
+      margin:12px 0;
+    }
+    .card:hover{ transform:translateY(-2px); border-color:rgba(10,132,255,.35); box-shadow:0 16px 40px rgba(0,0,0,.5) }
+    .card-inner{ padding:18px }
+
     .eyebrow{font-size:12px; color:var(--muted); margin-bottom:8px}
-    h1,h2,h3{margin:0} h2{font-size:20px} p,.status{color:var(--muted); font-size:14px; margin:6px 0 0}
+    .sectionTitle{font-weight:900; margin:6px 0 10px}
+    .pill{
+      display:inline-flex; gap:8px; align-items:center;
+      padding:6px 10px; border-radius:999px;
+      border:1px solid rgba(255,255,255,.14); color:var(--muted); background:rgba(255,255,255,.03)
+    }
+    .hr{height:1px; background:rgba(255,255,255,.10); margin:12px 0}
 
-    #viewer .card-inner{padding:12px}
-    #photoWrap{ margin-top:10px; border-radius:16px; border:1px solid rgba(255,255,255,.12); background:#000; overflow:hidden; }
-    #photo{ width:100%; height:min(78vh, calc(100vh - 220px)); object-fit:contain; background:#000; }
-    #caption{font-size:15px; color:#e9f1ff}
+    /* Forms */
+    label{display:block; margin:10px 0 6px 2px; font-size:13px; color:var(--muted)}
+    input, textarea, select, button{font-size:16px}
+    input[type="text"], input[type="number"], textarea, select{
+      width:100%; padding:12px; border-radius:12px; outline:none;
+      background:#0f1624; color:var(--text); border:1px solid rgba(255,255,255,.14);
+    }
+    textarea{min-height:88px; resize:vertical}
 
-    footer{max-width:1100px; margin:34px auto; padding:0 20px; color:#a9b6c9; font-size:13px; border-top:1px solid rgba(255,255,255,.06); display:flex; justify-content:space-between; gap:16px; flex-wrap:wrap}
-    #runTimer{font-size:13px; color:#cfe1ff}
-    #debug{font-size:12px; color:#ffdede; margin-top:6px; white-space:pre-wrap}
+    .btn{
+      appearance:none; border:0; border-radius:12px; width:auto; cursor:pointer;
+      padding:14px 16px; font-weight:800; font-size:16px; color:#03131b;
+      background:linear-gradient(180deg,#54a6ff,var(--blue)); box-shadow:var(--shadow);
+      text-align:center;
+    }
+    .btn.secondary{
+      background:transparent; color:var(--text);
+      border:1px solid rgba(255,255,255,.14);
+    }
+    .btn.teal{
+      background:linear-gradient(180deg,#3ce5d3,var(--teal)); color:#052522;
+    }
+    .btn.danger{
+      background:var(--red); color:#fff;
+    }
+    .row{ display:flex; gap:10px; flex-wrap:wrap; align-items:center }
+    .grid{ display:grid; gap:14px; grid-template-columns:repeat(auto-fit, minmax(280px,1fr)) }
+    .hidden{ display:none }
 
-    .btn{appearance:none; border:0; border-radius:12px; cursor:pointer; padding:14px 16px; font-weight:800; font-size:16px; color:#03131b; background:linear-gradient(180deg,#54a6ff,var(--blue)); box-shadow:var(--shadow); text-align:center}
-    .btn[disabled]{opacity:.65; cursor:not-allowed}
-    .btn.secondary{background:transparent; color:var(--text); border:1px solid rgba(255,255,255,.14)}
-    select{width:100%; padding:14px 12px; font-size:16px; border-radius:12px; border:1px solid rgba(255,255,255,.14); background:#0f1624; color:var(--text); outline:none}
-    input[type="range"]{accent-color:#54a6ff}
-    .row{display:flex; gap:10px; flex-wrap:wrap; align-items:center}
+    /* Sticky bar within creator (glass like homepage) */
+    .stickyBar{
+      position:sticky; top:62px; z-index:5;
+      background:rgba(12,15,22,.75);
+      backdrop-filter:saturate(120%) blur(6px);
+      border-bottom:1px solid rgba(255,255,255,.07);
+      padding:8px 12px;
+      margin:-18px -18px 10px -18px;
+    }
+
+    /* Thumbs + list */
+    .thumbs{display:flex; flex-wrap:wrap; gap:8px; margin-top:10px}
+    .thumb{width:88px; height:88px; object-fit:cover; border-radius:12px; border:1px solid rgba(255,255,255,.14); background:#0a2230}
+    .listItem{
+      display:flex; justify-content:space-between; align-items:center;
+      padding:10px; border:1px solid rgba(255,255,255,.14); border-radius:12px; background:#0f1624
+    }
   </style>
 </head>
 <body>
+
+  <!-- Sticky Top Navigation (matches homepage) -->
   <div class="topbar">
     <div class="topnav">
       <div class="brandmini">
-        <div class="logo" aria-hidden="true"><img src="/assets/logo/fire-ops-sim.png" alt="FireOps SIM logo" /></div>
-        <div style="line-height:1.1; font-size:15px; font-weight:900">FireOps SIM</div>
+        <div class="logo" aria-hidden="true">
+          <img src="/assets/logo/fire-ops-sim.png" alt="FireOps SIM logo" />
+        </div>
+        <div>
+          <div id="brandName" style="line-height:1.1; font-size:15px; font-weight:900">FireOps SIM</div>
+          <div class="tag" id="brandTag">Real-Time Fire Scene Simulator</div>
+        </div>
       </div>
     </div>
   </div>
 
-  <div class="wrap">
-    <div class="grid">
-      <article class="card">
-        <div class="card-inner">
-          <div class="eyebrow">Scenario</div>
-          <h2>Select & Start</h2>
-          <p>Choose a scenario below, then start it to enable voice prompts.</p>
-          <div class="row" style="margin-top:10px; width:100%">
-            <select id="scenarioSelect" aria-label="Choose a scenario"><option value="">Loading…</option></select>
-          </div>
-          <div class="status" id="status" aria-live="polite" style="margin-top:8px">Connecting…</div>
-          <div id="debug" aria-live="polite"></div>
+  <main>
+    <!-- Landing -->
+    <section class="card" id="landing">
+      <div class="card-inner">
+        <div class="sectionTitle">Scenario Admin</div>
+        <div class="row" style="margin-top:8px">
+          <button id="goCreate" class="btn">Create Scenario</button>
+          <button id="goEdit" class="btn secondary">Edit Scenario</button>
         </div>
-      </article>
+        <div class="pill" id="status" style="margin-top:10px">Ready</div>
+      </div>
+    </section>
 
-      <article class="card" id="viewer" style="display:none">
-        <div class="card-inner">
-          <div class="row" style="justify-content:space-between; align-items:center">
-            <h3 id="scTitle" style="margin:0; font-size:18px">(scenario)</h3>
-            <button id="backBtn" class="btn secondary" type="button">Back</button>
-          </div>
-
-          <div class="status" id="dispatchBlock" style="white-space:pre-wrap; margin-top:8px"></div>
-          <div class="status" id="geoStatus" style="margin-top:4px">Waiting for location…</div>
-
-          <div id="result" style="display:none">
-            <h3 id="stopTitle" style="margin:12px 2px 6px 2px"></h3>
-            <div id="photoWrap"><img id="photo" alt="Photo for this stop"></div>
-            <div class="status" id="caption" style="white-space:pre-wrap; margin-top:10px"></div>
-            <div class="status" id="detail"></div>
+    <!-- Create Scenario -->
+    <section class="card hidden" id="createPanel">
+      <div class="card-inner">
+        <div class="stickyBar">
+          <div class="row" style="justify-content:space-between; width:100%">
+            <div class="pill" id="createStatus">New scenario</div>
+            <button id="finalizeScenario" class="btn teal">Save Scenario</button>
           </div>
         </div>
-      </article>
 
-      <article class="card">
-        <div class="card-inner">
-          <div class="eyebrow">Audio & TTS</div>
-          <h2>Scenario Controls</h2>
-          <p>This enables audio and reads the dispatch and each caption.</p>
-          <div class="row" style="margin-top:10px; align-items:flex-start">
-            <button id="startScenario" class="btn" type="button">Start Scenario</button>
-            <button id="muteToggle" class="btn secondary" type="button">Mute</button>
-            <label style="margin-left:auto; color:var(--muted)">Volume
-              <input id="vol" type="range" min="0" max="1" step="0.05" value="1" />
-            </label>
-          </div>
-          <div id="runTimer" aria-live="polite" style="margin-top:8px">00:00</div>
+        <!-- Meta (collapses after first photo save) -->
+        <div id="scenarioMeta">
+          <label>Scenario Name</label>
+          <input id="scenarioName" type="text" placeholder="e.g., House Fire on Main St">
+
+          <label>Dispatch Information</label>
+          <textarea id="dispatchInfo" placeholder="Example: Engine 1, Engine 2, Medic 1 respond to ..."></textarea>
         </div>
-      </article>
-    </div>
-  </div>
 
-  <footer>
-    <div>© <span id="year"></span> FireOps SIM</div>
-    <div id="connStatus"></div>
-  </footer>
+        <div class="hr"></div>
 
-  <!-- Compat scripts present so we can fall back if needed -->
-  <script src="https://www.gstatic.com/firebasejs/10.12.4/firebase-app-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.12.4/firebase-database-compat.js"></script>
+        <!-- Photo entry -->
+        <div>
+          <div class="sectionTitle">Add Photo</div>
 
+          <label>Photo (camera or library)</label>
+          <input id="photoInput" type="file" accept="image/*" capture="environment">
+
+          <div class="row">
+            <div style="flex:1">
+              <label>Radius (meters)</label>
+              <input id="radius" type="number" inputmode="numeric" min="5" max="1000" value="50">
+            </div>
+            <!-- Short label intentionally removed -->
+          </div>
+
+          <label>Caption / Notes (read by TTS)</label>
+          <textarea id="caption" placeholder="What should crews observe or do here?"></textarea>
+
+          <div class="row" style="margin-top:8px">
+            <button id="savePhoto" class="btn">Save Photo</button>
+            <div class="tag">GPS is captured automatically on save.</div>
+          </div>
+        </div>
+
+        <div class="hr"></div>
+        <div class="sectionTitle">Photos in this scenario</div>
+        <div id="thumbs" class="thumbs"></div>
+      </div>
+    </section>
+
+    <!-- Edit Scenario -->
+    <section class="card hidden" id="editPanel">
+      <div class="card-inner">
+        <div class="sectionTitle">Edit Existing Scenario</div>
+        <div class="row" style="justify-content:space-between">
+          <div class="pill" id="editStatus">Loading…</div>
+          <button id="backFromEdit" class="btn secondary">Back</button>
+        </div>
+        <div id="scenarioList" style="margin-top:10px"></div>
+      </div>
+    </section>
+  </main>
+
+  <!-- Firebase + Logic (kept the same) -->
   <script type="module">
-  (async () => {
-    const $ = id => document.getElementById(id);
-    const viewer=$('viewer'), backBtn=$('backBtn');
-    const select=$('scenarioSelect'), status=$('status'), debug=$('debug'), connStatus=$('connStatus');
-    const dispatchBlock=$('dispatchBlock'), geoStatus=$('geoStatus');
-    const result=$('result'), stopTitle=$('stopTitle'), photo=$('photo'), caption=$('caption'), detail=$('detail');
-    const scTitle=$('scTitle');
-    const startBtn=$('startScenario'), muteToggle=$('muteToggle'), vol=$('vol'), runTimer=$('runTimer');
-    const log = (m)=>{ console.log('[viewer]', m); debug.textContent=String(m); };
+    // Firebase
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-app.js";
+    import { getDatabase, ref, push, set, get, update } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-database.js";
 
-    /* ---------- Helpers ---------- */
-    const toRad = x => x*Math.PI/180;
-    const hav=(a,b,c,d)=>{ const R=6371000, dA=toRad(c-a), dB=toRad(d-b);
-      return 2*R*Math.asin(Math.sqrt(Math.sin(dA/2)**2 + Math.cos(toRad(a))*Math.cos(toRad(c))*Math.sin(dB/2)**2)); };
-    const num=v=>(v===0||v===null)?v:parseFloat(v);
-
-    function normalizeStops(stopsLike){
-      if(!stopsLike) return [];
-      let arr = Array.isArray(stopsLike) ? stopsLike : Object.values(stopsLike);
-      return arr.map(s=>{
-        const lat = num(s.lat ?? s.latitude ?? s.latDeg);
-        const lng = num(s.lng ?? s.lon ?? s.long ?? s.longitude ?? s.lngDeg);
-        const radiusMeters = num(s.radiusMeters ?? s.radius ?? s.r) || 40;
-        const title = s.title || s.name || '';
-        const caption = s.caption || s.text || s.note || '';
-        const image = s.imageData || s.imageURL || s.imageUrl || s.url || s.photoURL || s.photo || s.img || '';
-        return { ...s, lat, lng, radiusMeters, title, caption, image };
-      }).filter(s => typeof s.lat === 'number' && typeof s.lng === 'number');
-    }
-
-    function setImage(img, stop){
-      const src = stop.image || '';
-      img.src = src || "data:image/svg+xml;utf8,"+encodeURIComponent(
-        "<svg xmlns='http://www.w3.org/2000/svg' width='1200' height='720'><rect width='100%' height='100%' fill='#000'/><text x='50%' y='50%' fill='#9ecbd6' font-size='24' text-anchor='middle'>No image</text></svg>"
-      );
-      img.onerror=()=>{ img.src="data:image/svg+xml;utf8,"+encodeURIComponent(
-        "<svg xmlns='http://www.w3.org/2000/svg' width='1200' height='720'><rect width='100%' height='100%' fill='#000'/><text x='50%' y='50%' fill='#9ecbd6' font-size='24' text-anchor='middle'>Image failed to load</text></svg>"
-      ); };
-    }
-
-    /* ---------- Firebase (modular first; compat fallback) ---------- */
     const firebaseConfig = {
       apiKey:"AIzaSyDM6DpRSeZueVKRpbyJyDmhf8WY66KyCDk",
       authDomain:"dailyquiz-d5279.firebaseapp.com",
@@ -168,251 +233,214 @@
       appId:"1:94577748034:web:c032d3a1d72db1313de5db",
       measurementId:"G-19DVN7NNH7"
     };
+    const app = initializeApp(firebaseConfig);
+    const db  = getDatabase(app);
 
-    let mode='modular', app, db, refFn, onValueFn, getFn;
-    try{
-      const { initializeApp } = await import('https://www.gstatic.com/firebasejs/10.12.4/firebase-app.js');
-      const { getDatabase, ref, onValue, get } = await import('https://www.gstatic.com/firebasejs/10.12.4/firebase-database.js');
-      app = initializeApp(firebaseConfig); db = getDatabase(app); refFn = ref; onValueFn = onValue; getFn = get;
-    }catch(e){
-      mode='compat';
-      app = window.firebase.initializeApp(firebaseConfig);
-      db = window.firebase.database();
-      refFn = (dbRefPath)=>db.ref(dbRefPath);
-      onValueFn = (r, cb, err)=>r.on('value', s=>cb(s), err);
-      getFn = (r)=>r.get(); // compat DataSnapshot via once/get
-    }
-    log('Firebase mode: ' + mode);
+    // DOM
+    const landing = document.getElementById('landing');
+    const goCreate = document.getElementById('goCreate');
+    const goEdit = document.getElementById('goEdit');
+    const statusPill = document.getElementById('status');
 
-    // Connection indicator
-    try{
-      const infoRef = (mode==='modular') ? refFn(db, '.info/connected') : refFn('.info/connected');
-      onValueFn(infoRef, snap=>{
-        const ok = snap.val() === true;
-        connStatus.textContent = ok ? 'Connected' : 'Offline';
-        connStatus.style.color = ok ? '#89ffb2' : '#ffdede';
+    const createPanel = document.getElementById('createPanel');
+    const createStatus = document.getElementById('createStatus');
+    const finalizeScenario = document.getElementById('finalizeScenario');
+
+    const scenarioMeta = document.getElementById('scenarioMeta');
+    const scenarioName = document.getElementById('scenarioName');
+    const dispatchInfo = document.getElementById('dispatchInfo');
+
+    const photoInput = document.getElementById('photoInput');
+    const radius = document.getElementById('radius');
+    const caption = document.getElementById('caption');
+    const savePhoto = document.getElementById('savePhoto');
+    const thumbs = document.getElementById('thumbs');
+
+    const editPanel = document.getElementById('editPanel');
+    theconst editStatus = document.getElementById('editStatus');
+    const scenarioList = document.getElementById('scenarioList');
+    const backFromEdit = document.getElementById('backFromEdit');
+
+    // State
+    let currentScenarioId = null;
+    let localStops = [];
+
+    // Helpers
+    const uiShow = el => el.classList.remove('hidden');
+    const uiHide = el => el.classList.add('hidden');
+    const toast = (el, msg) => el.textContent = msg;
+
+    function readFileAsDataURL(file){
+      return new Promise((res, rej)=>{
+        const r=new FileReader();
+        r.onload=()=>res(r.result);
+        r.onerror=rej;
+        r.readAsDataURL(file);
       });
-    }catch{}
-
-    /* ---------- Scenario loading (working loader) ---------- */
-    let scenarios=[], populated=false;
-    function mapSnapshot(val){
-      const obj = val || {};
-      return Object.entries(obj).map(([id, s])=>({ id, ...(s||{}), stops: normalizeStops(s?.stops) }));
     }
-    function populateDropdown(list){
-      select.innerHTML = '<option value="">Select a scenario…</option>';
-      list.forEach(sc=>{
-        const o=document.createElement('option');
-        o.value=sc.id;
-        o.textContent=sc.title || sc.name || sc.notes || '(untitled)';
-        select.appendChild(o);
+    function getGPS(){
+      return new Promise((resolve, reject)=>{
+        navigator.geolocation.getCurrentPosition(
+          pos => resolve({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
+          err => reject(err),
+          { enableHighAccuracy:true, timeout:15000, maximumAge:0 }
+        );
       });
-      status.textContent = list.length ? `${list.length} scenario(s) found` : 'No scenarios yet.';
-      populated = list.length>0;
+    }
+    function renderThumbs(){
+      thumbs.innerHTML='';
+      localStops.forEach((s,i)=>{
+        const img=document.createElement('img');
+        img.className='thumb';
+        img.title=s.title || `Stop ${i+1}`;
+        img.src=s.imageData || s.imageURL || '';
+        img.onerror = ()=>{ img.style.opacity=.7; img.title='Image failed to load'; };
+        thumbs.appendChild(img);
+      });
     }
 
-    try{
-      const a = (mode==='modular') ? refFn(db,'geophoto/scenarios') : refFn('geophoto/scenarios');
-      onValueFn(a, snap=>{
-        const list=mapSnapshot(snap.val());
-        if(list.length){ scenarios=list; populateDropdown(scenarios); log('SDK: geophoto/scenarios '+list.length); }
-      }, err=>log('SDK geophoto error: '+(err?.message||err)));
-    }catch(e){ log('attach geophoto failed: '+e.message); }
-    try{
-      const b = (mode==='modular') ? refFn(db,'scenarios') : refFn('scenarios');
-      onValueFn(b, snap=>{
-        const list=mapSnapshot(snap.val());
-        if(!scenarios.length && list.length){ scenarios=list; populateDropdown(scenarios); log('SDK: scenarios '+list.length); }
-      }, err=>log('SDK scenarios error: '+(err?.message||err)));
-    }catch(e){ log('attach scenarios failed: '+e.message); }
-
-    setTimeout(async ()=>{
-      if(!populated){
-        try{ const s1 = await getFn((mode==='modular') ? refFn(db,'geophoto/scenarios') : refFn('geophoto/scenarios'));
-             const list=mapSnapshot(s1?.val?.() ?? s1.val()); if(list.length){ scenarios=list; populateDropdown(list); log('GET geophoto '+list.length); } }
-        catch(e){ log('GET geophoto error: '+e.message); }
-      }
-      if(!populated){
-        try{ const s2 = await getFn((mode==='modular') ? refFn(db,'scenarios') : refFn('scenarios'));
-             const list=mapSnapshot(s2?.val?.() ?? s2.val()); if(list.length){ scenarios=list; populateDropdown(list); log('GET scenarios '+list.length); } }
-        catch(e){ log('GET scenarios error: '+e.message); }
-      }
-      if(!populated){
-        try{
-          const url = 'https://dailyquiz-d5279-default-rtdb.firebaseio.com/scenarios.json';
-          const r = await fetch(url); if(!r.ok) throw new Error('HTTP '+r.status);
-          const json = await r.json(); const list = mapSnapshot(json);
-          if(list.length){ scenarios=list; populateDropdown(list); log('REST scenarios '+list.length); }
-        }catch(e){ log('REST error: '+e.message); }
-      }
-      if(!populated){ status.textContent='No scenarios found.'; }
-    }, 1200);
-
-    /* ---------- Geofence + display ---------- */
-    const within=(d, r, acc)=> d <= ((Number(r)||0) + Math.max(Number(acc)||0, 10));
-    const findHit=(stops, la, ln, acc)=>{
-      let best=null; (stops||[]).forEach((s,i)=>{
-        const d=hav(la,ln,Number(s.lat),Number(s.lng));
-        if(within(d, s.radiusMeters, acc)){ if(!best || d<best.dist) best={s,index:i,dist:d}; }
-      }); return best;
+    // Navigation
+    goCreate.onclick = ()=>{
+      uiHide(landing); uiShow(createPanel);
+      createStatus.textContent='New scenario';
+      currentScenarioId=null; localStops=[];
+      scenarioName.value=''; dispatchInfo.value='';
+      photoInput.value=''; radius.value=50; caption.value='';
+      uiShow(scenarioMeta); // visible until first photo saved
+    };
+    goEdit.onclick = ()=>{ uiHide(landing); uiShow(editPanel); loadForEdit(); };
+    backFromEdit.onclick = ()=>{
+      uiHide(editPanel); uiShow(landing);
+      scenarioList.innerHTML=''; editStatus.textContent='Ready';
     };
 
-    function showDispatchIntro(sc){
-      const txt=(sc.dispatch||sc.notes||'').trim();
-      dispatchBlock.textContent = txt ? `Dispatch: ${txt}` : 'Dispatch: (none)';
-      // No beep; speak immediately
-      say(txt || `${sc.title || 'scenario'} started.`);
-    }
-
-    let current=null, watchId=null, lastStopIndex=-1;
-    function openScenarioById(id){
-      const sc=scenarios.find(s=>s.id===id);
-      if(!sc){ status.textContent='Scenario not found.'; return; }
-      current=sc;
-      viewer.style.display=''; scTitle.textContent=sc.title||sc.name||sc.notes||'(scenario)';
-
-      result.style.display='none'; stopTitle.textContent=''; caption.textContent=''; detail.textContent='';
-      lastStopIndex=-1;
-
-      showDispatchIntro(sc);
-
-      if(watchId) navigator.geolocation.clearWatch(watchId);
-      geoStatus.textContent='Watching your location…';
+    // Create flow (no short label; no extra top add/retry buttons)
+    savePhoto.onclick = async ()=>{
       try{
-        watchId=navigator.geolocation.watchPosition(p=>{
-          const { latitude:la, longitude:ln, accuracy:acc }=p.coords;
-          geoStatus.textContent=`Lat ${la.toFixed(5)}, Lng ${ln.toFixed(5)} (±${Math.round(acc)}m)`;
-          const hit=findHit(normalizeStops(sc.stops), la, ln, acc);
-          if(hit && hit.index!==lastStopIndex){
-            lastStopIndex=hit.index;
-            result.style.display='';
-            stopTitle.textContent=hit.s.title||'Stop';
-            setImage(photo, hit.s);
-            caption.textContent=hit.s.caption||'';
-            detail.textContent=`Distance: ${Math.round(hit.dist)} m (radius ${hit.s.radiusMeters} m)`;
-            // No beep; speak immediately
-            say(`${hit.s.title?hit.s.title+'. ':''}${hit.s.caption||''}`);
-            viewer.scrollIntoView({behavior:'smooth', block:'start'});
-          }
-        }, err=>{ geoStatus.textContent='Location error: '+err.message; }, { enableHighAccuracy:true, maximumAge:0, timeout:20000 });
-      }catch(e){ geoStatus.textContent='Location error: '+e.message; }
-    }
+        const file = photoInput.files?.[0];
+        if(!file){ alert('Please choose a photo first.'); return; }
 
-    /* ---------- Audio / TTS (no cancel-before-speak, no beep) ---------- */
-    const synth = window.speechSynthesis;
-    const isIOS = /iP(ad|hone|od)/.test(navigator.userAgent) ||
-                  (navigator.userAgent.includes('Mac') && navigator.maxTouchPoints>2);
-
-    let audioEnabled=false, muted=false, volume=1.0, audioCtx=null, wakeLock=null, wakeFallbackInterval=null, runInterval=null, startMs=0;
-    let speaking=false; const q=[]; let preferredVoice=null;
-
-    function pickPreferredVoice(){
-      const voices = synth.getVoices() || [];
-      const prefer = ['Samantha','Alex','Daniel','Karen','Moira','Victoria','Serena'];
-      for(const name of prefer){ const v = voices.find(v => v.name && v.name.startsWith(name)); if(v) return v; }
-      return voices.find(v => v.lang && v.lang.startsWith('en')) || voices[0] || null;
-    }
-    function ensureVoices(){
-      return new Promise(resolve=>{
-        let vs = synth.getVoices();
-        if(vs && vs.length){ preferredVoice = pickPreferredVoice(); return resolve(vs); }
-        const onvc = ()=>{ vs = synth.getVoices(); if(vs && vs.length){ synth.removeEventListener('voiceschanged', onvc); preferredVoice = pickPreferredVoice(); resolve(vs); } };
-        synth.addEventListener('voiceschanged', onvc);
-        let tries=0; const iv=setInterval(()=>{ vs = synth.getVoices(); if((vs && vs.length) || ++tries>10){ clearInterval(iv); preferredVoice = pickPreferredVoice(); resolve(vs||[]); } }, 200);
-      });
-    }
-    async function primeTTS(){
-      // Minimal prime on iOS without cancel()
-      if(!isIOS) return;
-      try{
-        await ensureVoices();
-        await new Promise(res=>{
-          const u = new SpeechSynthesisUtterance('.');
-          if(preferredVoice) u.voice = preferredVoice;
-          u.volume = 0.01; u.rate = 1.0; u.pitch = 1.0;
-          u.onend = res; u.onerror = res;
-          // IMPORTANT: no synth.cancel() here
-          synth.speak(u);
-          setTimeout(res, 800);
-        });
-      }catch{}
-    }
-
-    function say(text){
-      if(!audioEnabled || muted || !text) return;
-      q.push(text);
-      if(!speaking) playNext();
-    }
-    function playNext(){
-      if(!audioEnabled || muted || !q.length){ speaking=false; return; }
-      speaking=true;
-      const u=new SpeechSynthesisUtterance(q.shift());
-      u.volume = volume; u.rate = 1.0; u.pitch = 1.0;
-      if(preferredVoice) u.voice = preferredVoice;
-      u.onend=()=>{ speaking=false; playNext(); };
-      u.onerror=()=>{ speaking=false; };
-      try{ synth.speak(u); }catch{ speaking=false; }
-    }
-
-    function formatTime(ms){ const s=Math.floor(ms/1000), m=Math.floor(s/60), sec=s%60; return String(m).padStart(2,'0')+':'+String(sec).padStart(2,'0'); }
-    function startTimer(){ startMs=Date.now(); clearInterval(runInterval); runInterval=setInterval(()=>{ runTimer.textContent=formatTime(Date.now()-startMs); },500); }
-    function stopTimer(){ clearInterval(runInterval); runInterval=null; runTimer.textContent='00:00'; }
-
-    async function lockWake(){
-      try{
-        if('wakeLock' in navigator){ wakeLock = await navigator.wakeLock.request('screen'); wakeLock.addEventListener('release',()=>{}); }
-        else {
-          if(!audioCtx) audioCtx=new (window.AudioContext||window.webkitAudioContext)();
-          wakeFallbackInterval=setInterval(()=>{ try{ const src=audioCtx.createBufferSource(); src.buffer=audioCtx.createBuffer(1,1,audioCtx.sampleRate); src.connect(audioCtx.destination); src.start(0);}catch{} },30000);
+        // Create scenario shell on first photo
+        if(!currentScenarioId){
+          const name=(scenarioName.value||'').trim();
+          if(!name){ alert('Please enter a Scenario Name.'); return; }
+          const dispatch=(dispatchInfo.value||'').trim();
+          const newRef = push(ref(db,'scenarios'));
+          currentScenarioId=newRef.key;
+          await set(newRef,{
+            id:currentScenarioId,
+            title:name,
+            dispatch:dispatch,
+            createdAt:Date.now(),
+            active:true,
+            stops:[]
+          });
+          uiHide(scenarioMeta); // collapse after first save
         }
-      }catch{}
-    }
-    function releaseWake(){ try{ if(wakeLock){ wakeLock.release(); wakeLock=null; } }catch{} if(wakeFallbackInterval){ clearInterval(wakeFallbackInterval); wakeFallbackInterval=null; } }
 
-    muteToggle.onclick=()=>{ muted=!muted; muteToggle.textContent=muted?'Unmute':'Mute'; };
-    vol.oninput=e=>{ volume=parseFloat(e.target.value||'1')||1; };
+        const dataURL = await readFileAsDataURL(file);
+        const gps = await getGPS();
+        const r = Math.max(5, Math.min(1000, Math.round(parseInt(radius.value||'50',10))));
+        const stop = {
+          title: '', // short label removed
+          caption: (caption.value||'').trim(),
+          lat: gps.lat, lng: gps.lng,
+          radiusMeters: r,
+          imageData: dataURL
+        };
 
-    // ---------- Controls ----------
-    startBtn.onclick = async function(){
-      try{
-        audioEnabled=true;
-        if(!audioCtx) audioCtx=new (window.AudioContext||window.webkitAudioContext)();
-        await audioCtx.resume();
-        await lockWake();
-        // iPhone unlock: minimal prime WITHOUT cancel()
-        await primeTTS();
-        startTimer();
-        startBtn.textContent='Scenario Running';
-        startBtn.disabled=true;
-      }catch(e){ alert('Could not enable audio: '+e.message); return; }
+        localStops.push(stop);
+        await set(ref(db,'scenarios/'+currentScenarioId+'/stops'), localStops);
 
-      const id=select.value;
-      if(!id){
-        status.textContent='Choose a scenario first.';
-        startBtn.disabled=false; startBtn.textContent='Start Scenario'; audioEnabled=false; releaseWake(); stopTimer();
-        return;
+        // Reset fields
+        photoInput.value=''; caption.value=''; radius.value=50;
+        renderThumbs();
+        toast(createStatus, `Saved photo #${localStops.length}.`);
+      }catch(e){
+        alert('Save failed: ' + (e?.message||e));
       }
-      openScenarioById(id);
     };
 
-    backBtn.onclick=()=>{
-      viewer.style.display='none';
-      try{ if(watchId) navigator.geolocation.clearWatch(watchId); }catch{}
-      status.textContent='Choose a scenario and press Start Scenario.';
-      window.speechSynthesis.cancel(); // OK to cancel when backing out
-      startBtn.disabled=false; startBtn.textContent='Start Scenario'; audioEnabled=false;
-      releaseWake(); stopTimer();
+    // Save Scenario (sticky button)
+    finalizeScenario.onclick = async ()=>{
+      try{
+        if(!currentScenarioId){
+          const name=(scenarioName.value||'').trim();
+          if(!name){ alert('Enter Scenario Name, then Save a Photo or press Save Scenario again to create empty.'); return; }
+          const dispatch=(dispatchInfo.value||'').trim();
+          const newRef=push(ref(db,'scenarios'));
+          currentScenarioId=newRef.key;
+          await set(newRef,{
+            id:currentScenarioId,
+            title:name, dispatch:dispatch,
+            createdAt:Date.now(), active:true, stops:[]
+          });
+          uiHide(scenarioMeta);
+        }
+        toast(createStatus,'Scenario saved.');
+        // Reset for next create
+        currentScenarioId=null; localStops=[];
+        renderThumbs();
+        scenarioName.value=''; dispatchInfo.value='';
+        photoInput.value=''; caption.value=''; radius.value=50;
+        uiShow(scenarioMeta);
+      }catch(e){
+        alert('Save Scenario failed: ' + (e?.message||e));
+      }
     };
 
-    // Preselect ?id=
-    (function(){ const pre=new URLSearchParams(location.search).get('id'); if(!pre) return; const iv=setInterval(()=>{ if(select.options.length>1){ clearInterval(iv); select.value=pre; } },200); })();
+    // Edit view (unchanged logic)
+    async function loadForEdit(){
+      try{
+        editStatus.textContent='Loading scenarios…';
+        const snap=await get(ref(db,'scenarios'));
+        if(!snap.exists()){ editStatus.textContent='No scenarios found.'; scenarioList.innerHTML=''; return; }
+        const obj=snap.val()||{};
+        const arr=Object.entries(obj).map(([id,s])=>({id,...s}))
+          .sort((a,b)=>(b.createdAt||0)-(a.createdAt||0));
+        editStatus.textContent=`${arr.length} scenario(s)`;
+        scenarioList.innerHTML='';
 
-    // Footer year + surface errors
-    $('year').textContent = new Date().getFullYear();
-    window.addEventListener('error', e => log('Error: ' + (e.message||e)));
-    window.addEventListener('unhandledrejection', e => log('Promise error: ' + (e.reason && e.reason.message ? e.reason.message : e.reason)));
-  })();
+        arr.forEach(sc=>{
+          const row=document.createElement('div');
+          row.className='listItem';
+          const left=document.createElement('div');
+          left.innerHTML = `<div style="font-weight:800">${sc.title||'(untitled)'}</div>
+                            <div class="tag">Stops: ${Array.isArray(sc.stops)? sc.stops.length : 0} • ${new Date(sc.createdAt||Date.now()).toLocaleString()}</div>`;
+          const right=document.createElement('div');
+          const openBtn=document.createElement('button');
+          openBtn.className='btn'; openBtn.textContent='Open in Creator';
+          openBtn.onclick=()=>{
+            landing.classList.add('hidden');
+            editPanel.classList.add('hidden');
+            createPanel.classList.remove('hidden');
+            currentScenarioId=sc.id;
+            localStops=Array.isArray(sc.stops)? sc.stops : [];
+            renderThumbs();
+            uiHide(scenarioMeta); // editing existing keeps meta hidden
+            toast(createStatus, `Editing: ${sc.title||'(untitled)'}`);
+          };
+          const toggleBtn=document.createElement('button');
+          toggleBtn.className='btn secondary'; toggleBtn.style.marginLeft='8px';
+          toggleBtn.textContent=sc.active ? 'Deactivate' : 'Activate';
+          toggleBtn.onclick=()=>update(ref(db,'scenarios/'+sc.id), { active: !sc.active });
+          const delBtn=document.createElement('button');
+          delBtn.className='btn danger'; delBtn.style.marginLeft='8px';
+          delBtn.textContent='Delete';
+          delBtn.onclick=async()=>{
+            if(confirm('Delete this scenario? This cannot be undone.')){
+              await set(ref(db,'scenarios/'+sc.id), null);
+              row.remove();
+            }
+          };
+          right.appendChild(openBtn); right.appendChild(toggleBtn); right.appendChild(delBtn);
+          row.appendChild(left); row.appendChild(right);
+          scenarioList.appendChild(row);
+        });
+      }catch(e){
+        editStatus.textContent='Error: '+(e?.message||e);
+      }
+    }
   </script>
 </body>
 </html>
