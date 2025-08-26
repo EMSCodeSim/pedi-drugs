@@ -15,6 +15,7 @@
     .brandmini{display:flex;align-items:center;gap:12px;font-weight:800}
     .logo img{width:40px;height:40px;border-radius:10px;box-shadow:var(--shadow);object-fit:cover;background:#0f1624}
     .tag{color:var(--muted);font-size:12px}
+
     main{max-width:1200px;margin:20px auto 80px;padding:0 20px}
     .app{display:grid;grid-template-columns:320px 1fr 380px;gap:12px;align-items:start}
     .col{background:var(--card);border:1px solid var(--border);border-radius:var(--radiusSm);box-shadow:var(--shadow);padding:12px;overflow:auto}
@@ -35,11 +36,14 @@
     #c{display:block;width:100%;height:calc(100vh - 360px);background:transparent}
     .bar{display:flex;gap:8px;flex-wrap:wrap}
     .divider{height:1px;background:rgba(255,255,255,.1);opacity:.8;margin:10px 0}
+
     /* Overlay shelf */
     .olThumb{width:100%;aspect-ratio:1/1;border-radius:10px;border:1px solid rgba(255,255,255,.12);background:#0b2130;display:flex;align-items:center;justify-content:center;cursor:pointer}
     .olThumb img{max-width:88%;max-height:88%;display:block}
     .ol-tab.active{outline:3px solid var(--teal)}
+
     footer{max-width:1200px;margin:40px auto;padding:18px 20px;color:var(--muted);font-size:13px;border-top:1px solid rgba(255,255,255,.06);display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap}
+
     @media (max-width: 1100px){ .app{grid-template-columns:1fr} #c{height:56vh} }
     #errbar{position:fixed;left:10px;bottom:10px;background:#2b0d0d;color:#ffd7d7;border:1px solid #7a2b2b;border-radius:12px;padding:8px 12px;max-width:80vw;display:none;z-index:9999}
   </style>
@@ -61,7 +65,7 @@
     <div id="errbar"></div>
 
     <div id="app" class="app">
-      <!-- Left: scenario + meta -->
+      <!-- Left: scenarios + meta -->
       <div class="col" id="leftCol">
         <div class="row" style="justify-content:space-between">
           <div class="pill" id="statusPill">Loading…</div>
@@ -115,7 +119,7 @@
         <div class="canvasWrap"><canvas id="c"></canvas></div>
       </div>
 
-      <!-- Right: overlays + eraser + transform -->
+      <!-- Right: overlays + eraser + flip -->
       <div class="col" id="rightCol">
         <div class="sectionTitle">Overlays</div>
         <div class="row" style="gap:6px; flex-wrap:nowrap; overflow:auto">
@@ -175,7 +179,6 @@
   window.addEventListener('unhandledrejection', e => ERR(String(e.reason?.message||e.reason||e)));
 
   (async () => {
-    // Footer year
     document.getElementById('year').textContent = new Date().getFullYear();
 
     // Firebase
@@ -197,6 +200,7 @@
     const scenarioSel=document.getElementById('scenarioSel');
     const stopList=document.getElementById('stopList');
     const refreshBtn=document.getElementById('refresh');
+
     const stopTitle=document.getElementById('stopTitle');
     const stopCaption=document.getElementById('stopCaption');
     const stopLat=document.getElementById('stopLat');
@@ -205,6 +209,7 @@
     const useGPS=document.getElementById('useGPS');
     const saveMeta=document.getElementById('saveMeta');
     const metaMsg=document.getElementById('metaMsg');
+
     const replaceFile=document.getElementById('replaceFile');
     const replaceApply=document.getElementById('replaceApply');
     const deleteStop=document.getElementById('deleteStop');
@@ -224,20 +229,22 @@
     const bringFront=document.getElementById('bringFront');
     const sendBack=document.getElementById('sendBack');
     const deleteObj=document.getElementById('deleteObj');
+
     const eraserStart=document.getElementById('eraserStart');
     const eraserDone=document.getElementById('eraserDone');
     const eraserCancel=document.getElementById('eraserCancel');
     const eraserSize=document.getElementById('eraserSize');
     const eraserStatus=document.getElementById('eraserStatus');
+
     const flipSelH=document.getElementById('flipSelH');
     const flipSelV=document.getElementById('flipSelV');
 
     // Canvas
     const fabricCanvas = new fabric.Canvas('c', { backgroundColor:'#061621', preserveObjectStacking:true, selection:true });
-    let baseImage=null, cropRect=null, erasing=false;
+    let baseImage=null, cropRect=null;
 
     function fitCanvas(){
-      const reserved = 260; // approximate header/footer budget
+      const reserved = 260; // header/footer budget
       const targetH = Math.max(380, window.innerHeight - reserved);
       document.getElementById('c').style.height = targetH + 'px';
       fabricCanvas.setHeight(targetH);
@@ -265,9 +272,28 @@
         }, { crossOrigin:'anonymous' });
       });
     }
-    const dataURLFromCanvas = () => fabricCanvas.toDataURL({ format:'png', quality:0.92 });
 
-    // ===== Load scenarios (Admin logic: fixed path '/scenarios') =====
+    // ---- FULL-RES EXPORT/SAVE ----
+    function dataURLFromCanvasFullRes() {
+      const zoom = fabricCanvas.getZoom() || 1;
+      let multiplier = 1;
+      if (baseImage) {
+        const s = baseImage.scaleX || 1;
+        multiplier = (1 / s) * (1 / zoom);
+      }
+      multiplier = Math.max(1, Math.min(8, multiplier));
+      return fabricCanvas.toDataURL({ format: 'png', quality: 0.95, multiplier });
+    }
+
+    exportPNG.onclick = () => {
+      const url = dataURLFromCanvasFullRes();
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = (current?.title || 'image') + '-edited.png';
+      a.click();
+    };
+
+    // ===== Load scenarios (Admin logic: fixed '/scenarios') =====
     function coerceStops(sc){
       if (Array.isArray(sc?.stops))  return sc.stops;
       if (Array.isArray(sc?.photos)) return sc.photos;
@@ -282,7 +308,7 @@
     }
 
     let scenarios=[], current=null, stopIndex=-1;
-    const ROOT = 'scenarios';
+    const ROOT='scenarios';
 
     function showStatus(msg){ statusPill.textContent = msg; }
     function populateList(){
@@ -313,7 +339,7 @@
         if (!snap.exists()){
           scenarios = [];
           populateList();
-          showStatus('0 scenario(s) loaded from /scenarios');
+          showStatus('0 scenario(s) loaded');
           return;
         }
         const obj = snap.val() || {};
@@ -321,9 +347,9 @@
           id, _raw:s, _stops:coerceStops(s), ...s
         })).sort((a,b)=>(b.createdAt||0)-(a.createdAt||0));
         populateList();
-        showStatus(`${scenarios.length} scenario(s) loaded from /scenarios`);
+        showStatus(`${scenarios.length} scenario(s) loaded`);
       }catch(e){
-        showStatus('Firebase load error: ' + (e?.message || e));
+        showStatus('Error: ' + (e?.message || e));
       }
     }
 
@@ -338,7 +364,7 @@
           const fresh = scenarios.find(sc=>sc.id===current.id);
           if (fresh){ current=fresh; renderStopsThumbs(); }
         }
-        showStatus(`${scenarios.length} scenario(s) loaded from /scenarios`);
+        showStatus(`${scenarios.length} scenario(s) loaded`);
       }, err=> showStatus('RTDB onValue error: '+(err?.message||err)));
     }
 
@@ -351,7 +377,7 @@
       current = scenarios.find(s=>s.id===id) || null;
       stopIndex=-1;
       renderStopsThumbs();
-      fabricCanvas.clear(); baseImage=null; cropRect=null; erasing=false;
+      fabricCanvas.clear(); baseImage=null; cropRect=null;
       fitCanvas();
     };
 
@@ -365,18 +391,35 @@
       stopLng.value=(s.lng ?? '').toString();
       stopRadius.value=(s.radiusMeters ?? s.radius ?? 50).toString();
       Array.from(stopList.children).forEach((n,i)=>n.classList.toggle('active', i===idx));
-      fabricCanvas.clear(); baseImage=null; cropRect=null; erasing=false;
+      fabricCanvas.clear(); baseImage=null; cropRect=null;
       const src=s.imageData||s.imageURL;
       if(!src){ metaMsg.textContent='No image in this stop.'; return; }
       await setBaseImageFromDataURL(src);
-      // Rehydrate overlays
+
+      // Rehydrate overlays + erase masks
       if (Array.isArray(s.overlays)) {
         for (const ov of s.overlays){
           if (!ov?.src) continue;
           await new Promise(res=>{
             fabric.Image.fromURL(ov.src, img=>{
               try{
-                img.set({ left:ov.left||0, top:ov.top||0, scaleX:ov.scaleX||1, scaleY:ov.scaleY||1, angle:ov.angle||0, opacity:ov.opacity??1, flipX:!!ov.flipX, flipY:!!ov.flipY, erasable:true, cornerStyle:'circle', transparentCorners:false });
+                img.set({
+                  left:ov.left||0, top:ov.top||0,
+                  scaleX:ov.scaleX||1, scaleY:ov.scaleY||1,
+                  angle:ov.angle||0, opacity:ov.opacity??1,
+                  flipX:!!ov.flipX, flipY:!!ov.flipY,
+                  erasable:true, cornerStyle:'circle', transparentCorners:false
+                });
+
+                // Reapply fallback erase mask if present
+                if (Array.isArray(ov.erase) && ov.erase.length){
+                  const circles = ov.erase.map(e => new fabric.Circle({
+                    left: e.x, top: e.y, radius: e.r,
+                    originX:'center', originY:'center', absolutePositioned:true
+                  }));
+                  img.set('clipPath', new fabric.Group(circles, { absolutePositioned:true, inverted:true }));
+                }
+
                 fabricCanvas.add(img);
               } finally { res(); }
             }, { crossOrigin:'anonymous' });
@@ -386,14 +429,32 @@
       }
     }
 
-    // Meta save / GPS
+    // GPS + Meta save
     useGPS.onclick=()=>{ navigator.geolocation.getCurrentPosition(p=>{ stopLat.value=p.coords.latitude.toFixed(6); stopLng.value=p.coords.longitude.toFixed(6); metaMsg.textContent='GPS captured.'; }, e=>{ metaMsg.textContent='GPS error: '+e.message; }, { enableHighAccuracy:true, timeout:10000 }); };
 
     function serializeOverlays(){
       const out=[];
       fabricCanvas.getObjects('image').forEach(img=>{
         if (img===baseImage) return;
-        out.push({ src: img.getSrc ? img.getSrc() : img._originalElement?.src || img.src || '', left: img.left||0, top: img.top||0, scaleX: img.scaleX||1, scaleY: img.scaleY||1, angle: img.angle||0, opacity: img.opacity??1, flipX: !!img.flipX, flipY: !!img.flipY });
+
+        // Persist clipPath circles when present (fallback eraser)
+        let erase = null;
+        if (img.clipPath && img.clipPath.type === 'group' && img.clipPath.inverted) {
+          erase = (img.clipPath._objects || []).map(o => ({
+            type: o.type,
+            x: o.left, y: o.top,
+            r: o.radius || 0,
+          }));
+        }
+
+        out.push({
+          src: img.getSrc ? img.getSrc() : img._originalElement?.src || img.src || '',
+          left: img.left||0, top: img.top||0,
+          scaleX: img.scaleX||1, scaleY: img.scaleY||1,
+          angle: img.angle||0, opacity: img.opacity??1,
+          flipX: !!img.flipX,  flipY: !!img.flipY,
+          erase // array of circles or null
+        });
       });
       return out;
     }
@@ -416,12 +477,24 @@
       metaMsg.textContent='Meta saved.';
     }catch(err){ metaMsg.textContent=String(err.message||err); } };
 
-    // Replace / Export / Save image
     function readFileAsDataURL(f){ return new Promise((res,rej)=>{ const r=new FileReader(); r.onload=()=>res(r.result); r.onerror=rej; r.readAsDataURL(f); }); }
     replaceApply.onclick=async()=>{ const f=replaceFile.files?.[0]; if(!f){ metaMsg.textContent='Choose a file first.'; return; } const data=await readFileAsDataURL(f); await setBaseImageFromDataURL(data); };
-    exportPNG.onclick=()=>{ const url=dataURLFromCanvas(); const a=document.createElement('a'); a.href=url; a.download=(current?.title||'image')+'-edited.png'; a.click(); };
-    async function persistCurrentStopImageAndOverlays(){ if(!current || stopIndex<0) throw new Error('Select a stop first.'); const url=dataURLFromCanvas(); const s = { ...current._stops[stopIndex] }; s.imageData=url; s.imageURL=null; s.overlays = serializeOverlays(); const nextStops=[...current._stops]; nextStops[stopIndex]=s; const updated={ ...current._raw }; setStops(updated, nextStops); await set(ref(db, `${ROOT}/${current.id}`), updated); current._raw=updated; current._stops=nextStops; renderStopsThumbs(); }
-    saveImage.onclick=async()=>{ try{ await persistCurrentStopImageAndOverlays(); metaMsg.textContent='Image + overlays saved.'; }catch(err){ metaMsg.textContent=String(err.message||err); } };
+
+    async function persistCurrentStopImageAndOverlays(){
+      if(!current || stopIndex<0) throw new Error('Select a stop first.');
+      const url = dataURLFromCanvasFullRes();
+      const s = { ...current._stops[stopIndex] };
+      s.imageData=url; s.imageURL=null;
+      s.overlays = serializeOverlays();
+      const nextStops = [ ...current._stops ]; nextStops[stopIndex] = s;
+      const updated = { ...current._raw };
+      setStops(updated, nextStops);
+      await set(ref(db, `${ROOT}/${current.id}`), updated);
+      current._raw = updated; current._stops = nextStops;
+      renderStopsThumbs();
+      metaMsg.textContent='Image + overlays saved.';
+    }
+    saveImage.onclick=()=>persistCurrentStopImageAndOverlays().catch(e=> metaMsg.textContent=String(e.message||e));
 
     // Overlay shelf
     const OVERLAY_BASE='https://fireopssim.com/geophoto/overlays/';
@@ -442,13 +515,60 @@
     sendBack.onclick  = ()=>{ const o=fabricCanvas.getActiveObject(); if(o && o!==baseImage){ o.sendToBack(); if(baseImage) baseImage.sendToBack(); fabricCanvas.requestRenderAll(); } };
     deleteObj.onclick = ()=>{ const o=fabricCanvas.getActiveObject(); if(o && o!==baseImage){ fabricCanvas.remove(o); fabricCanvas.discardActiveObject(); fabricCanvas.requestRenderAll(); } };
 
-    // Eraser (overlays only)
-    function stopErasing(){ fabricCanvas.isDrawingMode=false; erasing=false; eraserStatus.textContent='Eraser: off'; }
-    eraserStart.onclick=()=>{ if(!fabric.EraserBrush){ alert('Eraser brush not available in this Fabric build.'); return; } const sel=fabricCanvas.getActiveObject(); if(!sel || sel.type!=='image' || sel===baseImage){ alert('Select an overlay image first.'); return; } if(baseImage) baseImage.set('erasable', false); fabricCanvas.getObjects().forEach(o=>o.set('erasable', false)); sel.set('erasable', true); fabricCanvas.isDrawingMode=true; fabricCanvas.freeDrawingBrush=new fabric.EraserBrush(fabricCanvas); fabricCanvas.freeDrawingBrush.width=parseInt(eraserSize.value,10)||30; erasing=true; eraserStatus.textContent=`Eraser: ON (size ${fabricCanvas.freeDrawingBrush.width})`; };
-    eraserSize.oninput=()=>{ if(fabricCanvas.freeDrawingBrush){ fabricCanvas.freeDrawingBrush.width=parseInt(eraserSize.value,10)||30; if(erasing) eraserStatus.textContent=`Eraser: ON (size ${fabricCanvas.freeDrawingBrush.width})`; } };
-    eraserDone.onclick=stopErasing; eraserCancel.onclick=()=>{ stopErasing(); fabricCanvas.renderAll(); };
+    // ---- Eraser (native brush if present; fallback clip-mask otherwise) ----
+    let erasing = false, fallbackEraserActive = false, fallbackCircles = [], pointerDown = false;
 
-    // Transform (flip only)
+    function stopErasing(){
+      fabricCanvas.isDrawingMode = false;
+      erasing = false;
+      fallbackEraserActive = false;
+      pointerDown = false;
+      eraserStatus.textContent = 'Eraser: off';
+      fabricCanvas.off('mouse:down', onMouseDownFallback);
+      fabricCanvas.off('mouse:move', onMouseMoveFallback);
+      fabricCanvas.off('mouse:up',   onMouseUpFallback);
+    }
+
+    function ensureOverlaySelected(){
+      const sel = fabricCanvas.getActiveObject();
+      if (!sel || sel.type!=='image' || sel===baseImage) { alert('Select an overlay image first.'); return null; }
+      return sel;
+    }
+
+    function applyFallbackCircleAt(sel, canvasPoint, radius){
+      const c = new fabric.Circle({ left: canvasPoint.x, top: canvasPoint.y, radius, originX:'center', originY:'center', absolutePositioned:true });
+      fallbackCircles.push(c);
+      const clipGroup = new fabric.Group(fallbackCircles, { absolutePositioned:true, inverted:true });
+      sel.set('clipPath', clipGroup);
+    }
+    function onMouseDownFallback(opt){ const sel=ensureOverlaySelected(); if(!sel) return; pointerDown = true; const p=fabricCanvas.getPointer(opt.e); const r=(parseInt(eraserSize.value,10)||30)*0.5; applyFallbackCircleAt(sel, p, r); fabricCanvas.requestRenderAll(); }
+    function onMouseMoveFallback(opt){ if(!pointerDown) return; const sel=ensureOverlaySelected(); if(!sel) return; const p=fabricCanvas.getPointer(opt.e); const r=(parseInt(eraserSize.value,10)||30)*0.5; applyFallbackCircleAt(sel, p, r); fabricCanvas.requestRenderAll(); }
+    function onMouseUpFallback(){ pointerDown = false; }
+
+    eraserStart.onclick = ()=>{
+      const sel = ensureOverlaySelected(); if(!sel) return;
+      if (fabric.EraserBrush) {
+        fabricCanvas.getObjects().forEach(o=>o.set('erasable', false));
+        sel.set('erasable', true);
+        fabricCanvas.isDrawingMode = true;
+        fabricCanvas.freeDrawingBrush = new fabric.EraserBrush(fabricCanvas);
+        fabricCanvas.freeDrawingBrush.width = parseInt(eraserSize.value,10)||30;
+        erasing = true;
+        eraserStatus.textContent = `Eraser: ON (brush ${fabricCanvas.freeDrawingBrush.width})`;
+      } else {
+        fallbackEraserActive = true;
+        fallbackCircles = (sel.clipPath && sel.clipPath._objects) ? [...sel.clipPath._objects] : [];
+        fabricCanvas.on('mouse:down', onMouseDownFallback);
+        fabricCanvas.on('mouse:move', onMouseMoveFallback);
+        fabricCanvas.on('mouse:up',   onMouseUpFallback);
+        eraserStatus.textContent = `Eraser: ON (fallback, size ${parseInt(eraserSize.value,10)||30})`;
+      }
+    };
+    eraserSize.oninput = ()=>{ if (fabricCanvas.freeDrawingBrush) { fabricCanvas.freeDrawingBrush.width = parseInt(eraserSize.value,10)||30; if (erasing) eraserStatus.textContent = `Eraser: ON (brush ${fabricCanvas.freeDrawingBrush.width})`; } else if (fallbackEraserActive) { eraserStatus.textContent = `Eraser: ON (fallback, size ${parseInt(eraserSize.value,10)||30})`; } };
+    eraserDone.onclick = stopErasing;
+    eraserCancel.onclick = ()=>{ stopErasing(); fabricCanvas.renderAll(); };
+
+    // Flip only
     function flipSelected(axis){ const o=fabricCanvas.getActiveObject(); if(!o || o===baseImage) return; if(axis==='x') o.set('flipX', !o.flipX); if(axis==='y') o.set('flipY', !o.flipY); fabricCanvas.requestRenderAll(); }
     flipSelH.onclick=()=>flipSelected('x');
     flipSelV.onclick=()=>flipSelected('y');
