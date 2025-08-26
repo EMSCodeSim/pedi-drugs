@@ -2,164 +2,210 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <title>FireOps SIM — Geo Scenarios Viewer</title>
+  <title>FireOps SIM — Admin (Geo-Photo)</title>
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <meta name="theme-color" content="#0b0f14" />
-  <link rel="icon" href="data:," />
+  <meta name="description" content="Create and edit FireOps SIM Geo-Photo training scenarios with dispatch info, geofenced photos, and captions." />
+
   <style>
-    :root{ --bg:#0b0f14; --bg2:#101726; --card:#121823; --muted:#8ea0b3; --text:#eaf2ff; --blue:#0a84ff; --shadow:0 12px 34px rgba(0,0,0,.38); --radius:18px; }
+    :root{
+      --bg:#0b0f14; --bg2:#101726; --card:#121823; --muted:#8ea0b3; --text:#eaf2ff;
+      --blue:#0a84ff; --teal:#2dd4bf; --red:#ff3b30; --shadow:0 12px 34px rgba(0,0,0,.38);
+      --radius:18px;
+    }
     *{box-sizing:border-box}
-    html,body{ margin:0; padding:0; color:var(--text); font-family:system-ui,-apple-system,Segoe UI,Roboto,Inter,Arial,sans-serif;
+    html,body{
+      margin:0; padding:0; color:var(--text);
+      font-family:system-ui,-apple-system,Segoe UI,Roboto,Inter,Arial,sans-serif;
       background:
         radial-gradient(1400px 700px at 15% -15%, rgba(10,132,255,.28), transparent 60%),
         radial-gradient(1200px 600px at 110% 0%, rgba(255,59,48,.22), transparent 60%),
         linear-gradient(165deg, var(--bg2), var(--bg) 55%);
-      -webkit-text-size-adjust:100%; scroll-behavior:smooth; }
-    a{color:inherit; text-decoration:none} img{max-width:100%; height:auto; display:block}
+      -webkit-text-size-adjust:100%;
+      scroll-behavior:smooth;
+    }
+    a{color:inherit; text-decoration:none}
+    img{max-width:100%; height:auto; display:block}
 
-    .topbar{position:sticky; top:0; z-index:20; background:rgba(12,15,22,.75); backdrop-filter:saturate(120%) blur(6px); border-bottom:1px solid rgba(255,255,255,.07)}
-    .topnav{max-width:1100px; margin:0 auto; padding:10px 20px; display:flex; align-items:center; gap:14px}
-    .brandmini{display:flex; align-items:center; gap:12px; font-weight:800}
-    .logo img{width:40px; height:40px; border-radius:10px; box-shadow:var(--shadow); object-fit:cover; background:#0f1624}
+    .topbar{
+      position:sticky; top:0; z-index:20;
+      background:rgba(12,15,22,.75);
+      backdrop-filter:saturate(120%) blur(6px);
+      border-bottom:1px solid rgba(255,255,255,.07);
+    }
+    .topnav{
+      max-width:1100px; margin:0 auto; padding:10px 20px;
+      display:flex; align-items:center; gap:14px; flex-wrap:wrap;
+    }
+    .brandmini{display:flex; align-items:center; gap:12px; font-weight:800; letter-spacing:.3px}
+    .logo img{
+      width:40px; height:40px; border-radius:10px; box-shadow:var(--shadow); object-fit:cover;
+      background:#0f1624;
+    }
+    .tag{color:var(--muted); font-size:12px}
 
-    .wrap{max-width:1100px; margin:0 auto; padding:18px 20px 100px}
-    .grid{display:grid; gap:14px; grid-template-columns:1fr}
-    .card{border-radius:var(--radius); background:var(--card); border:1px solid rgba(255,255,255,.07); box-shadow:var(--shadow); overflow:hidden; transition:transform .15s ease, border-color .2s ease}
-    .card:hover{transform:translateY(-2px); border-color:rgba(10,132,255,.35)}
-    .card-inner{padding:18px}
+    main{max-width:1100px; margin:24px auto 84px; padding:0 20px}
+    .card{
+      position:relative; border-radius:var(--radius); background:var(--card);
+      border:1px solid rgba(255,255,255,.07); box-shadow:var(--shadow); overflow:hidden;
+      transition:transform .15s ease, border-color .2s ease, box-shadow .2s ease;
+      margin:12px 0;
+    }
+    .card:hover{ transform:translateY(-2px); border-color:rgba(10,132,255,.35); box-shadow:0 16px 40px rgba(0,0,0,.5) }
+    .card-inner{ padding:18px }
+
     .eyebrow{font-size:12px; color:var(--muted); margin-bottom:8px}
-    h1,h2,h3{margin:0} h2{font-size:20px} p,.status{color:var(--muted); font-size:14px; margin:6px 0 0}
+    .sectionTitle{font-weight:900; margin:6px 0 10px}
+    .pill{
+      display:inline-flex; gap:8px; align-items:center;
+      padding:6px 10px; border-radius:999px;
+      border:1px solid rgba(255,255,255,.14); color:var(--muted); background:rgba(255,255,255,.03)
+    }
+    .hr{height:1px; background:rgba(255,255,255,.10); margin:12px 0}
 
-    .btn{appearance:none; border:0; border-radius:12px; cursor:pointer; padding:14px 16px; font-weight:800; font-size:16px; color:#03131b; background:linear-gradient(180deg,#54a6ff,var(--blue)); box-shadow:var(--shadow); text-align:center}
-    .btn[disabled]{opacity:.65; cursor:not-allowed}
-    .btn.secondary{background:transparent; color:var(--text); border:1px solid rgba(255,255,255,.14)}
-    select{width:100%; padding:14px 12px; font-size:16px; border-radius:12px; border:1px solid rgba(255,255,255,.14); background:#0f1624; color:var(--text); outline:none}
-    input[type="range"]{accent-color:#54a6ff}
-    .row{display:flex; gap:10px; flex-wrap:wrap; align-items:center}
+    label{display:block; margin:10px 0 6px 2px; font-size:13px; color:var(--muted)}
+    input, textarea, select, button{font-size:16px}
+    input[type="text"], input[type="number"], textarea, select{
+      width:100%; padding:12px; border-radius:12px; outline:none;
+      background:#0f1624; color:var(--text); border:1px solid rgba(255,255,255,.14);
+    }
+    textarea{min-height:88px; resize:vertical}
 
-    #viewer .card-inner{padding:12px}
-    #photoWrap{ margin-top:10px; border-radius:16px; border:1px solid rgba(255,255,255,.12); background:#000; overflow:hidden; }
-    #photo{ width:100%; height:min(78vh, calc(100vh - 220px)); object-fit:contain; background:#000; }
-    #caption{font-size:15px; color:#e9f1ff}
+    .btn{
+      appearance:none; border:0; border-radius:12px; width:auto; cursor:pointer;
+      padding:14px 16px; font-weight:800; font-size:16px; color:#03131b;
+      background:linear-gradient(180deg,#54a6ff,var(--blue)); box-shadow:var(--shadow);
+      text-align:center;
+    }
+    .btn.secondary{
+      background:transparent; color:var(--text);
+      border:1px solid rgba(255,255,255,.14);
+    }
+    .btn.teal{
+      background:linear-gradient(180deg,#3ce5d3,var(--teal)); color:#052522;
+    }
+    .btn.danger{ background:var(--red); color:#fff; }
+    .row{ display:flex; gap:10px; flex-wrap:wrap; align-items:center }
+    .hidden{ display:none }
 
-    footer{max-width:1100px; margin:34px auto; padding:0 20px; color:var(--muted); font-size:13px; border-top:1px solid rgba(255,255,255,.06); display:flex; justify-content:space-between; gap:16px; flex-wrap:wrap}
-    #runTimer{font-size:13px; color:#cfe1ff}
-    #debug{font-size:12px; color:#ffdede; margin-top:6px; white-space:pre-wrap}
+    .stickyBar{
+      position:sticky; top:62px; z-index:5;
+      background:rgba(12,15,22,.75);
+      backdrop-filter:saturate(120%) blur(6px);
+      border-bottom:1px solid rgba(255,255,255,.07);
+      padding:8px 12px;
+      margin:-18px -18px 10px -18px;
+    }
+
+    .thumbs{display:flex; flex-wrap:wrap; gap:8px; margin-top:10px}
+    .thumb{width:88px; height:88px; object-fit:cover; border-radius:12px; border:1px solid rgba(255,255,255,.14); background:#0a2230}
+    .listItem{
+      display:flex; justify-content:space-between; align-items:center;
+      padding:10px; border:1px solid rgba(255,255,255,.14); border-radius:12px; background:#0f1624
+    }
   </style>
 </head>
 <body>
+
+  <!-- Top Navigation -->
   <div class="topbar">
     <div class="topnav">
       <div class="brandmini">
-        <div class="logo" aria-hidden="true"><img src="/assets/logo/fire-ops-sim.png" alt="FireOps SIM logo" /></div>
-        <div style="line-height:1.1; font-size:15px; font-weight:900">FireOps SIM</div>
+        <div class="logo" aria-hidden="true">
+          <img src="/assets/logo/fire-ops-sim.png" alt="FireOps SIM logo" />
+        </div>
+        <div>
+          <div id="brandName" style="line-height:1.1; font-size:15px; font-weight:900">FireOps SIM</div>
+          <div class="tag" id="brandTag">Real-Time Fire Scene Simulator</div>
+        </div>
       </div>
     </div>
   </div>
 
-  <div class="wrap">
-    <div class="grid">
-      <article class="card">
-        <div class="card-inner">
-          <div class="eyebrow">Scenario</div>
-          <h2>Select & Start</h2>
-          <p>Choose a scenario below, then start it to enable audio/voice prompts.</p>
-          <div class="row" style="margin-top:10px; width:100%">
-            <select id="scenarioSelect" aria-label="Choose a scenario"><option value="">Loading…</option></select>
-          </div>
-          <div class="status" id="status" aria-live="polite" style="margin-top:8px">Connecting…</div>
-          <div id="debug" aria-live="polite"></div>
+  <main>
+    <!-- Landing -->
+    <section class="card" id="landing">
+      <div class="card-inner">
+        <div class="sectionTitle">Scenario Admin</div>
+        <div class="row" style="margin-top:8px">
+          <button id="goCreate" class="btn">Create Scenario</button>
+          <button id="goEdit" class="btn secondary">Edit Scenario</button>
         </div>
-      </article>
+        <div class="pill" id="status">Ready</div>
+      </div>
+    </section>
 
-      <article class="card" id="viewer" style="display:none">
-        <div class="card-inner">
-          <div class="row" style="justify-content:space-between; align-items:center">
-            <h3 id="scTitle" style="margin:0; font-size:18px">(scenario)</h3>
-            <button id="backBtn" class="btn secondary" type="button">Back</button>
-          </div>
-
-          <div class="status" id="dispatchBlock" style="white-space:pre-wrap; margin-top:8px"></div>
-          <div class="status" id="geoStatus" style="margin-top:4px">Waiting for location…</div>
-
-          <div id="result" style="display:none">
-            <h3 id="stopTitle" style="margin:12px 2px 6px 2px"></h3>
-            <div id="photoWrap"><img id="photo" alt="Photo for this stop"></div>
-            <div class="status" id="caption" style="white-space:pre-wrap; margin-top:10px"></div>
-            <div class="status" id="detail"></div>
+    <!-- Create Scenario -->
+    <section class="card hidden" id="createPanel">
+      <div class="card-inner">
+        <div class="stickyBar">
+          <div class="row" style="justify-content:space-between; width:100%; gap:8px">
+            <div class="pill" id="createStatus">New scenario</div>
+            <div class="row" style="gap:8px">
+              <button id="startScenarioBtn" class="btn teal">Start Scenario (Enable Voice)</button>
+              <button id="finalizeScenario" class="btn">Save Scenario</button>
+            </div>
           </div>
         </div>
-      </article>
 
-      <article class="card">
-        <div class="card-inner">
-          <div class="eyebrow">Audio & TTS</div>
-          <h2>Scenario Controls</h2>
-          <p>This enables audio, reads the dispatch, beeps on each geofence, and reads each caption.</p>
-          <div class="row" style="margin-top:10px; align-items:flex-start">
-            <button id="startScenario" class="btn" type="button">Start Scenario</button>
-            <button id="muteToggle" class="btn secondary" type="button">Mute</button>
-            <label style="margin-left:auto; color:var(--muted)">Volume
-              <input id="vol" type="range" min="0" max="1" step="0.05" value="1" />
-            </label>
-          </div>
-          <div id="runTimer" aria-live="polite" style="margin-top:8px">00:00</div>
+        <div id="scenarioMeta">
+          <label>Scenario Name</label>
+          <input id="scenarioName" type="text" placeholder="e.g., House Fire on Main St">
+
+          <label>Dispatch Information</label>
+          <textarea id="dispatchInfo" placeholder="Example: Engine 1 and Medic 1 respond to a two-story residential structure fire..."></textarea>
         </div>
-      </article>
-    </div>
-  </div>
 
-  <footer>
-    <div>© <span id="year"></span> FireOps SIM</div>
-    <div id="connStatus"></div>
-  </footer>
+        <div class="hr"></div>
 
-  <!-- Compat scripts present so we can fall back if needed -->
-  <script src="https://www.gstatic.com/firebasejs/10.12.4/firebase-app-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.12.4/firebase-database-compat.js"></script>
+        <!-- Photo entry -->
+        <div>
+          <div class="sectionTitle">Add Photo</div>
 
+          <label>Photo (camera or library)</label>
+          <input id="photoInput" type="file" accept="image/*" capture="environment">
+
+          <div class="row">
+            <div style="flex:1">
+              <label>Radius (meters)</label>
+              <input id="radius" type="number" inputmode="numeric" min="5" max="1000" value="50">
+            </div>
+          </div>
+
+          <label>Caption / Notes (read by TTS)</label>
+          <textarea id="caption" placeholder="What should crews observe or do here?"></textarea>
+
+          <div class="row" style="margin-top:8px">
+            <button id="savePhoto" class="btn">Save Photo</button>
+            <div class="tag">GPS is captured automatically on save.</div>
+          </div>
+        </div>
+
+        <div class="hr"></div>
+        <div class="sectionTitle">Photos in this scenario</div>
+        <div id="thumbs" class="thumbs"></div>
+      </div>
+    </section>
+
+    <!-- Edit Scenario -->
+    <section class="card hidden" id="editPanel">
+      <div class="card-inner">
+        <div class="sectionTitle">Edit Existing Scenario</div>
+        <div class="row" style="justify-content:space-between">
+          <div class="pill" id="editStatus">Loading…</div>
+          <button id="backFromEdit" class="btn secondary">Back</button>
+        </div>
+        <div id="scenarioList" style="margin-top:10px"></div>
+      </div>
+    </section>
+  </main>
+
+  <!-- Firebase + Logic + TTS Queue -->
   <script type="module">
-  (async () => {
-    const $ = id => document.getElementById(id);
-    const viewer=$('viewer'), backBtn=$('backBtn');
-    const select=$('scenarioSelect'), status=$('status'), debug=$('debug'), connStatus=$('connStatus');
-    const dispatchBlock=$('dispatchBlock'), geoStatus=$('geoStatus');
-    const result=$('result'), stopTitle=$('stopTitle'), photo=$('photo'), caption=$('caption'), detail=$('detail');
-    const scTitle=$('scTitle');
-    const startBtn=$('startScenario'), muteToggle=$('muteToggle'), vol=$('vol'), runTimer=$('runTimer');
-    const log = (m)=>{ console.log('[viewer]', m); debug.textContent=String(m); };
+    // ===================== Firebase (same logic) =====================
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-app.js";
+    import { getDatabase, ref, push, set, get, update } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-database.js";
 
-    // ---------- Helpers (kept from your file) ----------
-    const toRad = x => x*Math.PI/180;
-    const hav=(a,b,c,d)=>{ const R=6371000, dA=toRad(c-a), dB=toRad(d-b);
-      return 2*R*Math.asin(Math.sqrt(Math.sin(dA/2)**2 + Math.cos(toRad(a))*Math.cos(toRad(c))*Math.sin(dB/2)**2)); };
-    const num=v=>(v===0||v===null)?v:parseFloat(v);
-
-    function normalizeStops(stopsLike){
-      if(!stopsLike) return [];
-      let arr = Array.isArray(stopsLike) ? stopsLike : Object.values(stopsLike);
-      return arr.map(s=>{
-        const lat = num(s.lat ?? s.latitude ?? s.latDeg);
-        const lng = num(s.lng ?? s.lon ?? s.long ?? s.longitude ?? s.lngDeg);
-        const radiusMeters = num(s.radiusMeters ?? s.radius ?? s.r) || 40;
-        const title = s.title || s.name || '';
-        const caption = s.caption || s.text || s.note || '';
-        const image = s.imageData || s.imageURL || s.imageUrl || s.url || s.photoURL || s.photo || s.img || '';
-        return { ...s, lat, lng, radiusMeters, title, caption, image };
-      }).filter(s => typeof s.lat === 'number' && typeof s.lng === 'number');
-    }  /* cites your original normalize + image mapping. :contentReference[oaicite:1]{index=1} */
-
-    function setImage(img, stop){
-      const src = stop.image || '';
-      img.src = src || "data:image/svg+xml;utf8,"+encodeURIComponent(
-        "<svg xmlns='http://www.w3.org/2000/svg' width='1200' height='720'><rect width='100%' height='100%' fill='#000'/><text x='50%' y='50%' fill='#9ecbd6' font-size='24' text-anchor='middle'>No image</text></svg>"
-      );
-      img.onerror=()=>{ img.src="data:image/svg+xml;utf8,"+encodeURIComponent(
-        "<svg xmlns='http://www.w3.org/2000/svg' width='1200' height='720'><rect width='100%' height='100%' fill='#000'/><text x='50%' y='50%' fill='#9ecbd6' font-size='24' text-anchor='middle'>Image failed to load</text></svg>"
-      ); };
-    }
-
-    // ---------- Firebase (modular first; compat fallback) ----------
     const firebaseConfig = {
       apiKey:"AIzaSyDM6DpRSeZueVKRpbyJyDmhf8WY66KyCDk",
       authDomain:"dailyquiz-d5279.firebaseapp.com",
@@ -168,184 +214,306 @@
       appId:"1:94577748034:web:c032d3a1d72db1313de5db",
       measurementId:"G-19DVN7NNH7"
     };
+    const app = initializeApp(firebaseConfig);
+    const db  = getDatabase(app);
 
-    let mode='modular', app, db, refFn, onValueFn, getFn;
-    try{
-      const { initializeApp } = await import('https://www.gstatic.com/firebasejs/10.12.4/firebase-app.js');
-      const { getDatabase, ref, onValue, get } = await import('https://www.gstatic.com/firebasejs/10.12.4/firebase-database.js');
-      app = initializeApp(firebaseConfig); db = getDatabase(app); refFn = ref; onValueFn = onValue; getFn = get;
-    }catch(e){
-      mode='compat';
-      app = window.firebase.initializeApp(firebaseConfig);
-      db = window.firebase.database();
-      refFn = (dbRefPath)=>db.ref(dbRefPath);
-      onValueFn = (r, cb, err)=>r.on('value', s=>cb(s), err);
-      getFn = (r)=>r.get(); // compat DataSnapshot via once/get
-    }
-    log('Firebase mode: ' + mode);
+    // ===================== DOM =====================
+    const landing = document.getElementById('landing');
+    const goCreate = document.getElementById('goCreate');
+    const goEdit = document.getElementById('goEdit');
 
-    // Connection indicator (compat + modular)
-    try{
-      const infoRef = (mode==='modular') ? refFn(db, '.info/connected') : refFn('.info/connected');
-      onValueFn(infoRef, snap=>{
-        const ok = snap.val() === true;
-        connStatus.textContent = ok ? 'Connected' : 'Offline';
-        connStatus.style.color = ok ? '#89ffb2' : '#ffdede';
+    const createPanel = document.getElementById('createPanel');
+    const createStatus = document.getElementById('createStatus');
+    const finalizeScenario = document.getElementById('finalizeScenario');
+
+    const scenarioMeta = document.getElementById('scenarioMeta');
+    const scenarioName = document.getElementById('scenarioName');
+    const dispatchInfo = document.getElementById('dispatchInfo');
+
+    const photoInput = document.getElementById('photoInput');
+    const radius = document.getElementById('radius');
+    const caption = document.getElementById('caption');
+    const savePhoto = document.getElementById('savePhoto');
+    const thumbs = document.getElementById('thumbs');
+
+    const editPanel = document.getElementById('editPanel');
+    const editStatus = document.getElementById('editStatus');
+    const scenarioList = document.getElementById('scenarioList');
+    const backFromEdit = document.getElementById('backFromEdit');
+
+    const startScenarioBtn = document.getElementById('startScenarioBtn');
+
+    // ===================== State =====================
+    let currentScenarioId = null;
+    let localStops = []; // {caption, lat, lng, radiusMeters, imageData}
+
+    // ===================== Helpers =====================
+    const uiShow = el => el.classList.remove('hidden');
+    const uiHide = el => el.classList.add('hidden');
+    const toast = (el, msg) => el.textContent = msg;
+
+    function readFileAsDataURL(file){
+      return new Promise((res, rej)=>{
+        const r=new FileReader();
+        r.onload=()=>res(r.result);
+        r.onerror=rej;
+        r.readAsDataURL(file);
       });
-    }catch{}
-
-    // ---------- Scenario loading (your dual path + 1st-get + REST safety) ----------
-    let scenarios=[], populated=false;
-    function mapSnapshot(val){
-      const obj = val || {};
-      return Object.entries(obj).map(([id, s])=>({ id, ...(s||{}), stops: normalizeStops(s?.stops) }));
     }
-    function populateDropdown(list){
-      select.innerHTML = '<option value="">Select a scenario…</option>';
-      list.forEach(sc=>{
-        const o=document.createElement('option');
-        o.value=sc.id;
-        o.textContent=sc.title || sc.name || sc.notes || '(untitled)';
-        select.appendChild(o);
+    function getGPS(){
+      return new Promise((resolve, reject)=>{
+        navigator.geolocation.getCurrentPosition(
+          pos => resolve({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
+          err => reject(err),
+          { enableHighAccuracy:true, timeout:15000, maximumAge:0 }
+        );
       });
-      status.textContent = list.length ? `${list.length} scenario(s) found` : 'No scenarios yet.';
-      populated = list.length>0;
+    }
+    function renderThumbs(){
+      thumbs.innerHTML='';
+      localStops.forEach((s,i)=>{
+        const img=document.createElement('img');
+        img.className='thumb';
+        img.title=s.title || `Stop ${i+1}`;
+        img.src=s.imageData || s.imageURL || '';
+        img.onerror = ()=>{ img.style.opacity=.7; img.title='Image failed to load'; };
+        thumbs.appendChild(img);
+      });
     }
 
-    // 1) Prefer geophoto/scenarios; 2) fallback to scenarios — same as your file. :contentReference[oaicite:2]{index=2}
-    try{
-      const a = (mode==='modular') ? refFn(db,'geophoto/scenarios') : refFn('geophoto/scenarios');
-      onValueFn(a, snap=>{
-        const list=mapSnapshot(snap.val());
-        if(list.length){ scenarios=list; populateDropdown(scenarios); log('SDK: geophoto/scenarios '+list.length); }
-      }, err=>log('SDK geophoto error: '+(err?.message||err)));
-    }catch(e){ log('attach geophoto failed: '+e.message); }
-    try{
-      const b = (mode==='modular') ? refFn(db,'scenarios') : refFn('scenarios');
-      onValueFn(b, snap=>{
-        const list=mapSnapshot(snap.val());
-        if(!scenarios.length && list.length){ scenarios=list; populateDropdown(scenarios); log('SDK: scenarios '+list.length); }
-      }, err=>log('SDK scenarios error: '+(err?.message||err)));
-    }catch(e){ log('attach scenarios failed: '+e.message); }
-
-    // 3) One-time GET backups (handles listeners that don't fire)
-    setTimeout(async ()=>{
-      if(!populated){
-        try{ const s1 = await getFn((mode==='modular') ? refFn(db,'geophoto/scenarios') : refFn('geophoto/scenarios'));
-             const list=mapSnapshot(s1?.val?.() ?? s1.val()); if(list.length){ scenarios=list; populateDropdown(list); log('GET geophoto '+list.length); } }
-        catch(e){ log('GET geophoto error: '+e.message); }
-      }
-      if(!populated){
-        try{ const s2 = await getFn((mode==='modular') ? refFn(db,'scenarios') : refFn('scenarios'));
-             const list=mapSnapshot(s2?.val?.() ?? s2.val()); if(list.length){ scenarios=list; populateDropdown(list); log('GET scenarios '+list.length); } }
-        catch(e){ log('GET scenarios error: '+e.message); }
-      }
-      // 4) REST fetch as last resort (works with your open rules)
-      if(!populated){
-        try{
-          const url = 'https://dailyquiz-d5279-default-rtdb.firebaseio.com/scenarios.json';
-          const r = await fetch(url); if(!r.ok) throw new Error('HTTP '+r.status);
-          const json = await r.json(); const list = mapSnapshot(json);
-          if(list.length){ scenarios=list; populateDropdown(list); log('REST scenarios '+list.length); }
-        }catch(e){ log('REST error: '+e.message); }
-      }
-      if(!populated){ status.textContent='No scenarios found.'; }
-    }, 1200);
-
-    // ---------- Geofence + display (unchanged) ----------
-    function within(hitDist, stopRadius, accuracy){
-      const r = (Number(stopRadius)||0) + Math.max(Number(accuracy)||0, 10);
-      return hitDist <= r;
-    }
-    function findHit(stops, la, ln, acc){
-      let best=null; (stops||[]).forEach((s,i)=>{
-        const d=hav(la,ln,Number(s.lat),Number(s.lng));
-        if(within(d, s.radiusMeters, acc)){ if(!best || d<best.dist) best={s,index:i,dist:d}; }
-      }); return best;
-    }
-    function showDispatchIntro(sc){
-      const txt=(sc.dispatch||sc.notes||'').trim();
-      dispatchBlock.textContent = txt ? `Dispatch: ${txt}` : 'Dispatch: (none)';
-      setTimeout(()=>say(txt || `${sc.title || 'scenario'} started.`),120);
-    }
-
-    let current=null, watchId=null, lastStopIndex=-1;
-    function openScenarioById(id){
-      const sc=scenarios.find(s=>s.id===id);
-      if(!sc){ status.textContent='Scenario not found.'; return; }
-      current=sc;
-      viewer.style.display=''; scTitle.textContent=sc.title||sc.name||sc.notes||'(scenario)';
-
-      result.style.display='none'; stopTitle.textContent=''; caption.textContent=''; detail.textContent='';
-      lastStopIndex=-1;
-
-      showDispatchIntro(sc);
-
-      if(watchId) navigator.geolocation.clearWatch(watchId);
-      geoStatus.textContent='Watching your location…';
-      try{
-        watchId=navigator.geolocation.watchPosition(p=>{
-          const { latitude:la, longitude:ln, accuracy:acc }=p.coords;
-          geoStatus.textContent=`Lat ${la.toFixed(5)}, Lng ${ln.toFixed(5)} (±${Math.round(acc)}m)`;
-          const hit=findHit(normalizeStops(sc.stops), la, ln, acc);
-          if(hit && hit.index!==lastStopIndex){
-            lastStopIndex=hit.index;
-            result.style.display='';
-            stopTitle.textContent=hit.s.title||'Stop';
-            setImage(photo, hit.s);
-            caption.textContent=hit.s.caption||'';
-            detail.textContent=`Distance: ${Math.round(hit.dist)} m (radius ${hit.s.radiusMeters} m)`;
-            beep(); setTimeout(()=>say(`${hit.s.title?hit.s.title+'. ':''}${hit.s.caption||''}`),120);
-            viewer.scrollIntoView({behavior:'smooth', block:'start'});
-          }
-        }, err=>{ geoStatus.textContent='Location error: '+err.message; }, { enableHighAccuracy:true, maximumAge:0, timeout:20000 });
-      }catch(e){ geoStatus.textContent='Location error: '+e.message; }
-    }
-
-    // ---------- Audio / TTS ----------
-    let audioEnabled=false, muted=false, volume=1.0, audioCtx=null, wakeLock=null, wakeFallbackInterval=null, runInterval=null, startMs=0;
-    const synth=window.speechSynthesis; let speaking=false; const q=[];
-    function say(text){ if(!audioEnabled || muted || !text) return; q.push(text); if(!speaking) playNext(); }
-    function playNext(){ if(!audioEnabled || muted || !q.length){ speaking=false; return; }
-      speaking=true; const u=new SpeechSynthesisUtterance(q.shift()); u.volume=volume;
-      u.onend=()=>{ speaking=false; playNext(); }; u.onerror=()=>{ speaking=false; };
-      try{ synth.speak(u); }catch(e){ speaking=false; } }
-    function formatTime(ms){ const s=Math.floor(ms/1000), m=Math.floor(s/60), sec=s%60; return String(m).padStart(2,'0')+':'+String(sec).padStart(2,'0'); }
-    function startTimer(){ startMs=Date.now(); clearInterval(runInterval); runInterval=setInterval(()=>{ runTimer.textContent=formatTime(Date.now()-startMs); },500); }
-    function stopTimer(){ clearInterval(runInterval); runInterval=null; runTimer.textContent='00:00'; }
-    async function lockWake(){ try{
-      if('wakeLock' in navigator){ wakeLock=await navigator.wakeLock.request('screen'); wakeLock.addEventListener('release',()=>{}); }
-      else { if(!audioCtx) audioCtx=new (window.AudioContext||window.webkitAudioContext)();
-             wakeFallbackInterval=setInterval(()=>{ try{ const src=audioCtx.createBufferSource(); src.buffer=audioCtx.createBuffer(1,1,audioCtx.sampleRate); src.connect(audioCtx.destination); src.start(0);}catch(e){} },30000); }
-    }catch{} }
-    function releaseWake(){ try{ if(wakeLock){ wakeLock.release(); wakeLock=null; } }catch{} if(wakeFallbackInterval){ clearInterval(wakeFallbackInterval); wakeFallbackInterval=null; } }
-    function beep(){ if(!audioEnabled || muted) return; try{
-      if(!audioCtx) audioCtx=new (window.AudioContext||window.webkitAudioContext)(); const o=audioCtx.createOscillator(), g=audioCtx.createGain();
-      o.type='sine'; o.frequency.value=880; g.gain.value=0.001; o.connect(g).connect(audioCtx.destination);
-      const now=audioCtx.currentTime; g.gain.setValueAtTime(0.0001, now); g.gain.linearRampToValueAtTime(0.2*volume, now+0.02); g.gain.exponentialRampToValueAtTime(0.0001, now+0.25); o.start(now); o.stop(now+0.3);
-    }catch{} }
-
-    muteToggle.onclick=()=>{ muted=!muted; muteToggle.textContent=muted?'Unmute':'Mute'; };
-    vol.oninput=e=>{ volume=parseFloat(e.target.value||'1')||1; };
-
-    startBtn.onclick=async()=>{
-      try{
-        audioEnabled=true;
-        if(!audioCtx) audioCtx=new (window.AudioContext||window.webkitAudioContext)();
-        await audioCtx.resume(); await lockWake(); startTimer(); beep();
-        startBtn.textContent='Scenario Running'; startBtn.disabled=true;
-      }catch(e){ alert('Could not enable audio: '+e.message); return; }
-      const id=select.value;
-      if(!id){ status.textContent='Choose a scenario first.'; startBtn.disabled=false; startBtn.textContent='Start Scenario'; audioEnabled=false; releaseWake(); stopTimer(); return; }
-      openScenarioById(id);
+    // ===================== Navigation =====================
+    goCreate.onclick = ()=>{
+      uiHide(landing); uiShow(createPanel);
+      createStatus.textContent='New scenario';
+      currentScenarioId=null; localStops=[];
+      scenarioName.value=''; dispatchInfo.value='';
+      photoInput.value=''; radius.value=50; caption.value='';
+      uiShow(scenarioMeta);
     };
-    backBtn.onclick=()=>{ viewer.style.display='none'; try{ navigator.geolocation.clearWatch(watchId); }catch{} status.textContent='Choose a scenario and press Start Scenario.'; window.speechSynthesis.cancel(); startBtn.disabled=false; startBtn.textContent='Start Scenario'; audioEnabled=false; releaseWake(); stopTimer(); };
+    goEdit.onclick = ()=>{ uiHide(landing); uiShow(editPanel); loadForEdit(); };
+    backFromEdit.onclick = ()=>{
+      uiHide(editPanel); uiShow(landing);
+      scenarioList.innerHTML=''; editStatus.textContent='Ready';
+    };
 
-    (function(){ const pre=new URLSearchParams(location.search).get('id'); if(!pre) return; const iv=setInterval(()=>{ if(select.options.length>1){ clearInterval(iv); select.value=pre; } },200); })();
-    document.getElementById('year').textContent = new Date().getFullYear();
-    window.addEventListener('error', e => log('Error: ' + (e.message||e)));
-    window.addEventListener('unhandledrejection', e => log('Promise error: ' + (e.reason && e.reason.message ? e.reason.message : e.reason)));
-  })();
+    // ===================== Create flow =====================
+    savePhoto.onclick = async ()=>{
+      try{
+        const file = photoInput.files?.[0];
+        if(!file){ alert('Please choose a photo first.'); return; }
+
+        if(!currentScenarioId){
+          const name=(scenarioName.value||'').trim();
+          if(!name){ alert('Please enter a Scenario Name.'); return; }
+          const dispatch=(dispatchInfo.value||'').trim();
+          const newRef = push(ref(db,'scenarios'));
+          currentScenarioId=newRef.key;
+          await set(newRef,{
+            id:currentScenarioId, title:name, dispatch:dispatch,
+            createdAt:Date.now(), active:true, stops:[]
+          });
+          uiHide(scenarioMeta);
+        }
+
+        const dataURL = await readFileAsDataURL(file);
+        const gps = await getGPS();
+        const r = Math.max(5, Math.min(1000, Math.round(parseInt(radius.value||'50',10))));
+        const stop = {
+          title: '',
+          caption: (caption.value||'').trim(),
+          lat: gps.lat, lng: gps.lng,
+          radiusMeters: r,
+          imageData: dataURL
+        };
+
+        localStops.push(stop);
+        await set(ref(db,'scenarios/'+currentScenarioId+'/stops'), localStops);
+
+        photoInput.value=''; caption.value=''; radius.value=50;
+        renderThumbs();
+        toast(createStatus, `Saved photo #${localStops.length}.`);
+      }catch(e){
+        alert('Save failed: ' + (e?.message||e));
+      }
+    };
+
+    finalizeScenario.onclick = async ()=>{
+      try{
+        if(!currentScenarioId){
+          const name=(scenarioName.value||'').trim();
+          if(!name){ alert('Enter Scenario Name, then Save a Photo or press Save Scenario again to create empty.'); return; }
+          const dispatch=(dispatchInfo.value||'').trim();
+          const newRef=push(ref(db,'scenarios'));
+          currentScenarioId=newRef.key;
+          await set(newRef,{
+            id:currentScenarioId, title:name, dispatch:dispatch,
+            createdAt:Date.now(), active:true, stops:[]
+          });
+          uiHide(scenarioMeta);
+        }
+        toast(createStatus,'Scenario saved.');
+        currentScenarioId=null; localStops=[];
+        renderThumbs();
+        scenarioName.value=''; dispatchInfo.value='';
+        photoInput.value=''; caption.value=''; radius.value=50;
+        uiShow(scenarioMeta);
+      }catch(e){
+        alert('Save Scenario failed: ' + (e?.message||e));
+      }
+    };
+
+    // ===================== Edit view =====================
+    async function loadForEdit(){
+      try{
+        editStatus.textContent='Loading scenarios…';
+        const snap=await get(ref(db,'scenarios'));
+        if(!snap.exists()){ editStatus.textContent='No scenarios found.'; scenarioList.innerHTML=''; return; }
+        const obj=snap.val()||{};
+        const arr=Object.entries(obj).map(([id,s])=>({id,...s}))
+          .sort((a,b)=>(b.createdAt||0)-(a.createdAt||0));
+        editStatus.textContent=`${arr.length} scenario(s)`;
+        scenarioList.innerHTML='';
+
+        arr.forEach(sc=>{
+          const row=document.createElement('div');
+          row.className='listItem';
+          const left=document.createElement('div');
+          left.innerHTML = `<div style="font-weight:800">${sc.title||'(untitled)'}</div>
+                            <div class="tag">Stops: ${Array.isArray(sc.stops)? sc.stops.length : 0} • ${new Date(sc.createdAt||Date.now()).toLocaleString()}</div>`;
+          const right=document.createElement('div');
+          const openBtn=document.createElement('button');
+          openBtn.className='btn'; openBtn.textContent='Open in Creator';
+          openBtn.onclick=()=>{
+            landing.classList.add('hidden');
+            editPanel.classList.add('hidden');
+            createPanel.classList.remove('hidden');
+            currentScenarioId=sc.id;
+            localStops=Array.isArray(sc.stops)? sc.stops : [];
+            renderThumbs();
+            uiHide(scenarioMeta);
+            toast(createStatus, `Editing: ${sc.title||('(untitled)')}`);
+            dispatchInfo.value = sc.dispatch || '';
+            scenarioName.value = sc.title || '';
+          };
+          const toggleBtn=document.createElement('button');
+          toggleBtn.className='btn secondary'; toggleBtn.style.marginLeft='8px';
+          toggleBtn.textContent=sc.active ? 'Deactivate' : 'Activate';
+          toggleBtn.onclick=()=>update(ref(db,'scenarios/'+sc.id), { active: !sc.active });
+          const delBtn=document.createElement('button');
+          delBtn.className='btn danger'; delBtn.style.marginLeft='8px';
+          delBtn.textContent='Delete';
+          delBtn.onclick=async()=>{
+            if(confirm('Delete this scenario? This cannot be undone.')){
+              await set(ref(db,'scenarios/'+sc.id), null);
+              row.remove();
+            }
+          };
+          right.appendChild(openBtn); right.appendChild(toggleBtn); right.appendChild(delBtn);
+          row.appendChild(left); row.appendChild(right);
+          scenarioList.appendChild(row);
+        });
+      }catch(e){
+        editStatus.textContent='Error: '+(e?.message||e);
+      }
+    }
+
+    // ===================== TTS Queue (ZERO BEEPS / iOS-SAFE) =====================
+    let sharedAudio = null;
+    let audioUnlocked = false;
+    let playing = false;
+    const queue = [];
+
+    // True-silent 16-bit PCM WAV (0.25s @ 44100Hz, mono). No decoder clicks.
+    const SILENT_WAV =
+      "data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAESsAACJWAAACABAAAAABAACAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA=";
+
+    async function primeAudio() {
+      if (audioUnlocked) return true;
+
+      // Create shared audio element once
+      sharedAudio = new Audio();
+      sharedAudio.setAttribute('playsinline','');
+      sharedAudio.preload = 'auto';
+      sharedAudio.volume = 0;           // FORCE MUTED during unlock to avoid any click
+      sharedAudio.src = SILENT_WAV;     // guaranteed silent
+
+      sharedAudio.onended = () => {     // after any clip finishes, advance the queue
+        playing = false;
+        playNext();
+      };
+
+      try {
+        // MUST be called directly by the Start button tap
+        await sharedAudio.play();       // plays 0.25s of silence, at volume 0
+        sharedAudio.pause();            // immediately stop (no audible output anyway)
+        sharedAudio.currentTime = 0;
+        sharedAudio.volume = 1;         // restore volume for real TTS clips
+        audioUnlocked = true;
+        return true;
+      } catch (e) {
+        console.warn('Audio unlock failed:', e);
+        return false;
+      }
+    }
+
+    // Replace with your backend that returns an MP3 or M4A Blob (OpenAI TTS).
+    async function fetchOpenAITTS(text){
+      // Example:
+      // const resp = await fetch('/api/tts', {
+      //   method:'POST',
+      //   headers:{'Content-Type':'application/json'},
+      //   body: JSON.stringify({ text })
+      // });
+      // if (!resp.ok) throw new Error('TTS HTTP ' + resp.status);
+      // const blob = await resp.blob(); // audio/mpeg or audio/mp4 (aac)
+      // return URL.createObjectURL(blob);
+
+      // TEMP placeholder: still silence for safety until your backend is wired.
+      return SILENT_WAV;
+    }
+
+    function enqueueUrl(url){
+      queue.push(url);
+      if (!playing) playNext();
+    }
+
+    function playNext(){
+      if (!audioUnlocked || playing || queue.length === 0) return;
+      const url = queue.shift();
+      sharedAudio.src = url;
+      playing = true;
+      sharedAudio.play().catch(err=>{
+        console.warn('Playback error, skipping clip:', err);
+        playing = false;
+        playNext();
+      });
+    }
+
+    async function enqueueText(text){
+      const clean = (text||'').trim();
+      if (!clean) return;
+      const url = await fetchOpenAITTS(clean);
+      enqueueUrl(url);
+    }
+
+    async function startScenarioAndSpeakAll(){
+      const ok = await primeAudio();
+      if (!ok){
+        alert('Tap again to enable audio.');
+        return;
+      }
+      // Speak dispatch first
+      const dispatch = (dispatchInfo.value||'').trim();
+      if (dispatch) await enqueueText(dispatch);
+      // Then each caption
+      for (const stop of localStops){
+        if (stop && stop.caption) await enqueueText(stop.caption);
+      }
+      toast(createStatus, 'Voice: reading dispatch and all captions…');
+    }
+
+    startScenarioBtn.addEventListener('click', startScenarioAndSpeakAll);
+
   </script>
 </body>
 </html>
