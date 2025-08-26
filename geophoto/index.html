@@ -6,35 +6,34 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <meta name="theme-color" content="#0b0f14" />
   <style>
-    html,body{
-      margin:0;padding:0;height:100%;
-      background:#0b0f14;color:#eaf2ff;
-      font-family:system-ui,-apple-system,Segoe UI,Roboto,Inter,Arial,sans-serif;
-      overflow:hidden
-    }
+    html,body{margin:0;padding:0;height:100%;background:#0b0f14;color:#eaf2ff;font-family:system-ui,-apple-system,Segoe UI,Roboto,Inter,Arial,sans-serif;overflow:hidden}
     .topbar{position:sticky;top:0;z-index:50;background:rgba(12,15,22,.78);backdrop-filter:blur(6px);border-bottom:1px solid rgba(255,255,255,.07)}
-    .topnav{max-width:1100px;margin:0 auto;padding:10px 20px;display:flex;align-items:center;gap:14px}
+    .topnav{max-width:1100px;margin:0 auto;padding:10px 20px;display:flex;align-items:center;gap:14px;justify-content:space-between}
     .brandmini{display:flex;align-items:center;gap:12px;font-weight:800}
     .logo img{width:40px;height:40px;border-radius:10px;box-shadow:0 12px 34px rgba(0,0,0,.38);background:#0f1624}
-    /* App layout */
-    #app{position:fixed;top:60px;left:0;right:0;bottom:0;display:grid;grid-template-rows:auto 1fr auto;gap:10px;padding:10px}
-    #scenarioRow{display:flex;gap:10px;align-items:center}
-    select{flex:1;min-width:200px;padding:12px;border-radius:12px;border:1px solid rgba(255,255,255,.14);background:#0f1624;color:#eaf2ff;outline:none;font-size:16px}
-    #note{color:#8ea0b3;font-size:13px}
-    /* Full-screen viewer */
-    #viewerWrap{position:relative;width:100%;height:100%;border-radius:16px;border:1px solid rgba(255,255,255,.12);background:#000;overflow:hidden}
-    #photo{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;background:#000}
+    .header-actions{display:flex;gap:10px;align-items:center}
+    .linkbtn{appearance:none;border:1px solid rgba(255,255,255,.18);border-radius:10px;padding:8px 12px;background:transparent;color:#eaf2ff;cursor:pointer;font-weight:700}
+
+    /* Viewer area */
+    #viewerWrap{position:fixed;top:60px;left:0;width:100%;height:calc(100% - 120px); /* leave room for controls */ display:flex;justify-content:center;align-items:center}
+    #photo{width:100%;height:100%;object-fit:cover;background:#000}
     #caption{
-      position:absolute;left:0;right:0;bottom:0;
+      position:absolute;left:0;right:0;bottom:60px;
       text-align:center;font-size:18px;padding:12px 16px;
       background:linear-gradient(0deg,rgba(0,0,0,.65),transparent);
       display:none
     }
-    /* Scenario controls (only place with buttons) */
-    #runRow{display:flex;gap:10px;align-items:center;justify-content:flex-start}
+
+    /* Controls (bottom bar) */
+    #controlsBar{position:fixed;left:0;right:0;bottom:0;display:flex;gap:10px;align-items:center;justify-content:center;padding:10px;background:rgba(12,15,22,.8);backdrop-filter:blur(6px);border-top:1px solid rgba(255,255,255,.07)}
     .btn{appearance:none;border:0;border-radius:12px;padding:12px 16px;font-weight:800;cursor:pointer;background:linear-gradient(180deg,#54a6ff,#0a84ff);color:#03131b;box-shadow:0 12px 34px rgba(0,0,0,.38)}
     .btn.secondary{background:transparent;color:#eaf2ff;border:1px solid rgba(255,255,255,.18)}
     .btn[disabled]{opacity:.6;cursor:not-allowed}
+    #note{position:fixed;left:12px;bottom:58px;color:#8ea0b3;font-size:13px}
+
+    @media (max-width:640px){
+      #caption{font-size:15px}
+    }
   </style>
 </head>
 <body>
@@ -44,28 +43,24 @@
         <div class="logo"><img src="/assets/logo/fire-ops-sim.png" alt="FireOps SIM"></div>
         <div>FireOps SIM</div>
       </div>
+      <div class="header-actions">
+        <!-- Back button in upper-right -->
+        <button id="backBtn" class="linkbtn" type="button">Back</button>
+      </div>
     </div>
   </div>
 
-  <div id="app">
-    <!-- Scenario select & hint -->
-    <div id="scenarioRow">
-      <select id="scenarioSelect" aria-label="Choose a scenario"><option value="">Loading scenarios…</option></select>
-      <span id="note">iPhone: use “Read Text” to speak. Android/Desktop auto-read; button repeats.</span>
-    </div>
-
-    <!-- Viewer (no buttons overlay here) -->
-    <div id="viewerWrap" aria-live="polite">
-      <img id="photo" alt="Scenario Photo" decoding="async" fetchpriority="high">
-      <div id="caption"></div>
-    </div>
-
-    <!-- Scenario Controls (only place with buttons) -->
-    <div id="runRow">
-      <button id="startStop" class="btn">Start</button>
-      <button id="readText" class="btn secondary">🔊 Read Text</button>
-    </div>
+  <div id="viewerWrap" aria-live="polite">
+    <img id="photo" alt="Scenario Photo" decoding="async" fetchpriority="high">
+    <div id="caption"></div>
   </div>
+
+  <!-- Scenario Controls: Start/Stop + Read Text -->
+  <div id="controlsBar">
+    <button id="startBtn" class="btn" type="button">Start</button>
+    <button id="readBtn" class="btn secondary" type="button">🔊 Read Text</button>
+  </div>
+  <div id="note">iPhone: “Read Text” triggers speech. Android/Desktop auto-read; button repeats.</div>
 
   <!-- Firebase (compat) -->
   <script src="https://www.gstatic.com/firebasejs/10.12.4/firebase-app-compat.js"></script>
@@ -74,21 +69,27 @@
   <script>
   (function(){
     const $ = id => document.getElementById(id);
-
-    const select = $('scenarioSelect');
     const photo = $('photo');
     const caption = $('caption');
-    const startStop = $('startStop');
-    const readText = $('readText');
+    const startBtn = $('startBtn');
+    const readBtn = $('readBtn');
+    const backBtn = $('backBtn');
+
+    // Back button to main page
+    backBtn.addEventListener('click', ()=>{
+      // try history back; if not available, go to root
+      if (document.referrer) history.back();
+      else window.location.href = '/';
+    });
 
     // Device / TTS policy
     const isIOS = /iP(hone|ad|od)/i.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
     const synthOK = ('speechSynthesis' in window) && ('SpeechSynthesisUtterance' in window);
-    const autoSpeak = !isIOS && synthOK;   // Android/Desktop autoplay; iOS requires button
+    const autoSpeak = !isIOS && synthOK;   // Android/Desktop autoplay; iOS needs button/gesture
     let lastSpeech = '';
 
     // Wake Lock (prevent sleep)
-    let wakeLock = null, keepAliveVideo=null;
+    let wakeLock = null, keepAliveVideo = null;
     async function acquireWakeLock(){
       try{
         if ('wakeLock' in navigator) {
@@ -101,8 +102,8 @@
       if (!keepAliveVideo) {
         keepAliveVideo = document.createElement('video');
         keepAliveVideo.setAttribute('playsinline','');
-        keepAliveVideo.muted=true; keepAliveVideo.loop=true;
-        keepAliveVideo.src='data:video/mp4;base64,AAAAIGZ0eXBpc29tAAAAAGlzb21pc28yYXZjMW1wNDEAAAAIZnJlZQA=';
+        keepAliveVideo.muted = true; keepAliveVideo.loop = true;
+        keepAliveVideo.src = 'data:video/mp4;base64,AAAAIGZ0eXBpc29tAAAAAGlzb21pc28yYXZjMW1wNDEAAAAIZnJlZQA=';
         keepAliveVideo.style.position='fixed'; keepAliveVideo.style.width='1px'; keepAliveVideo.style.height='1px';
         keepAliveVideo.style.opacity='0'; keepAliveVideo.style.pointerEvents='none';
         document.body.appendChild(keepAliveVideo);
@@ -115,9 +116,16 @@
     }
 
     // Firebase
-    const firebaseConfig={apiKey:"AIzaSyDM6DpRSeZueVKRpbyJyDmhf8WY66KyCDk",authDomain:"dailyquiz-d5279.firebaseapp.com",databaseURL:"https://dailyquiz-d5279-default-rtdb.firebaseio.com",projectId:"dailyquiz-d5279",appId:"1:94577748034:web:c032d3a1d72db1313de5db",measurementId:"G-19DVN7NNH7"};
+    const firebaseConfig = {
+      apiKey:"AIzaSyDM6DpRSeZueVKRpbyJyDmhf8WY66KyCDk",
+      authDomain:"dailyquiz-d5279.firebaseapp.com",
+      databaseURL:"https://dailyquiz-d5279-default-rtdb.firebaseio.com",
+      projectId:"dailyquiz-d5279",
+      appId:"1:94577748034:web:c032d3a1d72db1313de5db",
+      measurementId:"G-19DVN7NNH7"
+    };
     firebase.initializeApp(firebaseConfig);
-    const db=firebase.database();
+    const db = firebase.database();
 
     // Helpers: new imageData format → data URL
     function toDataURL(stored){
@@ -130,8 +138,23 @@
       return '';
     }
 
-    // Load scenarios (geophoto/scenarios or scenarios)
-    let scenarios=[], current=null, watchId=null, running=false, lastStopIndex=-1;
+    // Scenario loading by id (from ?id= or prompt)
+    let scenariosPath = null;
+    async function loadScenarioById(id){
+      // Try geophoto/scenarios first, then scenarios
+      const a = await fetch(`https://dailyquiz-d5279-default-rtdb.firebaseio.com/geophoto/scenarios/${id}.json`, {cache:'no-store'});
+      if (a.ok){
+        const sc = await a.json();
+        if (sc && sc.stops){ scenariosPath = 'geophoto/scenarios'; return sc; }
+      }
+      const b = await fetch(`https://dailyquiz-d5279-default-rtdb.firebaseio.com/scenarios/${id}.json`, {cache:'no-store'});
+      if (b.ok){
+        const sc2 = await b.json();
+        if (sc2 && sc2.stops){ scenariosPath = 'scenarios'; return sc2; }
+      }
+      return null;
+    }
+
     function normalizeStops(stopsLike){
       if(!stopsLike) return [];
       const arr = Array.isArray(stopsLike) ? stopsLike : Object.values(stopsLike);
@@ -147,29 +170,8 @@
         };
       }).filter(s => typeof s.lat==='number' && typeof s.lng==='number');
     }
-    function populateDropdown(list){
-      select.innerHTML='<option value="">Select a scenario…</option>';
-      list.sort((a,b)=> (b.createdAt||0)-(a.createdAt||0));
-      list.forEach(sc=>{
-        const o=document.createElement('option');
-        o.value=sc.id; o.textContent=sc.title || sc.name || '(untitled)';
-        select.appendChild(o);
-      });
-    }
-    function mapSnapshot(val){
-      const obj=val||{};
-      return Object.entries(obj).map(([id,s])=>({ id, ...(s||{}), stops: normalizeStops(s?.stops) }));
-    }
-    db.ref('geophoto/scenarios').on('value', snap=>{
-      const list=mapSnapshot(snap.val());
-      if(list.length){ scenarios=list; populateDropdown(list); }
-    });
-    db.ref('scenarios').on('value', snap=>{
-      const list=mapSnapshot(snap.val());
-      if(!scenarios.length && list.length){ scenarios=list; populateDropdown(list); }
-    });
 
-    // Geofence math (Haversine)
+    // Haversine
     const toRad = x => x*Math.PI/180;
     const havDistance=(aLat,aLng,bLat,bLng)=>{
       const R=6371000;
@@ -177,26 +179,22 @@
       const A=Math.sin(dLat/2)**2 + Math.cos(toRad(aLat))*Math.cos(toRad(bLat))*Math.sin(dLng/2)**2;
       return 2*R*Math.asin(Math.sqrt(A));
     };
-    // Tight radius: pad by accuracy but cap the pad to 20 m
+    // Tight padding: cap at 3 m
     function inside(stop, la, ln, acc){
       const d = havDistance(la, ln, stop.lat, stop.lng);
-      const pad = Math.min(Math.max(Number(acc)||0, 0), 20); // <= 20m accuracy padding
+      const pad = Math.min(Math.max(Number(acc)||0, 0), 3); // ≤ 3m padding
       return d <= (Number(stop.radiusMeters)||0) + pad;
     }
 
-    // Audio/Vibration cue on new photo
-    function buzz(){
-      if ('vibrate' in navigator) {
-        try { navigator.vibrate([220, 80, 140]); } catch {}
-      }
-    }
+    // Audio + vibration on new photo
+    function buzz(){ if ('vibrate' in navigator) { try { navigator.vibrate([220,80,140]); } catch {} } }
     let audioCtx=null;
     function beep(){
       try{
         audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
         const o = audioCtx.createOscillator();
         const g = audioCtx.createGain();
-        o.type='square'; o.frequency.value=880; // loudish beep
+        o.type='square'; o.frequency.value=880;
         g.gain.setValueAtTime(0.001, audioCtx.currentTime);
         g.gain.exponentialRampToValueAtTime(0.6, audioCtx.currentTime + 0.02);
         g.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.25);
@@ -206,10 +204,22 @@
     }
     function notifyNewPhoto(){ beep(); buzz(); }
 
-    // UI helpers
-    function clearPhoto(){
-      photo.src=''; caption.style.display='none'; caption.textContent='';
+    // TTS helpers
+    function speak(text){
+      if (!synthOK || !text) return;
+      try { speechSynthesis.cancel(); } catch {}
+      const u = new SpeechSynthesisUtterance(text);
+      u.rate = 1; u.pitch = 1; u.volume = 1;
+      try { speechSynthesis.speak(u); } catch {}
     }
+    function unlockTTS(){ // primes iOS on user gesture
+      if (!synthOK) return;
+      try { speechSynthesis.cancel(); const u = new SpeechSynthesisUtterance(' '); u.volume = 0; speechSynthesis.speak(u); } catch {}
+    }
+    readBtn.addEventListener('click', ()=>{ unlockTTS(); speak(lastSpeech || 'Ready.'); });
+
+    // UI helpers
+    function clearPhoto(){ photo.src=''; caption.style.display='none'; caption.textContent=''; }
     function showStop(stop){
       photo.src = stop.image || '';
       const cap = (stop.title ? stop.title + ' — ' : '') + (stop.caption || '');
@@ -220,29 +230,39 @@
       notifyNewPhoto();
     }
 
-    // TTS
-    function speak(text){
-      if (!synthOK || !text) return;
-      try { speechSynthesis.cancel(); } catch {}
-      const u = new SpeechSynthesisUtterance(text);
-      u.rate = 1; u.pitch = 1; u.volume = 1;
-      try { speechSynthesis.speak(u); } catch {}
-    }
-    function unlockTTS(){ // one-time gesture for iOS
-      if (!synthOK) return;
-      try { speechSynthesis.cancel(); const u = new SpeechSynthesisUtterance(' '); u.volume = 0; speechSynthesis.speak(u); } catch {}
-    }
-    readText.addEventListener('click', ()=>{ unlockTTS(); speak(lastSpeech || 'Ready.'); });
+    // Start/Stop logic
+    let running=false, current=null, watchId=null, lastStopIndex=-1, dispatchRead=false;
 
-    // Start/Stop
-    async function start(){
+    async function startScenario(){
       if (running) return;
-      const id = select.value;
-      if(!id){ alert('Choose a scenario first.'); return; }
+      // Determine scenario id
+      const urlId = new URLSearchParams(location.search).get('id');
+      let scenarioId = urlId || localStorage.getItem('lastScenarioId') || '';
+      if (!scenarioId){
+        scenarioId = prompt('Enter scenario id:') || '';
+      }
+      if (!scenarioId){ return; }
+      localStorage.setItem('lastScenarioId', scenarioId);
+
+      startBtn.textContent='Stop';
       running = true;
-      startStop.textContent = 'Stop';
       await acquireWakeLock();
-      current = scenarios.find(s=>s.id===id) || null;
+
+      const sc = await loadScenarioById(scenarioId);
+      if (!sc || !sc.stops){ alert('Scenario not found or has no stops.'); stopScenario(); return; }
+      current = {
+        id: scenarioId,
+        title: sc.title || sc.name || '',
+        dispatch: sc.dispatch || sc.notes || '',
+        stops: normalizeStops(sc.stops)
+      };
+
+      // 1) Read dispatch FIRST (iPhone & Android) — Start button is a user gesture so iOS allows it
+      const intro = (current.dispatch || current.title || '').toString().trim();
+      if (intro){ unlockTTS(); speak(intro); lastSpeech = intro; dispatchRead = true; }
+      else { dispatchRead = true; }
+
+      // 2) Begin geo watch; only show photos when inside geofence; pick closest if multiple
       clearPhoto(); lastStopIndex = -1;
 
       if (watchId) { try{ navigator.geolocation.clearWatch(watchId); }catch{} }
@@ -251,14 +271,12 @@
           if (!running || !current) return;
           const { latitude:la, longitude:ln, accuracy:acc } = p.coords;
 
-          // Gather all stops you're inside of, then choose the closest
           const hits = (current.stops||[])
             .map((st, i) => ({i, st, dist: havDistance(la, ln, st.lat, st.lng)}))
             .filter(obj => inside(obj.st, la, ln, acc))
             .sort((a,b)=> a.dist - b.dist);
 
           if (hits.length === 0) {
-            // outside all geofences -> clear display
             if (lastStopIndex !== -1) { clearPhoto(); lastStopIndex = -1; }
             return;
           }
@@ -271,18 +289,20 @@
         }, err=>{ /* silent */ }, { enableHighAccuracy:true, maximumAge:0, timeout:20000 });
       }catch(e){ /* silent */ }
     }
-    async function stop(){
-      running = false;
-      startStop.textContent = 'Start';
-      try{ navigator.geolocation.clearWatch(watchId); }catch{}
+
+    async function stopScenario(){
+      running = false; dispatchRead = false; current = null;
+      startBtn.textContent='Start';
+      try{ if (watchId) navigator.geolocation.clearWatch(watchId); }catch{}
       await releaseWakeLock();
       try{ if (synthOK) speechSynthesis.cancel(); }catch{}
       clearPhoto();
     }
-    startStop.addEventListener('click', ()=> running ? stop() : start());
 
-    // Also allow Read Text to unlock audio context on iOS before start
-    readText.addEventListener('click', ()=>{ try{ if (audioCtx && audioCtx.state==='suspended') audioCtx.resume(); }catch{} });
+    startBtn.addEventListener('click', ()=> running ? stopScenario() : startScenario());
+
+    // Also resume AudioContext on first Read tap (iOS)
+    readBtn.addEventListener('click', ()=>{ try{ if (audioCtx && audioCtx.state==='suspended') audioCtx.resume(); }catch{} });
 
   })();
   </script>
