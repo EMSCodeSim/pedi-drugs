@@ -2,12 +2,13 @@
 <html lang="en">
 <head>
 <meta charset="utf-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
 <title>Geo-Photo — Admin</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<meta name="theme-color" content="#0b0f14" />
 
 <style>
   :root{
-    /* Match home index brand */
+    /* MATCH HOME PAGE THEME — these are defaults; can be overridden by window.BRAND.colors */
     --bg:#0b0f14; --bg2:#101726;
     --card:#121823; --panel:#0f1624;
     --text:#eaf2ff; --muted:#8ea0b3;
@@ -36,42 +37,51 @@
       linear-gradient(165deg, var(--bg2), var(--bg) 55%);
     -webkit-text-size-adjust:100%;
   }
+  a{color:inherit; text-decoration:none}
 
-  /* Sticky brand bar */
+  /* TOP BAR — same structure as index */
   .topbar{
-    position:sticky; top:0; z-index:20;
+    position:sticky; top:0; z-index:30;
     background:rgba(12,15,22,.75);
     backdrop-filter:saturate(120%) blur(6px);
     border-bottom:1px solid rgba(255,255,255,.07);
   }
   .topnav{
-    max-width:1100px; margin:0 auto; padding:10px 16px;
+    max-width:1100px; margin:0 auto; padding:12px 16px;
     display:flex; align-items:center; gap:14px; flex-wrap:wrap;
   }
-  .brandmini{display:flex; align-items:center; gap:12px; font-weight:800; letter-spacing:.3px}
-  .logo{
-    width:36px; height:36px; border-radius:10px;
-    background: linear-gradient(145deg, var(--blue), #3da0ff);
-    display:grid; place-items:center; font-size:14px; color:#fff; box-shadow:var(--shadow);
+  .brandmini{display:flex; align-items:center; gap:12px}
+  .logoWrap{
+    width:40px; height:40px; border-radius:10px; overflow:hidden;
+    display:grid; place-items:center; background:linear-gradient(145deg, var(--blue), #3da0ff);
+    box-shadow:var(--shadow);
   }
-  .tag{color:var(--muted); font-size:12px}
+  .logoWrap img{width:100%; height:100%; object-fit:cover; display:block}
+  .logoFallback{color:#fff; font-weight:900; letter-spacing:.4px}
+  .brandtext{line-height:1.1}
+  .brandname{font-weight:900; font-size:15px}
+  .brandtag{color:var(--muted); font-size:12px}
 
-  main{max-width:1100px; margin:18px auto 80px; padding:0 16px}
-
+  /* WRAPPER / CARDS */
+  main{max-width:1100px; margin:18px auto 84px; padding:0 16px}
   .card{
     border-radius:var(--radius); background:var(--card);
     border:1px solid var(--border); box-shadow:var(--shadow);
     padding:16px; margin:12px 0; overflow:hidden;
+    transition:transform .15s ease, border-color .2s ease, box-shadow .2s ease;
   }
+  .card:hover{ transform:translateY(-1px); border-color:rgba(10,132,255,.28); box-shadow:0 16px 40px rgba(0,0,0,.5) }
+
   .sectionTitle{font-weight:900; margin:6px 0 10px}
-  .note{color:var(--muted); font-size:12px}
   .pill{
     display:inline-flex; gap:8px; align-items:center;
     padding:6px 10px; border-radius:999px;
     border:1px solid var(--border); color:var(--muted); background:rgba(255,255,255,.03)
   }
+  .note{color:var(--muted); font-size:12px}
   .hr{height:1px; background:var(--border); margin:12px 0}
 
+  /* FORMS (match index feel) */
   label{display:block; margin:10px 0 6px 2px; font-size:13px; color:var(--muted)}
   input, textarea, select, button{font-size:16px}
   input[type="text"], input[type="number"], textarea, select{
@@ -92,36 +102,41 @@
 
   .row{display:flex; gap:10px; align-items:center; flex-wrap:wrap}
   .grid{display:grid; gap:14px; grid-template-columns:repeat(auto-fit, minmax(280px,1fr))}
+  .hidden{display:none}
 
-  /* Sticky actions inside Create panel */
+  /* STICKY BAR in Create panel (same vibe as index hero glass) */
   .stickyBar{
-    position:sticky; top:60px; z-index:5;
+    position:sticky; top:64px; z-index:5;
     background:rgba(12,15,22,.75);
     backdrop-filter:saturate(120%) blur(6px);
     border-bottom:1px solid rgba(255,255,255,.07);
     margin:-16px -16px 10px; padding:8px 12px;
   }
 
+  /* Thumbnails */
   .thumbs{display:flex; flex-wrap:wrap; gap:8px; margin-top:10px}
   .thumb{width:88px; height:88px; object-fit:cover; border-radius:12px; border:1px solid var(--border); background:#0a2230}
+
+  /* Scenario list (edit) */
   .listItem{
     display:flex; justify-content:space-between; align-items:center;
     padding:10px; border:1px solid var(--border); border-radius:12px; background:var(--panel)
   }
-
-  .hidden{display:none}
 </style>
 </head>
 <body>
 
-<!-- Brand bar -->
+<!-- TOP BAR (mirrors index header) -->
 <div class="topbar">
   <div class="topnav">
     <div class="brandmini">
-      <div class="logo" id="logo">FS</div>
-      <div>
-        <div id="brandName" style="line-height:1.1; font-size:15px; font-weight:900">FireOps SIM</div>
-        <div class="tag" id="brandTag">Geo-Photo Training Scenarios</div>
+      <div class="logoWrap" aria-label="Logo">
+        <!-- If BRAND.logo is set, we'll inject an <img>. Otherwise show initials. -->
+        <span id="logoFallback" class="logoFallback">FS</span>
+      </div>
+      <div class="brandtext">
+        <div id="brandName" class="brandname">FireOps SIM</div>
+        <div id="brandTag" class="brandtag">Geo-Photo Training Scenarios</div>
       </div>
     </div>
   </div>
@@ -143,7 +158,6 @@
     <div class="stickyBar">
       <div class="row" style="justify-content:space-between">
         <div class="pill" id="createStatus">New scenario</div>
-        <!-- Top Add Photo removed previously; Save Scenario remains -->
         <button id="finalizeScenario" class="btn teal">Save Scenario</button>
       </div>
     </div>
@@ -171,7 +185,7 @@
           <label>Radius (meters)</label>
           <input id="radius" type="number" inputmode="numeric" min="5" max="1000" value="50">
         </div>
-        <!-- Short Label removed per request -->
+        <!-- Short Label intentionally removed -->
       </div>
 
       <label>Caption / Notes (read by TTS)</label>
@@ -184,7 +198,6 @@
     </div>
 
     <div class="hr"></div>
-
     <div class="sectionTitle">Photos in this scenario</div>
     <div id="thumbs" class="thumbs"></div>
   </section>
@@ -200,11 +213,11 @@
   </section>
 </main>
 
-<!-- Firebase + Logic -->
+<!-- Firebase + Logic (unchanged functionality) -->
 <script type="module">
   // Firebase
   import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-app.js";
-  import { getDatabase, ref, push, set, get, onValue, update } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-database.js";
+  import { getDatabase, ref, push, set, get, update } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-database.js";
 
   const firebaseConfig = {
     apiKey:"AIzaSyDM6DpRSeZueVKRpbyJyDmhf8WY66KyCDk",
@@ -215,15 +228,44 @@
     measurementId:"G-19DVN7NNH7"
   };
   const app = initializeApp(firebaseConfig);
-  const db = getDatabase(app);
+  const db  = getDatabase(app);
 
-  // Branding (matches home)
-  const BRAND = { name:'FireOps SIM', tagline:'Geo-Photo Training Scenarios', initials:'FS' };
-  document.getElementById('brandName').textContent = BRAND.name;
-  document.getElementById('brandTag').textContent = BRAND.tagline;
-  document.getElementById('logo').textContent = BRAND.initials;
+  // === Branding sync with index ===
+  const DEFAULT_BRAND = {
+    name: 'FireOps SIM',
+    tag: 'Geo-Photo Training Scenarios',
+    initials: 'FS',
+    logo: null, // e.g. '/assets/logo/fireopssim-logo.svg' — if set, image will be shown
+    colors: null // { bg, bg2, card, panel, text, muted, border, blue, teal, red }
+  };
+  const BRAND = Object.assign({}, DEFAULT_BRAND, (window.BRAND || {}));
 
-  // DOM
+  // Apply brand text
+  document.getElementById('brandName').textContent = BRAND.name || DEFAULT_BRAND.name;
+  document.getElementById('brandTag').textContent  = BRAND.tag  || DEFAULT_BRAND.tag;
+
+  // Apply logo image if provided (matches index behavior)
+  (function applyLogo(){
+    const wrap = document.querySelector('.logoWrap');
+    const fallback = document.getElementById('logoFallback');
+    if (BRAND.logo) {
+      const img = new Image();
+      img.alt = BRAND.name || 'Logo';
+      img.onload = ()=>{ wrap.innerHTML=''; wrap.appendChild(img); };
+      img.onerror = ()=>{ fallback.textContent = (BRAND.initials||DEFAULT_BRAND.initials); };
+      img.src = BRAND.logo;
+    } else {
+      fallback.textContent = BRAND.initials || DEFAULT_BRAND.initials;
+    }
+  })();
+
+  // Apply color overrides if index sets BRAND.colors
+  if (BRAND.colors && typeof BRAND.colors === 'object') {
+    const m = new Map(Object.entries(BRAND.colors));
+    m.forEach((v,k)=>{ if (v) document.documentElement.style.setProperty(`--${k}`, v); });
+  }
+
+  // === DOM refs
   const landing = document.getElementById('landing');
   const goCreate = document.getElementById('goCreate');
   const goEdit = document.getElementById('goEdit');
@@ -248,11 +290,11 @@
   const scenarioList = document.getElementById('scenarioList');
   const backFromEdit = document.getElementById('backFromEdit');
 
-  // State
+  // === State
   let currentScenarioId = null;
   let localStops = [];
 
-  // Helpers
+  // === Helpers (unchanged)
   const uiShow = el => el.classList.remove('hidden');
   const uiHide = el => el.classList.add('hidden');
   const toast = (el, msg) => el.textContent = msg;
@@ -281,18 +323,19 @@
       img.className='thumb';
       img.title=s.title || `Stop ${i+1}`;
       img.src=s.imageData || s.imageURL || '';
+      img.onerror = ()=>{ img.style.opacity=.7; img.title='Image failed to load'; };
       thumbs.appendChild(img);
     });
   }
 
-  // Navigation
+  // === Navigation
   goCreate.onclick = ()=>{
     uiHide(landing); uiShow(createPanel);
     createStatus.textContent='New scenario';
     currentScenarioId=null; localStops=[];
     scenarioName.value=''; dispatchInfo.value='';
     photoInput.value=''; radius.value=50; caption.value='';
-    uiShow(scenarioMeta); // show name/dispatch until first photo saved
+    uiShow(scenarioMeta); // visible until first photo saved
   };
   goEdit.onclick = ()=>{ uiHide(landing); uiShow(editPanel); loadForEdit(); };
   backFromEdit.onclick = ()=>{
@@ -300,13 +343,13 @@
     scenarioList.innerHTML=''; editStatus.textContent='Ready';
   };
 
-  // Create flow
+  // === Create flow (unchanged logic; no short label)
   savePhoto.onclick = async ()=>{
     try{
       const file = photoInput.files?.[0];
       if(!file){ alert('Please choose a photo first.'); return; }
 
-      // If first time: create scenario shell with name/dispatch
+      // Make scenario shell on first save
       if(!currentScenarioId){
         const name=(scenarioName.value||'').trim();
         if(!name){ alert('Please enter a Scenario Name.'); return; }
@@ -321,18 +364,16 @@
           active:true,
           stops:[]
         });
-        uiHide(scenarioMeta); // collapse after first save (old logic)
+        uiHide(scenarioMeta); // collapse after first save
       }
 
-      // Prepare image + GPS
       const dataURL = await readFileAsDataURL(file);
       const gps = await getGPS();
       const r = Math.max(5, Math.min(1000, Math.round(parseInt(radius.value||'50',10))));
       const stop = {
-        title: '',            // Short label removed per request
+        title: '',                 // short label removed
         caption: (caption.value||'').trim(),
-        lat: gps.lat,
-        lng: gps.lng,
+        lat: gps.lat, lng: gps.lng,
         radiusMeters: r,
         imageData: dataURL
       };
@@ -340,7 +381,7 @@
       localStops.push(stop);
       await set(ref(db,'scenarios/'+currentScenarioId+'/stops'), localStops);
 
-      // Clear photo fields
+      // reset photo fields
       photoInput.value=''; caption.value=''; radius.value=50;
       renderThumbs();
       toast(createStatus, `Saved photo #${localStops.length}.`);
@@ -349,11 +390,10 @@
     }
   };
 
-  // Save Scenario (sticky)
+  // === Save Scenario (unchanged)
   finalizeScenario.onclick = async ()=>{
     try{
       if(!currentScenarioId){
-        // Allow saving empty scenario shell if name provided
         const name=(scenarioName.value||'').trim();
         if(!name){ alert('Enter Scenario Name, then Save a Photo or press Save Scenario again to create empty.'); return; }
         const dispatch=(dispatchInfo.value||'').trim();
@@ -361,16 +401,13 @@
         currentScenarioId=newRef.key;
         await set(newRef,{
           id:currentScenarioId,
-          title:name,
-          dispatch:dispatch,
-          createdAt:Date.now(),
-          active:true,
-          stops:[]
+          title:name, dispatch:dispatch,
+          createdAt:Date.now(), active:true, stops:[]
         });
         uiHide(scenarioMeta);
       }
       toast(createStatus,'Scenario saved.');
-      // Reset for next create (preserve the old flow)
+      // reset for new create
       currentScenarioId=null; localStops=[];
       renderThumbs();
       scenarioName.value=''; dispatchInfo.value='';
@@ -381,7 +418,7 @@
     }
   };
 
-  // Edit view (same as before)
+  // === Edit view (unchanged)
   async function loadForEdit(){
     try{
       editStatus.textContent='Loading scenarios…';
@@ -403,12 +440,14 @@
         const openBtn=document.createElement('button');
         openBtn.className='btn primary'; openBtn.textContent='Open in Creator';
         openBtn.onclick=()=>{
-          // Load into creator for adding more photos
-          uiHide(editPanel); uiShow(createPanel);
+          // load into creator for additional photos
+          document.getElementById('landing').classList.add('hidden');
+          document.getElementById('editPanel').classList.add('hidden');
+          document.getElementById('createPanel').classList.remove('hidden');
           currentScenarioId=sc.id;
           localStops=Array.isArray(sc.stops)? sc.stops : [];
           renderThumbs();
-          uiHide(scenarioMeta); // editing existing scenarios keeps meta hidden
+          uiHide(scenarioMeta); // editing existing keeps meta hidden
           toast(createStatus, `Editing: ${sc.title||'(untitled)'}`);
         };
         const toggleBtn=document.createElement('button');
