@@ -8,14 +8,15 @@
   <style>
     html,body{margin:0;padding:0;height:100%;background:#0b0f14;color:#eaf2ff;font-family:system-ui,-apple-system,Segoe UI,Roboto,Inter,Arial,sans-serif;overflow:hidden}
     .topbar{position:sticky;top:0;z-index:50;background:rgba(12,15,22,.78);backdrop-filter:blur(6px);border-bottom:1px solid rgba(255,255,255,.07)}
-    .topnav{max-width:1100px;margin:0 auto;padding:10px 20px;display:flex;align-items:center;gap:14px;justify-content:space-between}
+    .topnav{max-width:1100px;margin:0 auto;padding:10px 20px;display:flex;align-items:center;gap:12px;justify-content:space-between}
     .brandmini{display:flex;align-items:center;gap:12px;font-weight:800}
     .logo img{width:40px;height:40px;border-radius:10px;box-shadow:0 12px 34px rgba(0,0,0,.38);background:#0f1624}
     .header-actions{display:flex;gap:10px;align-items:center}
-    .linkbtn{appearance:none;border:1px solid rgba(255,255,255,.18);border-radius:10px;padding:8px 12px;background:transparent;color:#eaf2ff;cursor:pointer;font-weight:700}
+    #backBtn{appearance:none;border:0;border-radius:10px;padding:8px 12px;font-weight:800;cursor:pointer;background:linear-gradient(180deg,#54a6ff,#0a84ff);color:#03131b}
+    #scenarioSelect{min-width:240px;padding:10px 12px;border-radius:10px;border:1px solid rgba(255,255,255,.18);background:#0f1624;color:#eaf2ff;outline:none}
 
     /* Viewer area */
-    #viewerWrap{position:fixed;top:60px;left:0;width:100%;height:calc(100% - 120px); /* leave room for controls */ display:flex;justify-content:center;align-items:center}
+    #viewerWrap{position:fixed;top:60px;left:0;width:100%;height:calc(100% - 120px);display:flex;justify-content:center;align-items:center}
     #photo{width:100%;height:100%;object-fit:cover;background:#000}
     #caption{
       position:absolute;left:0;right:0;bottom:60px;
@@ -29,11 +30,8 @@
     .btn{appearance:none;border:0;border-radius:12px;padding:12px 16px;font-weight:800;cursor:pointer;background:linear-gradient(180deg,#54a6ff,#0a84ff);color:#03131b;box-shadow:0 12px 34px rgba(0,0,0,.38)}
     .btn.secondary{background:transparent;color:#eaf2ff;border:1px solid rgba(255,255,255,.18)}
     .btn[disabled]{opacity:.6;cursor:not-allowed}
-    #note{position:fixed;left:12px;bottom:58px;color:#8ea0b3;font-size:13px}
 
-    @media (max-width:640px){
-      #caption{font-size:15px}
-    }
+    @media (max-width:640px){ #caption{font-size:15px} }
   </style>
 </head>
 <body>
@@ -44,8 +42,10 @@
         <div>FireOps SIM</div>
       </div>
       <div class="header-actions">
-        <!-- Back button in upper-right -->
-        <button id="backBtn" class="linkbtn" type="button">Back</button>
+        <select id="scenarioSelect" aria-label="Choose a scenario">
+          <option value="">Loading scenarios…</option>
+        </select>
+        <button id="backBtn" type="button">Back</button>
       </div>
     </div>
   </div>
@@ -60,7 +60,6 @@
     <button id="startBtn" class="btn" type="button">Start</button>
     <button id="readBtn" class="btn secondary" type="button">🔊 Read Text</button>
   </div>
-  <div id="note">iPhone: “Read Text” triggers speech. Android/Desktop auto-read; button repeats.</div>
 
   <!-- Firebase (compat) -->
   <script src="https://www.gstatic.com/firebasejs/10.12.4/firebase-app-compat.js"></script>
@@ -74,10 +73,10 @@
     const startBtn = $('startBtn');
     const readBtn = $('readBtn');
     const backBtn = $('backBtn');
+    const select = $('scenarioSelect');
 
     // Back button to main page
     backBtn.addEventListener('click', ()=>{
-      // try history back; if not available, go to root
       if (document.referrer) history.back();
       else window.location.href = '/';
     });
@@ -138,23 +137,7 @@
       return '';
     }
 
-    // Scenario loading by id (from ?id= or prompt)
-    let scenariosPath = null;
-    async function loadScenarioById(id){
-      // Try geophoto/scenarios first, then scenarios
-      const a = await fetch(`https://dailyquiz-d5279-default-rtdb.firebaseio.com/geophoto/scenarios/${id}.json`, {cache:'no-store'});
-      if (a.ok){
-        const sc = await a.json();
-        if (sc && sc.stops){ scenariosPath = 'geophoto/scenarios'; return sc; }
-      }
-      const b = await fetch(`https://dailyquiz-d5279-default-rtdb.firebaseio.com/scenarios/${id}.json`, {cache:'no-store'});
-      if (b.ok){
-        const sc2 = await b.json();
-        if (sc2 && sc2.stops){ scenariosPath = 'scenarios'; return sc2; }
-      }
-      return null;
-    }
-
+    // Load scenarios into dropdown (from geophoto/scenarios and scenarios)
     function normalizeStops(stopsLike){
       if(!stopsLike) return [];
       const arr = Array.isArray(stopsLike) ? stopsLike : Object.values(stopsLike);
@@ -170,6 +153,35 @@
         };
       }).filter(s => typeof s.lat==='number' && typeof s.lng==='number');
     }
+
+    function populateDropdown(list){
+      select.innerHTML='<option value="">Select a scenario…</option>';
+      list.sort((a,b)=> (b.createdAt||0)-(a.createdAt||0));
+      list.forEach(sc=>{
+        const o=document.createElement('option');
+        o.value=sc.id;
+        o.textContent=sc.title || sc.name || '(untitled)';
+        select.appendChild(o);
+      });
+    }
+
+    async function loadAllScenarios(){
+      const out=[];
+      try{
+        const a = await fetch('https://dailyquiz-d5279-default-rtdb.firebaseio.com/geophoto/scenarios.json',{cache:'no-store'});
+        if(a.ok){ const ja=await a.json()||{}; for(const [id,s] of Object.entries(ja)){ out.push({ id, ...(s||{}), stops: normalizeStops(s?.stops) }); } }
+      }catch{}
+      try{
+        const b = await fetch('https://dailyquiz-d5279-default-rtdb.firebaseio.com/scenarios.json',{cache:'no-store'});
+        if(b.ok){ const jb=await b.json()||{}; for(const [id,s] of Object.entries(jb)){ out.push({ id, ...(s||{}), stops: normalizeStops(s?.stops) }); } }
+      }catch{}
+      // de-dup by id (prefer geophoto/scenarios)
+      const map=new Map();
+      out.forEach(s=>{ if(!map.has(s.id)) map.set(s.id, s); });
+      return Array.from(map.values());
+    }
+
+    let scenarios=[], current=null, running=false, watchId=null, lastStopIndex=-1;
 
     // Haversine
     const toRad = x => x*Math.PI/180;
@@ -204,7 +216,7 @@
     }
     function notifyNewPhoto(){ beep(); buzz(); }
 
-    // TTS helpers
+    // TTS
     function speak(text){
       if (!synthOK || !text) return;
       try { speechSynthesis.cancel(); } catch {}
@@ -230,39 +242,39 @@
       notifyNewPhoto();
     }
 
-    // Start/Stop logic
-    let running=false, current=null, watchId=null, lastStopIndex=-1, dispatchRead=false;
-
     async function startScenario(){
       if (running) return;
-      // Determine scenario id
-      const urlId = new URLSearchParams(location.search).get('id');
-      let scenarioId = urlId || localStorage.getItem('lastScenarioId') || '';
-      if (!scenarioId){
-        scenarioId = prompt('Enter scenario id:') || '';
-      }
-      if (!scenarioId){ return; }
-      localStorage.setItem('lastScenarioId', scenarioId);
-
-      startBtn.textContent='Stop';
+      const id = select.value;
+      if (!id){ alert('Select a scenario first.'); return; }
       running = true;
+      startBtn.textContent='Stop';
       await acquireWakeLock();
 
-      const sc = await loadScenarioById(scenarioId);
+      // Load this scenario (try geophoto first, then scenarios)
+      let sc=null;
+      try{
+        const rA = await fetch(`https://dailyquiz-d5279-default-rtdb.firebaseio.com/geophoto/scenarios/${id}.json`,{cache:'no-store'});
+        if(rA.ok){ sc = await rA.json(); }
+      }catch{}
+      if(!sc){
+        try{
+          const rB = await fetch(`https://dailyquiz-d5279-default-rtdb.firebaseio.com/scenarios/${id}.json`,{cache:'no-store'});
+          if(rB.ok){ sc = await rB.json(); }
+        }catch{}
+      }
       if (!sc || !sc.stops){ alert('Scenario not found or has no stops.'); stopScenario(); return; }
+
       current = {
-        id: scenarioId,
+        id,
         title: sc.title || sc.name || '',
         dispatch: sc.dispatch || sc.notes || '',
         stops: normalizeStops(sc.stops)
       };
 
-      // 1) Read dispatch FIRST (iPhone & Android) — Start button is a user gesture so iOS allows it
+      // Read dispatch FIRST (works on iPhone & Android)
       const intro = (current.dispatch || current.title || '').toString().trim();
-      if (intro){ unlockTTS(); speak(intro); lastSpeech = intro; dispatchRead = true; }
-      else { dispatchRead = true; }
+      if (intro){ unlockTTS(); speak(intro); lastSpeech = intro; }
 
-      // 2) Begin geo watch; only show photos when inside geofence; pick closest if multiple
       clearPhoto(); lastStopIndex = -1;
 
       if (watchId) { try{ navigator.geolocation.clearWatch(watchId); }catch{} }
@@ -271,6 +283,7 @@
           if (!running || !current) return;
           const { latitude:la, longitude:ln, accuracy:acc } = p.coords;
 
+          // Collect all geofence matches, choose closest
           const hits = (current.stops||[])
             .map((st, i) => ({i, st, dist: havDistance(la, ln, st.lat, st.lng)}))
             .filter(obj => inside(obj.st, la, ln, acc))
@@ -280,18 +293,17 @@
             if (lastStopIndex !== -1) { clearPhoto(); lastStopIndex = -1; }
             return;
           }
-
           const best = hits[0];
           if (best.i !== lastStopIndex){
             lastStopIndex = best.i;
             showStop(best.st);
           }
-        }, err=>{ /* silent */ }, { enableHighAccuracy:true, maximumAge:0, timeout:20000 });
-      }catch(e){ /* silent */ }
+        }, err=>{}, { enableHighAccuracy:true, maximumAge:0, timeout:20000 });
+      }catch(e){}
     }
 
     async function stopScenario(){
-      running = false; dispatchRead = false; current = null;
+      running = false;
       startBtn.textContent='Start';
       try{ if (watchId) navigator.geolocation.clearWatch(watchId); }catch{}
       await releaseWakeLock();
@@ -300,9 +312,16 @@
     }
 
     startBtn.addEventListener('click', ()=> running ? stopScenario() : startScenario());
-
-    // Also resume AudioContext on first Read tap (iOS)
     readBtn.addEventListener('click', ()=>{ try{ if (audioCtx && audioCtx.state==='suspended') audioCtx.resume(); }catch{} });
+
+    // Boot: load scenarios into dropdown
+    loadAllScenarios().then(list => {
+      scenarios = list;
+      populateDropdown(list);
+      // Preselect ?id= if present
+      const pre = new URLSearchParams(location.search).get('id');
+      if (pre && list.some(s=>s.id===pre)) select.value = pre;
+    });
 
   })();
   </script>
