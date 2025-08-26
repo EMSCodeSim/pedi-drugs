@@ -9,22 +9,10 @@
 
   <style>
     :root{
-      /* Match homepage palette and style */
-      --brandName: "FireOps SIM";
-      --brandTag: "Real-Time Fire Scene Simulator";
-      --bg:#0b0f14;
-      --bg2:#101726;
-      --card:#121823;
-      --muted:#8ea0b3;
-      --text:#eaf2ff;
-      --blue:#0a84ff;
-      --teal:#2dd4bf;
-      --red:#ff3b30;
-      --shadow:0 12px 34px rgba(0,0,0,.38);
+      --bg:#0b0f14; --bg2:#101726; --card:#121823; --muted:#8ea0b3; --text:#eaf2ff;
+      --blue:#0a84ff; --teal:#2dd4bf; --red:#ff3b30; --shadow:0 12px 34px rgba(0,0,0,.38);
       --radius:18px;
-      --radiusSm:14px;
     }
-
     *{box-sizing:border-box}
     html,body{
       margin:0; padding:0; color:var(--text);
@@ -39,7 +27,6 @@
     a{color:inherit; text-decoration:none}
     img{max-width:100%; height:auto; display:block}
 
-    /* Topbar (identical structure to homepage) */
     .topbar{
       position:sticky; top:0; z-index:20;
       background:rgba(12,15,22,.75);
@@ -57,7 +44,6 @@
     }
     .tag{color:var(--muted); font-size:12px}
 
-    /* Page wrapper + cards (copied from homepage) */
     main{max-width:1100px; margin:24px auto 84px; padding:0 20px}
     .card{
       position:relative; border-radius:var(--radius); background:var(--card);
@@ -77,7 +63,6 @@
     }
     .hr{height:1px; background:rgba(255,255,255,.10); margin:12px 0}
 
-    /* Forms */
     label{display:block; margin:10px 0 6px 2px; font-size:13px; color:var(--muted)}
     input, textarea, select, button{font-size:16px}
     input[type="text"], input[type="number"], textarea, select{
@@ -99,14 +84,10 @@
     .btn.teal{
       background:linear-gradient(180deg,#3ce5d3,var(--teal)); color:#052522;
     }
-    .btn.danger{
-      background:var(--red); color:#fff;
-    }
+    .btn.danger{ background:var(--red); color:#fff; }
     .row{ display:flex; gap:10px; flex-wrap:wrap; align-items:center }
-    .grid{ display:grid; gap:14px; grid-template-columns:repeat(auto-fit, minmax(280px,1fr)) }
     .hidden{ display:none }
 
-    /* Sticky bar within creator (glass like homepage) */
     .stickyBar{
       position:sticky; top:62px; z-index:5;
       background:rgba(12,15,22,.75);
@@ -116,7 +97,6 @@
       margin:-18px -18px 10px -18px;
     }
 
-    /* Thumbs + list */
     .thumbs{display:flex; flex-wrap:wrap; gap:8px; margin-top:10px}
     .thumb{width:88px; height:88px; object-fit:cover; border-radius:12px; border:1px solid rgba(255,255,255,.14); background:#0a2230}
     .listItem{
@@ -127,7 +107,7 @@
 </head>
 <body>
 
-  <!-- Sticky Top Navigation (matches homepage) -->
+  <!-- Top Navigation -->
   <div class="topbar">
     <div class="topnav">
       <div class="brandmini">
@@ -151,7 +131,7 @@
           <button id="goCreate" class="btn">Create Scenario</button>
           <button id="goEdit" class="btn secondary">Edit Scenario</button>
         </div>
-        <div class="pill" id="status" style="margin-top:10px">Ready</div>
+        <div class="pill" id="status">Ready</div>
       </div>
     </section>
 
@@ -162,20 +142,19 @@
           <div class="row" style="justify-content:space-between; width:100%; gap:8px">
             <div class="pill" id="createStatus">New scenario</div>
             <div class="row" style="gap:8px">
-              <!-- NEW: One-tap start that unlocks audio and reads dispatch + captions -->
-              <button id="startScenarioBtn" class="btn teal" title="Enable voice and read dispatch then captions">Start Scenario (Enable Voice)</button>
+              <!-- One-tap: unlock iOS audio and read dispatch + captions -->
+              <button id="startScenarioBtn" class="btn teal">Start Scenario (Enable Voice)</button>
               <button id="finalizeScenario" class="btn">Save Scenario</button>
             </div>
           </div>
         </div>
 
-        <!-- Meta (collapses after first photo save) -->
         <div id="scenarioMeta">
           <label>Scenario Name</label>
           <input id="scenarioName" type="text" placeholder="e.g., House Fire on Main St">
 
           <label>Dispatch Information</label>
-          <textarea id="dispatchInfo" placeholder="Example: Engine 1, Engine 2, Medic 1 respond to ..."></textarea>
+          <textarea id="dispatchInfo" placeholder="Example: Engine 1 and Medic 1 respond to a two-story residential structure fire..."></textarea>
         </div>
 
         <div class="hr"></div>
@@ -192,7 +171,6 @@
               <label>Radius (meters)</label>
               <input id="radius" type="number" inputmode="numeric" min="5" max="1000" value="50">
             </div>
-            <!-- Short label intentionally removed -->
           </div>
 
           <label>Caption / Notes (read by TTS)</label>
@@ -225,7 +203,7 @@
 
   <!-- Firebase + Logic + TTS Queue -->
   <script type="module">
-    // ===================== Firebase (unchanged logic) =====================
+    // ===================== Firebase (same logic) =====================
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-app.js";
     import { getDatabase, ref, push, set, get, update } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-database.js";
 
@@ -265,12 +243,11 @@
     const scenarioList = document.getElementById('scenarioList');
     const backFromEdit = document.getElementById('backFromEdit');
 
-    // NEW: Start Scenario button (unlocks audio + reads dispatch/captions)
     const startScenarioBtn = document.getElementById('startScenarioBtn');
 
     // ===================== State =====================
     let currentScenarioId = null;
-    let localStops = [];
+    let localStops = []; // {caption, lat, lng, radiusMeters, imageData}
 
     // ===================== Helpers =====================
     const uiShow = el => el.classList.remove('hidden');
@@ -313,7 +290,7 @@
       currentScenarioId=null; localStops=[];
       scenarioName.value=''; dispatchInfo.value='';
       photoInput.value=''; radius.value=50; caption.value='';
-      uiShow(scenarioMeta); // visible until first photo saved
+      uiShow(scenarioMeta);
     };
     goEdit.onclick = ()=>{ uiHide(landing); uiShow(editPanel); loadForEdit(); };
     backFromEdit.onclick = ()=>{
@@ -321,13 +298,12 @@
       scenarioList.innerHTML=''; editStatus.textContent='Ready';
     };
 
-    // ===================== Create flow (unchanged) =====================
+    // ===================== Create flow =====================
     savePhoto.onclick = async ()=>{
       try{
         const file = photoInput.files?.[0];
         if(!file){ alert('Please choose a photo first.'); return; }
 
-        // Create scenario shell on first photo
         if(!currentScenarioId){
           const name=(scenarioName.value||'').trim();
           if(!name){ alert('Please enter a Scenario Name.'); return; }
@@ -335,21 +311,17 @@
           const newRef = push(ref(db,'scenarios'));
           currentScenarioId=newRef.key;
           await set(newRef,{
-            id:currentScenarioId,
-            title:name,
-            dispatch:dispatch,
-            createdAt:Date.now(),
-            active:true,
-            stops:[]
+            id:currentScenarioId, title:name, dispatch:dispatch,
+            createdAt:Date.now(), active:true, stops:[]
           });
-          uiHide(scenarioMeta); // collapse after first save
+          uiHide(scenarioMeta);
         }
 
         const dataURL = await readFileAsDataURL(file);
         const gps = await getGPS();
         const r = Math.max(5, Math.min(1000, Math.round(parseInt(radius.value||'50',10))));
         const stop = {
-          title: '', // short label removed
+          title: '',
           caption: (caption.value||'').trim(),
           lat: gps.lat, lng: gps.lng,
           radiusMeters: r,
@@ -359,7 +331,6 @@
         localStops.push(stop);
         await set(ref(db,'scenarios/'+currentScenarioId+'/stops'), localStops);
 
-        // Reset fields
         photoInput.value=''; caption.value=''; radius.value=50;
         renderThumbs();
         toast(createStatus, `Saved photo #${localStops.length}.`);
@@ -368,7 +339,6 @@
       }
     };
 
-    // Save Scenario (sticky button)
     finalizeScenario.onclick = async ()=>{
       try{
         if(!currentScenarioId){
@@ -378,14 +348,12 @@
           const newRef=push(ref(db,'scenarios'));
           currentScenarioId=newRef.key;
           await set(newRef,{
-            id:currentScenarioId,
-            title:name, dispatch:dispatch,
+            id:currentScenarioId, title:name, dispatch:dispatch,
             createdAt:Date.now(), active:true, stops:[]
           });
           uiHide(scenarioMeta);
         }
         toast(createStatus,'Scenario saved.');
-        // Reset for next create
         currentScenarioId=null; localStops=[];
         renderThumbs();
         scenarioName.value=''; dispatchInfo.value='';
@@ -396,7 +364,7 @@
       }
     };
 
-    // ===================== Edit view (unchanged logic) =====================
+    // ===================== Edit view =====================
     async function loadForEdit(){
       try{
         editStatus.textContent='Loading scenarios…';
@@ -424,9 +392,8 @@
             currentScenarioId=sc.id;
             localStops=Array.isArray(sc.stops)? sc.stops : [];
             renderThumbs();
-            uiHide(scenarioMeta); // editing existing keeps meta hidden
+            uiHide(scenarioMeta);
             toast(createStatus, `Editing: ${sc.title||('(untitled)')}`);
-            // Also preload dispatch text into the field (non-destructive)
             dispatchInfo.value = sc.dispatch || '';
             scenarioName.value = sc.title || '';
           };
@@ -452,16 +419,15 @@
       }
     }
 
-    // ===================== TTS Queue: iOS-safe one-tap playback =====================
+    // ===================== TTS Queue (NO BEEPS) =====================
     let sharedAudio = null;
     let audioUnlocked = false;
     let playing = false;
     const queue = [];
 
-    // Tiny silent MP3 data URI (~200ms). Works to resolve play() on iOS.
-    // You can replace with a 0.3s "Voice enabled" MP3 from your TTS if you prefer.
+    // Short SILENT MP3 (priming only). Not audible; satisfies iOS user-gesture requirement.
     const SILENT_MP3 =
-      "data:audio/mpeg;base64,//uQZAAAAAAAAAAAAAAAAAAAAAAAWGluZwAAAA8AAAACAAACcQCAAAAAAABAAACAAACcQCAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";
+      "data:audio/mpeg;base64,//uQZAAAAAAAAAAAAAAAAAAAAAAAWGlinZwAAAA8AAAACAAACcQCAAAAAAABAAACAAACcQCAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";
 
     async function primeAudio() {
       if (audioUnlocked) return true;
@@ -470,9 +436,8 @@
       sharedAudio.preload = 'auto';
       sharedAudio.src = SILENT_MP3;
       sharedAudio.onended = () => { playing = false; playNext(); };
-
       try {
-        // MUST be called directly by the user's first tap
+        // Must be called directly by the Start button tap
         await sharedAudio.play();
         audioUnlocked = true;
         return true;
@@ -482,19 +447,18 @@
       }
     }
 
-    // Replace this with your server endpoint that returns an MP3 for the text.
-    // IMPORTANT: Use MP3 or AAC on iOS. WebM/Opus won't play there.
+    // Replace with your backend that returns an MP3 Blob for the text (OpenAI TTS).
     async function fetchOpenAITTS(text){
-      // Example: POST to your backend which calls OpenAI TTS and returns MP3
+      // Example:
       // const resp = await fetch('/api/tts', {
       //   method:'POST',
       //   headers:{'Content-Type':'application/json'},
       //   body: JSON.stringify({ text })
       // });
-      // const blob = await resp.blob(); // should be audio/mpeg
+      // const blob = await resp.blob(); // audio/mpeg
       // return URL.createObjectURL(blob);
 
-      // Placeholder fallback (uses the silent priming clip just to demo flow)
+      // Placeholder returns silent clip so flow is testable without audio.
       return SILENT_MP3;
     }
 
@@ -523,26 +487,22 @@
     }
 
     async function startScenarioAndSpeakAll(){
-      // 1) Unlock audio on the same tap
       const ok = await primeAudio();
       if (!ok){
         alert('Tap again to enable audio.');
         return;
       }
-      // 2) Speak dispatch first
+      // Read dispatch first
       const dispatch = (dispatchInfo.value||'').trim();
       if (dispatch) await enqueueText(dispatch);
-
-      // 3) Then each caption in order
+      // Then each caption
       for (const stop of localStops){
         if (stop && stop.caption) await enqueueText(stop.caption);
       }
-
       toast(createStatus, 'Voice: reading dispatch and all captions…');
     }
 
-    // Bind the one-tap starter
-    startScenarioBtn.addEventListener('click', startScenarioAndSpeakAll, { once:false });
+    startScenarioBtn.addEventListener('click', startScenarioAndSpeakAll);
 
   </script>
 </body>
