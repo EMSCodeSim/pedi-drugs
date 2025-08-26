@@ -9,7 +9,6 @@
 
   <style>
     :root{
-      /* Match homepage palette and style */
       --brandName: "FireOps SIM";
       --brandTag: "Real-Time Fire Scene Simulator";
       --bg:#0b0f14;
@@ -39,7 +38,6 @@
     a{color:inherit; text-decoration:none}
     img{max-width:100%; height:auto; display:block}
 
-    /* Topbar (identical structure to homepage) */
     .topbar{
       position:sticky; top:0; z-index:20;
       background:rgba(12,15,22,.75);
@@ -57,7 +55,6 @@
     }
     .tag{color:var(--muted); font-size:12px}
 
-    /* Page wrapper + cards (copied from homepage) */
     main{max-width:1100px; margin:24px auto 84px; padding:0 20px}
     .card{
       position:relative; border-radius:var(--radius); background:var(--card);
@@ -77,7 +74,6 @@
     }
     .hr{height:1px; background:rgba(255,255,255,.10); margin:12px 0}
 
-    /* Forms */
     label{display:block; margin:10px 0 6px 2px; font-size:13px; color:var(--muted)}
     input, textarea, select, button{font-size:16px}
     input[type="text"], input[type="number"], textarea, select{
@@ -99,35 +95,63 @@
     .btn.teal{
       background:linear-gradient(180deg,#3ce5d3,var(--teal)); color:#052522;
     }
-    .btn.danger{
-      background:var(--red); color:#fff;
-    }
+    .btn.danger{ background:var(--red); color:#fff; }
     .row{ display:flex; gap:10px; flex-wrap:wrap; align-items:center }
     .grid{ display:grid; gap:14px; grid-template-columns:repeat(auto-fit, minmax(280px,1fr)) }
     .hidden{ display:none }
 
-    /* Sticky bar within creator (glass like homepage) */
+    /* Sticky bar fix:
+       - Keep it sticky at the top of the card (top:0)
+       - Add top padding to the card so the first inputs are not covered */
     .stickyBar{
-      position:sticky; top:62px; z-index:5;
+      position:sticky; top:0; z-index:5;
       background:rgba(12,15,22,.75);
       backdrop-filter:saturate(120%) blur(6px);
       border-bottom:1px solid rgba(255,255,255,.07);
       padding:8px 12px;
-      margin:-18px -18px 10px -18px;
+      margin:-18px -18px 0 -18px;
     }
+    /* Extra top padding on any card section that contains a stickyBar */
+    .hasSticky{ padding-top:64px; }
 
     /* Thumbs + list */
     .thumbs{display:flex; flex-wrap:wrap; gap:8px; margin-top:10px}
-    .thumb{width:88px; height:88px; object-fit:cover; border-radius:12px; border:1px solid rgba(255,255,255,.14); background:#0a2230}
+    .thumbWrap{position:relative}
+    .thumb{
+      width:88px; height:88px; object-fit:cover; border-radius:12px;
+      border:1px solid rgba(255,255,255,.14); background:#0a2230; cursor:pointer;
+    }
+    .thumbWrap .delBtn{
+      position:absolute; top:4px; right:4px; border:none; border-radius:8px;
+      background:rgba(255,59,48,.9); color:#fff; font-size:12px; padding:4px 6px; cursor:pointer;
+    }
     .listItem{
       display:flex; justify-content:space-between; align-items:center;
       padding:10px; border:1px solid rgba(255,255,255,.14); border-radius:12px; background:#0f1624
     }
+
+    /* Modal editor */
+    .modal{
+      position:fixed; inset:0; display:none; align-items:center; justify-content:center;
+      background:rgba(0,0,0,.5); z-index:50; padding:16px;
+    }
+    .modal.show{ display:flex; }
+    .modalCard{
+      width:min(960px, 96vw); max-height:90vh; overflow:auto;
+      background:var(--card); border:1px solid rgba(255,255,255,.12);
+      border-radius:16px; box-shadow:var(--shadow); padding:16px;
+    }
+    .modalGrid{ display:grid; gap:12px; grid-template-columns: 1fr 1fr; }
+    .modalImg{
+      width:100%; height:360px; object-fit:contain; background:#000; border-radius:12px; border:1px solid rgba(255,255,255,.12);
+    }
+    .modalActions{ display:flex; gap:8px; flex-wrap:wrap; margin-top:8px }
+    .small{ font-size:12px; color:var(--muted) }
   </style>
 </head>
 <body>
 
-  <!-- Sticky Top Navigation (matches homepage) -->
+  <!-- Sticky Top Navigation -->
   <div class="topbar">
     <div class="topnav">
       <div class="brandmini">
@@ -157,7 +181,7 @@
 
     <!-- Create Scenario -->
     <section class="card hidden" id="createPanel">
-      <div class="card-inner">
+      <div class="card-inner hasSticky">
         <div class="stickyBar">
           <div class="row" style="justify-content:space-between; width:100%">
             <div class="pill" id="createStatus">New scenario</div>
@@ -188,10 +212,9 @@
               <label>Radius (meters)</label>
               <input id="radius" type="number" inputmode="numeric" min="5" max="1000" value="50">
             </div>
-            <!-- Short label intentionally removed -->
           </div>
 
-          <label>Caption / Notes (read by TTS)</label>
+          <label>Caption / Notes</label>
           <textarea id="caption" placeholder="What should crews observe or do here?"></textarea>
 
           <div class="row" style="margin-top:8px">
@@ -219,9 +242,53 @@
     </section>
   </main>
 
-  <!-- Firebase + Logic (kept the same) -->
+  <!-- Photo Editor Modal -->
+  <div class="modal" id="photoEditor">
+    <div class="modalCard">
+      <div class="row" style="justify-content:space-between; align-items:center">
+        <div class="sectionTitle" id="editorTitle">Edit Photo</div>
+        <button id="closeEditor" class="btn secondary">Close</button>
+      </div>
+      <div class="modalGrid" style="margin-top:8px">
+        <div>
+          <img id="editorImg" class="modalImg" alt="Photo preview" />
+          <div class="small" id="imgInfo"></div>
+        </div>
+        <div>
+          <label>Caption</label>
+          <textarea id="editorCaption"></textarea>
+
+          <div class="row">
+            <div style="flex:1">
+              <label>Radius (meters)</label>
+              <input id="editorRadius" type="number" inputmode="numeric" min="5" max="1000" />
+            </div>
+          </div>
+
+          <div class="grid" style="margin-top:4px">
+            <div>
+              <label>Latitude</label>
+              <input id="editorLat" type="number" step="0.000001" />
+            </div>
+            <div>
+              <label>Longitude</label>
+              <input id="editorLng" type="number" step="0.000001" />
+            </div>
+          </div>
+
+          <div class="modalActions">
+            <button id="useGPS" class="btn teal" type="button">Set Current GPS</button>
+            <button id="saveChanges" class="btn" type="button">Save Changes</button>
+            <button id="deletePhoto" class="btn danger" type="button">Delete Photo</button>
+          </div>
+        </div>
+      </div>
+      <div class="small" id="editorStatus" style="margin-top:8px"></div>
+    </div>
+  </div>
+
+  <!-- Firebase + Logic -->
   <script type="module">
-    // Firebase
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-app.js";
     import { getDatabase, ref, push, set, get, update } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-database.js";
 
@@ -240,7 +307,6 @@
     const landing = document.getElementById('landing');
     const goCreate = document.getElementById('goCreate');
     const goEdit = document.getElementById('goEdit');
-    const statusPill = document.getElementById('status');
 
     const createPanel = document.getElementById('createPanel');
     const createStatus = document.getElementById('createStatus');
@@ -257,17 +323,35 @@
     const thumbs = document.getElementById('thumbs');
 
     const editPanel = document.getElementById('editPanel');
-    const editStatus = document.getElementById('editStatus');  /* FIXED: was 'theconst editStatus' */
+    const editStatus = document.getElementById('editStatus');
     const scenarioList = document.getElementById('scenarioList');
     const backFromEdit = document.getElementById('backFromEdit');
+
+    // Editor modal DOM
+    const photoEditor = document.getElementById('photoEditor');
+    const closeEditor = document.getElementById('closeEditor');
+    const editorTitle = document.getElementById('editorTitle');
+    const editorImg = document.getElementById('editorImg');
+    const imgInfo = document.getElementById('imgInfo');
+    const editorCaption = document.getElementById('editorCaption');
+    const editorRadius = document.getElementById('editorRadius');
+    const editorLat = document.getElementById('editorLat');
+    const editorLng = document.getElementById('editorLng');
+    const editorStatus = document.getElementById('editorStatus');
+    const useGPS = document.getElementById('useGPS');
+    const saveChanges = document.getElementById('saveChanges');
+    const deletePhoto = document.getElementById('deletePhoto');
 
     // State
     let currentScenarioId = null;
     let localStops = [];
+    let editingIndex = -1;
 
     // Helpers
     const uiShow = el => el.classList.remove('hidden');
     const uiHide = el => el.classList.add('hidden');
+    const showModal = el => el.classList.add('show');
+    const hideModal = el => el.classList.remove('show');
     const toast = (el, msg) => el.textContent = msg;
 
     function readFileAsDataURL(file){
@@ -290,12 +374,29 @@
     function renderThumbs(){
       thumbs.innerHTML='';
       localStops.forEach((s,i)=>{
+        const wrap=document.createElement('div');
+        wrap.className='thumbWrap';
         const img=document.createElement('img');
         img.className='thumb';
         img.title=s.title || `Stop ${i+1}`;
         img.src=s.imageData || s.imageURL || '';
         img.onerror = ()=>{ img.style.opacity=.7; img.title='Image failed to load'; };
-        thumbs.appendChild(img);
+
+        // Click to open editor
+        img.addEventListener('click', ()=> openPhotoEditor(i));
+
+        // Small delete button (quick)
+        const del=document.createElement('button');
+        del.className='delBtn';
+        del.textContent='Delete';
+        del.addEventListener('click', (e)=>{
+          e.stopPropagation();
+          deletePhotoAt(i);
+        });
+
+        wrap.appendChild(img);
+        wrap.appendChild(del);
+        thumbs.appendChild(wrap);
       });
     }
 
@@ -314,13 +415,12 @@
       scenarioList.innerHTML=''; editStatus.textContent='Ready';
     };
 
-    // Create flow (no short label; no extra top add/retry buttons)
+    // Create flow
     savePhoto.onclick = async ()=>{
       try{
         const file = photoInput.files?.[0];
         if(!file){ alert('Please choose a photo first.'); return; }
 
-        // Create scenario shell on first photo
         if(!currentScenarioId){
           const name=(scenarioName.value||'').trim();
           if(!name){ alert('Please enter a Scenario Name.'); return; }
@@ -342,7 +442,7 @@
         const gps = await getGPS();
         const r = Math.max(5, Math.min(1000, Math.round(parseInt(radius.value||'50',10))));
         const stop = {
-          title: '', // short label removed
+          title: '',
           caption: (caption.value||'').trim(),
           lat: gps.lat, lng: gps.lng,
           radiusMeters: r,
@@ -361,7 +461,7 @@
       }
     };
 
-    // Save Scenario (sticky button)
+    // Save Scenario
     finalizeScenario.onclick = async ()=>{
       try{
         if(!currentScenarioId){
@@ -378,7 +478,7 @@
           uiHide(scenarioMeta);
         }
         toast(createStatus,'Scenario saved.');
-        // Reset for next create
+        // Reset for next create (optional)
         currentScenarioId=null; localStops=[];
         renderThumbs();
         scenarioName.value=''; dispatchInfo.value='';
@@ -389,7 +489,7 @@
       }
     };
 
-    // Edit view (unchanged logic)
+    // Edit view
     async function loadForEdit(){
       try{
         editStatus.textContent='Loading scenarios…';
@@ -441,6 +541,77 @@
         editStatus.textContent='Error: '+(e?.message||e);
       }
     }
+
+    // --------------- Photo Editor Logic ---------------
+    function openPhotoEditor(index){
+      const s = localStops[index];
+      if(!s){ return; }
+      editingIndex = index;
+      editorTitle.textContent = `Edit Photo #${index+1}`;
+      editorImg.src = s.imageData || s.imageURL || '';
+      imgInfo.textContent = s.imageURL ? 'Remote image' : 'Embedded image';
+      editorCaption.value = s.caption || '';
+      editorRadius.value = s.radiusMeters ?? 50;
+      editorLat.value = Number(s.lat ?? '').toFixed(6);
+      editorLng.value = Number(s.lng ?? '').toFixed(6);
+      editorStatus.textContent = '';
+      showModal(photoEditor);
+    }
+
+    closeEditor.onclick = ()=> hideModal(photoEditor);
+
+    useGPS.onclick = async ()=>{
+      try{
+        editorStatus.textContent = 'Getting current GPS…';
+        const gps = await getGPS();
+        editorLat.value = Number(gps.lat).toFixed(6);
+        editorLng.value = Number(gps.lng).toFixed(6);
+        editorStatus.textContent = 'GPS updated in editor (remember to Save Changes).';
+      }catch(e){
+        editorStatus.textContent = 'GPS error: ' + (e?.message || e);
+      }
+    };
+
+    saveChanges.onclick = async ()=>{
+      try{
+        if(editingIndex<0) return;
+        const lat = parseFloat(editorLat.value);
+        const lng = parseFloat(editorLng.value);
+        let r = Math.round(parseInt(editorRadius.value||'50',10));
+        r = Math.max(5, Math.min(1000, r));
+        if(Number.isNaN(lat) || Number.isNaN(lng)){ alert('Please enter valid latitude/longitude.'); return; }
+
+        const s = localStops[editingIndex];
+        s.caption = (editorCaption.value||'').trim();
+        s.radiusMeters = r;
+        s.lat = lat;
+        s.lng = lng;
+
+        await set(ref(db,'scenarios/'+currentScenarioId+'/stops'), localStops);
+        renderThumbs();
+        editorStatus.textContent = 'Saved.';
+        setTimeout(()=> hideModal(photoEditor), 300);
+      }catch(e){
+        editorStatus.textContent = 'Save failed: ' + (e?.message||e);
+      }
+    };
+
+    function deletePhotoAt(index){
+      if(index<0 || index>=localStops.length) return;
+      if(!confirm('Delete this photo? This cannot be undone.')) return;
+      localStops.splice(index,1);
+      set(ref(db,'scenarios/'+currentScenarioId+'/stops'), localStops)
+        .then(()=>{
+          renderThumbs();
+          // If deleting from within modal
+          if(editingIndex===index){ hideModal(photoEditor); editingIndex=-1; }
+          toast(createStatus, 'Photo deleted.');
+        })
+        .catch(e=> alert('Delete failed: ' + (e?.message||e)));
+    }
+
+    deletePhoto.onclick = ()=>{ if(editingIndex>=0) deletePhotoAt(editingIndex); };
+
   </script>
 </body>
 </html>
