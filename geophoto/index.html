@@ -9,13 +9,17 @@
   <style>
     :root{ --bg:#0b0f14; --bg2:#101726; --card:#121823; --muted:#8ea0b3; --text:#eaf2ff; --blue:#0a84ff; --shadow:0 12px 34px rgba(0,0,0,.38); --radius:18px; }
     *{box-sizing:border-box}
-    html,body{ margin:0; padding:0; color:var(--text); font-family:system-ui,-apple-system,Segoe UI,Roboto,Inter,Arial,sans-serif;
+    html,body{
+      margin:0; padding:0; color:var(--text);
+      font-family:system-ui,-apple-system,Segoe UI,Roboto,Inter,Arial,sans-serif;
       background:
         radial-gradient(1400px 700px at 15% -15%, rgba(10,132,255,.28), transparent 60%),
         radial-gradient(1200px 600px at 110% 0%, rgba(255,59,48,.22), transparent 60%),
         linear-gradient(165deg, var(--bg2), var(--bg) 55%);
-      -webkit-text-size-adjust:100%; scroll-behavior:smooth; }
-    a{color:inherit; text-decoration:none} img{max-width:100%; height:auto; display:block}
+      -webkit-text-size-adjust:100%; scroll-behavior:smooth;
+    }
+    a{color:inherit; text-decoration:none}
+    img{max-width:100%; height:auto; display:block}
 
     .topbar{position:sticky; top:0; z-index:20; background:rgba(12,15,22,.75); backdrop-filter:saturate(120%) blur(6px); border-bottom:1px solid rgba(255,255,255,.07)}
     .topnav{max-width:1100px; margin:0 auto; padding:10px 20px; display:flex; align-items:center; gap:14px}
@@ -24,22 +28,53 @@
 
     .wrap{max-width:1100px; margin:0 auto; padding:18px 20px 100px}
     .grid{display:grid; gap:14px; grid-template-columns:1fr}
-    .card{border-radius:var(--radius); background:var(--card); border:1px solid rgba(255,255,255,.07); box-shadow:var(--shadow); overflow:hidden; transition:transform .15s ease, border-color .2s ease}
-    .card:hover{transform:translateY(-2px); border-color:rgba(10,132,255,.35)}
+    .card{border-radius:var(--radius); background:var(--card); border:1px solid rgba(255,255,255,.07); box-shadow:var(--shadow); overflow:hidden}
     .card-inner{padding:18px}
     .eyebrow{font-size:12px; color:var(--muted); margin-bottom:8px}
     h1,h2,h3{margin:0} h2{font-size:20px} p,.status{color:var(--muted); font-size:14px; margin:6px 0 0}
 
-    .btn{appearance:none; border:0; border-radius:12px; cursor:pointer; padding:14px 16px; font-weight:800; font-size:16px; color:#03131b; background:linear-gradient(180deg,#54a6ff,var(--blue)); box-shadow:var(--shadow); text-align:center}
+    .btn{appearance:none; border:0; border-radius:12px; cursor:pointer; padding:12px 14px; font-weight:800; font-size:15px; color:#03131b; background:linear-gradient(180deg,#54a6ff,var(--blue)); box-shadow:var(--shadow); text-align:center}
     .btn[disabled]{opacity:.65; cursor:not-allowed}
     .btn.secondary{background:transparent; color:var(--text); border:1px solid rgba(255,255,255,.14)}
+
     select{width:100%; padding:14px 12px; font-size:16px; border-radius:12px; border:1px solid rgba(255,255,255,.14); background:#0f1624; color:var(--text); outline:none}
     .row{display:flex; gap:10px; flex-wrap:wrap; align-items:center}
 
-    #viewer .card-inner{padding:12px}
-    #photoWrap{ margin-top:10px; border-radius:16px; border:1px solid rgba(255,255,255,.12); background:#000; overflow:hidden; }
-    #photo{ width:100%; height:min(78vh, calc(100vh - 220px)); object-fit:contain; background:#000; image-rendering:auto }
-    #caption{font-size:15px; color:#e9f1ff}
+    /* Viewer area */
+    #viewer .card-inner{padding:10px}
+    #scTitle{font-size:18px; margin:0 0 8px 0}
+
+    #photoWrap{
+      position:relative;
+      width:100%;
+      height:calc(100vh - 210px); /* fills available screen below header/controls */
+      min-height:60vh;
+      border-radius:16px;
+      border:1px solid rgba(255,255,255,.12);
+      background:#000;
+      overflow:hidden;
+    }
+    #photo{
+      position:absolute; inset:0;
+      width:100%; height:100%;
+      object-fit:contain; /* full viewer area without cropping */
+      image-rendering:auto;
+      background:#000;
+    }
+
+    /* overlay controls inside the photo box */
+    .overlayBar{
+      position:absolute; left:0; right:0; bottom:0;
+      display:flex; justify-content:space-between; align-items:center;
+      gap:10px; padding:8px;
+      background:linear-gradient(0deg, rgba(0,0,0,.55), transparent);
+    }
+    .pill{display:inline-flex; gap:8px; align-items:center; padding:6px 10px; border-radius:999px; border:1px solid rgba(255,255,255,.18); color:#e7f1ff; background:rgba(0,0,0,.35)}
+    .rightBtns{display:flex; gap:8px}
+    #pushToRead{display:none} /* only shown on iPhone */
+
+    #caption{font-size:15px; color:#e9f1ff; margin-top:10px}
+    #detail{font-size:12px; color:#a8c3df; margin-top:4px}
 
     footer{max-width:1100px; margin:34px auto; padding:0 20px; color:#aebdd1; font-size:13px; border-top:1px solid rgba(255,255,255,.06); display:flex; justify-content:space-between; gap:16px; flex-wrap:wrap}
     #runTimer{font-size:13px; color:#cfe1ff}
@@ -48,6 +83,10 @@
 
     .spin{width:18px;height:18px;border-radius:50%;border:3px solid rgba(255,255,255,.25);border-top-color:#fff;animation:spin .9s linear infinite}
     @keyframes spin{to{transform:rotate(360deg)}}
+
+    @media (max-width:640px){
+      #photoWrap{height:calc(100vh - 240px)}
+    }
   </style>
 </head>
 <body>
@@ -78,19 +117,22 @@
 
       <article class="card" id="viewer" style="display:none">
         <div class="card-inner">
-          <div class="row" style="justify-content:space-between; align-items:center">
-            <h3 id="scTitle" style="margin:0; font-size:18px">(scenario)</h3>
-            <button id="backBtn" class="btn secondary" type="button">Back</button>
-          </div>
-
-          <div class="status" id="dispatchBlock" style="white-space:pre-wrap; margin-top:8px"></div>
-          <div class="status" id="geoStatus" style="margin-top:4px">Waiting for location…</div>
+          <h3 id="scTitle">(scenario)</h3>
 
           <div id="result" style="display:none">
-            <h3 id="stopTitle" style="margin:12px 2px 6px 2px"></h3>
-            <div id="photoWrap"><img id="photo" alt="Photo for this stop" decoding="async" fetchpriority="high"></div>
-            <div class="status" id="caption" style="white-space:pre-wrap; margin-top:10px"></div>
-            <div class="status" id="detail"></div>
+            <div id="photoWrap">
+              <img id="photo" alt="Photo for this stop" decoding="async" fetchpriority="high">
+              <!-- overlay control bar inside the photo -->
+              <div class="overlayBar">
+                <button id="stopScenario" class="btn secondary" type="button">Stop Scenario</button>
+                <div class="rightBtns">
+                  <button id="pushToRead" class="btn secondary" type="button">🔊 Push to Read</button>
+                  <span class="pill" id="runTimer">00:00</span>
+                </div>
+              </div>
+            </div>
+            <div id="caption" style="white-space:pre-wrap;"></div>
+            <div id="detail"></div>
           </div>
         </div>
       </article>
@@ -99,16 +141,14 @@
         <div class="card-inner">
           <div class="eyebrow">Run</div>
           <h2>Scenario Controls</h2>
-          <p id="ttsNote" class="status">iPhone now uses Push-to-Speak. Android/Desktop speak automatically.</p>
+          <p id="ttsNote" class="status">iPhone uses Push-to-Read. Android/Desktop read automatically.</p>
           <div class="row" style="margin-top:10px; align-items:flex-start">
             <button id="startScenario" class="btn" type="button">Start Scenario</button>
             <button id="muteToggle" class="btn secondary" type="button">Mute</button>
-            <button id="speakNow" class="btn secondary" type="button" style="display:none">🔊 Push to Speak</button>
             <label style="margin-left:auto; color:var(--muted)">Rate
               <input id="rate" type="range" min="0.7" max="1.3" step="0.05" value="1" />
             </label>
           </div>
-          <div id="runTimer" aria-live="polite" style="margin-top:8px">00:00</div>
         </div>
       </article>
     </div>
@@ -126,24 +166,23 @@
   <script>
   (function(){
     const $ = id => document.getElementById(id);
-    const viewer=$('viewer'), backBtn=$('backBtn');
+    const viewer=$('viewer');
     const select=$('scenarioSelect'), status=$('status'), diag=$('diag'), debug=$('debug'), connStatus=$('connStatus');
-    const dispatchBlock=$('dispatchBlock'), geoStatus=$('geoStatus');
-    const result=$('result'), stopTitle=$('stopTitle'), photo=$('photo'), caption=$('caption'), detail=$('detail');
-    const scTitle=$('scTitle');
+    const result=$('result'), photo=$('photo'), caption=$('caption'), detail=$('detail'), scTitle=$('scTitle');
     const startBtn=$('startScenario'), muteToggle=$('muteToggle'), rate=$('rate'), runTimer=$('runTimer');
-    const speakNow=$('speakNow'), ttsNote=$('ttsNote');
+    const pushToRead=$('pushToRead'), stopScenario=$('stopScenario'), ttsNote=$('ttsNote');
+
     const log = (m)=>{ console.log('[viewer]', m); debug.textContent=String(m); };
 
-    // ---------- Device flags / TTS policy ----------
+    /* Device flags / TTS policy */
     const isIOS = /iP(hone|ad|od)/i.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
     const synthOK = ('speechSynthesis' in window) && ('SpeechSynthesisUtterance' in window);
-    const autoSpeak = !isIOS && synthOK;     // Android/Desktop auto
-    const buttonSpeak = isIOS && synthOK;    // iPhone uses button
-    speakNow.style.display = buttonSpeak ? '' : 'none';
-    ttsNote.textContent = buttonSpeak ? 'iPhone uses Push-to-Speak. Android/Desktop speak automatically.' : 'Android/Desktop speak automatically.';
+    const autoSpeak = !isIOS && synthOK;   // Android/Desktop auto
+    const buttonSpeak = isIOS && synthOK;  // iPhone uses button
+    pushToRead.style.display = buttonSpeak ? '' : 'none';
+    ttsNote.textContent = buttonSpeak ? 'iPhone uses Push-to-Read. Android/Desktop read automatically.' : 'Android/Desktop read automatically.';
 
-    // ---------- Firebase ----------
+    /* Firebase */
     const firebaseConfig = {
       apiKey:"AIzaSyDM6DpRSeZueVKRpbyJyDmhf8WY66KyCDk",
       authDomain:"dailyquiz-d5279.firebaseapp.com",
@@ -161,10 +200,10 @@
       connStatus.style.color = ok ? '#89ffb2' : '#ffdede';
     });
 
-    // ---------- Helpers for new imageData format ----------
+    /* Handle new imageData format {format,data} as data: URL */
     function toDataURLFromStored(val){
       if (!val) return '';
-      if (typeof val === 'string') return val; // legacy data URL
+      if (typeof val === 'string') return val;
       if (val && val.data){
         const fmt = (val.format === 'jpeg' || val.format === 'jpg') ? 'jpeg' : 'png';
         return `data:image/${fmt};base64,${val.data}`;
@@ -172,7 +211,7 @@
       return '';
     }
 
-    // ---------- Scenario loading (both paths) ----------
+    /* Scenario loading */
     let scenarios=[], pathUsed='';
     function normalizeStops(stopsLike){
       if(!stopsLike) return [];
@@ -184,7 +223,6 @@
         const radiusMeters = num(s.radiusMeters ?? s.radius ?? s.r) || 40;
         const title = s.title || s.name || '';
         const caption = s.caption || s.text || s.note || '';
-        // Accept new object shape from Advanced Editor:
         const image = toDataURLFromStored(s.imageData || s.imageURL || s.imageUrl || s.url || s.photoURL || s.photo || s.img);
         return { ...s, lat, lng, radiusMeters, title, caption, image };
       }).filter(s => typeof s.lat === 'number' && typeof s.lng === 'number');
@@ -239,7 +277,7 @@
       if(!scenarios.length){ status.textContent='No scenarios found.'; diag.textContent='Loaded from: none'; }
     }, 2000);
 
-    // ---------- TTS ----------
+    /* TTS */
     let muted=false, rateVal=1.0; let lastSpeechText='';
     const TTS = (() => {
       if(!synthOK){
@@ -255,7 +293,7 @@
       }
       function say(text){
         lastSpeechText = text || '';
-        if(!unlocked) return; // iOS: wait for user button; Android/desktop: unlocked on Start
+        if(!unlocked) return; // iOS waits for gesture
         const q = chunk(text);
         q.forEach(seg=>{
           const u=new SpeechSynthesisUtterance(seg);
@@ -271,14 +309,41 @@
       return { unlockOnce, say, stop, setRate:(r)=>{rateVal=r;}, setMuted:(m)=>{muted=m;} };
     })();
 
-    speakNow.onclick = ()=>{
-      // On iPhone: unlock + speak the latest caption/dispatch
+    pushToRead.onclick = ()=>{
       TTS.unlockOnce();
       if (lastSpeechText) TTS.say(lastSpeechText);
       else TTS.say('Ready.');
     };
 
-    // ---------- Geofence + display ----------
+    /* Wake Lock (prevent screen sleep) */
+    let wakeLock=null, keepAliveVideo=null;
+    async function acquireWakeLock(){
+      try{
+        if ('wakeLock' in navigator) {
+          wakeLock = await navigator.wakeLock.request('screen');
+          wakeLock.addEventListener('release', ()=>{ wakeLock=null; });
+          return;
+        }
+      }catch{}
+      // iOS fallback: play a tiny looping muted video to keep CPU active
+      if (!keepAliveVideo) {
+        keepAliveVideo = document.createElement('video');
+        keepAliveVideo.setAttribute('playsinline','');
+        keepAliveVideo.muted=true; keepAliveVideo.loop=true;
+        // 1px silent inline video
+        keepAliveVideo.src = 'data:video/mp4;base64,AAAAIGZ0eXBpc29tAAAAAGlzb21pc28yYXZjMW1wNDEAAAAIZnJlZQA=';
+        keepAliveVideo.style.position='fixed'; keepAliveVideo.style.width='1px'; keepAliveVideo.style.height='1px';
+        keepAliveVideo.style.opacity='0'; keepAliveVideo.style.pointerEvents='none';
+        document.body.appendChild(keepAliveVideo);
+      }
+      try{ await keepAliveVideo.play(); }catch{}
+    }
+    async function releaseWakeLock(){
+      try{ if (wakeLock) { await wakeLock.release(); wakeLock=null; } }catch{}
+      try{ if (keepAliveVideo){ await keepAliveVideo.pause(); } }catch{}
+    }
+
+    /* Geofence + display */
     const toRad = x => x*Math.PI/180;
     const hav=(a,b,c,d)=>{ const R=6371000, dA=toRad(c-a), dB=toRad(d-b);
       return 2*R*Math.asin(Math.sqrt(Math.sin(dA/2)**2 + Math.cos(toRad(a))*Math.cos(toRad(c))*Math.sin(dB/2)**2)); };
@@ -304,13 +369,16 @@
     function speakIfAllowed(text){
       lastSpeechText = text || '';
       if (autoSpeak) TTS.say(text);
-      // On iPhone we only speak on button press; we still store lastSpeechText
     }
 
-    function showDispatchIntro(sc){
-      const txt=(sc.dispatch||sc.notes||'').trim();
-      dispatchBlock.textContent = txt ? `Dispatch: ${txt}` : 'Dispatch: (none)';
-      speakIfAllowed(txt ? txt : `${sc.title || 'Scenario'} started.`);
+    function showStop(sc, hit){
+      result.style.display='';
+      setImage(photo, hit.s);
+      caption.textContent=hit.s.caption||'';
+      detail.textContent=hit.s.title ? hit.s.title : '';
+      const speech = `${hit.s.title ? (hit.s.title+'. ') : ''}${hit.s.caption || ''}`;
+      speakIfAllowed(speech);
+      viewer.scrollIntoView({behavior:'smooth', block:'start'});
     }
 
     let current=null, watchId=null, lastStopIndex=-1;
@@ -321,35 +389,27 @@
       current=sc;
       viewer.style.display=''; scTitle.textContent=sc.title||sc.name||sc.notes||'(scenario)';
 
-      result.style.display='none'; stopTitle.textContent=''; caption.textContent=''; detail.textContent='';
+      result.style.display='none'; caption.textContent=''; detail.textContent='';
       lastStopIndex=-1;
 
-      showDispatchIntro(sc);
+      const intro=(sc.dispatch||sc.notes||sc.title||'').trim();
+      speakIfAllowed(intro);
 
       if(watchId) navigator.geolocation.clearWatch(watchId);
-      geoStatus.innerHTML='Watching your location… <span class="spin" aria-hidden="true"></span>';
       try{
         watchId=navigator.geolocation.watchPosition(p=>{
           const { latitude:la, longitude:ln, accuracy:acc }=p.coords;
-          geoStatus.textContent=`Lat ${la.toFixed(5)}, Lng ${ln.toFixed(5)} (±${Math.round(acc)}m)`;
           const hit=findHit((sc.stops||[]), la, ln, acc);
           if(hit && hit.index!==lastStopIndex){
             lastStopIndex=hit.index;
-            result.style.display='';
-            stopTitle.textContent=hit.s.title||'Stop';
-            setImage(photo, hit.s);
-            caption.textContent=hit.s.caption||'';
-            detail.textContent=`Distance: ${Math.round(hit.dist)} m (radius ${hit.s.radiusMeters} m)`;
-            const speech = `${hit.s.title ? (hit.s.title+'. ') : ''}${hit.s.caption || ''}`;
-            speakIfAllowed(speech);
-            viewer.scrollIntoView({behavior:'smooth', block:'start'});
+            showStop(sc, hit);
           }
-        }, err=>{ geoStatus.textContent='Location error: '+err.message; }, { enableHighAccuracy:true, maximumAge:0, timeout:20000 });
-      }catch(e){ geoStatus.textContent='Location error: '+e.message; }
+        }, err=>{ /* silent */ }, { enableHighAccuracy:true, maximumAge:0, timeout:20000 });
+      }catch(e){ /* silent */ }
     }
 
-    // ---------- UI: mute/rate, timer, start/back ----------
-    muteToggle.onclick=()=>{ muted = (muteToggle.textContent==='Mute'); TTS.setMuted(muted); muteToggle.textContent = muted ? 'Unmute' : 'Mute'; };
+    /* UI: mute/rate, timer, start/stop */
+    muteToggle.onclick=()=>{ const nowMute = (muteToggle.textContent==='Mute'); TTS.setMuted(nowMute); muteToggle.textContent = nowMute ? 'Unmute' : 'Mute'; };
     rate.oninput=e=>{ const r=parseFloat(e.target.value||'1')||1; TTS.setRate(r); };
 
     function formatTime(ms){ const s=Math.floor(ms/1000), m=Math.floor(s/60), sec=s%60; return String(m).padStart(2,'0')+':'+String(sec).padStart(2,'0'); }
@@ -357,32 +417,33 @@
     function startTimer(){ startMs=Date.now(); clearInterval(runInterval); runInterval=setInterval(()=>{ runTimer.textContent=formatTime(Date.now()-startMs); },500); }
     function stopTimer(){ clearInterval(runInterval); runInterval=null; runTimer.textContent='00:00'; }
 
-    startBtn.addEventListener('click', ()=>{
+    async function startScenario(){
       const id=select.value;
       if(!id){ status.textContent='Choose a scenario first.'; return; }
-
-      // Unlock speech on platforms that need a gesture (Android/Desktop too)
-      TTS.unlockOnce();
-
+      TTS.unlockOnce();     // primes Android/Desktop and allows iOS after gesture
+      await acquireWakeLock();
       startTimer();
-      startBtn.textContent='Scenario Running';
-      startBtn.disabled=true;
-
-      // Defer open to next frame for smoother iOS UI
+      startBtn.textContent='Scenario Running'; startBtn.disabled=true;
       requestAnimationFrame(()=> openScenarioById(id));
-    });
-
-    backBtn.onclick=()=>{ 
+    }
+    async function stopScenarioNow(){
       viewer.style.display='none';
-      try{ navigator.geolocation.clearWatch(watchId); }catch{} 
-      status.textContent='Choose a scenario and press Start Scenario.';
+      try{ navigator.geolocation.clearWatch(watchId); }catch{}
       TTS.stop();
+      await releaseWakeLock();
       startBtn.disabled=false; startBtn.textContent='Start Scenario';
       stopTimer();
-    };
+    }
 
-    // Preselect by ?id=abc if provided
+    startBtn.addEventListener('click', startScenario);
+    stopScenario.addEventListener('click', stopScenarioNow);
+
+    // Preselect by ?id=
     (function(){ const pre=new URLSearchParams(location.search).get('id'); if(!pre) return; const iv=setInterval(()=>{ if(select.options.length>1){ clearInterval(iv); select.value=pre; } },200); })();
+
+    /* Misc */
+    function resizeViewerArea(){ /* nothing needed; CSS uses viewport height; keep hook if needed later */ }
+    window.addEventListener('resize', resizeViewerArea);
     document.getElementById('year').textContent = new Date().getFullYear();
     window.addEventListener('error', e => log('Error: ' + (e.message||e)));
     window.addEventListener('unhandledrejection', e => log('Promise error: ' + (e.reason && e.reason.message ? e.reason.message : e.reason)));
