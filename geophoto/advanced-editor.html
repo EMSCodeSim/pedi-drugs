@@ -4,127 +4,715 @@
   <meta charset="utf-8" />
   <title>FireOps SIM — Advanced Editor</title>
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="description" content="Advanced editor for FireOps SIM Geo-Photo scenarios with overlays and RTDB save." />
   <meta name="theme-color" content="#0b0f14" />
+  <link rel="icon" href="data:," />
   <style>
-    :root{ --bg:#0b0f14; --bg2:#101726; --card:#121823; --muted:#8ea0b3; --text:#eaf2ff; --blue:#0a84ff; --teal:#2dd4bf; --red:#ff3b30; --shadow:0 12px 34px rgba(0,0,0,.38); --radius:18px }
+    :root{ --bg:#0b0f14; --bg2:#101726; --card:#121823; --muted:#8ea0b3; --text:#eaf2ff; --blue:#0a84ff; --teal:#2dd4bf; --red:#ff3b30; --shadow:0 12px 34px rgba(0,0,0,.38); --radius:18px; --radiusSm:14px; --border: rgba(255,255,255,.08);}
     *{box-sizing:border-box}
-    html,body{margin:0;padding:0;background:
+    html,body{margin:0;padding:0;color:var(--text);font-family:system-ui,-apple-system,Segoe UI,Roboto,Inter,Arial,sans-serif;background:
       radial-gradient(1400px 700px at 15% -15%, rgba(10,132,255,.28), transparent 60%),
       radial-gradient(1200px 600px at 110% 0%, rgba(255,59,48,.22), transparent 60%),
-      linear-gradient(165deg, var(--bg2), var(--bg) 55%);
-      color:var(--text); font-family:system-ui,-apple-system,Segoe UI,Roboto,Inter,Arial,sans-serif }
-    img{max-width:100%; display:block}
-    .topbar{position:sticky; top:0; z-index:30; background:rgba(12,15,22,.75); backdrop-filter:blur(6px); border-bottom:1px solid rgba(255,255,255,.08)}
-    .topnav{max-width:1200px; margin:0 auto; padding:10px 16px; display:flex; gap:12px; align-items:center; justify-content:space-between}
-    .brand{display:flex; gap:12px; align-items:center; font-weight:900}
-    .brand .logo{width:40px; height:40px; border-radius:10px; background:#0f1624; box-shadow:var(--shadow)}
-    .card{background:#121823; border:1px solid rgba(255,255,255,.08); border-radius:16px; box-shadow:var(--shadow); overflow:hidden}
-    .grid{max-width:1200px; margin:16px auto; padding:0 16px; display:grid; grid-template-columns: 260px 1fr 300px; gap:12px}
-    .col{display:flex; flex-direction:column; gap:12px}
-    .panel{padding:14px}
-    label{font-size:12px; color:#a9bed8; display:block; margin:8px 0 6px}
-    input, textarea, select{width:100%; padding:10px 12px; border-radius:12px; background:#0f1624; color:var(--text); border:1px solid rgba(255,255,255,.14); font-size:14px}
-    textarea{min-height:74px; resize:vertical}
-    .btn{appearance:none; border:0; border-radius:12px; padding:10px 12px; font-weight:800; cursor:pointer; background:linear-gradient(180deg,#54a6ff,var(--blue)); color:#03131b; box-shadow:var(--shadow)}
-    .btn.secondary{background:transparent; color:var(--text); border:1px solid rgba(255,255,255,.16)}
-    .btn.danger{background:var(--red); color:#fff}
-    .status{font-size:12px; color:#8ea0b3}
+      linear-gradient(165deg, var(--bg2), var(--bg) 55%)}
+    a{color:inherit;text-decoration:none}
 
-    #stageWrap{position:relative; background:#000; border-radius:14px; border:1px solid rgba(255,255,255,.12); min-height:60vh; display:flex; align-items:center; justify-content:center; overflow:hidden}
-    #baseImg{width:100%; height:100%; object-fit:contain; background:#000}
-    #overlayCanvas{position:absolute; inset:0}
-    .thumbs{display:flex; flex-wrap:wrap; gap:8px}
-    .thumb{width:88px; height:88px; object-fit:cover; border-radius:10px; border:1px solid rgba(255,255,255,.12); background:#0a2230; cursor:pointer}
-    .row{display:flex; gap:8px; flex-wrap:wrap; align-items:center}
-    #overlayMenu{display:grid; grid-template-columns:repeat(auto-fill,minmax(60px,1fr)); gap:8px; margin-top:8px}
-    .overlayBtn{background:#0f1624;border:1px solid rgba(255,255,255,.18);border-radius:10px;padding:4px;cursor:pointer;display:flex;align-items:center;justify-content:center}
-    .overlayBtn img{width:100%;height:100%;object-fit:contain}
-    #savingHUD{position:fixed; inset:0; display:none; align-items:center; justify-content:center; background:rgba(0,0,0,.45); z-index:60}
-    #savingHUD .modal{background:#0e1524; border:1px solid rgba(255,255,255,.12); border-radius:16px; padding:16px; box-shadow:var(--shadow); min-width:240px; text-align:center}
-    .spin{width:18px; height:18px; border-radius:50%; border:3px solid rgba(255,255,255,.25); border-top-color:#fff; animation:spin .9s linear infinite; display:inline-block}
+    .topbar{position:sticky;top:0;z-index:50;background:rgba(12,15,22,.78);backdrop-filter:blur(6px) saturate(120%);border-bottom:1px solid rgba(255,255,255,.07)}
+    .topnav{max-width:1200px;margin:0 auto;padding:10px 20px;display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+    .brandmini{display:flex;align-items:center;gap:12px;font-weight:800}
+    .logo img{width:40px;height:40px;border-radius:10px;box-shadow:var(--shadow);object-fit:cover;background:#0f1624}
+    .tag{color:var(--muted);font-size:12px}
+
+    main{max-width:1200px;margin:20px auto 80px;padding:0 20px}
+    .app{display:grid;grid-template-columns:320px 1fr 380px;gap:12px;align-items:start}
+    .col{background:var(--card);border:1px solid var(--border);border-radius:var(--radiusSm);box-shadow:var(--shadow);padding:12px;overflow:auto}
+    label{display:block;margin:8px 0 6px 2px;font-size:12px;color:var(--muted)}
+    select,input,textarea,button{font-size:14px}
+    select,input[type="text"],textarea{width:100%;padding:10px;border-radius:10px;border:1px solid rgba(255,255,255,.12);background:#0d2430;color:var(--text);outline:none}
+    textarea{min-height:72px;resize:vertical}
+    .btn{appearance:none;border:0;border-radius:12px;padding:10px 12px;background:linear-gradient(180deg,#54a6ff,var(--blue));color:#03131b;font-weight:800;cursor:pointer;box-shadow:var(--shadow)}
+    .btn.secondary{background:transparent;color:var(--text);border:1px solid rgba(255,255,255,.18)}
+    .btn.warn{background:#ffc857;color:#2a1d00}
+    .btn.danger{background:var(--red);color:#ffecec}
+    .row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+    .sectionTitle{font-weight:800;margin:6px 0}
+    .thumb{width:56px;height:56px;border-radius:8px;object-fit:cover;border:1px solid rgba(255,255,255,.15);cursor:pointer;background:#0b2130}
+    .thumb.active{outline:3px solid var(--teal)}
+    .pill{display:inline-flex;gap:8px;align-items:center;padding:6px 10px;border-radius:999px;border:1px solid rgba(255,255,255,.14);color:var(--muted)}
+
+    .canvasWrap{position:relative;background:#061621;border:1px solid rgba(255,255,255,.12);border-radius:12px;overflow:hidden}
+    #c{display:block;width:100%;height:calc(100vh - 360px);background:transparent}
+    .bar{display:flex;gap:8px;flex-wrap:wrap}
+    .divider{height:1px;background:rgba(255,255,255,.1);opacity:.8;margin:10px 0}
+
+    /* Overlay shelf */
+    .olThumb{width:100%;aspect-ratio:1/1;border-radius:10px;border:1px solid rgba(255,255,255,.12);background:#0b2130;display:flex;align-items:center;justify-content:center;cursor:pointer}
+    .olThumb img{max-width:88%;max-height:88%;display:block}
+    .ol-tab.active{outline:3px solid var(--teal)}
+
+    /* HUDs */
+    #errbar{position:fixed;left:10px;bottom:10px;background:#2b0d0d;color:#ffd7d7;border:1px solid #7a2b2b;border-radius:12px;padding:8px 12px;max-width:80vw;display:none;z-index:9999}
+    .overlayHUD{position:fixed;inset:0;display:none;align-items:center;justify-content:center;background:rgba(0,0,0,.45);backdrop-filter:blur(2px);z-index:9998}
+    .hudCard{min-width:220px;padding:18px;border-radius:14px;background:#0c1220;border:1px solid rgba(255,255,255,.12);box-shadow:var(--shadow);display:flex;gap:12px;align-items:center;justify-content:center;font-weight:800}
+    .spinner{width:22px;height:22px;border-radius:50%;border:3px solid rgba(255,255,255,.25);border-top-color:#fff;animation:spin 0.9s linear infinite}
     @keyframes spin{to{transform:rotate(360deg)}}
+
+    footer{max-width:1200px;margin:40px auto;padding:18px 20px;color:var(--muted);font-size:13px;border-top:1px solid rgba(255,255,255,.06);display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap}
+    @media (max-width:1100px){ .app{grid-template-columns:1fr} #c{height:56vh} }
   </style>
 </head>
 <body>
   <div class="topbar">
     <div class="topnav">
-      <div class="brand"><img class="logo" src="/assets/logo/fire-ops-sim.png" alt=""/><div>FireOps SIM — Advanced Editor</div></div>
-      <div class="row">
-        <select id="scenarioSelect"><option value="">Loading scenarios…</option></select>
-        <button id="backBtn" class="btn secondary">Back</button>
-      </div>
-    </div>
-  </div>
-
-  <div class="grid">
-    <div class="col">
-      <div class="card panel">
-        <div class="row" style="justify-content:space-between"><strong>Photo Meta</strong><span id="leftStatus" class="status">Ready</span></div>
-        <label>Title</label>
-        <input id="metaTitle"/>
-        <label>Caption</label>
-        <textarea id="metaCaption"></textarea>
-        <div class="row">
-          <div style="flex:1"><label>Latitude</label><input id="metaLat" type="number" step="0.000001"/></div>
-          <div style="flex:1"><label>Longitude</label><input id="metaLng" type="number" step="0.000001"/></div>
+      <div class="brandmini">
+        <div class="logo" aria-hidden="true"><img src="/assets/logo/fire-ops-sim.png" alt="FireOps SIM logo" /></div>
+        <div>
+          <div style="line-height:1.1; font-size:15px; font-weight:900">FireOps SIM</div>
+          <div class="tag">Real-Time Fire Scene Simulator</div>
         </div>
-        <label>Radius (m)</label>
-        <input id="metaRadius" type="number" min="1" max="1000"/>
-        <button id="saveMeta" class="btn" style="margin-top:8px">Save Meta</button>
-      </div>
-
-      <div class="card panel">
-        <strong>Photos</strong>
-        <div id="thumbs" class="thumbs" style="margin-top:8px"></div>
-      </div>
-
-      <div class="card panel">
-        <strong>Overlays</strong>
-        <div id="overlayMenu"></div>
-      </div>
-    </div>
-
-    <div class="col">
-      <div id="stageWrap" class="card">
-        <img id="baseImg" alt="Selected photo" />
-        <canvas id="overlayCanvas"></canvas>
-      </div>
-    </div>
-
-    <div class="col">
-      <div class="card panel">
-        <strong>Overlay Tools</strong>
-        <div class="row"><button id="flipH" class="btn secondary">Flip H</button><button id="flipV" class="btn secondary">Flip V</button><button id="clearAll" class="btn danger">Clear All</button></div>
-        <div class="row" style="margin-top:8px"><input id="eraserToggle" type="checkbox"/> <label for="eraserToggle">Eraser</label><label style="margin-left:auto">Size <input id="brushSize" type="range" min="4" max="64" value="18"/></label><label>Opacity <input id="brushOpacity" type="range" min="0.1" max="1" step="0.05" value="1"/></label></div>
-        <button id="saveImageToRTDB" class="btn" style="margin-top:8px">Save Image to RTDB</button>
       </div>
     </div>
   </div>
 
-  <div id="savingHUD"><div class="modal"><div class="spin"></div><div>Saving…</div></div></div>
+  <main>
+    <div id="errbar"></div>
+
+    <!-- Loading & Saving HUDs -->
+    <div id="loadingHUD" class="overlayHUD" aria-hidden="true">
+      <div class="hudCard"><div class="spinner"></div><div id="loadingLabel">Loading…</div></div>
+    </div>
+    <div id="savingHUD" class="overlayHUD" aria-hidden="true">
+      <div class="hudCard"><div class="spinner"></div><div>Saving…</div></div>
+    </div>
+
+    <div id="app" class="app">
+      <!-- Left: scenario + meta -->
+      <div class="col" id="leftCol">
+        <div class="row" style="justify-content:space-between">
+          <div class="pill" id="statusPill">Loading…</div>
+          <button id="refresh" class="btn secondary">Refresh</button>
+        </div>
+
+        <label>Scenario</label>
+        <select id="scenarioSel"><option value="">Select scenario…</option></select>
+
+        <div class="divider"></div>
+        <div class="sectionTitle">Photos in scenario</div>
+        <div id="stopList" class="row"></div>
+
+        <div class="divider"></div>
+        <div class="sectionTitle">Selected stop meta</div>
+        <label>Title</label><input id="stopTitle" type="text" />
+        <label>Caption</label><textarea id="stopCaption"></textarea>
+        <div class="row">
+          <div style="flex:1"><label>Latitude</label><input id="stopLat" type="text" /></div>
+          <div style="flex:1"><label>Longitude</label><input id="stopLng" type="text" /></div>
+        </div>
+        <label>Radius (meters)</label><input id="stopRadius" type="text" placeholder="50" />
+        <div class="row" style="margin-top:6px">
+          <button id="useGPS" class="btn secondary">Use my location</button>
+          <button id="saveMeta" class="btn">Save Meta</button>
+        </div>
+        <div id="metaMsg" class="pill" style="margin-top:6px">Ready</div>
+
+        <div class="divider"></div>
+        <div class="row">
+          <input id="replaceFile" type="file" accept="image/*" />
+          <button id="replaceApply" class="btn">Replace Image</button>
+        </div>
+        <div class="row" style="margin-top:6px">
+          <button id="deleteStop" class="btn danger">Delete This Photo</button>
+          <button id="exportPNG" class="btn secondary">Export PNG</button>
+        </div>
+      </div>
+
+      <!-- Center: canvas -->
+      <div class="col">
+        <div class="bar" style="margin-bottom:8px">
+          <button id="fit" class="btn secondary">Fit</button>
+          <button id="zoomIn" class="btn secondary">Zoom +</button>
+          <button id="zoomOut" class="btn secondary">Zoom −</button>
+          <button id="rotateL" class="btn secondary">Rotate ⟲</button>
+          <button id="rotateR" class="btn secondary">Rotate ⟳</button>
+          <span class="pill" id="canvasInfo">Canvas</span>
+          <button id="saveImage" class="btn">Save Image to RTDB</button>
+        </div>
+        <div class="canvasWrap"><canvas id="c"></canvas></div>
+      </div>
+
+      <!-- Right: overlays + eraser + flip -->
+      <div class="col" id="rightCol">
+        <div class="sectionTitle">Overlays</div>
+        <div class="row" style="gap:6px; flex-wrap:nowrap; overflow:auto">
+          <button class="btn secondary ol-tab" data-cat="fire">🔥 Fire</button>
+          <button class="btn secondary ol-tab" data-cat="smoke">🌫️ Smoke</button>
+          <button class="btn secondary ol-tab" data-cat="people">🧍 People</button>
+          <button class="btn secondary ol-tab" data-cat="cars">🚗 Cars</button>
+          <button class="btn secondary ol-tab" data-cat="hazard">⚠️ Hazard</button>
+        </div>
+        <div id="overlayShelf" style="margin-top:8px; display:grid; grid-template-columns:repeat(3, 1fr); gap:8px"></div>
+
+        <label style="margin-top:10px">Hue (selected overlay)</label>
+        <input id="overlayHue" type="range" min="-180" max="180" step="1" value="0" />
+
+        <label style="margin-top:10px">Opacity</label>
+        <input id="overlayOpacity" type="range" min="0.05" max="1" step="0.05" value="1" />
+
+        <div class="row" style="margin-top:8px">
+          <button id="bringFront" class="btn secondary">Bring to Front</button>
+          <button id="sendBack" class="btn secondary">Send to Back</button>
+          <button id="deleteObj" class="btn danger">Delete Selected</button>
+        </div>
+
+        <div class="divider"></div>
+        <div class="sectionTitle">Eraser (selected overlay)</div>
+        <div class="row">
+          <button id="eraserStart" class="btn warn">Start</button>
+          <button id="eraserDone" class="btn">Finish</button>
+          <button id="eraserCancel" class="btn secondary">Cancel</button>
+        </div>
+        <label style="margin-top:8px">Brush Size</label>
+        <input id="eraserSize" type="range" min="5" max="120" step="1" value="30" />
+        <label style="margin-top:8px">Overlay Opacity</label>
+        <input id="eraserOverlayOpacity" type="range" min="0.05" max="1" step="0.05" value="1" />
+        <div class="row" style="margin-top:8px">
+          <button id="eraserUndo" class="btn secondary">Undo Erase</button>
+          <button id="eraserRedo" class="btn secondary">Redo Erase</button>
+          <button id="eraserClear" class="btn secondary">Clear Erase</button>
+        </div>
+        <div class="pill" id="eraserStatus" style="margin-top:6px">Eraser: off</div>
+
+        <div class="divider"></div>
+        <div class="sectionTitle">Transform Overlay</div>
+        <div class="row">
+          <button id="flipSelH" class="btn secondary">Flip H</button>
+          <button id="flipSelV" class="btn secondary">Flip V</button>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <footer>
+    <div>© <span id="year"></span> FireOps SIM</div>
+    <div class="external">Part of the <a href="https://emscodesim.com" rel="noopener">EMS Code Sim</a> training ecosystem</div>
+  </footer>
+
+  <!-- Fabric 5.x -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/fabric.js/5.3.0/fabric.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
 
   <script type="module">
-    const overlayMenu=$('overlayMenu');
-    const overlayList=[
-      'people/person1.png','people/person2.png','people/person3.png',
-      'cars/car1.png','cars/car2.png','cars/car3.png','cars/car4.png',
-      'fire/fire1.png','fire/fire2.png','fire/fire3.png','fire/fire4.png','fire/fire5.png','fire/fire6.png','fire/fire7.png','fire/fire8.png',
-      'smoke/smoke1.png','smoke/smoke2.png','smoke/smoke3.png','smoke/smoke4.png']
-      .map(p=>`https://fireopssim.com/geophoto/overlays/${p}`);
+  /* Error banner */
+  const ERR = (msg) => { const b=document.getElementById('errbar'); b.textContent=msg; b.style.display='block'; };
 
-    overlayList.forEach(url=>{
-      const btn=document.createElement('div');
-      btn.className='overlayBtn';
-      const img=document.createElement('img'); img.src=url; btn.appendChild(img);
-      btn.onclick=()=>addOverlay(url);
-      overlayMenu.appendChild(btn);
-    });
+  (async () => {
+    document.getElementById('year').textContent = new Date().getFullYear();
 
-    function addOverlay(url){
-      const s=stops[idx]; if(!s) return; ensureOverlayModel(s);
-      s.overlays.push({id:Date.now(), type:'bitmap', x:0.3, y:0.3, w:0.4, h:0.4, flipH:false, flipV:false, opacity:1, data:{format:'png',data:url}});
-      drawOverlays(); saveOverlaysDebounced();
+    const loadingHUD = document.getElementById('loadingHUD');
+    const loadingLabel = document.getElementById('loadingLabel');
+    const savingHUD  = document.getElementById('savingHUD');
+    const showLoading = (t='Loading…')=>{ loadingLabel.textContent=t; loadingHUD.style.display='flex'; };
+    const hideLoading = ()=>{ loadingHUD.style.display='none'; };
+    const showSaving  = ()=>{ savingHUD.style.display='flex'; };
+    const hideSaving  = ()=>{ savingHUD.style.display='none'; };
+
+    /* Firebase */
+    const [{ initializeApp }] = await Promise.all([ import("https://www.gstatic.com/firebasejs/10.12.4/firebase-app.js") ]);
+    const [{ getDatabase, ref, onValue, get, set }] = await Promise.all([ import("https://www.gstatic.com/firebasejs/10.12.4/firebase-database.js") ]);
+    const firebaseConfig = {
+      apiKey:"AIzaSyDM6DpRSeZueVKRpbyJyDmhf8WY66KyCDk",
+      authDomain:"dailyquiz-d5279.firebaseapp.com",
+      databaseURL:"https://dailyquiz-d5279-default-rtdb.firebaseio.com",
+      projectId:"dailyquiz-d5279",
+      appId:"1:94577748034:web:c032d3a1d72db1313de5db",
+      measurementId:"G-19DVN7NNH7"
+    };
+    const appFB = initializeApp(firebaseConfig);
+    const db = getDatabase(appFB);
+
+    /* DOM Refs */
+    const statusPill=document.getElementById('statusPill');
+    const scenarioSel=document.getElementById('scenarioSel');
+    const stopList=document.getElementById('stopList');
+    const refreshBtn=document.getElementById('refresh');
+    const stopTitle=document.getElementById('stopTitle');
+    const stopCaption=document.getElementById('stopCaption');
+    const stopLat=document.getElementById('stopLat');
+    const stopLng=document.getElementById('stopLng');
+    const stopRadius=document.getElementById('stopRadius');
+    const useGPS=document.getElementById('useGPS');
+    const saveMeta=document.getElementById('saveMeta');
+    const metaMsg=document.getElementById('metaMsg');
+    const replaceFile=document.getElementById('replaceFile');
+    const replaceApply=document.getElementById('replaceApply');
+    const deleteStop=document.getElementById('deleteStop');
+    const exportPNG=document.getElementById('exportPNG');
+    const cInfo=document.getElementById('canvasInfo');
+    const fitBtn=document.getElementById('fit');
+    const zoomIn=document.getElementById('zoomIn');
+    const zoomOut=document.getElementById('zoomOut');
+    const rotateL=document.getElementById('rotateL');
+    const rotateR=document.getElementById('rotateR');
+    const saveImage=document.getElementById('saveImage');
+
+    const overlayShelf=document.getElementById('overlayShelf');
+    const tabBtns = Array.from(document.querySelectorAll('.ol-tab'));
+    const overlayHue=document.getElementById('overlayHue');
+    const overlayOpacity=document.getElementById('overlayOpacity');
+    const bringFront=document.getElementById('bringFront');
+    const sendBack=document.getElementById('sendBack');
+    const deleteObj=document.getElementById('deleteObj');
+
+    const eraserStart=document.getElementById('eraserStart');
+    const eraserDone=document.getElementById('eraserDone');
+    const eraserCancel=document.getElementById('eraserCancel');
+    const eraserSize=document.getElementById('eraserSize');
+    const eraserOverlayOpacity=document.getElementById('eraserOverlayOpacity');
+    const eraserUndo=document.getElementById('eraserUndo');
+    const eraserRedo=document.getElementById('eraserRedo');
+    const eraserClear=document.getElementById('eraserClear');
+    const eraserStatus=document.getElementById('eraserStatus');
+    const flipSelH=document.getElementById('flipSelH');
+    const flipSelV=document.getElementById('flipSelV');
+
+    /* Canvas */
+    const fabricCanvas = new fabric.Canvas('c', { backgroundColor:'#061621', preserveObjectStacking:true, selection:true });
+    let baseImage=null;
+
+    function fitCanvas(){
+      const reserved = 260;
+      const targetH = Math.max(380, window.innerHeight - reserved);
+      document.getElementById('c').style.height = targetH + 'px';
+      fabricCanvas.setHeight(targetH);
+      const midCol = document.querySelector('main .col:nth-child(2)');
+      const width = (midCol?.clientWidth || 800) - 24;
+      fabricCanvas.setWidth(width);
+      fabricCanvas.calcOffset();
+      fabricCanvas.requestRenderAll();
     }
+    fitCanvas(); window.addEventListener('resize', fitCanvas);
+
+    function setBaseImageFromDataURL(dataURL){
+      return new Promise((resolve,reject)=>{
+        fabric.Image.fromURL(dataURL, (img)=>{
+          if (!img) { reject(new Error('Image load failed')); return; }
+          if (baseImage) fabricCanvas.remove(baseImage);
+          baseImage = img; baseImage.selectable=false; baseImage.evented=false; baseImage.set('erasable', false);
+          const cw=fabricCanvas.getWidth(), ch=fabricCanvas.getHeight();
+          const scale=Math.min(cw/img.width, ch/img.height);
+          baseImage.scale(scale);
+          baseImage.set({ left:(cw - img.width*scale)/2, top:(ch - img.height*scale)/2 });
+          fabricCanvas.add(baseImage); baseImage.moveTo(0); fabricCanvas.requestRenderAll();
+          cInfo.textContent=`Image ${Math.round(img.width)}×${Math.round(img.height)} (scale ${scale.toFixed(2)})`;
+          resolve();
+        }, { crossOrigin:'anonymous' });
+      });
+    }
+
+    /* === SMART FULL-RES EXPORT (keeps payload under ~9 MB) === */
+    // Returns { format: 'png'|'jpeg', data: '<base64-without-prefix>' }
+    function encodeCanvasForRTDB() {
+      const MAX_BYTES = 9_000_000; // safety for RTDB string size
+      const zoom = fabricCanvas.getZoom() || 1;
+      let multiplier = 1;
+      if (baseImage) {
+        const s = baseImage.scaleX || 1;
+        multiplier = (1 / s) * (1 / zoom);
+      }
+      multiplier = Math.max(1, Math.min(8, multiplier));
+
+      // Helper to measure base64 payload length in bytes (roughly)
+      const bytesOf = (b64) => Math.floor((b64.length * 3) / 4);
+
+      // Try PNG first
+      let url = fabricCanvas.toDataURL({ format:'png', quality:1, multiplier });
+      let b64 = url.split(',')[1] || '';
+      if (bytesOf(b64) <= MAX_BYTES) return { format:'png', data:b64 };
+
+      // Try JPEG with descending qualities
+      const qSteps = [0.95, 0.9, 0.85, 0.8, 0.75, 0.7, 0.65, 0.6];
+      for (const q of qSteps) {
+        url = fabricCanvas.toDataURL({ format:'jpeg', quality:q, multiplier });
+        b64 = url.split(',')[1] || '';
+        if (bytesOf(b64) <= MAX_BYTES) return { format:'jpeg', data:b64 };
+      }
+      // If still too big, reduce multiplier gradually and retry JPEG
+      let m = multiplier;
+      while (m > 0.7) {
+        m *= 0.85;
+        for (const q of qSteps) {
+          url = fabricCanvas.toDataURL({ format:'jpeg', quality:q, multiplier:m });
+          b64 = url.split(',')[1] || '';
+          if (bytesOf(b64) <= MAX_BYTES) return { format:'jpeg', data:b64 };
+        }
+      }
+      // Final fallback: very compressed JPEG
+      url = fabricCanvas.toDataURL({ format:'jpeg', quality:0.5, multiplier:Math.max(0.6, m) });
+      b64 = url.split(',')[1] || '';
+      return { format:'jpeg', data:b64 };
+    }
+
+    // Reconstruct a data URL from {format, data} (backward compatible with existing strings)
+    function toDataURLFromStored(stored) {
+      if (typeof stored === 'string') return stored; // already a data URL
+      if (!stored || !stored.data) return '';
+      const fmt = stored.format === 'jpeg' ? 'jpeg' : 'png';
+      return `data:image/${fmt};base64,${stored.data}`;
+    }
+
+    exportPNG.onclick = () => {
+      // Export at current best (PNG/JPEG). For user download, prepend the data URL.
+      const enc = encodeCanvasForRTDB();
+      const url = `data:image/${enc.format};base64,${enc.data}`;
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'image-edited.' + (enc.format === 'jpeg' ? 'jpg' : 'png');
+      a.click();
+    };
+
+    /* Scenarios (fixed root '/scenarios') */
+    function coerceStops(sc){
+      if (Array.isArray(sc?.stops))  return sc.stops;
+      if (Array.isArray(sc?.photos)) return sc.photos;
+      if (Array.isArray(sc?.images)) return sc.images;
+      return [];
+    }
+    function setStops(sc, stops){
+      if (Array.isArray(sc?.stops)) sc.stops = stops;
+      else if (Array.isArray(sc?.photos)) sc.photos = stops;
+      else if (Array.isArray(sc?.images)) sc.images = stops;
+      else sc.stops = stops;
+    }
+
+    let scenarios=[], current=null, stopIndex=-1;
+    const ROOT='scenarios';
+
+    function showStatus(msg){ statusPill.textContent = msg; }
+    function populateList(){
+      scenarioSel.innerHTML = '<option value="">Select scenario…</option>';
+      scenarios.forEach(sc => {
+        const o=document.createElement('option'); o.value=sc.id; o.textContent=(sc.title||'(untitled)') + (sc.active? '':' (inactive)');
+        scenarioSel.appendChild(o);
+      });
+    }
+    function renderStopsThumbs(){
+      stopList.innerHTML='';
+      if(!current || !current._stops?.length){ stopList.innerHTML='<div class="pill">No photos</div>'; return; }
+      current._stops.forEach((s,idx)=>{
+        const img=document.createElement('img');
+        img.className='thumb'+(idx===stopIndex?' active':'');
+        const src = toDataURLFromStored(s.imageData || s.imageURL);
+        img.src=src||'';
+        img.title=s.title||`Stop ${idx+1}`;
+        img.onerror=()=>{ img.src="data:image/svg+xml;utf8,"+encodeURIComponent("<svg xmlns='http://www.w3.org/2000/svg' width='80' height='80'><rect width='100%' height='100%' fill='#0a2230'/><text x='50%' y='50%' fill='#9ecbd6' font-size='10' text-anchor='middle'>no image</text></svg>"); };
+        img.onclick=()=>loadStop(idx);
+        stopList.appendChild(img);
+      });
+    }
+
+    async function loadScenarios(){
+      try{
+        showLoading('Loading scenarios…');
+        const snap = await get(ref(db, ROOT));
+        const obj = snap.exists() ? (snap.val()||{}) : {};
+        scenarios = Object.entries(obj).map(([id, s])=>({
+          id, _raw:s, _stops:coerceStops(s), ...s
+        })).sort((a,b)=>(b.createdAt||0)-(a.createdAt||0));
+        populateList();
+        showStatus(`${scenarios.length} scenario(s) loaded`);
+      }catch(e){
+        showStatus('Error: ' + (e?.message || e));
+        ERR(e?.message || e);
+      } finally { hideLoading(); }
+    }
+
+    function startLive(){
+      onValue(ref(db, ROOT), snap=>{
+        const v=snap.val()||{};
+        scenarios = Object.entries(v).map(([id,s])=>({
+          id, _raw:s, _stops:coerceStops(s), ...s
+        })).sort((a,b)=>(b.createdAt||0)-(a.createdAt||0));
+        populateList();
+        if (current){
+          const fresh = scenarios.find(sc=>sc.id===current.id);
+          if (fresh){ current=fresh; renderStopsThumbs(); }
+        }
+        showStatus(`${scenarios.length} scenario(s) loaded`);
+      }, err=> showStatus('RTDB onValue error: '+(err?.message||err)));
+    }
+
+    await loadScenarios();
+    startLive();
+    refreshBtn.onclick = loadScenarios;
+
+    scenarioSel.onchange = async ()=>{
+      const id=scenarioSel.value;
+      current = scenarios.find(s=>s.id===id) || null;
+      stopIndex=-1;
+      renderStopsThumbs();
+      fabricCanvas.clear(); baseImage=null;
+      fitCanvas();
+    };
+
+    async function loadStop(idx){
+      if(!current) return;
+      const s=current._stops[idx]; if(!s) return;
+      stopIndex=idx;
+      stopTitle.value=s.title||'';
+      stopCaption.value=s.caption||'';
+      stopLat.value=(s.lat ?? '').toString();
+      stopLng.value=(s.lng ?? '').toString();
+      stopRadius.value=(s.radiusMeters ?? s.radius ?? 50).toString();
+      Array.from(stopList.children).forEach((n,i)=>n.classList.toggle('active', i===idx));
+      fabricCanvas.clear(); baseImage=null;
+
+      const src = toDataURLFromStored(s.imageData || s.imageURL);
+      if(!src){ metaMsg.textContent='No image in this stop.'; return; }
+
+      showLoading('Loading photo…');
+      await setBaseImageFromDataURL(src);
+
+      // Rehydrate overlays + erase masks
+      if (Array.isArray(s.overlays)) {
+        for (const ov of s.overlays){
+          if (!ov?.src) continue;
+          await new Promise(res=>{
+            fabric.Image.fromURL(ov.src, img=>{
+              try{
+                img.set({
+                  left:ov.left||0, top:ov.top||0,
+                  scaleX:ov.scaleX||1, scaleY:ov.scaleY||1,
+                  angle:ov.angle||0, opacity:ov.opacity??1,
+                  flipX:!!ov.flipX, flipY:!!ov.flipY,
+                  erasable:true, cornerStyle:'circle', transparentCorners:false
+                });
+                if (Array.isArray(ov.erase) && ov.erase.length){
+                  const circles = ov.erase.map(e => new fabric.Circle({
+                    left: e.x, top: e.y, radius: e.r,
+                    originX:'center', originY:'center', absolutePositioned:true
+                  }));
+                  img.set('clipPath', new fabric.Group(circles, { absolutePositioned:true, inverted:true }));
+                }
+                img._eraseUndoStack = []; img._eraseRedoStack = [];
+                fabricCanvas.add(img);
+              } finally { res(); }
+            }, { crossOrigin:'anonymous' });
+          });
+        }
+        fabricCanvas.requestRenderAll();
+      }
+      hideLoading();
+    }
+
+    /* GPS + Meta save */
+    useGPS.onclick=()=>{ navigator.geolocation.getCurrentPosition(p=>{ stopLat.value=p.coords.latitude.toFixed(6); stopLng.value=p.coords.longitude.toFixed(6); metaMsg.textContent='GPS captured.'; }, e=>{ metaMsg.textContent='GPS error: '+e.message; }, { enableHighAccuracy:true, timeout:10000 }); };
+
+    function serializeOverlays(){
+      const out=[];
+      fabricCanvas.getObjects('image').forEach(img=>{
+        if (img===baseImage) return;
+        let erase = null;
+        if (img.clipPath && img.clipPath.type === 'group' && img.clipPath.inverted) {
+          erase = (img.clipPath._objects || []).map(o => ({
+            type: o.type, x: o.left, y: o.top, r: o.radius || 0,
+          }));
+        }
+        out.push({
+          src: img.getSrc ? img.getSrc() : img._originalElement?.src || img.src || '',
+          left: img.left||0, top: img.top||0,
+          scaleX: img.scaleX||1, scaleY: img.scaleY||1,
+          angle: img.angle||0, opacity: img.opacity??1,
+          flipX: !!img.flipX,  flipY: !!img.flipY,
+          erase
+        });
+      });
+      return out;
+    }
+
+    saveMeta.onclick=async()=>{ try{
+      if(!current || stopIndex<0) throw new Error('Select a stop first.');
+      showSaving();
+      const s = { ...current._stops[stopIndex] };
+      s.title=stopTitle.value.trim();
+      s.caption=stopCaption.value.trim();
+      s.lat=parseFloat(stopLat.value);
+      s.lng=parseFloat(stopLng.value);
+      s.radiusMeters=Math.max(5, Math.min(1000, Math.round(parseInt(stopRadius.value||'50',10))));
+      if(Number.isNaN(s.lat)||Number.isNaN(s.lng)) throw new Error('Invalid GPS coordinates.');
+      s.overlays = serializeOverlays();
+      const nextStops = [ ...current._stops ]; nextStops[stopIndex] = s;
+      const updated = { ...current._raw };
+      setStops(updated, nextStops);
+      await set(ref(db, `${ROOT}/${current.id}`), updated);
+      current._raw = updated; current._stops = nextStops;
+      metaMsg.textContent='Meta saved.';
+    }catch(err){ metaMsg.textContent=String(err.message||err); }
+     finally { hideSaving(); } };
+
+    function readFileAsDataURL(f){ return new Promise((res,rej)=>{ const r=new FileReader(); r.onload=()=>res(r.result); r.onerror=rej; r.readAsDataURL(f); }); }
+    replaceApply.onclick=async()=>{ const f=replaceFile.files?.[0]; if(!f){ metaMsg.textContent='Choose a file first.'; return; } const data=await readFileAsDataURL(f); await setBaseImageFromDataURL(data); };
+
+    async function persistCurrentStopImageAndOverlays(){
+      if(!current || stopIndex<0) throw new Error('Select a stop first.');
+      showSaving();
+      try{
+        const enc = encodeCanvasForRTDB();
+        const s = { ...current._stops[stopIndex] };
+        s.imageData = enc;   // { format, data } — compact & RTDB-safe
+        s.imageURL  = null;
+        s.overlays  = serializeOverlays();
+
+        const nextStops = [ ...current._stops ]; nextStops[stopIndex] = s;
+        const updated = { ...current._raw };
+        setStops(updated, nextStops);
+        await set(ref(db, `${ROOT}/${current.id}`), updated);
+        current._raw = updated; current._stops = nextStops;
+        renderStopsThumbs();
+        metaMsg.textContent='Image + overlays saved.';
+      } finally { hideSaving(); }
+    }
+    saveImage.onclick=()=>persistCurrentStopImageAndOverlays().catch(e=> metaMsg.textContent=String(e.message||e));
+
+    /* Overlay shelf */
+    const OVERLAY_BASE='https://fireopssim.com/geophoto/overlays/';
+    // Map UI category → CDN folder name (keeps UI the same, fixes paths)
+    const FOLDER_MAP = { cars:'car', people:'people', fire:'fire', smoke:'smoke', hazard:'hazard' };
+    // Filenames per your CDN
+    const SPRITES = {
+      fire:   ['fire1.png','fire2.png','fire3.png','fire4.png','fire5.png','fire6.png','fire7.png','fire8.png'],
+      smoke:  ['smoke1.png','smoke2.png','smoke3.png','smoke4.png'],
+      people: ['person1.png','person2.png','person3.png'],
+      cars:   ['car1.png','car2.png','car3.png','car4.png'],
+      // keeping hazard tab present; paths unchanged unless you provide new names
+      hazard: ['hazard1.png','hazard2.png','hazard3.png']
+    };
+    const resolveSpritePath=(cat,name)=>`${OVERLAY_BASE}${(FOLDER_MAP[cat]||cat)}/${name}`;
+    function renderShelf(cat){ overlayShelf.innerHTML=''; (SPRITES[cat]||[]).forEach((name,i)=>{ const div=document.createElement('div'); div.className='olThumb'; const img=document.createElement('img'); img.src=resolveSpritePath(cat,name); img.alt=`${cat}-${i+1}`; img.onerror=()=>{ div.style.opacity=.5; div.title='Missing: '+img.src; }; div.appendChild(img); div.onclick=()=>addOverlayImage(resolveSpritePath(cat,name)); overlayShelf.appendChild(div); }); }
+    tabBtns.forEach(btn => btn.onclick = () => { tabBtns.forEach(b => b.classList.remove('active')); btn.classList.add('active'); renderShelf(btn.dataset.cat); });
+    if (tabBtns[0]) { tabBtns[0].classList.add('active'); renderShelf(tabBtns[0].dataset.cat); }
+    function addOverlayImage(src){ fabric.Image.fromURL(src, img => { const cw=fabricCanvas.getWidth(), ch=fabricCanvas.getHeight(); const targetW=cw*0.28; const scale=targetW/img.width; img.scale(scale); img.set({ left:cw/2-(img.width*scale)/2, top:ch/2-(img.height*scale)/2, cornerStyle:'circle', transparentCorners:false, shadow:'rgba(0,0,0,0.35) 0 6px 16px', erasable:true }); img._eraseUndoStack=[]; img._eraseRedoStack=[]; fabricCanvas.add(img); fabricCanvas.setActiveObject(img); fabricCanvas.requestRenderAll(); }, { crossOrigin:'anonymous' }); }
+
+    /* Hue/Opacity/Order */
+    const supportsHue = !!(fabric.Image && fabric.Image.filters && fabric.Image.filters.HueRotation);
+    overlayHue.disabled = !supportsHue;
+    function ensureHueFilter(img){ img.filters = img.filters || []; img.filters = img.filters.filter(f => !(f && f.type === 'HueRotation')); }
+    overlayHue.oninput = (e)=>{ if(!supportsHue) return; const o=fabricCanvas.getActiveObject(); if(o && o.type==='image' && o!==baseImage){ const deg=parseInt(e.target.value,10)||0; ensureHueFilter(o); if (deg !== 0) o.filters.push(new fabric.Image.filters.HueRotation({ rotation: deg * Math.PI/180 })); o.applyFilters(); fabricCanvas.requestRenderAll(); } };
+    overlayOpacity.oninput = (e)=>{ const o=fabricCanvas.getActiveObject(); if(o && o!==baseImage){ o.set('opacity', parseFloat(e.target.value)); fabricCanvas.requestRenderAll(); } };
+
+    bringFront.onclick = ()=>{ const o=fabricCanvas.getActiveObject(); if(o && o!==baseImage){ o.bringToFront(); fabricCanvas.requestRenderAll(); } };
+    sendBack.onclick  = ()=>{ const o=fabricCanvas.getActiveObject(); if(o && o!==baseImage){ o.sendToBack(); if(baseImage) baseImage.sendToBack(); fabricCanvas.requestRenderAll(); } };
+    deleteObj.onclick = ()=>{ const o=fabricCanvas.getActiveObject(); if(o && o!==baseImage){ fabricCanvas.remove(o); fabricCanvas.discardActiveObject(); fabricCanvas.requestRenderAll(); } };
+
+    /* Eraser — clip-mask with Undo/Redo/Opacity */
+    let erasing=false, pointerDown=false;
+    function selectedOverlay(){ const o=fabricCanvas.getActiveObject(); return (o && o.type==='image' && o!==baseImage) ? o : null; }
+
+    function getMaskCircles(img){
+      if (img.clipPath && img.clipPath.type==='group' && img.clipPath.inverted){
+        return img.clipPath._objects || [];
+      }
+      return [];
+    }
+    function setMaskCircles(img, arr){
+      img.set('clipPath', new fabric.Group(arr, { absolutePositioned:true, inverted:true }));
+    }
+    function pushUndo(img, prevArr){
+      img._eraseUndoStack = img._eraseUndoStack || [];
+      img._eraseRedoStack = img._eraseRedoStack || [];
+      img._eraseUndoStack.push(prevArr.map(c=> new fabric.Circle({left:c.left, top:c.top, radius:c.radius, originX:'center', originY:'center', absolutePositioned:true})));
+      img._eraseRedoStack.length = 0;
+    }
+
+    function applyCircle(img, p, radius){
+      const prev = getMaskCircles(img);
+      pushUndo(img, prev);
+      const next = prev.slice();
+      next.push(new fabric.Circle({ left:p.x, top:p.y, radius, originX:'center', originY:'center', absolutePositioned:true }));
+      setMaskCircles(img, next);
+    }
+
+    function onMouseDown(opt){
+      const img = selectedOverlay(); if(!img) return;
+      pointerDown = true;
+      const p = fabricCanvas.getPointer(opt.e);
+      const r = (parseInt(eraserSize.value,10)||30) * 0.5;
+      applyCircle(img, p, r);
+      fabricCanvas.requestRenderAll();
+    }
+    function onMouseMove(opt){
+      if(!pointerDown) return;
+      const img = selectedOverlay(); if(!img) return;
+      const p = fabricCanvas.getPointer(opt.e);
+      const r = (parseInt(eraserSize.value,10)||30) * 0.5;
+      applyCircle(img, p, r);
+      fabricCanvas.requestRenderAll();
+    }
+    function onMouseUp(){ pointerDown=false; }
+
+    function stopErasing(){
+      erasing=false; pointerDown=false;
+      eraserStatus.textContent='Eraser: off';
+      fabricCanvas.off('mouse:down', onMouseDown);
+      fabricCanvas.off('mouse:move', onMouseMove);
+      fabricCanvas.off('mouse:up', onMouseUp);
+    }
+
+    eraserStart.onclick = ()=>{
+      const img = selectedOverlay(); if(!img){ alert('Select an overlay image first.'); return; }
+      erasing = true;
+      eraserStatus.textContent = `Eraser: ON (size ${parseInt(eraserSize.value,10)||30})`;
+      fabricCanvas.on('mouse:down', onMouseDown);
+      fabricCanvas.on('mouse:move', onMouseMove);
+      fabricCanvas.on('mouse:up', onMouseUp);
+    };
+    eraserDone.onclick = stopErasing;
+    eraserCancel.onclick = ()=>{ stopErasing(); fabricCanvas.renderAll(); };
+
+    eraserOverlayOpacity.oninput = (e)=>{
+      const img = selectedOverlay(); if(img){ img.set('opacity', parseFloat(e.target.value)); fabricCanvas.requestRenderAll(); }
+    };
+
+    eraserUndo.onclick = ()=>{
+      const img = selectedOverlay(); if(!img) return;
+      img._eraseUndoStack = img._eraseUndoStack || []; img._eraseRedoStack = img._eraseRedoStack || [];
+      const prev = img._eraseUndoStack.pop(); if(!prev) return;
+      const curr = getMaskCircles(img);
+      img._eraseRedoStack.push(curr.map(c=> new fabric.Circle({left:c.left, top:c.top, radius:c.radius, originX:'center', originY:'center', absolutePositioned:true})));
+      setMaskCircles(img, prev);
+      fabricCanvas.requestRenderAll();
+    };
+    eraserRedo.onclick = ()=>{
+      const img = selectedOverlay(); if(!img) return;
+      img._eraseRedoStack = img._eraseRedoStack || []; img._eraseUndoStack = img._eraseUndoStack || [];
+      const nxt = img._eraseRedoStack.pop(); if(!nxt) return;
+      const curr = getMaskCircles(img);
+      img._eraseUndoStack.push(curr.map(c=> new fabric.Circle({left:c.left, top:c.top, radius:c.radius, originX:'center', originY:'center', absolutePositioned:true})));
+      setMaskCircles(img, nxt);
+      fabricCanvas.requestRenderAll();
+    };
+    eraserClear.onclick = ()=>{
+      const img = selectedOverlay(); if(!img) return;
+      const curr = getMaskCircles(img);
+      pushUndo(img, curr);
+      setMaskCircles(img, []);
+      fabricCanvas.requestRenderAll();
+    };
+
+    /* Flip */
+    function flipSelected(axis){ const o=fabricCanvas.getActiveObject(); if(!o || o===baseImage) return; if(axis==='x') o.set('flipX', !o.flipX); if(axis==='y') o.set('flipY', !o.flipY); fabricCanvas.requestRenderAll(); }
+    flipSelH.onclick=()=>flipSelected('x');
+    flipSelV.onclick=()=>flipSelected('y');
+
+    /* Canvas utilities */
+    const rebase=()=>{ if(!baseImage) return; setBaseImageFromDataURL(baseImage.toDataURL({})); };
+    fitBtn.onclick=rebase;
+    zoomIn.onclick=()=>fabricCanvas.setZoom(fabricCanvas.getZoom()*1.1);
+    zoomOut.onclick=()=>fabricCanvas.setZoom(fabricCanvas.getZoom()/1.1);
+    rotateL.onclick=()=>{ if(baseImage){ baseImage.rotate((baseImage.angle||0)-90); fabricCanvas.requestRenderAll(); } };
+    rotateR.onclick=()=>{ if(baseImage){ baseImage.rotate((baseImage.angle||0)+90); fabricCanvas.requestRenderAll(); } };
+
+    /* Delete stop */
+    deleteStop.onclick=async()=>{ try{ if(!current || stopIndex<0) return; if(!confirm('Delete this photo from the scenario?')) return; const next=[...current._stops]; next.splice(stopIndex,1); const updated={ ...current._raw }; setStops(updated, next); await set(ref(db, `${ROOT}/${current.id}`), updated); current._stops=next; stopIndex=-1; fabricCanvas.clear(); baseImage=null; renderStopsThumbs(); metaMsg.textContent='Photo deleted.'; }catch(e){ metaMsg.textContent=String(e.message||e); } };
+
+  })().catch(e=>ERR(e?.message||e));
   </script>
 </body>
 </html>
