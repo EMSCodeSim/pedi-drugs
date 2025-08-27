@@ -30,27 +30,19 @@
     .btn.danger{background:var(--red); color:#fff}
     .status{font-size:12px; color:#8ea0b3}
 
-    /* center column viewer */
     #stageWrap{position:relative; background:#000; border-radius:14px; border:1px solid rgba(255,255,255,.12); min-height:60vh; display:flex; align-items:center; justify-content:center; overflow:hidden}
     #baseImg{width:100%; height:100%; object-fit:contain; background:#000}
     #overlayCanvas{position:absolute; inset:0}
-
-    /* thumbnail strip */
     .thumbs{display:flex; flex-wrap:wrap; gap:8px}
     .thumb{width:88px; height:88px; object-fit:cover; border-radius:10px; border:1px solid rgba(255,255,255,.12); background:#0a2230; cursor:pointer}
-
-    /* tool rows */
     .row{display:flex; gap:8px; flex-wrap:wrap; align-items:center}
-    .toggle{display:inline-flex; gap:6px; align-items:center}
-
-    /* saving HUD */
+    #overlayMenu{display:grid; grid-template-columns:repeat(auto-fill,minmax(60px,1fr)); gap:8px; margin-top:8px}
+    .overlayBtn{background:#0f1624;border:1px solid rgba(255,255,255,.18);border-radius:10px;padding:4px;cursor:pointer;display:flex;align-items:center;justify-content:center}
+    .overlayBtn img{width:100%;height:100%;object-fit:contain}
     #savingHUD{position:fixed; inset:0; display:none; align-items:center; justify-content:center; background:rgba(0,0,0,.45); z-index:60}
     #savingHUD .modal{background:#0e1524; border:1px solid rgba(255,255,255,.12); border-radius:16px; padding:16px; box-shadow:var(--shadow); min-width:240px; text-align:center}
     .spin{width:18px; height:18px; border-radius:50%; border:3px solid rgba(255,255,255,.25); border-top-color:#fff; animation:spin .9s linear infinite; display:inline-block}
     @keyframes spin{to{transform:rotate(360deg)}}
-
-    /* overlay handles */
-    .handle{position:absolute; width:10px; height:10px; background:#0a84ff; border-radius:2px; border:1px solid #fff}
   </style>
 </head>
 <body>
@@ -65,29 +57,20 @@
   </div>
 
   <div class="grid">
-    <!-- Left: Meta -->
     <div class="col">
       <div class="card panel">
         <div class="row" style="justify-content:space-between"><strong>Photo Meta</strong><span id="leftStatus" class="status">Ready</span></div>
         <label>Title</label>
-        <input id="metaTitle" placeholder="Title"/>
+        <input id="metaTitle"/>
         <label>Caption</label>
-        <textarea id="metaCaption" placeholder="Caption / instructions"></textarea>
+        <textarea id="metaCaption"></textarea>
         <div class="row">
-          <div style="flex:1">
-            <label>Latitude</label>
-            <input id="metaLat" type="number" step="0.000001" />
-          </div>
-          <div style="flex:1">
-            <label>Longitude</label>
-            <input id="metaLng" type="number" step="0.000001" />
-          </div>
+          <div style="flex:1"><label>Latitude</label><input id="metaLat" type="number" step="0.000001"/></div>
+          <div style="flex:1"><label>Longitude</label><input id="metaLng" type="number" step="0.000001"/></div>
         </div>
         <label>Radius (m)</label>
-        <input id="metaRadius" type="number" min="1" max="1000" />
-        <div class="row" style="margin-top:8px">
-          <button id="saveMeta" class="btn">Save Meta</button>
-        </div>
+        <input id="metaRadius" type="number" min="1" max="1000"/>
+        <button id="saveMeta" class="btn" style="margin-top:8px">Save Meta</button>
       </div>
 
       <div class="card panel">
@@ -96,12 +79,11 @@
       </div>
 
       <div class="card panel">
-        <div class="row" style="justify-content:space-between"><strong>Overlays — Diagnostics</strong><button id="fixAll" class="btn secondary">Fix All Positions</button></div>
-        <div id="diag" class="status" style="white-space:pre-wrap; margin-top:6px">—</div>
+        <strong>Overlays</strong>
+        <div id="overlayMenu"></div>
       </div>
     </div>
 
-    <!-- Center: Stage -->
     <div class="col">
       <div id="stageWrap" class="card">
         <img id="baseImg" alt="Selected photo" />
@@ -109,317 +91,40 @@
       </div>
     </div>
 
-    <!-- Right: Tools -->
     <div class="col">
       <div class="card panel">
-        <div class="row" style="justify-content:space-between"><strong>Overlay Tools</strong><span id="toolStatus" class="status">Ready</span></div>
-        <div class="row">
-          <button id="flipH" class="btn secondary">Flip H</button>
-          <button id="flipV" class="btn secondary">Flip V</button>
-          <button id="clearAll" class="btn danger">Clear All</button>
-        </div>
-        <div class="row" style="margin-top:8px">
-          <div class="toggle"><input id="eraserToggle" type="checkbox"/> <label for="eraserToggle">Eraser (overlays only)</label></div>
-          <label style="margin-left:auto">Size <input id="brushSize" type="range" min="4" max="64" value="18"/></label>
-          <label>Opacity <input id="brushOpacity" type="range" min="0.1" max="1" step="0.05" value="1"/></label>
-        </div>
-        <div class="row" style="margin-top:8px">
-          <button id="saveImageToRTDB" class="btn">Save Image to RTDB</button>
-        </div>
-      </div>
-
-      <div class="card panel">
-        <strong>Scenario</strong>
-        <div class="row" style="margin-top:8px">
-          <button id="prevPhoto" class="btn secondary">◀ Prev</button>
-          <button id="nextPhoto" class="btn secondary">Next ▶</button>
-        </div>
+        <strong>Overlay Tools</strong>
+        <div class="row"><button id="flipH" class="btn secondary">Flip H</button><button id="flipV" class="btn secondary">Flip V</button><button id="clearAll" class="btn danger">Clear All</button></div>
+        <div class="row" style="margin-top:8px"><input id="eraserToggle" type="checkbox"/> <label for="eraserToggle">Eraser</label><label style="margin-left:auto">Size <input id="brushSize" type="range" min="4" max="64" value="18"/></label><label>Opacity <input id="brushOpacity" type="range" min="0.1" max="1" step="0.05" value="1"/></label></div>
+        <button id="saveImageToRTDB" class="btn" style="margin-top:8px">Save Image to RTDB</button>
       </div>
     </div>
   </div>
 
-  <!-- Saving HUD -->
-  <div id="savingHUD"><div class="modal"><div class="spin"></div><div style="margin-top:8px">Saving…</div></div></div>
+  <div id="savingHUD"><div class="modal"><div class="spin"></div><div>Saving…</div></div></div>
 
-  <!-- Firebase + Editor Logic -->
   <script type="module">
-    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-app.js";
-    import { getDatabase, ref, get, set, update } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-database.js";
+    const overlayMenu=$('overlayMenu');
+    const overlayList=[
+      'people/person1.png','people/person2.png','people/person3.png',
+      'cars/car1.png','cars/car2.png','cars/car3.png','cars/car4.png',
+      'fire/fire1.png','fire/fire2.png','fire/fire3.png','fire/fire4.png','fire/fire5.png','fire/fire6.png','fire/fire7.png','fire/fire8.png',
+      'smoke/smoke1.png','smoke/smoke2.png','smoke/smoke3.png','smoke/smoke4.png']
+      .map(p=>`https://fireopssim.com/geophoto/overlays/${p}`);
 
-    const firebaseConfig = {
-      apiKey:"AIzaSyDM6DpRSeZueVKRpbyJyDmhf8WY66KyCDk",
-      authDomain:"dailyquiz-d5279.firebaseapp.com",
-      databaseURL:"https://dailyquiz-d5279-default-rtdb.firebaseio.com",
-      projectId:"dailyquiz-d5279",
-      appId:"1:94577748034:web:c032d3a1d72db1313de5db",
-      measurementId:"G-19DVN7NNH7"
-    };
-    const app = initializeApp(firebaseConfig);
-    const db  = getDatabase(app);
+    overlayList.forEach(url=>{
+      const btn=document.createElement('div');
+      btn.className='overlayBtn';
+      const img=document.createElement('img'); img.src=url; btn.appendChild(img);
+      btn.onclick=()=>addOverlay(url);
+      overlayMenu.appendChild(btn);
+    });
 
-    const $ = id => document.getElementById(id);
-    const scenarioSelect=$('scenarioSelect');
-    const thumbs=$('thumbs');
-    const baseImg=$('baseImg');
-    const overlayCanvas=$('overlayCanvas');
-    const leftStatus=$('leftStatus');
-    const toolStatus=$('toolStatus');
-    const diag=$('diag');
-    const savingHUD=$('savingHUD');
-
-    const metaTitle=$('metaTitle');
-    const metaCaption=$('metaCaption');
-    const metaLat=$('metaLat');
-    const metaLng=$('metaLng');
-    const metaRadius=$('metaRadius');
-    const saveMeta=$('saveMeta');
-
-    const flipH=$('flipH');
-    const flipV=$('flipV');
-    const clearAll=$('clearAll');
-    const eraserToggle=$('eraserToggle');
-    const brushSize=$('brushSize');
-    const brushOpacity=$('brushOpacity');
-    const saveImageToRTDB=$('saveImageToRTDB');
-
-    const prevPhoto=$('prevPhoto');
-    const nextPhoto=$('nextPhoto');
-    const backBtn=$('backBtn');
-    backBtn.onclick=()=>{ if (document.referrer) history.back(); else location.href='/'; };
-
-    // ---------- State ----------
-    let scenariosObj={};
-    let currentScenarioId=null;
-    let stops=[];           // stops for selected scenario
-    let idx=0;              // current stop index
-
-    // overlay model: array of objects using normalized coords (0..1)
-    // { id, type: 'bitmap'|'poly'|'mask', x, y, w, h, flipH, flipV, opacity, data }
-
-    function dataURLFromStored(objOrString){
-      if (typeof objOrString === 'string') return objOrString;
-      if (!objOrString || !objOrString.data) return '';
-      const fmt = (objOrString.format==='jpeg'||objOrString.format==='jpg')?'jpeg':'png';
-      return `data:image/${fmt};base64,${objOrString.data}`;
-    }
-
-    // ---------- Load scenarios ----------
-    async function loadScenarios(){
-      const [a,b] = await Promise.all([
-        get(ref(db,'geophoto/scenarios')).catch(()=>({})),
-        get(ref(db,'scenarios')).catch(()=>({}))
-      ]);
-      scenariosObj = { ...(a?.val()||{}), ...(b?.val()||{}) };
-      scenarioSelect.innerHTML = '<option value="">Select a scenario…</option>';
-      Object.entries(scenariosObj).forEach(([id,s])=>{
-        const o=document.createElement('option');
-        o.value=id; o.textContent=s.title||s.name||id; scenarioSelect.appendChild(o);
-      });
-    }
-
-    scenarioSelect.onchange = ()=>{
-      currentScenarioId = scenarioSelect.value || null;
-      if (!currentScenarioId) return;
-      const sc = scenariosObj[currentScenarioId];
-      stops = Array.isArray(sc?.stops) ? sc.stops : (sc?.stops ? Object.values(sc.stops) : []);
-      idx = 0;
-      renderThumbs();
-      loadCurrent();
-      analyzeOverlays();
-    };
-
-    function renderThumbs(){
-      thumbs.innerHTML='';
-      stops.forEach((s,i)=>{
-        const t=document.createElement('img'); t.className='thumb';
-        t.src = dataURLFromStored(s.imageData)||s.imageURL||'';
-        t.title = s.title||`Stop ${i+1}`;
-        t.onclick=()=>{ idx=i; loadCurrent(); };
-        thumbs.appendChild(t);
-      });
-    }
-
-    function setCanvasToImage(){
-      const rect = baseImg.getBoundingClientRect();
-      overlayCanvas.width = Math.round(rect.width);
-      overlayCanvas.height = Math.round(rect.height);
-    }
-
-    async function loadCurrent(){
-      const s = stops[idx]; if(!s) return;
-      baseImg.onload = ()=>{ setCanvasToImage(); drawOverlays(); fillMeta(s); };
-      baseImg.src = dataURLFromStored(s.imageData)||s.imageURL||'';
-    }
-
-    function fillMeta(s){
-      metaTitle.value = s.title||''; metaCaption.value=s.caption||'';
-      metaLat.value = s.lat??''; metaLng.value=s.lng??''; metaRadius.value=s.radiusMeters??40;
-    }
-
-    // ---------- Overlay rendering (normalized -> pixels) ----------
-    function getCtx(){ return overlayCanvas.getContext('2d'); }
-    function clearCanvas(){ const ctx=getCtx(); ctx.clearRect(0,0,overlayCanvas.width, overlayCanvas.height); }
-
-    function normToPx(n, size){ return Math.round(n*size); }
-
-    function ensureOverlayModel(s){
-      if (!s.overlays) s.overlays = [];
-      // migrate absolute -> normalized if needed
-      if (s.overlays.some(o=> (o.x>1||o.y>1||o.w>1||o.h>1)) && baseImg.naturalWidth && baseImg.naturalHeight){
-        s.overlays = s.overlays.map(o=>{
-          const W = baseImg.naturalWidth, H = baseImg.naturalHeight;
-          return {
-            ...o,
-            x: (o.x||0)/W, y:(o.y||0)/H, w:(o.w||W)/W, h:(o.h||H)/H,
-          };
-        });
-      }
-    }
-
-    function drawOverlays(){
-      clearCanvas();
-      const s = stops[idx]; if(!s) return;
-      ensureOverlayModel(s);
-      const ctx=getCtx();
-      const W=overlayCanvas.width, H=overlayCanvas.height;
-      (s.overlays||[]).forEach(o=>{
-        const x=normToPx(o.x,W), y=normToPx(o.y,H), w=normToPx(o.w,W), h=normToPx(o.h,H);
-        const imgSrc = o.data ? dataURLFromStored(o.data) : null;
-        ctx.save(); ctx.globalAlpha = o.opacity!=null ? o.opacity : 1;
-        if (imgSrc){
-          // draw bitmap overlay
-          // support flips
-          ctx.translate(x + w/2, y + h/2);
-          ctx.scale(o.flipH?-1:1, o.flipV?-1:1);
-          ctx.drawImage(Object.assign(new Image(),{src:imgSrc}), -w/2, -h/2, w, h);
-        } else if (o.type==='mask' && o.path){
-          ctx.fillStyle = 'rgba(0,0,0,0)';
-          ctx.globalCompositeOperation = 'destination-out';
-          ctx.beginPath();
-          (o.path||[]).forEach((pt,j)=>{
-            const px=normToPx(pt.x,W), py=normToPx(pt.y,H);
-            if(j===0) ctx.moveTo(px,py); else ctx.lineTo(px,py);
-          });
-          ctx.closePath(); ctx.fill();
-          ctx.globalCompositeOperation = 'source-over';
-        } else {
-          // fallback: outline
-          ctx.strokeStyle='#0a84ff'; ctx.lineWidth=2; ctx.strokeRect(x,y,w,h);
-        }
-        ctx.restore();
-      });
-    }
-
-    // ---------- Tools ----------
-    flipH.onclick = ()=>{ const s=stops[idx]; if(!s) return; ensureOverlayModel(s); (s.overlays||[]).forEach(o=> o.flipH=!o.flipH); drawOverlays(); toolStatus.textContent='Flipped H'; };
-    flipV.onclick = ()=>{ const s=stops[idx]; if(!s) return; ensureOverlayModel(s); (s.overlays||[]).forEach(o=> o.flipV=!o.flipV); drawOverlays(); toolStatus.textContent='Flipped V'; };
-    clearAll.onclick = ()=>{ const s=stops[idx]; if(!s) return; if(confirm('Clear all overlays for this photo?')){ s.overlays=[]; drawOverlays(); } };
-
-    // Simple eraser that only affects overlay mask (adds a mask path segment)
-    let drawing=false; let lastPt=null;
-    overlayCanvas.addEventListener('pointerdown', e=>{
-      if (!eraserToggle.checked) return; drawing=true; lastPt=pointerToNorm(e); addMaskPoint(lastPt,true); });
-    overlayCanvas.addEventListener('pointermove', e=>{
-      if (!drawing || !eraserToggle.checked) return; const p=pointerToNorm(e); addMaskPoint(p,false); });
-    overlayCanvas.addEventListener('pointerup', ()=>{ drawing=false; lastPt=null; saveOverlaysDebounced(); });
-    overlayCanvas.addEventListener('pointerleave', ()=>{ if(drawing){drawing=false; lastPt=null; saveOverlaysDebounced();} });
-
-    function pointerToNorm(e){
-      const r = overlayCanvas.getBoundingClientRect();
-      const x = (e.clientX - r.left) / r.width; const y = (e.clientY - r.top) / r.height;
-      return {x: Math.min(1,Math.max(0,x)), y: Math.min(1,Math.max(0,y))};
-    }
-
-    function addMaskPoint(p, start){
+    function addOverlay(url){
       const s=stops[idx]; if(!s) return; ensureOverlayModel(s);
-      // find or create mask overlay
-      let m = (s.overlays||[]).find(o=>o.type==='mask');
-      if (!m){ m={ id:'mask', type:'mask', path:[], opacity:1 }; s.overlays.push(m); }
-      const spacing = (parseInt(brushSize.value,10)||18)/overlayCanvas.width; // normalize
-      if (start || !m.path || m.path.length===0 || dist(m.path[m.path.length-1], p) > spacing){
-        m.path = [...(m.path||[]), p];
-      }
-      drawOverlays();
+      s.overlays.push({id:Date.now(), type:'bitmap', x:0.3, y:0.3, w:0.4, h:0.4, flipH:false, flipV:false, opacity:1, data:{format:'png',data:url}});
+      drawOverlays(); saveOverlaysDebounced();
     }
-    function dist(a,b){ const dx=a.x-b.x, dy=a.y-b.y; return Math.hypot(dx,dy); }
-
-    // ---------- Save image + overlays ----------
-    saveImageToRTDB.onclick = async ()=>{
-      if (!currentScenarioId) return;
-      const s = stops[idx]; if(!s) return;
-      showSaving(true);
-      try{
-        // Persist overlays and meta back to DB
-        await set(ref(db, `scenarios/${currentScenarioId}/stops/${idx}/overlays`), s.overlays||[]);
-        // Persist caption/title if changed
-        await update(ref(db, `scenarios/${currentScenarioId}/stops/${idx}`), {
-          title: metaTitle.value||'', caption: metaCaption.value||'', lat: parseFloat(metaLat.value)||null, lng: parseFloat(metaLng.value)||null, radiusMeters: Math.max(1, Math.min(1000, parseInt(metaRadius.value||'40',10)))
-        });
-        toolStatus.textContent='Saved';
-      }catch(e){ toolStatus.textContent='Save failed: '+(e?.message||e); }
-      showSaving(false);
-    };
-
-    function showSaving(show){ savingHUD.style.display = show ? 'flex' : 'none'; }
-
-    // Save meta only
-    saveMeta.onclick = async ()=>{
-      const s=stops[idx]; if(!s||!currentScenarioId) return;
-      showSaving(true);
-      try{
-        await update(ref(db, `scenarios/${currentScenarioId}/stops/${idx}`), {
-          title: metaTitle.value||'', caption: metaCaption.value||'', lat: parseFloat(metaLat.value)||null, lng: parseFloat(metaLng.value)||null, radiusMeters: Math.max(1, Math.min(1000, parseInt(metaRadius.value||'40',10)))
-        });
-        leftStatus.textContent='Meta saved';
-      }catch(e){ leftStatus.textContent='Save failed: '+(e?.message||e); }
-      showSaving(false);
-    };
-
-    // ---------- Overlay diagnostics / migration ----------
-    function analyzeOverlays(){
-      const s = stops[idx]; if(!s){ diag.textContent='—'; return; }
-      ensureOverlayModel(s);
-      const overs = s.overlays||[];
-      const outOfRange = overs.filter(o=> o.x<0||o.y<0||o.w<0||o.h<0||o.x>1||o.y>1||o.w>1||o.h>1).length;
-      diag.textContent = `Overlays: ${overs.length}\nOut-of-range: ${outOfRange}\nTip: positions are stored normalized (0–1) so they scale with any screen.`;
-    }
-
-    async function fixAllPositionsForScenario(){
-      if (!currentScenarioId) return;
-      const sc = scenariosObj[currentScenarioId];
-      const st = Array.isArray(sc?.stops) ? sc.stops : (sc?.stops ? Object.values(sc.stops) : []);
-      let changed=0;
-      st.forEach(s=>{
-        if (!s.overlays||!baseImg.naturalWidth) return;
-        const needs = s.overlays.some(o=> (o.x>1||o.y>1||o.w>1||o.h>1));
-        if (needs){
-          const W=baseImg.naturalWidth, H=baseImg.naturalHeight;
-          s.overlays = s.overlays.map(o=> ({...o, x:(o.x||0)/W, y:(o.y||0)/H, w:(o.w||W)/W, h:(o.h||H)/H }));
-          changed++;
-        }
-      });
-      if (changed){
-        showSaving(true);
-        try{ await set(ref(db, `scenarios/${currentScenarioId}/stops`), st); toolStatus.textContent=`Fixed ${changed} photo(s)`; }catch(e){ toolStatus.textContent='Fix failed: '+(e?.message||e); }
-        showSaving(false);
-        // refresh local model
-        stops = st; renderThumbs(); loadCurrent(); analyzeOverlays();
-      } else {
-        toolStatus.textContent='Nothing to fix';
-      }
-    }
-    $('fixAll').onclick = fixAllPositionsForScenario;
-
-    // ---------- Nav between photos ----------
-    prevPhoto.onclick = ()=>{ if (idx>0){ idx--; loadCurrent(); analyzeOverlays(); } };
-    nextPhoto.onclick = ()=>{ if (idx<stops.length-1){ idx++; loadCurrent(); analyzeOverlays(); } };
-
-    // ---------- Debounce helper ----------
-    let saveT=null; function saveOverlaysDebounced(){ clearTimeout(saveT); saveT=setTimeout(()=>{ saveImageToRTDB.click(); }, 600); }
-
-    // ---------- Boot ----------
-    window.addEventListener('resize', ()=>{ setCanvasToImage(); drawOverlays(); });
-    loadScenarios();
   </script>
 </body>
 </html>
