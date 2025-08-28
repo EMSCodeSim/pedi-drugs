@@ -7,7 +7,10 @@
   <meta name="description" content="Real-time fire scene simulator with geofenced photos, audio/visual cues, and radio communications training." />
   <link rel="canonical" href="https://fireopssim.com/" />
   <meta name="theme-color" content="#0b0f14" />
-  <link rel="icon" href="data:," />
+
+  <!-- Favicons -->
+  <link rel="icon" href="/fireops-favicon.png" sizes="48x48" type="image/png">
+  <link rel="shortcut icon" href="/fireops-favicon.ico" type="image/x-icon">
 
   <!-- Open Graph -->
   <meta property="og:title" content="FireOps SIM — Real-Time Fire Scene Simulator" />
@@ -206,7 +209,6 @@
               <input id="adminPass" type="password" placeholder="Enter admin password" inputmode="text" autocomplete="current-password" />
               <div class="row" style="margin-top:6px">
                 <button id="unlockBtn" class="btn secondary" type="button">Unlock Admin</button>
-                <div class="tag">Hint: <code>Franktown</code></div>
               </div>
             </div>
 
@@ -253,7 +255,7 @@
     const BRAND = {
       name: 'FireOps SIM',
       tagline: 'Real-Time Fire Scene Simulator',
-      heroTitle: 'Train where it matters — on scene.',
+      heroTitle: 'Train where it matters.',
       heroLead: 'FireOps SIM runs live, location-triggered scenarios with audio and visual cues that guide your actions in real time. Crews practice size-up, decision-making, and communications just like the street.'
     };
     document.getElementById('brandName').textContent = BRAND.name;
