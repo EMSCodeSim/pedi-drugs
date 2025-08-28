@@ -95,14 +95,48 @@
         <label>Scenario</label>
         <select id="scenarioSel"><option value="">Select scenario…</option></select>
 
+        <!-- Scenario-level dispatch editor -->
         <div class="divider"></div>
-        <div class="sectionTitle">Photos in scenario</div>
+        <div class="sectionTitle">Scenario Dispatch</div>
+        <label>Dispatch Text</label>
+        <textarea id="scenarioDispatch" placeholder="Ex: Engine 1 dispatched to a residential structure fire..."></textarea>
+        <div class="row">
+          <label class="pill" for="scenarioDispatchTTS" style="cursor:pointer">Read via TTS</label>
+          <input id="scenarioDispatchTTS" type="checkbox" />
+          <button id="saveScenarioMeta" class="btn">Save Scenario</button>
+        </div>
+        <div id="scenarioMetaMsg" class="pill" style="margin-top:6px">Ready</div>
+
+        <div class="divider"></div>
+        <div class="row" style="justify-content:space-between">
+          <div class="sectionTitle">Photos / Slides in scenario</div>
+          <button id="addTextSlide" class="btn secondary">+ Add Text Slide</button>
+        </div>
         <div id="stopList" class="row"></div>
 
         <div class="divider"></div>
         <div class="sectionTitle">Selected stop meta</div>
         <label>Title</label><input id="stopTitle" type="text" />
         <label>Caption</label><textarea id="stopCaption"></textarea>
+
+        <!-- Text Slide panel (conditional) -->
+        <div id="textSlidePanel" style="display:none">
+          <div class="sectionTitle">Text Slide</div>
+          <label>Text Content</label>
+          <textarea id="textSlideContent" placeholder="Type the slide text here…"></textarea>
+          <div class="row">
+            <div class="pill"><input id="textSlideManual" type="checkbox" /> <span>Manual mode (ignore GPS)</span></div>
+            <div class="pill"><input id="textSlideTTS" type="checkbox" checked /> <span>TTS for this slide</span></div>
+          </div>
+          <label>Font Size</label>
+          <input id="textSlideFontSize" type="range" min="18" max="72" step="2" value="34" />
+          <div class="row" style="margin-top:6px">
+            <button id="renderTextPreview" class="btn secondary">Render Preview</button>
+          </div>
+          <div id="textSlideMsg" class="pill" style="margin-top:6px">Text slide ready</div>
+          <div class="divider"></div>
+        </div>
+
         <div class="row">
           <div style="flex:1"><label>Latitude</label><input id="stopLat" type="text" /></div>
           <div style="flex:1"><label>Longitude</label><input id="stopLng" type="text" /></div>
@@ -115,12 +149,12 @@
         <div id="metaMsg" class="pill" style="margin-top:6px">Ready</div>
 
         <div class="divider"></div>
-        <div class="row">
+        <div class="row" id="replaceRow">
           <input id="replaceFile" type="file" accept="image/*" />
           <button id="replaceApply" class="btn">Replace Image</button>
         </div>
         <div class="row" style="margin-top:6px">
-          <button id="deleteStop" class="btn danger">Delete This Photo</button>
+          <button id="deleteStop" class="btn danger">Delete This Photo/Slide</button>
           <button id="exportPNG" class="btn secondary">Export PNG</button>
         </div>
       </div>
@@ -216,7 +250,7 @@
 
     /* Firebase */
     const [{ initializeApp }] = await Promise.all([ import("https://www.gstatic.com/firebasejs/10.12.4/firebase-app.js") ]);
-    const [{ getDatabase, ref, onValue, get, set }] = await Promise.all([ import("https://www.gstatic.com/firebasejs/10.12.4/firebase-database.js") ]);
+    const [{ getDatabase, ref, onValue, get, set, push, child, update }] = await Promise.all([ import("https://www.gstatic.com/firebasejs/10.12.4/firebase-database.js") ]);
     const firebaseConfig = {
       apiKey:"AIzaSyDM6DpRSeZueVKRpbyJyDmhf8WY66KyCDk",
       authDomain:"dailyquiz-d5279.firebaseapp.com",
@@ -233,18 +267,37 @@
     const scenarioSel=document.getElementById('scenarioSel');
     const stopList=document.getElementById('stopList');
     const refreshBtn=document.getElementById('refresh');
+
+    const scenarioDispatch=document.getElementById('scenarioDispatch');
+    const scenarioDispatchTTS=document.getElementById('scenarioDispatchTTS');
+    const saveScenarioMeta=document.getElementById('saveScenarioMeta');
+    const scenarioMetaMsg=document.getElementById('scenarioMetaMsg');
+    const addTextSlide=document.getElementById('addTextSlide');
+
     const stopTitle=document.getElementById('stopTitle');
     const stopCaption=document.getElementById('stopCaption');
+
+    const textSlidePanel=document.getElementById('textSlidePanel');
+    const textSlideContent=document.getElementById('textSlideContent');
+    const textSlideManual=document.getElementById('textSlideManual');
+    const textSlideTTS=document.getElementById('textSlideTTS');
+    const textSlideFontSize=document.getElementById('textSlideFontSize');
+    const renderTextPreview=document.getElementById('renderTextPreview');
+    const textSlideMsg=document.getElementById('textSlideMsg');
+
     const stopLat=document.getElementById('stopLat');
     const stopLng=document.getElementById('stopLng');
     const stopRadius=document.getElementById('stopRadius');
     const useGPS=document.getElementById('useGPS');
     const saveMeta=document.getElementById('saveMeta');
     const metaMsg=document.getElementById('metaMsg');
+
+    const replaceRow=document.getElementById('replaceRow');
     const replaceFile=document.getElementById('replaceFile');
     const replaceApply=document.getElementById('replaceApply');
     const deleteStop=document.getElementById('deleteStop');
     const exportPNG=document.getElementById('exportPNG');
+
     const cInfo=document.getElementById('canvasInfo');
     const fitBtn=document.getElementById('fit');
     const zoomIn=document.getElementById('zoomIn');
@@ -275,7 +328,7 @@
 
     /* Canvas */
     const fabricCanvas = new fabric.Canvas('c', { backgroundColor:'#061621', preserveObjectStacking:true, selection:true });
-    let baseImage=null;
+    let baseImage=null; // can be fabric.Image or fabric.Rect for text slides
 
     function fitCanvas(){
       const reserved = 260;
@@ -285,6 +338,18 @@
       const midCol = document.querySelector('main .col:nth-child(2)');
       const width = (midCol?.clientWidth || 800) - 24;
       fabricCanvas.setWidth(width);
+      // resize text-slide base rect & text if present
+      if (baseImage && baseImage.type === 'rect') {
+        baseImage.set({ left:0, top:0, width:fabricCanvas.getWidth(), height:fabricCanvas.getHeight() });
+        const baseText = fabricCanvas.getObjects('textbox').find(o => o.isBaseText);
+        if (baseText){
+          baseText.set({
+            width: Math.floor(fabricCanvas.getWidth()*0.8),
+            left: Math.floor(fabricCanvas.getWidth()*0.1),
+            top:  Math.floor(fabricCanvas.getHeight()*0.2)
+          });
+        }
+      }
       fabricCanvas.calcOffset();
       fabricCanvas.requestRenderAll();
     }
@@ -307,10 +372,38 @@
       });
     }
 
+    // Render a text slide as black background + centered white text
+    function setBaseAsTextSlide(text, fontSize=34){
+      fabricCanvas.clear();
+      const rect = new fabric.Rect({
+        left:0, top:0,
+        width:fabricCanvas.getWidth(),
+        height:fabricCanvas.getHeight(),
+        fill:'#000',
+        selectable:false, evented:false, erasable:false
+      });
+      baseImage = rect;
+      const tb = new fabric.Textbox(text||'', {
+        width: Math.floor(fabricCanvas.getWidth()*0.8),
+        left: Math.floor(fabricCanvas.getWidth()*0.1),
+        top:  Math.floor(fabricCanvas.getHeight()*0.2),
+        fontSize: fontSize||34,
+        fill:'#fff',
+        textAlign:'center',
+        fontFamily:'system-ui, -apple-system, Segoe UI, Roboto, Inter, Arial, sans-serif',
+        selectable:false, evented:false, erasable:false
+      });
+      tb.isBaseText = true;
+      fabricCanvas.add(rect);
+      fabricCanvas.add(tb);
+      rect.moveTo(0);
+      fabricCanvas.requestRenderAll();
+      cInfo.textContent='Text slide';
+    }
+
     /* === SMART FULL-RES EXPORT (keeps payload under ~9 MB) === */
-    // Returns { format: 'png'|'jpeg', data: '<base64-without-prefix>' }
     function encodeCanvasForRTDB() {
-      const MAX_BYTES = 9_000_000; // safety for RTDB string size
+      const MAX_BYTES = 9_000_000;
       const zoom = fabricCanvas.getZoom() || 1;
       let multiplier = 1;
       if (baseImage) {
@@ -319,22 +412,18 @@
       }
       multiplier = Math.max(1, Math.min(8, multiplier));
 
-      // Helper to measure base64 payload length in bytes (roughly)
       const bytesOf = (b64) => Math.floor((b64.length * 3) / 4);
 
-      // Try PNG first
       let url = fabricCanvas.toDataURL({ format:'png', quality:1, multiplier });
       let b64 = url.split(',')[1] || '';
       if (bytesOf(b64) <= MAX_BYTES) return { format:'png', data:b64 };
 
-      // Try JPEG with descending qualities
       const qSteps = [0.95, 0.9, 0.85, 0.8, 0.75, 0.7, 0.65, 0.6];
       for (const q of qSteps) {
         url = fabricCanvas.toDataURL({ format:'jpeg', quality:q, multiplier });
         b64 = url.split(',')[1] || '';
         if (bytesOf(b64) <= MAX_BYTES) return { format:'jpeg', data:b64 };
       }
-      // If still too big, reduce multiplier gradually and retry JPEG
       let m = multiplier;
       while (m > 0.7) {
         m *= 0.85;
@@ -344,22 +433,19 @@
           if (bytesOf(b64) <= MAX_BYTES) return { format:'jpeg', data:b64 };
         }
       }
-      // Final fallback: very compressed JPEG
       url = fabricCanvas.toDataURL({ format:'jpeg', quality:0.5, multiplier:Math.max(0.6, m) });
       b64 = url.split(',')[1] || '';
       return { format:'jpeg', data:b64 };
     }
 
-    // Reconstruct a data URL from {format, data} (backward compatible with existing strings)
     function toDataURLFromStored(stored) {
-      if (typeof stored === 'string') return stored; // already a data URL
+      if (typeof stored === 'string') return stored;
       if (!stored || !stored.data) return '';
       const fmt = stored.format === 'jpeg' ? 'jpeg' : 'png';
       return `data:image/${fmt};base64,${stored.data}`;
     }
 
     exportPNG.onclick = () => {
-      // Export at current best (PNG/JPEG). For user download, prepend the data URL.
       const enc = encodeCanvasForRTDB();
       const url = `data:image/${enc.format};base64,${enc.data}`;
       const a = document.createElement('a');
@@ -393,16 +479,30 @@
         scenarioSel.appendChild(o);
       });
     }
+
+    function textThumbDataURL(text){
+      const t = (text || 'TEXT').split('\n')[0].slice(0,18);
+      const svg = `
+        <svg xmlns='http://www.w3.org/2000/svg' width='80' height='80'>
+          <rect width='100%' height='100%' fill='#000'/>
+          <rect x='6' y='6' width='68' height='20' rx='6' fill='#0a84ff'/>
+          <text x='40' y='21' fill='#001' font-size='12' text-anchor='middle' font-weight='700'>TEXT</text>
+          <text x='40' y='50' fill='#fff' font-size='10' text-anchor='middle'>${t.replace(/&/g,'&amp;')}</text>
+        </svg>`;
+      return "data:image/svg+xml;utf8," + encodeURIComponent(svg);
+    }
+
     function renderStopsThumbs(){
       stopList.innerHTML='';
-      if(!current || !current._stops?.length){ stopList.innerHTML='<div class="pill">No photos</div>'; return; }
+      if(!current || !current._stops?.length){ stopList.innerHTML='<div class="pill">No photos/slides</div>'; return; }
       current._stops.forEach((s,idx)=>{
         const img=document.createElement('img');
         img.className='thumb'+(idx===stopIndex?' active':'');
-        const src = toDataURLFromStored(s.imageData || s.imageURL);
-        img.src=src||'';
-        img.title=s.title||`Stop ${idx+1}`;
-        img.onerror=()=>{ img.src="data:image/svg+xml;utf8,"+encodeURIComponent("<svg xmlns='http://www.w3.org/2000/svg' width='80' height='80'><rect width='100%' height='100%' fill='#0a2230'/><text x='50%' y='50%' fill='#9ecbd6' font-size='10' text-anchor='middle'>no image</text></svg>"); };
+        const isText = s?.type === 'text';
+        const src = isText ? textThumbDataURL(s.text||s.title||'') : toDataURLFromStored(s.imageData || s.imageURL);
+        img.src=src||textThumbDataURL(s?.title||'');
+        img.title=(s.title||`Stop ${idx+1}`) + (isText?' (Text slide)':'');
+        img.onerror=()=>{ img.src=textThumbDataURL(s?.title||''); };
         img.onclick=()=>loadStop(idx);
         stopList.appendChild(img);
       });
@@ -443,32 +543,114 @@
     startLive();
     refreshBtn.onclick = loadScenarios;
 
+    function applyScenarioMetaToUI(){
+      if (!current){ scenarioDispatch.value=''; scenarioDispatchTTS.checked=false; return; }
+      const raw = current._raw || {};
+      scenarioDispatch.value = raw.dispatchText || '';
+      scenarioDispatchTTS.checked = !!raw.dispatchTTS;
+    }
+
     scenarioSel.onchange = async ()=>{
       const id=scenarioSel.value;
       current = scenarios.find(s=>s.id===id) || null;
       stopIndex=-1;
       renderStopsThumbs();
+      applyScenarioMetaToUI();
       fabricCanvas.clear(); baseImage=null;
       fitCanvas();
     };
+
+    // Save scenario-level meta (dispatch text + TTS)
+    saveScenarioMeta.onclick = async () => {
+      try{
+        if (!current) throw new Error('Select a scenario first.');
+        showSaving();
+        const updated = { ...current._raw, dispatchText: scenarioDispatch.value.trim(), dispatchTTS: !!scenarioDispatchTTS.checked };
+        await set(ref(db, `${ROOT}/${current.id}`), updated);
+        current._raw = updated;
+        scenarioMetaMsg.textContent = 'Scenario saved.';
+      }catch(e){
+        scenarioMetaMsg.textContent = 'Error: ' + (e?.message||e);
+      }finally{ hideSaving(); }
+    };
+
+    // Create & add a new text slide
+    addTextSlide.onclick = async ()=>{
+      try{
+        if (!current) throw new Error('Select a scenario first.');
+        showSaving();
+        const nextStops = [ ...current._stops ];
+        const newStop = {
+          type:'text',
+          title:'Text Slide',
+          caption:'',
+          text:'New slide text',
+          fontSize:34,
+          manual:true,   // show in manual mode by default
+          tts:true,
+          lat:null, lng:null,
+          radiusMeters:50,
+          overlays:[]
+        };
+        nextStops.push(newStop);
+        const updated = { ...current._raw };
+        setStops(updated, nextStops);
+        await set(ref(db, `${ROOT}/${current.id}`), updated);
+        current._raw = updated; current._stops = nextStops;
+        renderStopsThumbs();
+        stopIndex = nextStops.length - 1;
+        await loadStop(stopIndex);
+        scenarioMetaMsg.textContent = 'Text slide added.';
+      }catch(e){
+        scenarioMetaMsg.textContent = 'Error: ' + (e?.message||e);
+      }finally{ hideSaving(); }
+    };
+
+    function isTextStop(s){ return s && s.type === 'text'; }
+
+    // Toggle UI sections based on stop type
+    function updateStopMetaPanelUI(s){
+      const textMode = isTextStop(s);
+      textSlidePanel.style.display = textMode ? '' : 'none';
+      replaceRow.style.display = textMode ? 'none' : '';
+      // GPS controls visible unless manual text slide
+      const gpsBlockers = [stopLat.closest('.row'), stopLng.closest('.row'), stopRadius];
+      gpsBlockers.forEach(()=>{}); // keep layout stable
+    }
 
     async function loadStop(idx){
       if(!current) return;
       const s=current._stops[idx]; if(!s) return;
       stopIndex=idx;
+
+      // Common meta
       stopTitle.value=s.title||'';
       stopCaption.value=s.caption||'';
       stopLat.value=(s.lat ?? '').toString();
       stopLng.value=(s.lng ?? '').toString();
       stopRadius.value=(s.radiusMeters ?? s.radius ?? 50).toString();
+
+      // Text slide meta
+      textSlideContent.value = isTextStop(s) ? (s.text||'') : '';
+      textSlideFontSize.value = isTextStop(s) ? (s.fontSize||34) : 34;
+      textSlideManual.checked = !!s.manual;
+      textSlideTTS.checked = !!s.tts;
+
       Array.from(stopList.children).forEach((n,i)=>n.classList.toggle('active', i===idx));
       fabricCanvas.clear(); baseImage=null;
 
-      const src = toDataURLFromStored(s.imageData || s.imageURL);
-      if(!src){ metaMsg.textContent='No image in this stop.'; return; }
+      updateStopMetaPanelUI(s);
 
-      showLoading('Loading photo…');
-      await setBaseImageFromDataURL(src);
+      const src = toDataURLFromStored(s.imageData || s.imageURL);
+
+      if (isTextStop(s)){
+        setBaseAsTextSlide(s.text||'', s.fontSize||34);
+        // allow overlays rehydrate too
+      } else {
+        if(!src){ metaMsg.textContent='No image in this stop.'; return; }
+        showLoading('Loading photo…');
+        await setBaseImageFromDataURL(src);
+      }
 
       // Rehydrate overlays + erase masks
       if (Array.isArray(s.overlays)) {
@@ -530,19 +712,38 @@
     saveMeta.onclick=async()=>{ try{
       if(!current || stopIndex<0) throw new Error('Select a stop first.');
       showSaving();
+      const isText = isTextStop(current._stops[stopIndex]);
       const s = { ...current._stops[stopIndex] };
       s.title=stopTitle.value.trim();
       s.caption=stopCaption.value.trim();
-      s.lat=parseFloat(stopLat.value);
-      s.lng=parseFloat(stopLng.value);
+
+      // Text slide fields
+      if (isText){
+        s.type='text';
+        s.text = textSlideContent.value;
+        s.fontSize = parseInt(textSlideFontSize.value,10) || 34;
+        s.tts = !!textSlideTTS.checked;
+        s.manual = !!textSlideManual.checked;
+      }
+
+      // GPS/radius (kept even if manual = true, viewer can choose to ignore)
+      s.lat = (stopLat.value.trim()==='' ? null : parseFloat(stopLat.value));
+      s.lng = (stopLng.value.trim()==='' ? null : parseFloat(stopLng.value));
       s.radiusMeters=Math.max(5, Math.min(1000, Math.round(parseInt(stopRadius.value||'50',10))));
-      if(Number.isNaN(s.lat)||Number.isNaN(s.lng)) throw new Error('Invalid GPS coordinates.');
+      if( (s.lat!==null && Number.isNaN(s.lat)) || (s.lng!==null && Number.isNaN(s.lng)) ) throw new Error('Invalid GPS coordinates.');
+
       s.overlays = serializeOverlays();
+
       const nextStops = [ ...current._stops ]; nextStops[stopIndex] = s;
       const updated = { ...current._raw };
       setStops(updated, nextStops);
       await set(ref(db, `${ROOT}/${current.id}`), updated);
       current._raw = updated; current._stops = nextStops;
+      renderStopsThumbs();
+
+      // If text slide, re-render preview with updated text/font
+      if (isText) setBaseAsTextSlide(s.text, s.fontSize);
+
       metaMsg.textContent='Meta saved.';
     }catch(err){ metaMsg.textContent=String(err.message||err); }
      finally { hideSaving(); } };
@@ -550,6 +751,7 @@
     function readFileAsDataURL(f){ return new Promise((res,rej)=>{ const r=new FileReader(); r.onload=()=>res(r.result); r.onerror=rej; r.readAsDataURL(f); }); }
     replaceApply.onclick=async()=>{ const f=replaceFile.files?.[0]; if(!f){ metaMsg.textContent='Choose a file first.'; return; } const data=await readFileAsDataURL(f); await setBaseImageFromDataURL(data); };
 
+    // Persist current canvas snapshot + overlays to RTDB
     async function persistCurrentStopImageAndOverlays(){
       if(!current || stopIndex<0) throw new Error('Select a stop first.');
       showSaving();
@@ -566,17 +768,22 @@
         await set(ref(db, `${ROOT}/${current.id}`), updated);
         current._raw = updated; current._stops = nextStops;
         renderStopsThumbs();
-        metaMsg.textContent='Image + overlays saved.';
+        metaMsg.textContent='Image/slide + overlays saved.';
       } finally { hideSaving(); }
     }
     saveImage.onclick=()=>persistCurrentStopImageAndOverlays().catch(e=> metaMsg.textContent=String(e.message||e));
 
+    // Re-render text preview quickly without saving
+    renderTextPreview.onclick = ()=>{
+      const txt = textSlideContent.value;
+      const fs = parseInt(textSlideFontSize.value,10) || 34;
+      setBaseAsTextSlide(txt, fs);
+      textSlideMsg.textContent = 'Preview updated (not yet saved).';
+    };
+
     /* Overlay shelf — dynamic, no hardcoding */
     const OVERLAY_BASE = 'https://fireopssim.com/geophoto/overlays/';
-    // UI category → folder name (keeps UI the same, fixes paths if folder names differ)
     const FOLDER_MAP = { cars:'car', people:'people', fire:'fire', smoke:'smoke', hazard:'hazard' };
-
-    // For last-resort probing (only used if no JSON manifest and no auto-index)
     const CAT_PREFIX = { fire:'fire', smoke:'smoke', people:'person', cars:'car', hazard:'hazard' };
     const EXTENSIONS = ['png','webp','jpg','jpeg'];
     const OVERLAY_CACHE = Object.create(null);
@@ -585,10 +792,7 @@
     function resolveSpritePath(cat, name){ return `${OVERLAY_BASE}${resolveFolder(cat)}/${name}`; }
 
     async function listFromManifest(baseUrl, folder){
-      const candidates = [
-        `${baseUrl}index.json`,
-        `${baseUrl}_index.json`,
-      ];
+      const candidates = [`${baseUrl}index.json`, `${baseUrl}_index.json`];
       for (const url of candidates){
         try{
           const r = await fetch(url, { cache:'no-store' });
@@ -632,8 +836,7 @@
       const prefix = CAT_PREFIX[cat] || 'img';
       const found = [];
       let misses = 0;
-      const MAX_MISS_STREAK = 6;
-      const MAX_STEPS = 80;
+      const MAX_MISS_STREAK = 6, MAX_STEPS = 80;
 
       for (let i=1; i<=MAX_STEPS && misses<MAX_MISS_STREAK; i++){
         let hit = false;
@@ -641,11 +844,7 @@
           const url = `${baseUrl}${prefix}${i}.${ext}`;
           try{
             const r = await fetch(url, { method:'HEAD', cache:'no-store' });
-            if (r.ok){
-              found.push(`${prefix}${i}.${ext}`);
-              hit = true;
-              break;
-            }
+            if (r.ok){ found.push(`${prefix}${i}.${ext}`); hit = true; break; }
           }catch{}
         }
         misses = hit ? 0 : misses + 1;
@@ -655,7 +854,6 @@
 
     async function listOverlays(cat){
       if (OVERLAY_CACHE[cat]) return OVERLAY_CACHE[cat];
-
       const folder = resolveFolder(cat);
       const baseUrl = `${OVERLAY_BASE}${folder}/`;
 
@@ -666,14 +864,10 @@
       }
 
       files = await listFromAutoIndex(baseUrl);
-      if (files && files.length){
-        OVERLAY_CACHE[cat] = files; return files;
-      }
+      if (files && files.length){ OVERLAY_CACHE[cat] = files; return files; }
 
       files = await listFromProbing(baseUrl, cat);
-      if (files && files.length){
-        OVERLAY_CACHE[cat] = files; return files;
-      }
+      if (files && files.length){ OVERLAY_CACHE[cat] = files; return files; }
 
       OVERLAY_CACHE[cat] = [];
       return [];
@@ -854,15 +1048,33 @@
     flipSelV.onclick=()=>flipSelected('y');
 
     /* Canvas utilities */
-    const rebase=()=>{ if(!baseImage) return; setBaseImageFromDataURL(baseImage.toDataURL({})); };
+    const rebase=()=>{ if(!baseImage) return;
+      if (baseImage.type === 'image') setBaseImageFromDataURL(baseImage.toDataURL({}));
+      if (baseImage.type === 'rect') {
+        const bt = fabricCanvas.getObjects('textbox').find(o=>o.isBaseText);
+        setBaseAsTextSlide(bt ? bt.text : '', bt ? bt.fontSize : 34);
+      }
+    };
     fitBtn.onclick=rebase;
     zoomIn.onclick=()=>fabricCanvas.setZoom(fabricCanvas.getZoom()*1.1);
     zoomOut.onclick=()=>fabricCanvas.setZoom(fabricCanvas.getZoom()/1.1);
-    rotateL.onclick=()=>{ if(baseImage){ baseImage.rotate((baseImage.angle||0)-90); fabricCanvas.requestRenderAll(); } };
-    rotateR.onclick=()=>{ if(baseImage){ baseImage.rotate((baseImage.angle||0)+90); fabricCanvas.requestRenderAll(); } };
+    rotateL.onclick=()=>{ if(baseImage && baseImage.rotate){ baseImage.rotate((baseImage.angle||0)-90); fabricCanvas.requestRenderAll(); } };
+    rotateR.onclick=()=>{ if(baseImage && baseImage.rotate){ baseImage.rotate((baseImage.angle||0)+90); fabricCanvas.requestRenderAll(); } };
 
     /* Delete stop */
-    deleteStop.onclick=async()=>{ try{ if(!current || stopIndex<0) return; if(!confirm('Delete this photo from the scenario?')) return; const next=[...current._stops]; next.splice(stopIndex,1); const updated={ ...current._raw }; setStops(updated, next); await set(ref(db, `${ROOT}/${current.id}`), updated); current._stops=next; stopIndex=-1; fabricCanvas.clear(); baseImage=null; renderStopsThumbs(); metaMsg.textContent='Photo deleted.'; }catch(e){ metaMsg.textContent=String(e.message||e); } };
+    deleteStop.onclick=async()=>{ try{
+      if(!current || stopIndex<0) return;
+      if(!confirm('Delete this photo/slide from the scenario?')) return;
+      const next=[...current._stops];
+      next.splice(stopIndex,1);
+      const updated={ ...current._raw };
+      setStops(updated, next);
+      await set(ref(db, `${ROOT}/${current.id}`), updated);
+      current._stops=next; stopIndex=-1;
+      fabricCanvas.clear(); baseImage=null;
+      renderStopsThumbs();
+      metaMsg.textContent='Photo/slide deleted.';
+    }catch(e){ metaMsg.textContent=String(e.message||e); } };
 
   })().catch(e=>ERR(e?.message||e));
   </script>
