@@ -48,8 +48,17 @@
     .thumb{
       border:1px solid var(--edge);border-radius:12px;overflow:hidden;background:#0a0f18;cursor:pointer;display:flex;flex-direction:column;min-height:170px
     }
-    .thumb .img{aspect-ratio:16/10;background:#000}
+    .thumb .img{aspect-ratio:16/10;background:#000;position:relative;display:block}
     .thumb .img img{width:100%;height:100%;object-fit:cover}
+    /* Fallback "no image" look (used for Dispatch slide) */
+    .thumb .img.noimg{
+      background:linear-gradient(180deg,rgba(84,166,255,.25),rgba(10,132,255,.12));
+      display:grid;place-items:center;
+    }
+    .thumb .img.noimg .label{
+      font-weight:900; letter-spacing:.6px; text-transform:uppercase; opacity:.9;
+      padding:6px 10px; border:1px solid var(--edge2); border-radius:999px; backdrop-filter:blur(2px);
+    }
     .thumb .tcap{padding:8px 10px;font-size:13px;color:var(--muted)}
     .row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
     .grow{flex:1}
@@ -218,7 +227,7 @@
       const payload = {
         title: stop.title || '',
         caption: stop.caption || '',
-        image: stop.image || ''  // can be data URL or https URL
+        image: stop.image || ''  // can be data URL or https URL; empty => black slide with caption
       };
       try{
         await db.ref(path).set(payload);
@@ -239,26 +248,67 @@
       }
     }
 
-    // Build thumbnails grid
-    function renderThumbs(stops, session){
+    // Build thumbnails grid (adds Dispatch slide first when available)
+    function renderThumbs(stops, session, dispatchText){
       thumbsEl.innerHTML = '';
+
+      // 0) Dispatch slide (no image) if provided
+      if (dispatchText){
+        const dCard = document.createElement('div');
+        dCard.className = 'thumb';
+        dCard.title = 'Dispatch — ' + dispatchText;
+
+        const dImgWrap = document.createElement('div');
+        dImgWrap.className = 'img noimg';
+        const label = document.createElement('div');
+        label.className = 'label';
+        label.textContent = 'Dispatch';
+        dImgWrap.appendChild(label);
+
+        const dCap = document.createElement('div');
+        dCap.className = 'tcap';
+        dCap.innerHTML = `<strong>Dispatch</strong><br>${dispatchText}`;
+
+        dCard.appendChild(dImgWrap);
+        dCard.appendChild(dCap);
+        dCard.addEventListener('click', ()=> pushFrame(session, { title:'Dispatch', caption: dispatchText, image:'' }));
+        thumbsEl.appendChild(dCard);
+      }
+
+      // 1) Regular stops
       if (!stops || !stops.length){
-        thumbsEl.innerHTML = '<div style="padding:12px;color:#94a3b8">No stops found for this scenario.</div>';
+        // (If no stops AND no dispatch, show empty state)
+        if (!dispatchText){
+          const empty = document.createElement('div');
+          empty.style.cssText = 'padding:12px;color:#94a3b8';
+          empty.textContent = 'No stops found for this scenario.';
+          thumbsEl.appendChild(empty);
+        }
         return;
       }
-      stops.forEach((st, idx)=>{
+
+      stops.forEach((st)=>{
         const card = document.createElement('div');
         card.className = 'thumb';
         card.title = (st.title || 'Untitled') + (st.caption ? (' — ' + st.caption) : '');
 
         const imgWrap = document.createElement('div');
         imgWrap.className = 'img';
-        const img = document.createElement('img');
-        img.loading = 'lazy';
-        img.decoding = 'async';
-        img.src = st.image || '';
-        img.alt = st.title || 'Scenario image';
-        imgWrap.appendChild(img);
+        const hasImg = !!st.image;
+        if (hasImg){
+          const img = document.createElement('img');
+          img.loading = 'lazy';
+          img.decoding = 'async';
+          img.src = st.image || '';
+          img.alt = st.title || 'Scenario image';
+          imgWrap.appendChild(img);
+        }else{
+          imgWrap.classList.add('noimg');
+          const label = document.createElement('div');
+          label.className = 'label';
+          label.textContent = (st.title || 'Slide');
+          imgWrap.appendChild(label);
+        }
 
         const cap = document.createElement('div');
         cap.className = 'tcap';
@@ -281,7 +331,7 @@
       // 1) subscribe to current users view for this session
       subscribeCurrent(session);
 
-      // 2) fetch scenario and render thumbs
+      // 2) fetch scenario and render thumbs (+ dispatch slide if available)
       let sc=null;
       try{
         const rA = await fetch(`https://dailyquiz-d5279-default-rtdb.firebaseio.com/geophoto/scenarios/${scenarioId}.json`,{cache:'no-store'});
@@ -294,7 +344,8 @@
         }catch{}
       }
       const stops = normalizeStops(sc?.stops) || [];
-      renderThumbs(stops, session);
+      const dispatchText = ((sc?.dispatch || sc?.notes || '') + '').trim();
+      renderThumbs(stops, session, dispatchText);
       statusEl.textContent = 'Loaded scenario: ' + (sc?.title || sc?.name || scenarioId);
     });
 
