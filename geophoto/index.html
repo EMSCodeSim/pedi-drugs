@@ -53,7 +53,7 @@
   </div>
 
   <div id="viewerWrap" aria-live="polite">
-    <img id="photo" alt="Scenario Photo" decoding="async" fetchpriority="high">
+    <img id="photo" alt="Scenario Photo" decoding="async" loading="eager" fetchpriority="high">
     <div id="caption"></div>
   </div>
 
@@ -195,12 +195,20 @@
       return d <= (Number(stop.radiusMeters)||0) + pad;
     }
 
-    // Beep + vibrate when showing a new photo (kept as-is)
+    // Beep + vibrate when showing a new photo
     function buzz(){ if ('vibrate' in navigator) { try { navigator.vibrate([220,80,140]); } catch {} } }
     let audioCtx=null;
-    function beep(){
+    function ensureAudioUnlocked(){
       try{
         audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
+        if (audioCtx.state === 'suspended') { audioCtx.resume(); }
+      }catch{}
+    }
+    function beep(){
+      try{
+        // Audio must be unlocked by a user gesture first (Start button); ensure once.
+        audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
+        if (audioCtx.state === 'suspended') return; // not unlocked yet (iOS) — Start button will unlock
         const o = audioCtx.createOscillator();
         const g = audioCtx.createGain();
         o.type='square'; o.frequency.value=880;
@@ -243,11 +251,15 @@
     const manualPath = `geophoto/manual/${session}/current`; // instructor will write here
 
     function startManual(){
-      // Read an initial intro (lets iOS unlock audio on Start tap)
+      // Show a visible "awaiting instructor" slide and unlock audio/TTS on the tap
+      ensureAudioUnlocked();
       const intro = 'Manual mode. Awaiting instructor.';
-      speak(intro); lastSpeech = intro;
+      lastSpeech = intro;
+      caption.textContent = intro;
+      caption.style.display = 'block';
+      notifyNewPhoto();
 
-      // Subscribe to instructor-controlled node
+      // Subscribe to instructor-controlled node (low-latency stream)
       manualRef = db.ref(manualPath);
       manualRef.on('value', snap=>{
         const v = snap.val();
@@ -276,6 +288,9 @@
       startBtn.textContent='Stop';
       await acquireWakeLock();
 
+      // Unlock AudioContext on the Start tap so iPhone beeps later without extra taps
+      ensureAudioUnlocked();
+
       // Manual mode path — no GPS watcher
       if (id === '__manual__'){
         stopManual(); // safety
@@ -288,6 +303,7 @@
 
       // GPS mode (existing logic)
       stopManual(); // ensure no manual listener
+
       // Load scenario (prefer geophoto path, then fallback)
       let sc=null;
       try{
@@ -309,11 +325,15 @@
         stops: normalizeStops(sc.stops)
       };
 
-      // Read dispatch/title first (kept as-is)
+      // Dispatch as FIRST visible slide (not just TTS)
       const intro = (current.dispatch || current.title || '').toString().trim();
-      if (intro) { speak(intro); lastSpeech = intro; }
-
       clearPhoto(); lastStopIndex = -1;
+      if (intro) {
+        // Show dispatch slide immediately
+        showStop({ title: 'Dispatch', caption: intro, image: '' });
+      }
+      // Speak dispatch/title first (kept as-is)
+      if (intro) { speak(intro); lastSpeech = intro; }
 
       if (watchId) { try{ navigator.geolocation.clearWatch(watchId); }catch{} watchId=null; }
       try{
@@ -328,7 +348,7 @@
             .sort((a,b)=> a.dist - b.dist);
 
           if (hits.length === 0) {
-            if (lastStopIndex !== -1) { clearPhoto(); lastStopIndex = -1; }
+            // Keep the dispatch slide visible until first hit (lastStopIndex stays -1)
             return;
           }
           const best = hits[0];
@@ -353,8 +373,10 @@
 
     startBtn.addEventListener('click', ()=> running ? stopScenario() : startScenario());
     readBtn.addEventListener('click', ()=>{ // Repeat or manual trigger on iPhone
-      try{ if (audioCtx && audioCtx.state==='suspended') audioCtx.resume(); }catch{}
-      speak(lastSpeech || 'Ready.');
+      try{
+        ensureAudioUnlocked(); // resume if user taps Read
+        speak(lastSpeech || 'Ready.');
+      }catch{}
     });
 
     // Boot: load scenarios into dropdown (+ preselect ?id= or ?mode=manual)
