@@ -571,24 +571,176 @@
     }
     saveImage.onclick=()=>persistCurrentStopImageAndOverlays().catch(e=> metaMsg.textContent=String(e.message||e));
 
-    /* Overlay shelf */
-    const OVERLAY_BASE='https://fireopssim.com/geophoto/overlays/';
-    // Map UI category → CDN folder name (keeps UI the same, fixes paths)
+    /* Overlay shelf — dynamic, no hardcoding */
+    const OVERLAY_BASE = 'https://fireopssim.com/geophoto/overlays/';
+    // UI category → folder name (keeps UI the same, fixes paths if folder names differ)
     const FOLDER_MAP = { cars:'car', people:'people', fire:'fire', smoke:'smoke', hazard:'hazard' };
-    // Filenames per your CDN
-    const SPRITES = {
-      fire:   ['fire1.png','fire2.png','fire3.png','fire4.png','fire5.png','fire6.png','fire7.png','fire8.png'],
-      smoke:  ['smoke1.png','smoke2.png','smoke3.png','smoke4.png'],
-      people: ['person1.png','person2.png','person3.png','person4.png'],
-      cars:   ['car1.png','car2.png','car3.png','car4.png'],
-      // keeping hazard tab present; paths unchanged unless you provide new names
-      hazard: ['hazard1.png','hazard2.png','hazard3.png']
-    };
-    const resolveSpritePath=(cat,name)=>`${OVERLAY_BASE}${(FOLDER_MAP[cat]||cat)}/${name}`;
-    function renderShelf(cat){ overlayShelf.innerHTML=''; (SPRITES[cat]||[]).forEach((name,i)=>{ const div=document.createElement('div'); div.className='olThumb'; const img=document.createElement('img'); img.src=resolveSpritePath(cat,name); img.alt=`${cat}-${i+1}`; img.onerror=()=>{ div.style.opacity=.5; div.title='Missing: '+img.src; }; div.appendChild(img); div.onclick=()=>addOverlayImage(resolveSpritePath(cat,name)); overlayShelf.appendChild(div); }); }
-    tabBtns.forEach(btn => btn.onclick = () => { tabBtns.forEach(b => b.classList.remove('active')); btn.classList.add('active'); renderShelf(btn.dataset.cat); });
+
+    // For last-resort probing (only used if no JSON manifest and no auto-index)
+    const CAT_PREFIX = { fire:'fire', smoke:'smoke', people:'person', cars:'car', hazard:'hazard' };
+    const EXTENSIONS = ['png','webp','jpg','jpeg'];
+    const OVERLAY_CACHE = Object.create(null);
+
+    function resolveFolder(cat){ return (FOLDER_MAP[cat] || cat); }
+    function resolveSpritePath(cat, name){ return `${OVERLAY_BASE}${resolveFolder(cat)}/${name}`; }
+
+    async function listFromManifest(baseUrl, folder){
+      const candidates = [
+        `${baseUrl}index.json`,
+        `${baseUrl}_index.json`,
+      ];
+      for (const url of candidates){
+        try{
+          const r = await fetch(url, { cache:'no-store' });
+          if (r.ok && (r.headers.get('content-type')||'').includes('application/json')){
+            const j = await r.json();
+            if (Array.isArray(j)) return j;
+            if (Array.isArray(j.files)) return j.files;
+            if (j[folder] && Array.isArray(j[folder])) return j[folder];
+          }
+        }catch{}
+      }
+      try{
+        const root = `${OVERLAY_BASE}manifest.json`;
+        const r = await fetch(root, { cache:'no-store' });
+        if (r.ok && (r.headers.get('content-type')||'').includes('application/json')){
+          const j = await r.json();
+          if (j && Array.isArray(j[folder])) return j[folder];
+        }
+      }catch{}
+      return null;
+    }
+
+    async function listFromAutoIndex(baseUrl){
+      try{
+        const r = await fetch(baseUrl, { cache:'no-store' });
+        const ctype = r.headers.get('content-type') || '';
+        if (r.ok && ctype.includes('text/html')){
+          const html = await r.text();
+          const doc = new DOMParser().parseFromString(html, 'text/html');
+          const hrefs = Array.from(doc.querySelectorAll('a[href]')).map(a => a.getAttribute('href') || '');
+          const files = hrefs
+            .map(h => h.replace(/^\.\//, ''))
+            .filter(h => /\.(png|webp|jpe?g)$/i.test(h));
+          return files.length ? files : null;
+        }
+      }catch{}
+      return null;
+    }
+
+    async function listFromProbing(baseUrl, cat){
+      const prefix = CAT_PREFIX[cat] || 'img';
+      const found = [];
+      let misses = 0;
+      const MAX_MISS_STREAK = 6;
+      const MAX_STEPS = 80;
+
+      for (let i=1; i<=MAX_STEPS && misses<MAX_MISS_STREAK; i++){
+        let hit = false;
+        for (const ext of EXTENSIONS){
+          const url = `${baseUrl}${prefix}${i}.${ext}`;
+          try{
+            const r = await fetch(url, { method:'HEAD', cache:'no-store' });
+            if (r.ok){
+              found.push(`${prefix}${i}.${ext}`);
+              hit = true;
+              break;
+            }
+          }catch{}
+        }
+        misses = hit ? 0 : misses + 1;
+      }
+      return found.length ? found : null;
+    }
+
+    async function listOverlays(cat){
+      if (OVERLAY_CACHE[cat]) return OVERLAY_CACHE[cat];
+
+      const folder = resolveFolder(cat);
+      const baseUrl = `${OVERLAY_BASE}${folder}/`;
+
+      let files = await listFromManifest(baseUrl, folder);
+      if (files && files.length){
+        files = files.filter(f => /\.(png|webp|jpe?g)$/i.test(f));
+        OVERLAY_CACHE[cat] = files; return files;
+      }
+
+      files = await listFromAutoIndex(baseUrl);
+      if (files && files.length){
+        OVERLAY_CACHE[cat] = files; return files;
+      }
+
+      files = await listFromProbing(baseUrl, cat);
+      if (files && files.length){
+        OVERLAY_CACHE[cat] = files; return files;
+      }
+
+      OVERLAY_CACHE[cat] = [];
+      return [];
+    }
+
+    async function renderShelf(cat){
+      overlayShelf.innerHTML = '';
+      overlayShelf.setAttribute('aria-busy','true');
+      try{
+        const files = await listOverlays(cat);
+        if (!files.length){
+          const msg = document.createElement('div');
+          msg.className = 'pill';
+          msg.textContent = 'No overlays found in /overlays/' + resolveFolder(cat);
+          overlayShelf.appendChild(msg);
+          return;
+        }
+        for (const name of files){
+          const div = document.createElement('div');
+          div.className = 'olThumb';
+          const img = document.createElement('img');
+          img.src = resolveSpritePath(cat, name);
+          img.alt = `${cat}-${name}`;
+          img.onerror = () => { div.style.opacity = .5; div.title = 'Missing: ' + img.src; };
+          div.appendChild(img);
+          div.onclick = () => addOverlayImage(resolveSpritePath(cat, name));
+          overlayShelf.appendChild(div);
+        }
+      } finally {
+        overlayShelf.removeAttribute('aria-busy');
+      }
+    }
+
+    tabBtns.forEach(btn => {
+      btn.onclick = () => {
+        tabBtns.forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        renderShelf(btn.dataset.cat);
+      };
+    });
     if (tabBtns[0]) { tabBtns[0].classList.add('active'); renderShelf(tabBtns[0].dataset.cat); }
-    function addOverlayImage(src){ fabric.Image.fromURL(src, img => { const cw=fabricCanvas.getWidth(), ch=fabricCanvas.getHeight(); const targetW=cw*0.28; const scale=targetW/img.width; img.scale(scale); img.set({ left:cw/2-(img.width*scale)/2, top:ch/2-(img.height*scale)/2, cornerStyle:'circle', transparentCorners:false, shadow:'rgba(0,0,0,0.35) 0 6px 16px', erasable:true }); img._eraseUndoStack=[]; img._eraseRedoStack=[]; fabricCanvas.add(img); fabricCanvas.setActiveObject(img); fabricCanvas.requestRenderAll(); }, { crossOrigin:'anonymous' }); }
+
+    function addOverlayImage(src){
+      fabric.Image.fromURL(
+        src,
+        img => {
+          const cw=fabricCanvas.getWidth(), ch=fabricCanvas.getHeight();
+          const targetW=cw*0.28;
+          const scale=targetW/img.width;
+          img.scale(scale);
+          img.set({
+            left:cw/2-(img.width*scale)/2,
+            top:ch/2-(img.height*scale)/2,
+            cornerStyle:'circle',
+            transparentCorners:false,
+            shadow:'rgba(0,0,0,0.35) 0 6px 16px',
+            erasable:true
+          });
+          img._eraseUndoStack=[];
+          img._eraseRedoStack=[];
+          fabricCanvas.add(img);
+          fabricCanvas.setActiveObject(img);
+          fabricCanvas.requestRenderAll();
+        },
+        { crossOrigin:'anonymous' }
+      );
+    }
 
     /* Hue/Opacity/Order */
     const supportsHue = !!(fabric.Image && fabric.Image.filters && fabric.Image.filters.HueRotation);
