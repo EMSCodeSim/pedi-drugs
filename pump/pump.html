@@ -19,13 +19,13 @@
 
   .wrapper{border-top:1px solid var(--edge);border-bottom:1px solid var(--edge)}
   .scroll{height:65vh;overflow:auto;overscroll-behavior:contain;background:linear-gradient(180deg,#0b0f14,#0e1726)}
-  .stage{position:relative;width:100%;min-height:520px;}
-  #engine{display:block;width:100%;height:auto;position:absolute;bottom:0;left:0;}
-  #overlay{position:absolute;inset:0;width:100%;height:100%;display:block}
+  .stage{position:relative;width:100%;min-height:520px}
+  #engine{display:block;width:100%;height:auto;position:absolute;bottom:0;left:0}
+  #overlay{position:absolute;inset:0;display:block;width:100%;height:100%}
   .hint{position:absolute;top:8px;left:10px;font-size:12px;color:#f7e39a}
 
-  /* left tools */
-  .side{position:fixed;left:8px;top:72px;z-index:4;display:flex;flex-direction:column;gap:8px;}
+  /* Left overlay tools */
+  .side{position:fixed;left:8px;top:72px;z-index:4;display:flex;flex-direction:column;gap:8px}
   .fab{width:44px;height:44px;border-radius:12px;border:1px solid var(--edge);background:#0b1320;color:#eaf2ff;font-size:12px;display:flex;align-items:center;justify-content:center;cursor:pointer;box-shadow:0 4px 12px rgba(0,0,0,.25)}
   .fab:active{transform:translateY(1px)}
   .drawer{position:fixed;left:60px;top:72px;z-index:5;background:#0b1320;border:1px solid var(--edge);border-radius:12px;box-shadow:0 8px 20px rgba(0,0,0,.35);width:min(78vw,340px);max-width:340px;display:none}
@@ -35,6 +35,7 @@
   .row button{background:#12203a;border:1px solid var(--edge);color:#eaf2ff;border-radius:10px;padding:8px 10px;font-size:13px;cursor:pointer}
   .row button:active{transform:translateY(1px)}
 
+  /* Lower panels */
   .panel{padding:10px 12px;background:var(--panel)}
   .card{background:#0e1726;border:1px solid var(--edge);border-radius:14px;padding:12px;margin:10px 0}
   .grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
@@ -57,12 +58,14 @@
     <div class="sub">Left tools • Hose stack touches the truck</div>
   </header>
 
+  <!-- Left buttons -->
   <div class="side">
     <button class="fab" id="openHose">Hose</button>
     <button class="fab" id="openAcc">Acc</button>
     <button class="fab" id="openNoz">Noz</button>
   </div>
 
+  <!-- Drawers -->
   <div class="drawer" id="drawerHose" role="dialog" aria-label="Hose options">
     <h3>Hose segments</h3>
     <div class="row">
@@ -91,11 +94,15 @@
     <div class="row" id="nozRow"></div>
   </div>
 
+  <!-- Stage -->
   <div class="wrapper">
     <div id="scroll" class="scroll">
       <div id="stage" class="stage">
-        <img id="engine" alt="ENGINE 181" src="https://fireopssim.com/pump/engine181.png" />
-        <svg id="overlay" viewBox="0 0 390 800" preserveAspectRatio="none">
+        <!-- Use natural size to compute exact rendered height -->
+        <img id="engine" alt="ENGINE 181"
+             src="https://fireopssim.com/pump/engine181.png"
+             loading="eager" decoding="sync" />
+        <svg id="overlay" viewBox="0 0 390 800" preserveAspectRatio="none" aria-label="Diagram overlay">
           <g id="hoseGroup"></g>
           <g id="accGroup"></g>
           <g id="nozzleGroup"></g>
@@ -106,6 +113,7 @@
     </div>
   </div>
 
+  <!-- Lower panels -->
   <div class="panel">
     <div class="card">
       <h3 style="margin:0 0 8px;font-size:14px;color:#cfe4ff">Environment</h3>
@@ -136,8 +144,8 @@
   // ====== CONFIG ======
   const STAGE_W = 390;
   const PX_PER_50FT = 80;
-  const HOSE_X_RATIO = 0.79;
-  const HOSE_TOUCH_OFFSET = -8; // negative overlap so it clearly touches
+  const HOSE_X_RATIO = 0.79;     // horizontal attach point (0..1)
+  const HOSE_TOUCH_OFFSET = -10; // a tiny overlap into the truck roof
 
   const HOSE_WIDTH = { "5": 12, "2.5": 9, "1.75": 6 };
   const HOSE_COLOR = { "5": "var(--hose5)", "2.5": "var(--hose25)", "1.75": "var(--hose175)" };
@@ -174,7 +182,7 @@
   const hint = document.getElementById('hint');
   const builderList = document.getElementById('builderList');
 
-  // ====== LEFT DRAWERS ======
+  // ====== DRAWERS ======
   const drawerHose = document.getElementById('drawerHose');
   const drawerAcc  = document.getElementById('drawerAcc');
   const drawerNoz  = document.getElementById('drawerNoz');
@@ -184,13 +192,12 @@
   document.getElementById('openAcc').onclick  = (e)=>{ e.stopPropagation(); toggleDrawer(drawerAcc); };
   document.getElementById('openNoz').onclick  = (e)=>{ e.stopPropagation(); toggleDrawer(drawerNoz); };
   document.addEventListener('click', (e)=>{ if(!e.target.closest('.drawer') && !e.target.closest('.fab')) closeDrawers(); });
-
   function toggleDrawer(el){ const was = el.classList.contains('open'); closeDrawers(); if(!was) el.classList.add('open'); }
 
   drawerHose.querySelectorAll('button[data-hose]').forEach(btn=>{
     btn.onclick = ()=>{ items.push(JSON.parse(btn.getAttribute('data-hose'))); closeDrawers(); render(true); };
   });
-  drawerHose.querySelector('[data-act="clearHose"]').onclick = ()=>{ items = items.filter(x=>x.type!=='hose'); closeDrawers(); render(true); };
+  drawerHose.querySelector('[data-act="clearHose"]').onclick = ()=>{ items = items.filter(x=>x.type!=='hose' && !x.size); closeDrawers(); render(true); };
 
   drawerAcc.querySelectorAll('button[data-acc]').forEach(btn=>{
     btn.onclick = ()=>{ const d=JSON.parse(btn.getAttribute('data-acc')); items.push({type:'acc',name:d.name,loss:+d.loss||0}); closeDrawers(); render(true); };
@@ -201,7 +208,7 @@
     items.push({type:'acc', name:name||'Custom', loss:isNaN(loss)?0:loss});
     closeDrawers(); render(true);
   };
-  drawerAcc.querySelector('[data-act="clearAcc"]').onclick = ()=>{ items = items.filter(x=>x.type!=='acc'); closeDrawers(); render(true); };
+  drawerAcc.querySelector('[data-act="clearAcc"]').onclick = ()=>{ items = items.filter(x=>x.size); closeDrawers(); render(true); };
 
   const nozRow = document.getElementById('nozRow');
   NOZZLES.forEach(n=>{ const b=document.createElement('button'); b.textContent=`${n.name} (${n.gpm} gpm, NP ${n.NP})`; b.onclick=()=>{ nozzle=n; closeDrawers(); render(false); }; nozRow.appendChild(b); });
@@ -219,24 +226,35 @@
         const C = COEFF[it.size]||0, segFL=fl(C,Q,it.lengthFt);
         totalFL += segFL; hoses.push({i:idx+1, ...it, C, segFL});
         items[idx].type='hose';
-      }else{ totalAcc += +it.loss||0; accs.push({i:idx+1, ...it}); items[idx].type='acc'; }
+      } else { totalAcc += +it.loss||0; accs.push({i:idx+1, ...it}); items[idx].type='acc'; }
     });
     const elevPsi = elevFt * elevPsiPerFt;
     return {Q, NP, totalFL, totalAcc, elevPsi, PDP: NP + totalFL + totalAcc + elevPsi, hoses, accs};
   }
 
-  // ====== GEO HELPERS ======
-  function engineHeightPx(){ return engineImg.clientHeight || 180; }
+  // ====== GEOMETRY ======
   function stageWidthPx(){ return stage.clientWidth || window.innerWidth || 390; }
+
+  // Use the image's natural aspect ratio so Safari/Chrome/iOS all compute the same rendered height
+  function engineHeightPx(){
+    const nW = engineImg.naturalWidth || 0;
+    const nH = engineImg.naturalHeight || 0;
+    if(nW && nH){
+      return stageWidthPx() * (nH / nW);
+    }
+    // fallback (should rarely be used)
+    return engineImg.clientHeight || 180;
+  }
+
   function hoseXpx(){ return Math.round(stageWidthPx() * HOSE_X_RATIO); }
 
-  // Convert CSS px -> viewBox units for BOTH axes
-  function toVBX(px){ return px / stageWidthPx() * STAGE_W; }
-  function toVBY(px, vbH){ return px / vbH * vbH; } // (vbH == stageH; explicit for clarity)
+  // CSS px -> SVG viewBox units (viewBox height == stageH)
+  function toVBX(px, stageH){ return px / stageWidthPx() * STAGE_W; }
+  function toVBY(px, stageH){ return px / stageH * stageH; } // identity but explicit
 
   // ====== DRAW ======
   function renderDiagram(){
-    const eH = engineHeightPx();
+    const eH = engineHeightPx();     // exact rendered truck height (px)
 
     const hoseFeet = items.filter(x=>x.type==='hose' || x.size).reduce((s,h)=>s+(h.lengthFt||0),0);
     const hosePx = (hoseFeet/50) * PX_PER_50FT;
@@ -247,18 +265,17 @@
     stage.style.height = stageH + 'px';
     overlay.setAttribute('viewBox', `0 0 ${STAGE_W} ${Math.round(stageH)}`);
 
-    const vbH = overlay.viewBox.baseVal.height;
-    const engineTopPx = stageH - eH;             // CSS px position of truck roof
-    let currentTopPx = engineTopPx + HOSE_TOUCH_OFFSET; // start exactly on/into the roof
+    const engineTopPx = stageH - eH;                // y of truck roof in CSS px
+    let currentTopPx = engineTopPx + HOSE_TOUCH_OFFSET; // begin on/just into the roof
     const xPx = hoseXpx();
 
     hoseGroup.innerHTML = ''; accGroup.innerHTML = ''; nozzleGroup.innerHTML = ''; portGroup.innerHTML='';
 
-    // port ring right at connection point
+    // Port ring (visual connection)
     const port = document.createElementNS('http://www.w3.org/2000/svg','circle');
-    port.setAttribute('cx', toVBX(xPx));
-    port.setAttribute('cy', toVBY(engineTopPx-2, vbH));
-    port.setAttribute('r', toVBX(6)-toVBX(0));
+    port.setAttribute('cx', toVBX(xPx, stageH));
+    port.setAttribute('cy', toVBY(engineTopPx-2, stageH));
+    port.setAttribute('r', toVBX(6, stageH)-toVBX(0, stageH));
     port.setAttribute('fill', '#2b3142'); port.setAttribute('stroke','#111622'); port.setAttribute('stroke-width','1.5');
     portGroup.appendChild(port);
 
@@ -273,30 +290,30 @@
         const yPx = currentTopPx - hPx;
 
         const r = document.createElementNS('http://www.w3.org/2000/svg','rect');
-        r.setAttribute('x', toVBX(xPx - wPx/2));
-        r.setAttribute('y', toVBY(yPx, vbH));
-        r.setAttribute('width', toVBX(wPx)-toVBX(0));
-        r.setAttribute('height', toVBY(hPx, vbH));
+        r.setAttribute('x', toVBX(xPx - wPx/2, stageH));
+        r.setAttribute('y', toVBY(yPx, stageH));
+        r.setAttribute('width', toVBX(wPx, stageH)-toVBX(0, stageH));
+        r.setAttribute('height', toVBY(hPx, stageH));
         r.setAttribute('fill', HOSE_COLOR[size] || 'goldenrod');
         r.setAttribute('stroke','rgba(255,255,255,.10)');
         r.setAttribute('stroke-width','1');
         hoseGroup.appendChild(r);
 
         const line = document.createElementNS('http://www.w3.org/2000/svg','line');
-        line.setAttribute('x1', toVBX(xPx - wPx/2));
-        line.setAttribute('x2', toVBX(xPx + wPx/2));
-        line.setAttribute('y1', toVBY(yPx, vbH));
-        line.setAttribute('y2', toVBY(yPx, vbH));
+        line.setAttribute('x1', toVBX(xPx - wPx/2, stageH));
+        line.setAttribute('x2', toVBX(xPx + wPx/2, stageH));
+        line.setAttribute('y1', toVBY(yPx, stageH));
+        line.setAttribute('y2', toVBY(yPx, stageH));
         line.setAttribute('stroke','#2b3242'); line.setAttribute('stroke-width','2');
         hoseGroup.appendChild(line);
 
         currentTopPx -= hPx;
-      } else { // accessory
+      } else {
         const boxYpx = currentTopPx - 18;
 
         const bg = document.createElementNS('http://www.w3.org/2000/svg','rect');
-        bg.setAttribute('x', toVBX(xPx + 10));
-        bg.setAttribute('y', toVBY(boxYpx, vbH));
+        bg.setAttribute('x', toVBX(xPx + 10, stageH));
+        bg.setAttribute('y', toVBY(boxYpx, stageH));
         bg.setAttribute('width', 120);
         bg.setAttribute('height', 18);
         bg.setAttribute('rx', 6); bg.setAttribute('ry', 6);
@@ -304,8 +321,8 @@
         accGroup.appendChild(bg);
 
         const txt = document.createElementNS('http://www.w3.org/2000/svg','text');
-        txt.setAttribute('x', toVBX(xPx + 16));
-        txt.setAttribute('y', toVBY(boxYpx + 12, vbH));
+        txt.setAttribute('x', toVBX(xPx + 16, stageH));
+        txt.setAttribute('y', toVBY(boxYpx + 12, stageH));
         txt.setAttribute('fill', '#cfe4ff'); txt.setAttribute('font-size', '10');
         txt.textContent = `${it.name} (+${it.loss} psi)`;
         accGroup.appendChild(txt);
@@ -314,22 +331,22 @@
       }
     }
 
-    // nozzle
+    // Nozzle
     const lastHose = items.filter(i=>i.type==='hose' || i.size).slice(-1)[0];
     const wTopPx = lastHose ? (HOSE_WIDTH[lastHose.size]||6) : 8;
 
     const body = document.createElementNS('http://www.w3.org/2000/svg','rect');
-    body.setAttribute('x', toVBX(xPx - wTopPx/2 - 4));
-    body.setAttribute('y', toVBY(currentTopPx - 22, vbH));
-    body.setAttribute('width', toVBX(wTopPx + 8)-toVBX(0));
-    body.setAttribute('height', toVBY(18, vbH));
+    body.setAttribute('x', toVBX(xPx - wTopPx/2 - 4, stageH));
+    body.setAttribute('y', toVBY(currentTopPx - 22, stageH));
+    body.setAttribute('width', toVBX(wTopPx + 8, stageH)-toVBX(0, stageH));
+    body.setAttribute('height', toVBY(18, stageH));
     body.setAttribute('fill','#394357'); nozzleGroup.appendChild(body);
 
     const tip = document.createElementNS('http://www.w3.org/2000/svg','rect');
-    tip.setAttribute('x', toVBX(xPx - (wTopPx*0.4)));
-    tip.setAttribute('y', toVBY(currentTopPx - 30, vbH));
-    tip.setAttribute('width', toVBX(wTopPx*0.8)-toVBX(0));
-    tip.setAttribute('height', toVBY(8, vbH));
+    tip.setAttribute('x', toVBX(xPx - (wTopPx*0.4), stageH));
+    tip.setAttribute('y', toVBY(currentTopPx - 30, stageH));
+    tip.setAttribute('width', toVBX(wTopPx*0.8, stageH)-toVBX(0, stageH));
+    tip.setAttribute('height', toVBY(8, stageH));
     tip.setAttribute('fill','#9aa7bd'); nozzleGroup.appendChild(tip);
 
     const totalFeet = items.filter(i=>i.type==='hose' || i.size).reduce((s,h)=>s+(h.lengthFt||0),0);
