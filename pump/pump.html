@@ -7,57 +7,56 @@
 <style>
   :root{
     --bg:#0b0f14; --panel:#0f1624; --ink:#eaf2ff; --muted:#9fb0c8;
-    --edge:rgba(255,255,255,.12); --accent:#49a3ff;
+    --edge:rgba(255,255,255,.14); --accent:#49a3ff;
     --hose5:#ecd464; --hose25:#f2994a; --hose175:#ff6b6b;
   }
   *{box-sizing:border-box}
   html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);font-family:system-ui,Segoe UI,Inter,Arial,sans-serif}
   .app{display:flex;flex-direction:column;min-height:100vh}
 
-  /* HEADER — compact, readable, phone-friendly */
+  /* Title bar (very compact) */
   header{
     position:sticky;top:0;z-index:3;
-    padding:10px 12px;background:linear-gradient(180deg,#0c1320 0%,#0b0f14 100%);
+    padding:8px 12px;background:linear-gradient(180deg,#0c1320 0%,#0b0f14 100%);
     border-bottom:1px solid var(--edge)
   }
-  .hdr-top{display:flex;justify-content:space-between;align-items:flex-end;gap:10px;margin-bottom:8px}
-  .hdr-title{display:flex;flex-direction:column}
-  .hdr-title h1{font-size:16px;margin:0 0 2px}
-  .hdr-title .sub{font-size:12px;color:var(--muted)}
-  .hdr-controls{
-    display:grid;
-    grid-template-columns:repeat(3,1fr);
-    gap:6px
-  }
-  @media (max-width:420px){
-    .hdr-controls{grid-template-columns:1fr 1fr; grid-auto-rows:auto}
-  }
-  .mini{
-    display:flex; align-items:center; gap:6px;
-    background:#0b1320; border:1px solid var(--edge); border-radius:12px;
-    padding:6px
-  }
-  .mini label{font-size:12px;color:#cfe4ff;white-space:nowrap}
-  .mini select{
-    flex:1; min-width:0; /* squeeze gracefully */
-    background:transparent; color:var(--ink); border:1px solid var(--edge);
-    border-radius:8px; padding:6px 8px; font-size:13px
-  }
-  .mini button{
-    background:#12203a; border:1px solid var(--edge); color:#eaf2ff;
-    border-radius:8px; padding:6px 10px; font-size:13px; white-space:nowrap; cursor:pointer
-  }
-  .mini button:active{transform:translateY(1px)}
+  h1{font-size:15px;margin:0}
+  .sub{font-size:11px;color:var(--muted)}
 
-  /* STAGE: engine IMG + overlay SVG stacked */
+  /* Stage: engine IMG + overlay SVG stacked */
   .wrapper{border-top:1px solid var(--edge);border-bottom:1px solid var(--edge)}
   .scroll{height:65vh;overflow:auto;overscroll-behavior:contain;background:linear-gradient(180deg,#0b0f14,#0e1726)}
-  .stage{position:relative; width:100%; min-height:520px;}
-  #engine{display:block; width:100%; height:auto; position:absolute; bottom:0; left:0;}
-  #overlay{position:absolute; inset:0; display:block; width:100%; height:100%}
-  .hint{position:absolute; top:8px; left:10px; font-size:12px; color:#f7e39a}
+  .stage{position:relative;width:100%;min-height:520px;}
+  #engine{display:block;width:100%;height:auto;position:absolute;bottom:0;left:0;}
+  #overlay{position:absolute;inset:0;display:block;width:100%;height:100%}
+  .hint{position:absolute;top:8px;left:10px;font-size:12px;color:#f7e39a}
 
-  /* LOWER PANELS */
+  /* LEFT TOOLBAR (overlay) */
+  .side{
+    position:fixed;left:8px;top:72px;z-index:4;display:flex;flex-direction:column;gap:8px;
+  }
+  .fab{
+    width:44px;height:44px;border-radius:12px;border:1px solid var(--edge);
+    background:#0b1320;color:#eaf2ff;font-size:12px;
+    display:flex;align-items:center;justify-content:center;cursor:pointer;
+    box-shadow:0 4px 12px rgba(0,0,0,.25)
+  }
+  .fab:active{transform:translateY(1px)}
+  .drawer{
+    position:fixed;left:60px;top:72px;z-index:5;
+    background:#0b1320;border:1px solid var(--edge);border-radius:12px;box-shadow:0 8px 20px rgba(0,0,0,.35);
+    width:min(78vw,340px);max-width:340px;display:none
+  }
+  .drawer.open{display:block}
+  .drawer h3{margin:10px 12px 6px;font-size:13px;color:#cfe4ff}
+  .row{display:flex;flex-wrap:wrap;gap:8px;padding:8px 10px}
+  .row button{
+    background:#12203a;border:1px solid var(--edge);color:#eaf2ff;border-radius:10px;
+    padding:8px 10px;font-size:13px;cursor:pointer
+  }
+  .row button:active{transform:translateY(1px)}
+
+  /* Lower panels */
   .panel{padding:10px 12px;background:var(--panel)}
   .card{background:#0e1726;border:1px solid var(--edge);border-radius:14px;padding:12px;margin:10px 0}
   .grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
@@ -69,70 +68,68 @@
   .note{font-size:12px;color:#9fb0c8}
   .list{display:flex;flex-direction:column;gap:8px}
   .item{display:flex;justify-content:space-between;gap:10px;align-items:center;padding:10px;border:1px solid var(--edge);border-radius:12px;background:#0c1320}
-  .item small{color:var(--muted)}
   .actions{display:flex;gap:6px;align-items:center}
-  .actions select, .actions button{
-    background:#0b1320;color:var(--ink);border:1px solid var(--edge);border-radius:8px;padding:6px 8px;font-size:13px
+  .actions select,.actions button{
+    background:#0b1320;color:#eaf2ff;border:1px solid var(--edge);border-radius:8px;padding:6px 8px;font-size:13px
   }
 </style>
 </head>
 <body>
 <div class="app">
 
-  <!-- Header with compact controls -->
   <header>
-    <div class="hdr-top">
-      <div class="hdr-title">
-        <h1>Pump Pressure — Visual Builder</h1>
-        <div class="sub">ENGINE 181 full-width • straight-up hose stack</div>
-      </div>
-    </div>
-    <div class="hdr-controls">
-      <!-- Hose control -->
-      <div class="mini">
-        <label>Hose</label>
-        <select id="hosePick" aria-label="Hose preset">
-          <option value='{"size":"5","lengthFt":100}'>5″ 100′</option>
-          <option value='{"size":"2.5","lengthFt":50}'>2½″ 50′</option>
-          <option value='{"size":"1.75","lengthFt":100}'>1¾″ 100′</option>
-          <option value='{"size":"1.75","lengthFt":50}'>1¾″ 50′</option>
-        </select>
-        <button id="addHose" title="Add hose segment">＋</button>
-      </div>
-      <!-- Accessory control -->
-      <div class="mini">
-        <label>Accessory</label>
-        <select id="accPick" aria-label="Accessory preset">
-          <option value='{"name":"Wye/Siamese","loss":10}'>Wye/Siamese (+10)</option>
-          <option value='{"name":"In-line eductor","loss":25}'>In-line eductor (+25)</option>
-          <option value='{"name":"Master monitor","loss":25}'>Master monitor (+25)</option>
-          <option value='{"name":"Standpipe/PRV","loss":25}'>Standpipe/PRV (+25)</option>
-          <option value='{"name":"Custom","loss":0}'>Custom…</option>
-        </select>
-        <button id="addAcc" title="Add accessory">＋</button>
-      </div>
-      <!-- Nozzle control -->
-      <div class="mini">
-        <label>Nozzle</label>
-        <select id="nozPick" aria-label="Nozzle"></select>
-        <button id="applyNoz" title="Apply nozzle">✓</button>
-      </div>
-    </div>
+    <h1>Pump Pressure — Visual Builder</h1>
+    <div class="sub">ENGINE 181 full-width • hose stack starts at truck roof</div>
   </header>
+
+  <!-- LEFT TOOL BUTTONS -->
+  <div class="side">
+    <button class="fab" id="openHose" title="Add hose">Hose</button>
+    <button class="fab" id="openAcc"  title="Add accessory">Acc</button>
+    <button class="fab" id="openNoz"  title="Select nozzle">Noz</button>
+  </div>
+
+  <!-- HOSE DRAWER -->
+  <div class="drawer" id="drawerHose" role="dialog" aria-label="Hose options">
+    <h3>Hose segments</h3>
+    <div class="row">
+      <button data-hose='{"size":"5","lengthFt":100}'>5″ 100′</button>
+      <button data-hose='{"size":"2.5","lengthFt":50}'>2½″ 50′</button>
+      <button data-hose='{"size":"1.75","lengthFt":100}'>1¾″ 100′</button>
+      <button data-hose='{"size":"1.75","lengthFt":50}'>1¾″ 50′</button>
+      <button data-act="clearHose">Clear hoses</button>
+    </div>
+  </div>
+
+  <!-- ACCESSORY DRAWER -->
+  <div class="drawer" id="drawerAcc" role="dialog" aria-label="Accessory options">
+    <h3>Accessories</h3>
+    <div class="row">
+      <button data-acc='{"name":"Wye/Siamese","loss":10}'>Wye/Siamese (+10)</button>
+      <button data-acc='{"name":"In-line eductor","loss":25}'>In-line eductor (+25)</button>
+      <button data-acc='{"name":"Master monitor","loss":25}'>Master monitor (+25)</button>
+      <button data-acc='{"name":"Standpipe/PRV","loss":25}'>Standpipe/PRV (+25)</button>
+      <button data-act="accCustom">Custom…</button>
+      <button data-act="clearAcc">Clear accessories</button>
+    </div>
+  </div>
+
+  <!-- NOZZLE DRAWER -->
+  <div class="drawer" id="drawerNoz" role="dialog" aria-label="Nozzle options">
+    <h3>Nozzles</h3>
+    <div class="row" id="nozRow"></div>
+  </div>
 
   <!-- Stage -->
   <div class="wrapper">
     <div id="scroll" class="scroll">
       <div id="stage" class="stage">
-        <!-- Engine image as HTML IMG to avoid SVG/CORS issues -->
-        <img id="engine" alt="ENGINE 181"
-             src="https://fireopssim.com/pump/engine181.png" />
-        <!-- Overlay for hose/acc/nozzle -->
-        <svg id="overlay" viewBox="0 0 390 800" preserveAspectRatio="none">
+        <img id="engine" alt="ENGINE 181" src="https://fireopssim.com/pump/engine181.png" />
+        <svg id="overlay" viewBox="0 0 390 800" preserveAspectRatio="none" aria-label="Diagram overlay">
           <g id="hoseGroup"></g>
           <g id="accGroup"></g>
           <g id="nozzleGroup"></g>
-          <text class="hint" id="hint">Add hose to begin…</text>
+          <text class="hint" id="hint">Tap Hose and add a segment…</text>
         </svg>
       </div>
     </div>
@@ -176,7 +173,7 @@
   const STAGE_W = 390;             // overlay viewBox width
   const PX_PER_50FT = 80;          // vertical pixels per 50′ segment
   const HOSE_X_RATIO = 0.78;       // hose column X (fraction of stage width)
-  const HOSE_TOUCH_OFFSET = 3;     // small overlap so hose "touches" truck top on all devices
+  const HOSE_TOUCH_OFFSET = 0;     // start exactly at engine top (0 means no gap)
 
   // Thin hose widths
   const HOSE_WIDTH = { "5": 12, "2.5": 9, "1.75": 6 };
@@ -217,45 +214,61 @@
   const hint = document.getElementById('hint');
   const builderList = document.getElementById('builderList');
 
-  // Fill nozzle dropdown
-  const nozPick = document.getElementById('nozPick');
-  NOZZLES.forEach(n=>{
-    const opt = document.createElement('option');
-    opt.value = n.name; opt.textContent = `${n.name} (${n.gpm} gpm, NP ${n.NP})`;
-    nozPick.appendChild(opt);
+  // --- Left toolbar drawers ---
+  const drawerHose = document.getElementById('drawerHose');
+  const drawerAcc  = document.getElementById('drawerAcc');
+  const drawerNoz  = document.getElementById('drawerNoz');
+
+  function closeDrawers(){ drawerHose.classList.remove('open'); drawerAcc.classList.remove('open'); drawerNoz.classList.remove('open'); }
+  document.getElementById('openHose').onclick = (e)=>{ e.stopPropagation(); toggleDrawer(drawerHose); };
+  document.getElementById('openAcc').onclick  = (e)=>{ e.stopPropagation(); toggleDrawer(drawerAcc); };
+  document.getElementById('openNoz').onclick  = (e)=>{ e.stopPropagation(); toggleDrawer(drawerNoz); };
+  document.addEventListener('click', (e)=>{ if(!e.target.closest('.drawer') && !e.target.closest('.fab')) closeDrawers(); });
+
+  function toggleDrawer(el){
+    const was = el.classList.contains('open');
+    closeDrawers();
+    if(!was) el.classList.add('open');
+  }
+
+  // Hose drawer actions
+  drawerHose.querySelectorAll('button[data-hose]').forEach(btn=>{
+    btn.onclick = ()=>{
+      const data = JSON.parse(btn.getAttribute('data-hose'));
+      items.push({type:'hose', size:data.size, lengthFt:data.lengthFt});
+      closeDrawers(); render(true);
+    };
   });
-  nozPick.value = nozzle.name;
+  drawerHose.querySelector('[data-act="clearHose"]').onclick = ()=>{ items = items.filter(x=>x.type!=='hose'); closeDrawers(); render(true); };
 
-  // Top buttons: add/apply
-  document.getElementById('addHose').onclick = ()=>{
-    const data = JSON.parse(document.getElementById('hosePick').value);
-    items.push({type:'hose', size:data.size, lengthFt:data.lengthFt});
-    render(true);
-  };
-  document.getElementById('addAcc').onclick = ()=>{
-    const data = JSON.parse(document.getElementById('accPick').value);
-    if(data.name === 'Custom'){
-      const name = prompt('Accessory name?','Appliance');
-      if(name===null) return;
-      const loss = parseFloat(prompt('Pressure loss (psi)?','10')||'0');
-      items.push({type:'acc', name:name||'Custom', loss:isNaN(loss)?0:loss});
-    } else {
+  // Accessory drawer actions
+  drawerAcc.querySelectorAll('button[data-acc]').forEach(btn=>{
+    btn.onclick = ()=>{
+      const data = JSON.parse(btn.getAttribute('data-acc'));
       items.push({type:'acc', name:data.name, loss:Number(data.loss)||0});
-    }
-    render(true);
+      closeDrawers(); render(true);
+    };
+  });
+  drawerAcc.querySelector('[data-act="accCustom"]').onclick = ()=>{
+    const name = prompt('Accessory name?','Appliance'); if(name===null) return;
+    const loss = parseFloat(prompt('Pressure loss (psi)?','10')||'0');
+    items.push({type:'acc', name:name||'Custom', loss:isNaN(loss)?0:loss});
+    closeDrawers(); render(true);
   };
-  document.getElementById('applyNoz').onclick = ()=>{
-    const found = NOZZLES.find(n=>n.name===nozPick.value);
-    if(found){ nozzle = found; render(false); }
-  };
+  drawerAcc.querySelector('[data-act="clearAcc"]').onclick = ()=>{ items = items.filter(x=>x.type!=='acc'); closeDrawers(); render(true); };
 
-  // Env inputs
+  // Build nozzle drawer
+  const nozRow = document.getElementById('nozRow');
+  NOZZLES.forEach(n=>{
+    const b = document.createElement('button');
+    b.textContent = `${n.name} (${n.gpm} gpm, NP ${n.NP})`;
+    b.onclick = ()=>{ nozzle = n; closeDrawers(); render(false); };
+    nozRow.appendChild(b);
+  });
+
+  // Environment inputs
   document.getElementById('elevFt').oninput = e=>{ elevFt = parseFloat(e.target.value||0); render(); };
   document.getElementById('elevPsi').oninput = e=>{ elevPsiPerFt = parseFloat(e.target.value||0); render(); };
-
-  // Handle engine load & window resize
-  engineImg.onload = ()=> render(true);
-  window.addEventListener('resize', ()=> render(false));
 
   // ---------- Math ----------
   function fl(C, Q, L){ return (C||0) * Math.pow(Q/100, 2) * (L/100); }
@@ -284,49 +297,45 @@
   function engineHeightPx(){ return engineImg.clientHeight || 180; }
   function stageWidthPx(){ return stage.clientWidth || window.innerWidth || 390; }
   function hoseXpx(){ return Math.round(stageWidthPx() * HOSE_X_RATIO); }
-
-  // px -> viewBox units converter (y depends on current viewBox height)
   function toVBX(px){ return px / stageWidthPx() * STAGE_W; }
-  function toVBY(px, vbH){ return px / vbH * vbH; } // trivial, but keeps intent clear
 
   // ---------- Drawing ----------
   function renderDiagram(){
     const eH = engineHeightPx();
 
-    // total hose pixels + accessory blocks
+    // total hose + accessories
     const hoseFeet = items.filter(x=>x.type==='hose').reduce((s,h)=>s+h.lengthFt,0);
     const hosePx = (hoseFeet/50) * PX_PER_50FT;
     const accCount = items.filter(x=>x.type==='acc').length;
     const accPx = accCount * 22;
     const topPad = 120;
 
-    // stage height: engine at bottom, stack above it
+    // stage height so engine stays at bottom and stack fits
     const stageH = Math.max(520, eH + hosePx + accPx + topPad);
     stage.style.height = stageH + 'px';
     overlay.setAttribute('viewBox', `0 0 ${STAGE_W} ${Math.round(stageH)}`);
 
-    // y where engine top sits (in px)
-    let engineTopPx = stageH - eH;
+    // exact y where engine top sits
+    const engineTopPx = stageH - eH;
 
-    // start drawing exactly on the engine top (with small negative offset so it "touches")
+    // start drawing hose EXACTLY at engine top (no gap)
     let currentTopPx = engineTopPx + HOSE_TOUCH_OFFSET;
 
     const xPx = hoseXpx();
-    const vbH = overlay.viewBox.baseVal.height;
 
-    // clear layers
+    // clear
     hoseGroup.innerHTML = '';
     accGroup.innerHTML = '';
     nozzleGroup.innerHTML = '';
 
     if(items.length===0){
-      hint.textContent = 'Add hose to begin…';
+      hint.textContent = 'Tap Hose and add a segment…';
       return;
     } else {
       hint.textContent = '';
     }
 
-    // Draw items in order
+    // Draw stack
     for(const it of items){
       if(it.type==='hose'){
         const wPx = HOSE_WIDTH[it.size] || 6;
@@ -336,14 +345,14 @@
         const r = document.createElementNS('http://www.w3.org/2000/svg','rect');
         r.setAttribute('x', toVBX(xPx - wPx/2));
         r.setAttribute('y', yPx);
-        r.setAttribute('width', toVBX(wPx) - toVBX(0)); // proportional to width
+        r.setAttribute('width', toVBX(wPx) - toVBX(0));
         r.setAttribute('height', hPx);
         r.setAttribute('fill', HOSE_COLOR[it.size] || 'goldenrod');
         r.setAttribute('stroke', 'rgba(255,255,255,.10)');
         r.setAttribute('stroke-width', '1');
         hoseGroup.appendChild(r);
 
-        // coupling line at top of segment
+        // coupling line at top of each segment
         const line = document.createElementNS('http://www.w3.org/2000/svg','line');
         line.setAttribute('x1', toVBX(xPx - wPx/2));
         line.setAttribute('x2', toVBX(xPx + wPx/2));
@@ -355,6 +364,7 @@
 
         currentTopPx -= hPx;
       } else if(it.type==='acc'){
+        // small accessory label box beside the stack
         const boxYpx = currentTopPx - 18;
 
         const bg = document.createElementNS('http://www.w3.org/2000/svg','rect');
@@ -379,7 +389,7 @@
       }
     }
 
-    // Nozzle glyph at the stack top
+    // Nozzle glyph on top
     const lastHose = items.filter(i=>i.type==='hose').slice(-1)[0];
     const wTopPx = lastHose ? (HOSE_WIDTH[lastHose.size] || 6) : 8;
 
@@ -399,9 +409,9 @@
     tip.setAttribute('fill', '#9aa7bd');
     nozzleGroup.appendChild(tip);
 
-    // Info line
+    // Info
     const totalFeet = items.filter(i=>i.type==='hose').reduce((s,h)=>s+h.lengthFt,0);
-    document.getElementById('hint').textContent = `Total hose: ${totalFeet}′ • Items: ${items.length}`;
+    hint.textContent = `Total hose: ${totalFeet}′ • Items: ${items.length}`;
   }
 
   // ---------- Builder list ----------
@@ -467,17 +477,15 @@
     });
     return div;
   }
-
   function renderBuilder(){
-    const list = document.getElementById('builderList');
-    list.innerHTML = '';
+    builderList.innerHTML = '';
     if(items.length===0){
       const e = document.createElement('div');
       e.className = 'item';
-      e.innerHTML = `<div>Use the header controls: add **Hose**, **Accessory**, then apply a **Nozzle**.</div>`;
-      list.appendChild(e);
+      e.innerHTML = `<div>Use the left tools: add **Hose**, **Accessory**, then pick a **Nozzle**.</div>`;
+      builderList.appendChild(e);
     } else {
-      items.forEach((it,i)=> list.appendChild(row(it,i)));
+      items.forEach((it,i)=> builderList.appendChild(row(it,i)));
     }
   }
 
@@ -508,8 +516,10 @@
     }
   }
 
-  // Initial render (if image cached, onload may not fire)
+  // Initial render (on cached image, onload may not fire)
   if(engineImg.complete) render(true);
+  engineImg.onload = ()=> render(true);
+  window.addEventListener('resize', ()=> render(false));
 </script>
 </body>
 </html>
