@@ -31,14 +31,14 @@
   .item{display:flex;justify-content:space-between;gap:10px;align-items:center;padding:10px;border:1px solid var(--edge);border-radius:12px;background:#0c1320}
   .item small{color:var(--muted)}
   .actions{display:flex;gap:6px;align-items:center}
-  input,select{background:#0b1320;color:var(--ink);border:1px solid var(--edge);border-radius:10px;padding:8px 10px}
+  input,select{background:#0b1320;color:#eaf2ff;border:1px solid var(--edge);border-radius:10px;padding:8px 10px}
   label{font-size:12px;color:var(--muted);display:block;margin-bottom:4px}
   .grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
   .eq{font-family:ui-monospace,Menlo,monospace;color:#cfe4ff;font-size:13px;line-height:1.35}
   .kpis{display:flex;flex-wrap:wrap;gap:10px}
   .kpi{background:#0b1320;border:1px solid var(--edge);border-radius:12px;padding:10px 12px}
   .kpi b{font-size:20px}
-  .note{font-size:12px;color:var(--muted)}
+  .note{font-size:12px;color:#9fb0c8}
 </style>
 </head>
 <body>
@@ -46,7 +46,7 @@
   <header>
     <div>
       <h1>Pump Pressure — Visual Builder</h1>
-      <div class="sub">Start with ENGINE 181 • Add hose/appliance/nozzle • Live math</div>
+      <div class="sub">pump.html & enging181.png are in the same folder • Starts with engine only</div>
     </div>
     <div class="menu" id="addMenu">
       <button class="btn" id="addBtn">➕ Add</button>
@@ -62,28 +62,27 @@
   <div class="canvas">
     <svg id="scene" viewBox="0 0 390 360" preserveAspectRatio="xMidYMid slice" aria-label="Pump diagram">
       <defs>
-        <filter id="glow"><feGaussianBlur stdDeviation="1.2" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
-        <!-- optional hose texture (will use solid if image not found) -->
+        <!-- Optional hose texture tile (safe if missing) -->
         <pattern id="hoseStripes" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(35)">
-          <image id="hoseTileImg" href="./assets/overlay_hose_tile_64.png" x="0" y="0" width="6" height="6" />
+          <image id="hoseTileImg" href="./overlay_hose_tile_64.png" x="0" y="0" width="6" height="6" />
         </pattern>
+        <filter id="glow"><feGaussianBlur stdDeviation="1.2" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
       </defs>
 
-      <!-- ENGINE 181 image (bottom) -->
-      <image id="truckImg" href="./assets/engine181.png" x="6" y="250" width="200" height="95" />
+      <!-- ENGINE 181 overlay at bottom; path is ./enging181.png next to pump.html -->
+      <image id="truckImg" href="./enging181.png" x="6" y="250" width="200" height="95" />
 
-      <!-- Hose path + texture overlay -->
+      <!-- Hose path (initially hidden because no hose yet) -->
       <path id="hosePath" d="" stroke="var(--hose)" fill="none" stroke-linecap="round" filter="url(#glow)" stroke-width="12"/>
       <path id="hoseStripePath" d="" stroke="url(#hoseStripes)" fill="none" stroke-linecap="round" stroke-width="9" opacity="0.5"/>
 
-      <!-- Couplings, wye, nozzle -->
-      <image id="cplStart" href="./assets/overlay_coupling_96.png" x="-100" y="-100" width="18" height="18"/>
-      <image id="cplEnd"   href="./assets/overlay_coupling_96.png" x="-100" y="-100" width="18" height="18"/>
-      <image id="wyeImg"   href="./assets/overlay_wye_200.png"     x="-100" y="-100" width="26" height="26"/>
-      <image id="nozImg"   href="./assets/overlay_nozzle_fog_160.png" x="-100" y="-100" width="26" height="26"/>
+      <!-- Sprites (safe if files are missing; start off-canvas) -->
+      <image id="cplStart" href="./overlay_coupling_96.png" x="-100" y="-100" width="18" height="18"/>
+      <image id="cplEnd"   href="./overlay_coupling_96.png" x="-100" y="-100" width="18" height="18"/>
+      <image id="wyeImg"   href="./overlay_wye_200.png"     x="-100" y="-100" width="26" height="26"/>
+      <image id="nozImg"   href="./overlay_nozzle_fog_160.png" x="-100" y="-100" width="26" height="26"/>
 
-      <!-- Labels -->
-      <text x="200" y="36" fill="#f7e39a" font-size="10" id="pathLabel">Add components to begin…</text>
+      <text x="200" y="36" fill="#f7e39a" font-size="10" id="pathLabel">Engine is ready — add components to begin…</text>
     </svg>
   </div>
 
@@ -120,11 +119,17 @@
 </div>
 
 <script>
+  // ---------- Paths (you can change these, but defaults assume same folder as pump.html) ----------
+  const PATH_TRUCK = "./enging181.png";              // <— EXACT filename you gave
+  const PATH_NOZ_FOG = "./overlay_nozzle_fog_160.png";
+  const PATH_NOZ_SB  = "./overlay_nozzle_sb_160.png";
+  const PATH_WYE     = "./overlay_wye_200.png";
+  const PATH_COUP    = "./overlay_coupling_96.png";
+
   // ---------- Presets ----------
   // FL = C * (Q/100)^2 * (L/100)
   const COEFF = {"1.5":24,"1.75":15.5,"2":8,"2.5":2,"3":0.8,"4":0.2,"5":0.08};
   const STROKE = {"1.5":10,"1.75":12,"2":14,"2.5":16,"3":18,"4":22,"5":26};
-
   const NOZZLES = [
     {name:"Fog 95", gpm:95, NP:100},
     {name:"Fog 125", gpm:125, NP:100},
@@ -137,7 +142,6 @@
     {name:"ChiefXD 150 @75", gpm:150, NP:75},
     {name:"ChiefXD 185 @75", gpm:185, NP:75}
   ];
-
   const APPLIANCE_PRESETS = [
     {name:"Wye/Siamese", loss:10},
     {name:"In-line eductor", loss:25},
@@ -147,8 +151,8 @@
   ];
 
   // ---------- State ----------
-  let items = []; // user adds hose/appliances
-  let nozzle = null;
+  let items = [];     // hose/appliances get pushed here
+  let nozzle = null;  // set when chosen
   let elevFt = 0, elevPsiPerFt = 0.434;
 
   // ---------- Add menu ----------
@@ -196,9 +200,8 @@
              y: 3*u*u*(p1.y-p0.y) + 6*u*t*(p2.y-p1.y) + 3*t*t*(p3.y-p2.y) };
   }
 
-  // Visual path depends on total hose length
   function pathForChain(){
-    // pump port near ENGINE 181 image: (x≈113,y≈283) works well for x=6,y=250,width=200,height=95
+    // Pump port aligned for truckImg at x=6,y=250,width=200,height=95
     const pump = {x:113, y:283};
     const totalLen = items.filter(i=>i.type==='hose').reduce((s,h)=>s+h.length,0) || 80;
     const t = Math.max(0, Math.min(1, (totalLen-80)/(600-80)));
@@ -211,8 +214,7 @@
 
   // ---------- Builder rows ----------
   function builderRow(item, idx){
-    const row = document.createElement('div');
-    row.className = 'item';
+    const row = document.createElement('div'); row.className = 'item';
     if(item.type==='hose'){
       row.innerHTML = `
         <div><div>🧯 Hose <small>#${idx+1}</small></div>
@@ -250,7 +252,6 @@
           <button class="btn" data-act="del">✕</button>
         </div>`;
     }
-
     row.querySelectorAll('select,input').forEach(el=>{
       el.onchange = ()=>{
         const k = el.dataset.k;
@@ -268,7 +269,6 @@
         render();
       };
     });
-
     row.querySelectorAll('button[data-act]').forEach(btn=>{
       btn.onclick = ()=>{
         const act = btn.dataset.act;
@@ -280,10 +280,8 @@
     });
     return row;
   }
-
   function builderNozzleRow(){
-    const row = document.createElement('div');
-    row.className = 'item';
+    const row = document.createElement('div'); row.className = 'item';
     const name = nozzle ? nozzle.name : 'None selected';
     row.innerHTML = `
       <div><div>🔫 Nozzle</div><div class="note">${name}</div></div>
@@ -295,7 +293,6 @@
     if(nozzle){ row.querySelector('#clearNozzleBtn').onclick = ()=>{ nozzle=null; render(); }; }
     return row;
   }
-
   function pickNozzle(){
     const list = NOZZLES.map(n=>n.name).join(', ');
     const sel = prompt(`Pick nozzle:\n${list}\n${nozzle?`(current: ${nozzle.name})`:''}`, nozzle?.name || "Fog 150");
@@ -305,12 +302,10 @@
 
   // ---------- Renderers ----------
   function renderBuilder(){
-    const list = document.getElementById('builderList');
-    list.innerHTML = '';
+    const list = document.getElementById('builderList'); list.innerHTML = '';
     items.forEach((it,i)=> list.appendChild(builderRow(it,i)));
     list.appendChild(builderNozzleRow());
   }
-
   function renderMath(){
     const out = calc();
     document.getElementById('GPM').textContent = `${out.Q} gpm`;
@@ -324,8 +319,10 @@
     document.getElementById('equation').textContent =
       `PDP = NP(${out.NP}) + FL(${out.totalFL.toFixed(1)}) + APP(${out.totalApp.toFixed(1)}) ${out.elevPsi>=0?'+':'-'} Elev(${Math.abs(out.elevPsi).toFixed(1)})`;
   }
-
   function renderDiagram(){
+    // ensure the truck uses the exact file next to pump.html
+    document.getElementById('truckImg').setAttribute('href', PATH_TRUCK);
+
     const hosePath = document.getElementById('hosePath');
     const hoseStripePath = document.getElementById('hoseStripePath');
     const cplStart = document.getElementById('cplStart');
@@ -335,43 +332,44 @@
     const label    = document.getElementById('pathLabel');
 
     if(items.length===0){
+      // nothing drawn yet (as requested)
       hosePath.setAttribute('d',''); hoseStripePath.setAttribute('d','');
       [cplStart,cplEnd,wyeImg,nozImg].forEach(el=>{ el.setAttribute('x',-100); el.setAttribute('y',-100); });
-      label.textContent = 'Add components to begin…';
+      label.textContent = 'Engine is ready — add components to begin…';
       return;
     }
 
-    // Build hose curve
+    // build hose curve
     const {p0,p1,p2,p3,d} = pathForChain();
     hosePath.setAttribute('d', d);
     hoseStripePath.setAttribute('d', d);
 
-    // Thickness by first hose dia
+    // thickness by first hose dia
     const firstDia = (items.find(i=>i.type==='hose')?.dia) || '1.75';
     const sw = STROKE[firstDia] || 12;
     hosePath.setAttribute('stroke-width', sw);
     hoseStripePath.setAttribute('stroke-width', Math.max(6, sw-3));
 
-    // Start & end couplings
+    // Start & end couplings (safe if image missing)
+    cplStart.setAttribute('href', PATH_COUP);
+    cplEnd.setAttribute('href', PATH_COUP);
     cplStart.setAttribute('x', p0.x - 9); cplStart.setAttribute('y', p0.y - 9);
     cplEnd.setAttribute('x', p3.x - 9);   cplEnd.setAttribute('y', p3.y - 9);
 
-    // If a wye is present anywhere, drop icon mid-path
+    // Wye mid-path if any appliance contains "wye"
     const hasWye = items.some(i=>i.type==='appliance' && /wye/i.test(i.name));
     if(hasWye){
       const mid = cubicPoint(p0,p1,p2,p3,0.55);
+      wyeImg.setAttribute('href', PATH_WYE);
       wyeImg.setAttribute('x', mid.x - 13); wyeImg.setAttribute('y', mid.y - 13);
-    } else {
-      wyeImg.setAttribute('x', -100); wyeImg.setAttribute('y', -100);
-    }
+    } else { wyeImg.setAttribute('x', -100); wyeImg.setAttribute('y', -100); }
 
-    // Nozzle sprite + orientation
+    // Nozzle sprite (choose fog vs SB) + orientation
     if(nozzle){
       const tEnd = cubicTangent(p0,p1,p2,p3,0.99);
       const angle = Math.atan2(tEnd.y, tEnd.x) * 180/Math.PI;
       const isSB = /SB|ChiefXD .*@50|15\/16|7\/8|1\"/.test(nozzle.name);
-      nozImg.setAttribute('href', isSB ? './assets/overlay_nozzle_sb_160.png'
-                                       : './assets/overlay_nozzle_fog_160.png');
+      nozImg.setAttribute('href', isSB ? PATH_NOZ_SB : PATH_NOZ_FOG);
       nozImg.setAttribute('x', p3.x - 13);
       nozImg.setAttribute('y', p3.y - 13);
       nozImg.setAttribute('transform', `rotate(${angle}, ${p3.x}, ${p3.y})`);
@@ -386,16 +384,19 @@
   function render(){
     elevFt = parseFloat(document.getElementById('elevFt').value || 0);
     elevPsiPerFt = parseFloat(document.getElementById('elevPsi').value || 0.434);
-    renderBuilder();
+    // builder UI
+    const list = document.getElementById('builderList'); list.innerHTML = '';
+    items.forEach((it,i)=> list.appendChild(builderRow(it,i)));
+    list.appendChild(builderNozzleRow());
+
     renderDiagram();
     renderMath();
   }
 
-  // Env listeners
   document.getElementById('elevFt').oninput = render;
   document.getElementById('elevPsi').oninput = render;
 
-  // Initial render
+  // Initial render: only engine shows (no hose yet)
   render();
 </script>
 </body>
