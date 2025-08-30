@@ -14,7 +14,6 @@
   html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);font-family:system-ui,Segoe UI,Inter,Arial,sans-serif}
   .app{display:flex;flex-direction:column;min-height:100vh}
 
-  /* Title bar (very compact) */
   header{
     position:sticky;top:0;z-index:3;
     padding:8px 12px;background:linear-gradient(180deg,#0c1320 0%,#0b0f14 100%);
@@ -31,7 +30,7 @@
   #overlay{position:absolute;inset:0;display:block;width:100%;height:100%}
   .hint{position:absolute;top:8px;left:10px;font-size:12px;color:#f7e39a}
 
-  /* LEFT TOOLBAR (overlay) */
+  /* LEFT TOOLBAR */
   .side{
     position:fixed;left:8px;top:72px;z-index:4;display:flex;flex-direction:column;gap:8px;
   }
@@ -60,8 +59,8 @@
   .panel{padding:10px 12px;background:var(--panel)}
   .card{background:#0e1726;border:1px solid var(--edge);border-radius:14px;padding:12px;margin:10px 0}
   .grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
-  label{font-size:12px;color:var(--muted);display:block;margin-bottom:4px}
-  input{background:#0b1320;color:var(--ink);border:1px solid var(--edge);border-radius:10px;padding:8px 10px}
+  label{font-size:12px;color:#9fb0c8;display:block;margin-bottom:4px}
+  input{background:#0b1320;color:#eaf2ff;border:1px solid var(--edge);border-radius:10px;padding:8px 10px}
   .kpis{display:flex;gap:10px;flex-wrap:wrap}
   .kpi{background:#0b1320;border:1px solid var(--edge);border-radius:12px;padding:10px 12px}
   .kpi b{font-size:20px}
@@ -79,7 +78,7 @@
 
   <header>
     <h1>Pump Pressure — Visual Builder</h1>
-    <div class="sub">ENGINE 181 full-width • hose stack starts at truck roof</div>
+    <div class="sub">Left tools • Hose stack touches the truck</div>
   </header>
 
   <!-- LEFT TOOL BUTTONS -->
@@ -124,11 +123,15 @@
   <div class="wrapper">
     <div id="scroll" class="scroll">
       <div id="stage" class="stage">
+        <!-- Engine as HTML IMG to avoid SVG/CORS issues -->
         <img id="engine" alt="ENGINE 181" src="https://fireopssim.com/pump/engine181.png" />
+        <!-- Overlay draws hoses/accessories/nozzle -->
         <svg id="overlay" viewBox="0 0 390 800" preserveAspectRatio="none" aria-label="Diagram overlay">
           <g id="hoseGroup"></g>
           <g id="accGroup"></g>
           <g id="nozzleGroup"></g>
+          <!-- visual pump port so contact is obvious -->
+          <g id="portGroup"></g>
           <text class="hint" id="hint">Tap Hose and add a segment…</text>
         </svg>
       </div>
@@ -172,8 +175,8 @@
   // ---------- Visual constants ----------
   const STAGE_W = 390;             // overlay viewBox width
   const PX_PER_50FT = 80;          // vertical pixels per 50′ segment
-  const HOSE_X_RATIO = 0.78;       // hose column X (fraction of stage width)
-  const HOSE_TOUCH_OFFSET = 0;     // start exactly at engine top (0 means no gap)
+  const HOSE_X_RATIO = 0.79;       // hose column X (fraction of stage width)
+  const HOSE_TOUCH_OFFSET = -6;    // NEGATIVE = a slight overlap into the truck (touch effect)
 
   // Thin hose widths
   const HOSE_WIDTH = { "5": 12, "2.5": 9, "1.75": 6 };
@@ -211,6 +214,7 @@
   const hoseGroup = document.getElementById('hoseGroup');
   const accGroup = document.getElementById('accGroup');
   const nozzleGroup = document.getElementById('nozzleGroup');
+  const portGroup = document.getElementById('portGroup');
   const hint = document.getElementById('hint');
   const builderList = document.getElementById('builderList');
 
@@ -318,7 +322,7 @@
     // exact y where engine top sits
     const engineTopPx = stageH - eH;
 
-    // start drawing hose EXACTLY at engine top (no gap)
+    // start drawing hose SLIGHTLY overlapping into engine image for a solid “touch”
     let currentTopPx = engineTopPx + HOSE_TOUCH_OFFSET;
 
     const xPx = hoseXpx();
@@ -327,13 +331,24 @@
     hoseGroup.innerHTML = '';
     accGroup.innerHTML = '';
     nozzleGroup.innerHTML = '';
+    portGroup.innerHTML = '';
 
     if(items.length===0){
       hint.textContent = 'Tap Hose and add a segment…';
-      return;
     } else {
       hint.textContent = '';
     }
+
+    // draw a little pump port/coupling ring right at the attach point (visual cue)
+    const portRpx = 6;
+    const port = document.createElementNS('http://www.w3.org/2000/svg','circle');
+    port.setAttribute('cx', toVBX(xPx));
+    port.setAttribute('cy', engineTopPx - 2);           // 2px inside the truck
+    port.setAttribute('r', toVBX(portRpx) - toVBX(0));
+    port.setAttribute('fill', '#2b3142');
+    port.setAttribute('stroke', '#111622');
+    port.setAttribute('stroke-width', '1.5');
+    portGroup.appendChild(port);
 
     // Draw stack
     for(const it of items){
@@ -516,7 +531,7 @@
     }
   }
 
-  // Initial render (on cached image, onload may not fire)
+  // Initial render
   if(engineImg.complete) render(true);
   engineImg.onload = ()=> render(true);
   window.addEventListener('resize', ()=> render(false));
