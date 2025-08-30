@@ -13,38 +13,42 @@
   *{box-sizing:border-box}
   html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);font-family:system-ui,Segoe UI,Inter,Arial,sans-serif}
   .app{display:flex;flex-direction:column;min-height:100vh}
+
   header{
     position:sticky;top:0;z-index:3;
     padding:10px 12px;background:linear-gradient(180deg,#0c1320 0%,#0b0f14 100%);
-    border-bottom:1px solid var(--edge);display:flex;align-items:center;gap:10px;justify-content:space-between
+    border-bottom:1px solid var(--edge);
   }
-  h1{font-size:16px;margin:0 0 2px}
-  .sub{font-size:12px;color:var(--muted)}
-  .toolbar{display:flex;gap:8px;align-items:center}
-  .btn{background:#0b1320;border:1px solid var(--edge);color:var(--ink);padding:8px 12px;border-radius:10px;cursor:pointer;position:relative}
-  .btn:active{transform:translateY(1px)}
-  .menu{position:relative}
-  .menu-panel{
-    position:absolute;top:44px;left:0;background:#0b1320;border:1px solid var(--edge);
-    border-radius:12px;overflow:hidden;display:none;min-width:220px;z-index:5
+  h1{font-size:16px;margin:0 0 4px}
+  .controls-top{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px}
+  .controls-top .group{display:flex;gap:6px}
+  select,button{
+    background:#0b1320;border:1px solid var(--edge);color:var(--ink);
+    border-radius:10px;padding:8px 10px;font-size:14px
   }
-  .menu.open .menu-panel{display:block}
-  .menu-panel button{display:block;width:100%;text-align:left;padding:10px 12px;background:transparent;border:none;color:var(--ink);font-size:14px}
-  .menu-panel button:hover{background:#101c30}
+  button{cursor:pointer}
+  button:active{transform:translateY(1px)}
 
-  .canvas{background:linear-gradient(180deg,#0b0f14,#0e1726);border-bottom:1px solid var(--edge)}
-  .scroll{height:65vh;overflow-y:auto;overscroll-behavior:contain}
-  svg{width:100%;display:block}
+  /* Stage: engine IMG + overlay SVG stacked */
+  .wrapper{border-top:1px solid var(--edge);border-bottom:1px solid var(--edge)}
+  .scroll{height:65vh;overflow:auto;overscroll-behavior:contain;background:linear-gradient(180deg,#0b0f14,#0e1726)}
+  .stage{position:relative; width:100%; min-height:500px;}
+  #engine{display:block; width:100%; height:auto; position:absolute; bottom:0; left:0;}
+  /* SVG overlay covers the whole stage */
+  #overlay{position:absolute; inset:0; display:block; width:100%; height:100%}
+  .hint{position:absolute; top:8px; left:10px; font-size:12px; color:#f7e39a}
 
-  .controls{padding:10px 12px;background:var(--panel)}
+  .panel{padding:10px 12px;background:var(--panel)}
   .card{background:#0e1726;border:1px solid var(--edge);border-radius:14px;padding:12px;margin:10px 0}
   .grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
   label{font-size:12px;color:var(--muted);display:block;margin-bottom:4px}
-  input,select{background:#0b1320;color:var(--ink);border:1px solid var(--edge);border-radius:10px;padding:8px 10px}
+  input{background:#0b1320;color:var(--ink);border:1px solid var(--edge);border-radius:10px;padding:8px 10px}
+
   .kpis{display:flex;gap:10px;flex-wrap:wrap}
   .kpi{background:#0b1320;border:1px solid var(--edge);border-radius:12px;padding:10px 12px}
   .kpi b{font-size:20px}
   .note{font-size:12px;color:#9fb0c8}
+
   .list{display:flex;flex-direction:column;gap:8px}
   .item{display:flex;justify-content:space-between;gap:10px;align-items:center;padding:10px;border:1px solid var(--edge);border-radius:12px;background:#0c1320}
   .item small{color:var(--muted)}
@@ -53,75 +57,58 @@
 </head>
 <body>
 <div class="app">
+
   <header>
-    <div>
-      <h1>Pump Pressure — Visual Builder</h1>
-      <div class="sub">ENGINE 181 image spans width • straight-up hose segments</div>
-    </div>
-    <div class="toolbar">
-      <!-- Hose menu -->
-      <div class="menu" id="menuHose">
-        <button class="btn" id="btnHose">Hose ▾</button>
-        <div class="menu-panel">
-          <button data-hose='{"size":"5","lengthFt":100}'>5″ 100′</button>
-          <button data-hose='{"size":"2.5","lengthFt":50}'>2½″ 50′</button>
-          <button data-hose='{"size":"1.75","lengthFt":100}'>1¾″ 100′</button>
-          <button data-hose='{"size":"1.75","lengthFt":50}'>1¾″ 50′</button>
-          <button data-act="clearHose">— Clear hoses</button>
-        </div>
+    <h1>Pump Pressure — Visual Builder</h1>
+    <div class="controls-top">
+      <!-- Hose -->
+      <div class="group">
+        <select id="hosePick" aria-label="Hose preset">
+          <option value='{"size":"5","lengthFt":100}'>5″ 100′</option>
+          <option value='{"size":"2.5","lengthFt":50}'>2½″ 50′</option>
+          <option value='{"size":"1.75","lengthFt":100}'>1¾″ 100′</option>
+          <option value='{"size":"1.75","lengthFt":50}'>1¾″ 50′</option>
+        </select>
+        <button id="addHose">Add Hose</button>
       </div>
-
-      <!-- Accessory menu -->
-      <div class="menu" id="menuAcc">
-        <button class="btn" id="btnAcc">Accessory ▾</button>
-        <div class="menu-panel">
-          <button data-acc='{"name":"Wye/Siamese","loss":10}'>Wye/Siamese (+10 psi)</button>
-          <button data-acc='{"name":"In-line eductor","loss":25}'>In-line eductor (+25 psi)</button>
-          <button data-acc='{"name":"Master monitor","loss":25}'>Master monitor (+25 psi)</button>
-          <button data-acc='{"name":"Standpipe/PRV","loss":25}'>Standpipe/PRV (+25 psi)</button>
-          <button data-act="accCustom">Custom…</button>
-          <button data-act="clearAcc">— Clear accessories</button>
-        </div>
+      <!-- Accessory -->
+      <div class="group">
+        <select id="accPick" aria-label="Accessory preset">
+          <option value='{"name":"Wye/Siamese","loss":10}'>Wye/Siamese (+10 psi)</option>
+          <option value='{"name":"In-line eductor","loss":25}'>In-line eductor (+25 psi)</option>
+          <option value='{"name":"Master monitor","loss":25}'>Master monitor (+25 psi)</option>
+          <option value='{"name":"Standpipe/PRV","loss":25}'>Standpipe/PRV (+25 psi)</option>
+          <option value='{"name":"Custom","loss":0}'>Custom…</option>
+        </select>
+        <button id="addAcc">Add Accessory</button>
       </div>
-
-      <!-- Nozzle menu -->
-      <div class="menu" id="menuNoz">
-        <button class="btn" id="btnNoz">Nozzle ▾</button>
-        <div class="menu-panel" id="nozPanel"></div>
+      <!-- Nozzle -->
+      <div class="group">
+        <select id="nozPick" aria-label="Nozzle">
+          <!-- options filled by JS -->
+        </select>
+        <button id="applyNoz">Apply Nozzle</button>
       </div>
     </div>
   </header>
 
-  <!-- Visual diagram -->
-  <div class="canvas">
+  <!-- Stage -->
+  <div class="wrapper">
     <div id="scroll" class="scroll">
-      <!-- stage height grows with hose length; engine image stays at bottom -->
-      <svg id="stage" viewBox="0 0 390 800" height="800" preserveAspectRatio="xMidYMid slice" aria-label="Pump diagram">
-        <!-- Engine 181 full width at bottom -->
-        <image id="truckImg" href="https://fireopssim.com/pump/engine181.png" x="0" y="600" width="390" height="180" preserveAspectRatio="xMidYMin slice" />
-
-        <!-- Hose column (straight up, touching the engine) -->
-        <g id="hoseGroup"></g>
-
-        <!-- Accessories stacked along the hose -->
-        <g id="accGroup"></g>
-
-        <!-- Nozzle at top -->
-        <g id="nozzleGroup"></g>
-
-        <!-- Info -->
-        <text x="12" y="18" fill="#f7e39a" font-size="10" id="infoLabel">Tap Hose ▾ to add a segment…</text>
-      </svg>
+      <div id="stage" class="stage">
+        <img id="engine" alt="ENGINE 181" src="https://fireopssim.com/pump/engine181.png" />
+        <svg id="overlay" viewBox="0 0 390 800" preserveAspectRatio="none">
+          <g id="hoseGroup"></g>
+          <g id="accGroup"></g>
+          <g id="nozzleGroup"></g>
+          <text class="hint" id="hint">Add hose to begin…</text>
+        </svg>
+      </div>
     </div>
   </div>
 
-  <!-- Builder + Math -->
-  <div class="controls">
-    <div class="card">
-      <div class="note">Stack hose/acc along the vertical riser; nozzle is applied at the very top.</div>
-      <div class="list" id="builderList"></div>
-    </div>
-
+  <!-- Lower panels -->
+  <div class="panel">
     <div class="card">
       <h3 style="margin:0 0 8px;font-size:14px;color:#cfe4ff">Environment</h3>
       <div class="grid2">
@@ -137,6 +124,11 @@
     </div>
 
     <div class="card">
+      <h3 style="margin:0 0 8px;font-size:14px;color:#cfe4ff">Build List</h3>
+      <div class="list" id="builderList"></div>
+    </div>
+
+    <div class="card">
       <div class="eq" id="equation">PDP = NP + ΣFL(hose @ GPM) + ΣAccessory ± Elev</div>
       <div class="kpis" style="margin-top:8px">
         <div class="kpi"><div>Flow</div><b id="GPM">— gpm</b></div>
@@ -145,17 +137,15 @@
       <div class="note" id="breakdown" style="margin-top:8px"></div>
     </div>
   </div>
+
 </div>
 
 <script>
   // ---------- Visual constants ----------
-  const STAGE_W = 390;                // viewBox width
-  const ENGINE_HEIGHT = 180;          // engine image height (fits full width nicely)
-  const PX_PER_50FT = 80;             // vertical pixels per 50′ segment (tweak to taste)
-  const HOSE_X_RATIO = 0.78;          // where hose rises (fraction of width from left, near pump panel)
-
-  // Thin hose widths
-  const HOSE_WIDTH = { "5": 14, "2.5": 10, "1.75": 7 };
+  const STAGE_W = 390;             // overlay viewBox width
+  const PX_PER_50FT = 80;          // vertical pixels per 50′ segment
+  const HOSE_X_RATIO = 0.78;       // hose column X (fraction of width)
+  const HOSE_WIDTH = { "5": 12, "2.5": 9, "1.75": 6 };  // thinner per your request
   const HOSE_COLOR = { "5": "var(--hose5)", "2.5": "var(--hose25)", "1.75": "var(--hose175)" };
 
   // Friction loss: FL = C * (Q/100)^2 * (L/100)
@@ -177,79 +167,61 @@
   ];
 
   // ---------- State ----------
-  // Items stacked from the engine top upward, in order added:
-  // Hose:      {type:'hose', size:'5'|'2.5'|'1.75', lengthFt:50|100}
-  // Accessory: {type:'acc', name:'Wye', loss:10}
-  let items = [];
+  // Items stacked from engine top upward: hose or accessory
+  let items = []; // {type:'hose', size, lengthFt} | {type:'acc', name, loss}
   let nozzle = NOZZLES[3]; // Fog 150 default
   let elevFt = 0, elevPsiPerFt = 0.434;
 
   // ---------- Elements ----------
-  const scrollEl = document.getElementById('scroll');
+  const engineImg = document.getElementById('engine');
   const stage = document.getElementById('stage');
-  const truckImg = document.getElementById('truckImg');
+  const scrollEl = document.getElementById('scroll');
+  const overlay = document.getElementById('overlay');
   const hoseGroup = document.getElementById('hoseGroup');
   const accGroup = document.getElementById('accGroup');
   const nozzleGroup = document.getElementById('nozzleGroup');
-  const infoLabel = document.getElementById('infoLabel');
+  const hint = document.getElementById('hint');
   const builderList = document.getElementById('builderList');
 
-  // ---------- Menus ----------
-  setupMenu('menuHose', (panel)=>{
-    // click handling for preset hose segments
-    panel.querySelectorAll('button[data-hose]').forEach(btn=>{
-      btn.onclick = ()=>{
-        const data = JSON.parse(btn.getAttribute('data-hose'));
-        items.push({type:'hose', size:data.size, lengthFt:data.lengthFt});
-        render(true);
-        closeAllMenus();
-      };
-    });
-    panel.querySelector('[data-act="clearHose"]').onclick = ()=>{ items = items.filter(x=>x.type!=='hose'); render(true); closeAllMenus(); };
+  // Populate nozzle dropdown
+  const nozPick = document.getElementById('nozPick');
+  NOZZLES.forEach(n=>{
+    const opt = document.createElement('option');
+    opt.value = n.name; opt.textContent = `${n.name} (${n.gpm} gpm, NP ${n.NP})`;
+    nozPick.appendChild(opt);
   });
+  nozPick.value = nozzle.name;
 
-  setupMenu('menuAcc', (panel)=>{
-    panel.querySelectorAll('button[data-acc]').forEach(btn=>{
-      btn.onclick = ()=>{
-        const data = JSON.parse(btn.getAttribute('data-acc'));
-        items.push({type:'acc', name:data.name, loss:Number(data.loss)||0});
-        render(true); closeAllMenus();
-      };
-    });
-    panel.querySelector('[data-act="accCustom"]').onclick = ()=>{
+  // Top buttons (no popups; just select + add/apply)
+  document.getElementById('addHose').onclick = ()=>{
+    const data = JSON.parse(document.getElementById('hosePick').value);
+    items.push({type:'hose', size:data.size, lengthFt:data.lengthFt});
+    render(true);
+  };
+  document.getElementById('addAcc').onclick = ()=>{
+    const data = JSON.parse(document.getElementById('accPick').value);
+    if(data.name === 'Custom'){
       const name = prompt('Accessory name?','Appliance');
       if(name===null) return;
       const loss = parseFloat(prompt('Pressure loss (psi)?','10')||'0');
-      items.push({type:'acc', name: name || 'Custom', loss: isNaN(loss)?0:loss});
-      render(true); closeAllMenus();
-    };
-    panel.querySelector('[data-act="clearAcc"]').onclick = ()=>{ items = items.filter(x=>x.type!=='acc'); render(true); closeAllMenus(); };
-  });
+      items.push({type:'acc', name:name||'Custom', loss:isNaN(loss)?0:loss});
+    } else {
+      items.push({type:'acc', name:data.name, loss:Number(data.loss)||0});
+    }
+    render(true);
+  };
+  document.getElementById('applyNoz').onclick = ()=>{
+    const found = NOZZLES.find(n=>n.name===nozPick.value);
+    if(found){ nozzle = found; render(false); }
+  };
 
-  // Build nozzle menu dynamically
-  const nozPanel = document.getElementById('nozPanel');
-  NOZZLES.forEach(n=>{
-    const b = document.createElement('button');
-    b.textContent = `${n.name} (${n.gpm} gpm • NP ${n.NP})`;
-    b.onclick = ()=>{ nozzle = n; render(false); closeAllMenus(); };
-    nozPanel.appendChild(b);
-  });
-  setupMenu('menuNoz');
+  // Env inputs
+  document.getElementById('elevFt').oninput = e=>{ elevFt = parseFloat(e.target.value||0); render(); };
+  document.getElementById('elevPsi').oninput = e=>{ elevPsiPerFt = parseFloat(e.target.value||0); render(); };
 
-  function setupMenu(id, onReady){
-    const menu = document.getElementById(id);
-    const btn = menu.querySelector('.btn');
-    const panel = menu.querySelector('.menu-panel');
-    btn.onclick = (e)=>{ e.stopPropagation(); toggleMenu(menu); };
-    if(onReady) onReady(panel);
-  }
-  function toggleMenu(menu){
-    const isOpen = menu.classList.contains('open');
-    closeAllMenus();
-    if(!isOpen) menu.classList.add('open');
-  }
-  function closeAllMenus(){ document.querySelectorAll('.menu.open').forEach(m=>m.classList.remove('open')); }
-  document.addEventListener('click', closeAllMenus);
+  // Handle engine load & window resize to keep geometry correct
+  engineImg.onload = ()=> render(true);
+  window.addEventListener('resize', ()=> render(false));
 
   // ---------- Math ----------
   function fl(C, Q, L){ return (C||0) * Math.pow(Q/100, 2) * (L/100); }
@@ -258,8 +230,7 @@
     const NP = nozzle.NP || 0;
 
     let totalFL = 0, totalAcc = 0;
-    const hoses = [];
-    const accs = [];
+    const hoses = [], accs = [];
     items.forEach((it, idx)=>{
       if(it.type==='hose'){
         const C = COEFF[it.size] || 0;
@@ -276,125 +247,141 @@
   }
 
   // ---------- Geometry helpers ----------
-  function engineTopY(svgH){ return svgH - ENGINE_HEIGHT; }
-  function hoseX(){ return Math.round(STAGE_W * HOSE_X_RATIO); }
+  function engineHeightPx(){ return engineImg.clientHeight || 180; }
+  function stageWidthPx(){ return stage.clientWidth || window.innerWidth || 390; }
+  function hoseXpx(){
+    return Math.round(stageWidthPx() * HOSE_X_RATIO);
+  }
 
-  // ---------- Diagram render ----------
+  // ---------- Drawing ----------
   function renderDiagram(){
-    // Total hose height in pixels
-    const totalFeet = items.filter(x=>x.type==='hose').reduce((s,seg)=> s + seg.lengthFt, 0);
-    const hosePx = (totalFeet/50) * PX_PER_50FT;
-    // Accessory visual space (each gets a little block)
+    const eH = engineHeightPx();
+
+    // total hose pixels + accessory space
+    const hoseFeet = items.filter(x=>x.type==='hose').reduce((s,h)=>s+h.lengthFt,0);
+    const hosePx = (hoseFeet/50) * PX_PER_50FT;
     const accCount = items.filter(x=>x.type==='acc').length;
     const accPx = accCount * 22;
+    const topPad = 120; // room for nozzle & label
 
-    // Compute stage height so engine remains at bottom and stack fits
-    const baseTop = 120; // space above the stack for nozzle/labels
-    const svgH = Math.max(ENGINE_HEIGHT + 220, ENGINE_HEIGHT + hosePx + accPx + baseTop);
-    stage.setAttribute('height', svgH);
-    stage.setAttribute('viewBox', `0 0 ${STAGE_W} ${svgH}`);
+    // stage height: engine at bottom, stack above it
+    const stageH = Math.max(500, eH + hosePx + accPx + topPad);
+    stage.style.height = stageH + 'px';
 
-    // Engine: full width at bottom
-    truckImg.setAttribute('x', 0);
-    truckImg.setAttribute('y', svgH - ENGINE_HEIGHT);
-    truckImg.setAttribute('width', STAGE_W);
-    truckImg.setAttribute('height', ENGINE_HEIGHT);
+    // overlay viewBox updates to match px height (keep width fixed at 390 units)
+    overlay.setAttribute('viewBox', `0 0 ${STAGE_W} ${Math.round(stageH)}`);
 
-    // Start drawing at the engine top edge
-    let currentTop = engineTopY(svgH);
-    const x = hoseX();
+    // engine is CSS-positioned at bottom; hose starts exactly at engine top
+    let currentTop = stageH - eH; // y coordinate where engine top sits (in px)
+    const x = hoseXpx();
 
+    // clear layers
     hoseGroup.innerHTML = '';
     accGroup.innerHTML = '';
     nozzleGroup.innerHTML = '';
 
     if(items.length===0){
-      infoLabel.textContent = 'Tap Hose ▾ to add a segment…';
+      hint.textContent = 'Add hose to begin…';
       return;
+    } else {
+      hint.textContent = '';
     }
 
-    // Draw items in the order they were added (stack upward)
+    // Draw stack in order
     for(const it of items){
       if(it.type==='hose'){
-        const w = HOSE_WIDTH[it.size] || 8;
+        const w = HOSE_WIDTH[it.size] || 6;
         const h = (it.lengthFt===50 ? PX_PER_50FT : 2*PX_PER_50FT);
-        // segment touches the top of the engine (no gap)
         const y = currentTop - h;
-        const rect = document.createElementNS('http://www.w3.org/2000/svg','rect');
-        rect.setAttribute('x', x - w/2);
-        rect.setAttribute('y', y);
-        rect.setAttribute('width', w);
-        rect.setAttribute('height', h);
-        rect.setAttribute('fill', HOSE_COLOR[it.size] || 'goldenrod');
-        rect.setAttribute('stroke', 'rgba(255,255,255,.10)');
-        rect.setAttribute('stroke-width', '1');
-        hoseGroup.appendChild(rect);
 
-        // coupling line at the top of each segment
+        // Because SVG viewBox units map to 390 width, we convert px->vb units
+        const vbX = x / stageWidthPx() * STAGE_W;
+        const vbY = y / stageH * overlay.viewBox.baseVal.height;
+        const vbW = w / stageWidthPx() * STAGE_W;
+        const vbH = h / stageH * overlay.viewBox.baseVal.height;
+
+        const r = document.createElementNS('http://www.w3.org/2000/svg','rect');
+        r.setAttribute('x', vbX - vbW/2);
+        r.setAttribute('y', vbY);
+        r.setAttribute('width', vbW);
+        r.setAttribute('height', vbH);
+        r.setAttribute('fill', HOSE_COLOR[it.size] || 'goldenrod');
+        r.setAttribute('stroke', 'rgba(255,255,255,.10)');
+        r.setAttribute('stroke-width', '1');
+        hoseGroup.appendChild(r);
+
+        // coupling line
         const line = document.createElementNS('http://www.w3.org/2000/svg','line');
-        line.setAttribute('x1', x - w/2); line.setAttribute('x2', x + w/2);
-        line.setAttribute('y1', y); line.setAttribute('y2', y);
-        line.setAttribute('stroke', '#2b3242'); line.setAttribute('stroke-width', '2');
+        line.setAttribute('x1', vbX - vbW/2);
+        line.setAttribute('x2', vbX + vbW/2);
+        line.setAttribute('y1', vbY);
+        line.setAttribute('y2', vbY);
+        line.setAttribute('stroke', '#2b3242');
+        line.setAttribute('stroke-width', '2');
         hoseGroup.appendChild(line);
 
-        currentTop -= h; // move up for next item
+        currentTop -= h;
       } else if(it.type==='acc'){
-        // small accessory box next to the hose
-        const g = document.createElementNS('http://www.w3.org/2000/svg','g');
-        const boxY = currentTop - 18;
-        const r = document.createElementNS('http://www.w3.org/2000/svg','rect');
-        r.setAttribute('x', x + 10);
-        r.setAttribute('y', boxY);
-        r.setAttribute('width', 110);
-        r.setAttribute('height', 18);
-        r.setAttribute('fill', '#172134');
-        r.setAttribute('stroke', 'rgba(255,255,255,.15)');
-        r.setAttribute('rx', '6'); r.setAttribute('ry', '6');
+        const vbX = (x + 10) / stageWidthPx() * STAGE_W;
+        const boxYpx = currentTop - 18;
+        const vbY = boxYpx / stageH * overlay.viewBox.baseVal.height;
 
-        const t = document.createElementNS('http://www.w3.org/2000/svg','text');
-        t.setAttribute('x', x + 16);
-        t.setAttribute('y', boxY + 12);
-        t.setAttribute('fill', '#cfe4ff');
-        t.setAttribute('font-size', '10');
-        t.textContent = `${it.name} (+${it.loss} psi)`;
+        const bg = document.createElementNS('http://www.w3.org/2000/svg','rect');
+        bg.setAttribute('x', vbX);
+        bg.setAttribute('y', vbY);
+        bg.setAttribute('width', 120);
+        bg.setAttribute('height', 18);
+        bg.setAttribute('rx', 6); bg.setAttribute('ry', 6);
+        bg.setAttribute('fill', '#172134');
+        bg.setAttribute('stroke', 'rgba(255,255,255,.15)');
+        accGroup.appendChild(bg);
 
-        g.appendChild(r); g.appendChild(t); accGroup.appendChild(g);
-        currentTop -= 22; // reserve space
+        const txt = document.createElementNS('http://www.w3.org/2000/svg','text');
+        txt.setAttribute('x', vbX + 6);
+        txt.setAttribute('y', vbY + 12);
+        txt.setAttribute('fill', '#cfe4ff');
+        txt.setAttribute('font-size', '10');
+        txt.textContent = `${it.name} (+${it.loss} psi)`;
+        accGroup.appendChild(txt);
+
+        currentTop -= 22;
       }
     }
 
-    // Nozzle at the top of stack
+    // Nozzle glyph at the very top
     const lastHose = items.filter(i=>i.type==='hose').slice(-1)[0];
-    const wTop = lastHose ? (HOSE_WIDTH[lastHose.size] || 8) : 10;
+    const wTopPx = lastHose ? (HOSE_WIDTH[lastHose.size] || 6) : 8;
+    const vbX = x / stageWidthPx() * STAGE_W;
+    const bodyYpx = currentTop - 22;
+    const tipYpx = currentTop - 30;
+    const vbBodyY = bodyYpx / stageH * overlay.viewBox.baseVal.height;
+    const vbTipY  = tipYpx  / stageH * overlay.viewBox.baseVal.height;
+    const vbWTop  = wTopPx / stageWidthPx() * STAGE_W;
+
     const body = document.createElementNS('http://www.w3.org/2000/svg','rect');
-    body.setAttribute('x', x - wTop/2 - 4);
-    body.setAttribute('y', currentTop - 22);
-    body.setAttribute('width', wTop + 8);
+    body.setAttribute('x', vbX - vbWTop/2 - 4);
+    body.setAttribute('y', vbBodyY);
+    body.setAttribute('width', vbWTop + 8);
     body.setAttribute('height', 18);
     body.setAttribute('fill', '#394357');
     nozzleGroup.appendChild(body);
 
     const tip = document.createElementNS('http://www.w3.org/2000/svg','rect');
-    tip.setAttribute('x', x - (wTop*0.4));
-    tip.setAttribute('y', currentTop - 30);
-    tip.setAttribute('width', wTop*0.8);
+    tip.setAttribute('x', vbX - (vbWTop*0.4));
+    tip.setAttribute('y', vbTipY);
+    tip.setAttribute('width', vbWTop*0.8);
     tip.setAttribute('height', 8);
     tip.setAttribute('fill', '#9aa7bd');
     nozzleGroup.appendChild(tip);
-
-    // Info
-    const totalFeet = items.filter(i=>i.type==='hose').reduce((s,h)=>s+h.lengthFt,0);
-    infoLabel.textContent = `Total hose: ${totalFeet}′ • Items: ${items.length}`;
   }
 
   // ---------- Builder list ----------
-  function builderRow(it, idx){
-    const row = document.createElement('div');
-    row.className = 'item';
+  function row(it, idx){
+    const div = document.createElement('div');
+    div.className = 'item';
     if(it.type==='hose'){
-      row.innerHTML = `
-        <div><div>🧯 Hose <small>#${idx+1}</small></div>
-             <div class="note">${it.size}″ • ${it.lengthFt}′</div></div>
+      div.innerHTML = `
+        <div><div>🧯 Hose <small>#${idx+1}</small></div><div class="note">${it.size}″ • ${it.lengthFt}′</div></div>
         <div class="actions">
           <select data-k="size">
             <option value="5" ${it.size==='5'?'selected':''}>5″</option>
@@ -405,36 +392,34 @@
             <option value="50" ${it.lengthFt===50?'selected':''}>50′</option>
             <option value="100" ${it.lengthFt===100?'selected':''}>100′</option>
           </select>
-          <button class="btn" data-act="dup">＋</button>
-          <button class="btn" data-act="up">↑</button>
-          <button class="btn" data-act="down">↓</button>
-          <button class="btn" data-act="del">✕</button>
+          <button data-act="dup">＋</button>
+          <button data-act="up">↑</button>
+          <button data-act="down">↓</button>
+          <button data-act="del">✕</button>
         </div>`;
     } else {
-      row.innerHTML = `
-        <div><div>⚙️ Accessory <small>#${idx+1}</small></div>
-             <div class="note">${it.name} • +${it.loss} psi</div></div>
+      div.innerHTML = `
+        <div><div>⚙️ Accessory <small>#${idx+1}</small></div><div class="note">${it.name} • +${it.loss} psi</div></div>
         <div class="actions">
-          <button class="btn" data-act="loss">Loss</button>
-          <button class="btn" data-act="rename">Name</button>
-          <button class="btn" data-act="up">↑</button>
-          <button class="btn" data-act="down">↓</button>
-          <button class="btn" data-act="del">✕</button>
+          <button data-act="loss">Loss</button>
+          <button data-act="rename">Name</button>
+          <button data-act="up">↑</button>
+          <button data-act="down">↓</button>
+          <button data-act="del">✕</button>
         </div>`;
     }
 
-    // handlers
-    row.querySelectorAll('select').forEach(sel=>{
-      sel.onchange = ()=>{
-        const k = sel.dataset.k;
-        if(k==='size') it.size = sel.value;
-        if(k==='lengthFt') it.lengthFt = parseInt(sel.value,10);
+    div.querySelectorAll('select').forEach(s=>{
+      s.onchange = ()=>{
+        const k = s.dataset.k;
+        if(k==='size') it.size = s.value;
+        if(k==='lengthFt') it.lengthFt = parseInt(s.value,10);
         render();
       };
     });
-    row.querySelectorAll('button[data-act]').forEach(btn=>{
-      btn.onclick = ()=>{
-        const act = btn.dataset.act;
+    div.querySelectorAll('button[data-act]').forEach(b=>{
+      b.onclick = ()=>{
+        const act = b.dataset.act;
         if(act==='dup'){ items.splice(idx+1,0, structuredClone(it)); }
         if(act==='del'){ items.splice(idx,1); }
         if(act==='up' && idx>0){ [items[idx-1],items[idx]] = [items[idx],items[idx-1]]; }
@@ -449,23 +434,22 @@
         render(true);
       };
     });
-
-    return row;
+    return div;
   }
 
   function renderBuilder(){
     builderList.innerHTML = '';
     if(items.length===0){
-      const empty = document.createElement('div');
-      empty.className = 'item';
-      empty.innerHTML = `<div>Use the toolbar: add **Hose**, **Accessory**, then pick a **Nozzle**.</div>`;
-      builderList.appendChild(empty);
+      const e = document.createElement('div');
+      e.className = 'item';
+      e.innerHTML = `<div>Use the top controls to add **Hose**, **Accessory**, and apply a **Nozzle**.</div>`;
+      builderList.appendChild(e);
     } else {
-      items.forEach((it,i)=> builderList.appendChild(builderRow(it,i)));
+      items.forEach((it,i)=> builderList.appendChild(row(it,i)));
     }
   }
 
-  // ---------- Math panel ----------
+  // ---------- Math ----------
   function calcAndRenderMath(){
     const out = calc();
     document.getElementById('GPM').textContent = `${out.Q} gpm`;
@@ -484,22 +468,16 @@
 
   // ---------- Render all ----------
   function render(autoScroll=false){
-    // engine already full width via attributes
     renderDiagram();
     renderBuilder();
     calcAndRenderMath();
     if(autoScroll){
-      // keep bottom (engine) visible while building
       setTimeout(()=>{ scrollEl.scrollTop = scrollEl.scrollHeight; }, 0);
     }
   }
 
-  // ---------- Env inputs ----------
-  document.getElementById('elevFt').oninput = e=>{ elevFt = parseFloat(e.target.value||0); render(); };
-  document.getElementById('elevPsi').oninput = e=>{ elevPsiPerFt = parseFloat(e.target.value||0); render(); };
-
-  // Initial render
-  render(true);
+  // Initial render (if image cached, onload may not fire)
+  if(engineImg.complete) render(true);
 </script>
 </body>
 </html>
