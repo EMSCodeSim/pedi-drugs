@@ -14,80 +14,108 @@
   html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);font-family:system-ui,Segoe UI,Inter,Arial,sans-serif}
   .app{display:flex;flex-direction:column;min-height:100vh}
 
+  /* HEADER — compact, readable, phone-friendly */
   header{
     position:sticky;top:0;z-index:3;
     padding:10px 12px;background:linear-gradient(180deg,#0c1320 0%,#0b0f14 100%);
-    border-bottom:1px solid var(--edge);
+    border-bottom:1px solid var(--edge)
   }
-  h1{font-size:16px;margin:0 0 4px}
-  .controls-top{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px}
-  .controls-top .group{display:flex;gap:6px}
-  select,button{
-    background:#0b1320;border:1px solid var(--edge);color:var(--ink);
-    border-radius:10px;padding:8px 10px;font-size:14px
+  .hdr-top{display:flex;justify-content:space-between;align-items:flex-end;gap:10px;margin-bottom:8px}
+  .hdr-title{display:flex;flex-direction:column}
+  .hdr-title h1{font-size:16px;margin:0 0 2px}
+  .hdr-title .sub{font-size:12px;color:var(--muted)}
+  .hdr-controls{
+    display:grid;
+    grid-template-columns:repeat(3,1fr);
+    gap:6px
   }
-  button{cursor:pointer}
-  button:active{transform:translateY(1px)}
+  @media (max-width:420px){
+    .hdr-controls{grid-template-columns:1fr 1fr; grid-auto-rows:auto}
+  }
+  .mini{
+    display:flex; align-items:center; gap:6px;
+    background:#0b1320; border:1px solid var(--edge); border-radius:12px;
+    padding:6px
+  }
+  .mini label{font-size:12px;color:#cfe4ff;white-space:nowrap}
+  .mini select{
+    flex:1; min-width:0; /* squeeze gracefully */
+    background:transparent; color:var(--ink); border:1px solid var(--edge);
+    border-radius:8px; padding:6px 8px; font-size:13px
+  }
+  .mini button{
+    background:#12203a; border:1px solid var(--edge); color:#eaf2ff;
+    border-radius:8px; padding:6px 10px; font-size:13px; white-space:nowrap; cursor:pointer
+  }
+  .mini button:active{transform:translateY(1px)}
 
-  /* Stage: engine IMG + overlay SVG stacked */
+  /* STAGE: engine IMG + overlay SVG stacked */
   .wrapper{border-top:1px solid var(--edge);border-bottom:1px solid var(--edge)}
   .scroll{height:65vh;overflow:auto;overscroll-behavior:contain;background:linear-gradient(180deg,#0b0f14,#0e1726)}
-  .stage{position:relative; width:100%; min-height:500px;}
+  .stage{position:relative; width:100%; min-height:520px;}
   #engine{display:block; width:100%; height:auto; position:absolute; bottom:0; left:0;}
-  /* SVG overlay covers the whole stage */
   #overlay{position:absolute; inset:0; display:block; width:100%; height:100%}
   .hint{position:absolute; top:8px; left:10px; font-size:12px; color:#f7e39a}
 
+  /* LOWER PANELS */
   .panel{padding:10px 12px;background:var(--panel)}
   .card{background:#0e1726;border:1px solid var(--edge);border-radius:14px;padding:12px;margin:10px 0}
   .grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
   label{font-size:12px;color:var(--muted);display:block;margin-bottom:4px}
   input{background:#0b1320;color:var(--ink);border:1px solid var(--edge);border-radius:10px;padding:8px 10px}
-
   .kpis{display:flex;gap:10px;flex-wrap:wrap}
   .kpi{background:#0b1320;border:1px solid var(--edge);border-radius:12px;padding:10px 12px}
   .kpi b{font-size:20px}
   .note{font-size:12px;color:#9fb0c8}
-
   .list{display:flex;flex-direction:column;gap:8px}
   .item{display:flex;justify-content:space-between;gap:10px;align-items:center;padding:10px;border:1px solid var(--edge);border-radius:12px;background:#0c1320}
   .item small{color:var(--muted)}
   .actions{display:flex;gap:6px;align-items:center}
+  .actions select, .actions button{
+    background:#0b1320;color:var(--ink);border:1px solid var(--edge);border-radius:8px;padding:6px 8px;font-size:13px
+  }
 </style>
 </head>
 <body>
 <div class="app">
 
+  <!-- Header with compact controls -->
   <header>
-    <h1>Pump Pressure — Visual Builder</h1>
-    <div class="controls-top">
-      <!-- Hose -->
-      <div class="group">
+    <div class="hdr-top">
+      <div class="hdr-title">
+        <h1>Pump Pressure — Visual Builder</h1>
+        <div class="sub">ENGINE 181 full-width • straight-up hose stack</div>
+      </div>
+    </div>
+    <div class="hdr-controls">
+      <!-- Hose control -->
+      <div class="mini">
+        <label>Hose</label>
         <select id="hosePick" aria-label="Hose preset">
           <option value='{"size":"5","lengthFt":100}'>5″ 100′</option>
           <option value='{"size":"2.5","lengthFt":50}'>2½″ 50′</option>
           <option value='{"size":"1.75","lengthFt":100}'>1¾″ 100′</option>
           <option value='{"size":"1.75","lengthFt":50}'>1¾″ 50′</option>
         </select>
-        <button id="addHose">Add Hose</button>
+        <button id="addHose" title="Add hose segment">＋</button>
       </div>
-      <!-- Accessory -->
-      <div class="group">
+      <!-- Accessory control -->
+      <div class="mini">
+        <label>Accessory</label>
         <select id="accPick" aria-label="Accessory preset">
-          <option value='{"name":"Wye/Siamese","loss":10}'>Wye/Siamese (+10 psi)</option>
-          <option value='{"name":"In-line eductor","loss":25}'>In-line eductor (+25 psi)</option>
-          <option value='{"name":"Master monitor","loss":25}'>Master monitor (+25 psi)</option>
-          <option value='{"name":"Standpipe/PRV","loss":25}'>Standpipe/PRV (+25 psi)</option>
+          <option value='{"name":"Wye/Siamese","loss":10}'>Wye/Siamese (+10)</option>
+          <option value='{"name":"In-line eductor","loss":25}'>In-line eductor (+25)</option>
+          <option value='{"name":"Master monitor","loss":25}'>Master monitor (+25)</option>
+          <option value='{"name":"Standpipe/PRV","loss":25}'>Standpipe/PRV (+25)</option>
           <option value='{"name":"Custom","loss":0}'>Custom…</option>
         </select>
-        <button id="addAcc">Add Accessory</button>
+        <button id="addAcc" title="Add accessory">＋</button>
       </div>
-      <!-- Nozzle -->
-      <div class="group">
-        <select id="nozPick" aria-label="Nozzle">
-          <!-- options filled by JS -->
-        </select>
-        <button id="applyNoz">Apply Nozzle</button>
+      <!-- Nozzle control -->
+      <div class="mini">
+        <label>Nozzle</label>
+        <select id="nozPick" aria-label="Nozzle"></select>
+        <button id="applyNoz" title="Apply nozzle">✓</button>
       </div>
     </div>
   </header>
@@ -96,7 +124,10 @@
   <div class="wrapper">
     <div id="scroll" class="scroll">
       <div id="stage" class="stage">
-        <img id="engine" alt="ENGINE 181" src="https://fireopssim.com/pump/engine181.png" />
+        <!-- Engine image as HTML IMG to avoid SVG/CORS issues -->
+        <img id="engine" alt="ENGINE 181"
+             src="https://fireopssim.com/pump/engine181.png" />
+        <!-- Overlay for hose/acc/nozzle -->
         <svg id="overlay" viewBox="0 0 390 800" preserveAspectRatio="none">
           <g id="hoseGroup"></g>
           <g id="accGroup"></g>
@@ -144,8 +175,11 @@
   // ---------- Visual constants ----------
   const STAGE_W = 390;             // overlay viewBox width
   const PX_PER_50FT = 80;          // vertical pixels per 50′ segment
-  const HOSE_X_RATIO = 0.78;       // hose column X (fraction of width)
-  const HOSE_WIDTH = { "5": 12, "2.5": 9, "1.75": 6 };  // thinner per your request
+  const HOSE_X_RATIO = 0.78;       // hose column X (fraction of stage width)
+  const HOSE_TOUCH_OFFSET = 3;     // small overlap so hose "touches" truck top on all devices
+
+  // Thin hose widths
+  const HOSE_WIDTH = { "5": 12, "2.5": 9, "1.75": 6 };
   const HOSE_COLOR = { "5": "var(--hose5)", "2.5": "var(--hose25)", "1.75": "var(--hose175)" };
 
   // Friction loss: FL = C * (Q/100)^2 * (L/100)
@@ -183,7 +217,7 @@
   const hint = document.getElementById('hint');
   const builderList = document.getElementById('builderList');
 
-  // Populate nozzle dropdown
+  // Fill nozzle dropdown
   const nozPick = document.getElementById('nozPick');
   NOZZLES.forEach(n=>{
     const opt = document.createElement('option');
@@ -192,7 +226,7 @@
   });
   nozPick.value = nozzle.name;
 
-  // Top buttons (no popups; just select + add/apply)
+  // Top buttons: add/apply
   document.getElementById('addHose').onclick = ()=>{
     const data = JSON.parse(document.getElementById('hosePick').value);
     items.push({type:'hose', size:data.size, lengthFt:data.lengthFt});
@@ -219,7 +253,7 @@
   document.getElementById('elevFt').oninput = e=>{ elevFt = parseFloat(e.target.value||0); render(); };
   document.getElementById('elevPsi').oninput = e=>{ elevPsiPerFt = parseFloat(e.target.value||0); render(); };
 
-  // Handle engine load & window resize to keep geometry correct
+  // Handle engine load & window resize
   engineImg.onload = ()=> render(true);
   window.addEventListener('resize', ()=> render(false));
 
@@ -249,31 +283,36 @@
   // ---------- Geometry helpers ----------
   function engineHeightPx(){ return engineImg.clientHeight || 180; }
   function stageWidthPx(){ return stage.clientWidth || window.innerWidth || 390; }
-  function hoseXpx(){
-    return Math.round(stageWidthPx() * HOSE_X_RATIO);
-  }
+  function hoseXpx(){ return Math.round(stageWidthPx() * HOSE_X_RATIO); }
+
+  // px -> viewBox units converter (y depends on current viewBox height)
+  function toVBX(px){ return px / stageWidthPx() * STAGE_W; }
+  function toVBY(px, vbH){ return px / vbH * vbH; } // trivial, but keeps intent clear
 
   // ---------- Drawing ----------
   function renderDiagram(){
     const eH = engineHeightPx();
 
-    // total hose pixels + accessory space
+    // total hose pixels + accessory blocks
     const hoseFeet = items.filter(x=>x.type==='hose').reduce((s,h)=>s+h.lengthFt,0);
     const hosePx = (hoseFeet/50) * PX_PER_50FT;
     const accCount = items.filter(x=>x.type==='acc').length;
     const accPx = accCount * 22;
-    const topPad = 120; // room for nozzle & label
+    const topPad = 120;
 
     // stage height: engine at bottom, stack above it
-    const stageH = Math.max(500, eH + hosePx + accPx + topPad);
+    const stageH = Math.max(520, eH + hosePx + accPx + topPad);
     stage.style.height = stageH + 'px';
-
-    // overlay viewBox updates to match px height (keep width fixed at 390 units)
     overlay.setAttribute('viewBox', `0 0 ${STAGE_W} ${Math.round(stageH)}`);
 
-    // engine is CSS-positioned at bottom; hose starts exactly at engine top
-    let currentTop = stageH - eH; // y coordinate where engine top sits (in px)
-    const x = hoseXpx();
+    // y where engine top sits (in px)
+    let engineTopPx = stageH - eH;
+
+    // start drawing exactly on the engine top (with small negative offset so it "touches")
+    let currentTopPx = engineTopPx + HOSE_TOUCH_OFFSET;
+
+    const xPx = hoseXpx();
+    const vbH = overlay.viewBox.baseVal.height;
 
     // clear layers
     hoseGroup.innerHTML = '';
@@ -287,48 +326,40 @@
       hint.textContent = '';
     }
 
-    // Draw stack in order
+    // Draw items in order
     for(const it of items){
       if(it.type==='hose'){
-        const w = HOSE_WIDTH[it.size] || 6;
-        const h = (it.lengthFt===50 ? PX_PER_50FT : 2*PX_PER_50FT);
-        const y = currentTop - h;
-
-        // Because SVG viewBox units map to 390 width, we convert px->vb units
-        const vbX = x / stageWidthPx() * STAGE_W;
-        const vbY = y / stageH * overlay.viewBox.baseVal.height;
-        const vbW = w / stageWidthPx() * STAGE_W;
-        const vbH = h / stageH * overlay.viewBox.baseVal.height;
+        const wPx = HOSE_WIDTH[it.size] || 6;
+        const hPx = (it.lengthFt===50 ? PX_PER_50FT : 2*PX_PER_50FT);
+        const yPx = currentTopPx - hPx;
 
         const r = document.createElementNS('http://www.w3.org/2000/svg','rect');
-        r.setAttribute('x', vbX - vbW/2);
-        r.setAttribute('y', vbY);
-        r.setAttribute('width', vbW);
-        r.setAttribute('height', vbH);
+        r.setAttribute('x', toVBX(xPx - wPx/2));
+        r.setAttribute('y', yPx);
+        r.setAttribute('width', toVBX(wPx) - toVBX(0)); // proportional to width
+        r.setAttribute('height', hPx);
         r.setAttribute('fill', HOSE_COLOR[it.size] || 'goldenrod');
         r.setAttribute('stroke', 'rgba(255,255,255,.10)');
         r.setAttribute('stroke-width', '1');
         hoseGroup.appendChild(r);
 
-        // coupling line
+        // coupling line at top of segment
         const line = document.createElementNS('http://www.w3.org/2000/svg','line');
-        line.setAttribute('x1', vbX - vbW/2);
-        line.setAttribute('x2', vbX + vbW/2);
-        line.setAttribute('y1', vbY);
-        line.setAttribute('y2', vbY);
+        line.setAttribute('x1', toVBX(xPx - wPx/2));
+        line.setAttribute('x2', toVBX(xPx + wPx/2));
+        line.setAttribute('y1', yPx);
+        line.setAttribute('y2', yPx);
         line.setAttribute('stroke', '#2b3242');
         line.setAttribute('stroke-width', '2');
         hoseGroup.appendChild(line);
 
-        currentTop -= h;
+        currentTopPx -= hPx;
       } else if(it.type==='acc'){
-        const vbX = (x + 10) / stageWidthPx() * STAGE_W;
-        const boxYpx = currentTop - 18;
-        const vbY = boxYpx / stageH * overlay.viewBox.baseVal.height;
+        const boxYpx = currentTopPx - 18;
 
         const bg = document.createElementNS('http://www.w3.org/2000/svg','rect');
-        bg.setAttribute('x', vbX);
-        bg.setAttribute('y', vbY);
+        bg.setAttribute('x', toVBX(xPx + 10));
+        bg.setAttribute('y', boxYpx);
         bg.setAttribute('width', 120);
         bg.setAttribute('height', 18);
         bg.setAttribute('rx', 6); bg.setAttribute('ry', 6);
@@ -337,42 +368,40 @@
         accGroup.appendChild(bg);
 
         const txt = document.createElementNS('http://www.w3.org/2000/svg','text');
-        txt.setAttribute('x', vbX + 6);
-        txt.setAttribute('y', vbY + 12);
+        txt.setAttribute('x', toVBX(xPx + 16));
+        txt.setAttribute('y', boxYpx + 12);
         txt.setAttribute('fill', '#cfe4ff');
         txt.setAttribute('font-size', '10');
         txt.textContent = `${it.name} (+${it.loss} psi)`;
         accGroup.appendChild(txt);
 
-        currentTop -= 22;
+        currentTopPx -= 22;
       }
     }
 
-    // Nozzle glyph at the very top
+    // Nozzle glyph at the stack top
     const lastHose = items.filter(i=>i.type==='hose').slice(-1)[0];
     const wTopPx = lastHose ? (HOSE_WIDTH[lastHose.size] || 6) : 8;
-    const vbX = x / stageWidthPx() * STAGE_W;
-    const bodyYpx = currentTop - 22;
-    const tipYpx = currentTop - 30;
-    const vbBodyY = bodyYpx / stageH * overlay.viewBox.baseVal.height;
-    const vbTipY  = tipYpx  / stageH * overlay.viewBox.baseVal.height;
-    const vbWTop  = wTopPx / stageWidthPx() * STAGE_W;
 
     const body = document.createElementNS('http://www.w3.org/2000/svg','rect');
-    body.setAttribute('x', vbX - vbWTop/2 - 4);
-    body.setAttribute('y', vbBodyY);
-    body.setAttribute('width', vbWTop + 8);
+    body.setAttribute('x', toVBX(xPx - wTopPx/2 - 4));
+    body.setAttribute('y', currentTopPx - 22);
+    body.setAttribute('width', toVBX(wTopPx + 8) - toVBX(0));
     body.setAttribute('height', 18);
     body.setAttribute('fill', '#394357');
     nozzleGroup.appendChild(body);
 
     const tip = document.createElementNS('http://www.w3.org/2000/svg','rect');
-    tip.setAttribute('x', vbX - (vbWTop*0.4));
-    tip.setAttribute('y', vbTipY);
-    tip.setAttribute('width', vbWTop*0.8);
+    tip.setAttribute('x', toVBX(xPx - (wTopPx*0.4)));
+    tip.setAttribute('y', currentTopPx - 30);
+    tip.setAttribute('width', toVBX(wTopPx*0.8) - toVBX(0));
     tip.setAttribute('height', 8);
     tip.setAttribute('fill', '#9aa7bd');
     nozzleGroup.appendChild(tip);
+
+    // Info line
+    const totalFeet = items.filter(i=>i.type==='hose').reduce((s,h)=>s+h.lengthFt,0);
+    document.getElementById('hint').textContent = `Total hose: ${totalFeet}′ • Items: ${items.length}`;
   }
 
   // ---------- Builder list ----------
@@ -381,7 +410,8 @@
     div.className = 'item';
     if(it.type==='hose'){
       div.innerHTML = `
-        <div><div>🧯 Hose <small>#${idx+1}</small></div><div class="note">${it.size}″ • ${it.lengthFt}′</div></div>
+        <div><div>🧯 Hose <small>#${idx+1}</small></div>
+             <div class="note">${it.size}″ • ${it.lengthFt}′</div></div>
         <div class="actions">
           <select data-k="size">
             <option value="5" ${it.size==='5'?'selected':''}>5″</option>
@@ -399,7 +429,8 @@
         </div>`;
     } else {
       div.innerHTML = `
-        <div><div>⚙️ Accessory <small>#${idx+1}</small></div><div class="note">${it.name} • +${it.loss} psi</div></div>
+        <div><div>⚙️ Accessory <small>#${idx+1}</small></div>
+             <div class="note">${it.name} • +${it.loss} psi</div></div>
         <div class="actions">
           <button data-act="loss">Loss</button>
           <button data-act="rename">Name</button>
@@ -438,32 +469,33 @@
   }
 
   function renderBuilder(){
-    builderList.innerHTML = '';
+    const list = document.getElementById('builderList');
+    list.innerHTML = '';
     if(items.length===0){
       const e = document.createElement('div');
       e.className = 'item';
-      e.innerHTML = `<div>Use the top controls to add **Hose**, **Accessory**, and apply a **Nozzle**.</div>`;
-      builderList.appendChild(e);
+      e.innerHTML = `<div>Use the header controls: add **Hose**, **Accessory**, then apply a **Nozzle**.</div>`;
+      list.appendChild(e);
     } else {
-      items.forEach((it,i)=> builderList.appendChild(row(it,i)));
+      items.forEach((it,i)=> list.appendChild(row(it,i)));
     }
   }
 
   // ---------- Math ----------
   function calcAndRenderMath(){
-    const out = calc();
-    document.getElementById('GPM').textContent = `${out.Q} gpm`;
-    document.getElementById('PDP').textContent = `${Math.round(out.PDP)} psi`;
+    const {Q, NP, totalFL, totalAcc, elevPsi, PDP, hoses, accs} = calc();
+    document.getElementById('GPM').textContent = `${Q} gpm`;
+    document.getElementById('PDP').textContent = `${Math.round(PDP)} psi`;
 
-    const partsH = out.hoses.map(h=>`H${h.i}: ${h.size}″ ${h.lengthFt}′ → FL=${h.segFL.toFixed(1)} psi`).join(' • ');
-    const partsA = out.accs.length ? (' • Acc: '+out.accs.map(a=>`${a.name}+${a.loss}`).join(', ')) : '';
-    const elev = `Elev=${out.elevPsi.toFixed(1)} psi`;
-    const np = `NP=${out.NP} psi`;
-    const totalFL = `Total FL=${out.totalFL.toFixed(1)} psi`;
-    const totalAcc = `Accessories=${out.totalAcc.toFixed(1)} psi`;
-    document.getElementById('breakdown').textContent = `${np} • ${totalFL} • ${totalAcc} • ${elev}${partsH?(' • '+partsH):''}${partsA}`;
+    const partsH = hoses.map(h=>`H${h.i}: ${h.size}″ ${h.lengthFt}′ → FL=${h.segFL.toFixed(1)} psi`).join(' • ');
+    const partsA = accs.length ? (' • Acc: '+accs.map(a=>`${a.name}+${a.loss}`).join(', ')) : '';
+    const elev = `Elev=${elevPsi.toFixed(1)} psi`;
+    const np = `NP=${NP} psi`;
+    const tFL = `Total FL=${totalFL.toFixed(1)} psi`;
+    const tAcc = `Accessories=${totalAcc.toFixed(1)} psi`;
+    document.getElementById('breakdown').textContent = `${np} • ${tFL} • ${tAcc} • ${elev}${partsH?(' • '+partsH):''}${partsA}`;
     document.getElementById('equation').textContent =
-      `PDP = NP(${out.NP}) + FL(${out.totalFL.toFixed(1)}) + ACC(${out.totalAcc.toFixed(1)}) ${out.elevPsi>=0?'+':'-'} Elev(${Math.abs(out.elevPsi).toFixed(1)})`;
+      `PDP = NP(${NP}) + FL(${totalFL.toFixed(1)}) + ACC(${totalAcc.toFixed(1)}) ${elevPsi>=0?'+':'-'} Elev(${Math.abs(elevPsi).toFixed(1)})`;
   }
 
   // ---------- Render all ----------
