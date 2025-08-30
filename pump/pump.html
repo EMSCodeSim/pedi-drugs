@@ -8,7 +8,7 @@
   :root{
     --bg:#0b0f14; --panel:#0f1624; --ink:#eaf2ff; --muted:#9fb0c8;
     --edge:rgba(255,255,255,.10); --accent:#49a3ff;
-    --hose:#f3ce6a;
+    --hose5:#f1d76a; --hose25:#f7a25a; --hose175:#ff6b6b;
   }
   *{box-sizing:border-box}
   html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);font-family:system-ui,Segoe UI,Inter,Arial,sans-serif}
@@ -23,15 +23,18 @@
   .menu.open .menu-panel{display:block}
   .menu-panel button{display:block;width:100%;text-align:left;padding:10px 12px;background:transparent;border:none;color:var(--ink);font-size:14px}
   .menu-panel button:hover{background:#101c30}
-  .canvas{position:relative;overflow:hidden;background:linear-gradient(180deg,#0b0f14,#0e1726)}
-  svg{width:100%;height:50vh;display:block}
-  .controls{padding:10px 12px;background:var(--panel);border-top:1px solid var(--edge)}
+
+  .canvas{position:relative;background:linear-gradient(180deg,#0b0f14,#0e1726);border-bottom:1px solid var(--edge)}
+  .scroll{height:60vh; overflow-y:auto; overscroll-behavior:contain; border-top:1px solid var(--edge)}
+  svg{width:100%; display:block}
+
+  .controls{padding:10px 12px;background:var(--panel)}
   .card{background:#0e1726;border:1px solid var(--edge);border-radius:14px;padding:12px;margin:10px 0}
   .list{display:flex;flex-direction:column;gap:8px}
   .item{display:flex;justify-content:space-between;gap:10px;align-items:center;padding:10px;border:1px solid var(--edge);border-radius:12px;background:#0c1320}
   .item small{color:var(--muted)}
   .actions{display:flex;gap:6px;align-items:center}
-  input,select{background:#0b1320;color:#eaf2ff;border:1px solid var(--edge);border-radius:10px;padding:8px 10px}
+  input,select{background:#0b1320;color:var(--ink);border:1px solid var(--edge);border-radius:10px;padding:8px 10px}
   label{font-size:12px;color:var(--muted);display:block;margin-bottom:4px}
   .grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
   .eq{font-family:ui-monospace,Menlo,monospace;color:#cfe4ff;font-size:13px;line-height:1.35}
@@ -46,55 +49,47 @@
   <header>
     <div>
       <h1>Pump Pressure — Visual Builder</h1>
-      <div class="sub">pump.html & enging181.png are in the same folder • Starts with engine only</div>
+      <div class="sub">ENGINE 181 image from fireopssim.com • Straight-up hose segments</div>
     </div>
     <div class="menu" id="addMenu">
       <button class="btn" id="addBtn">➕ Add</button>
       <div class="menu-panel" id="addPanel">
-        <button data-add="hose">Hose segment</button>
-        <button data-add="appliance">Appliance (Wye, Eductor, etc.)</button>
+        <button data-add="hose">Hose segment (5″ / 2½″ / 1¾″ • 50′ or 100′)</button>
         <button data-add="nozzle">Nozzle… (incl. Chief XD)</button>
+        <button data-add="clear">Clear all</button>
       </div>
     </div>
   </header>
 
   <!-- Visual diagram -->
   <div class="canvas">
-    <svg id="scene" viewBox="0 0 390 360" preserveAspectRatio="xMidYMid slice" aria-label="Pump diagram">
-      <defs>
-        <!-- Optional hose texture tile (safe if missing) -->
-        <pattern id="hoseStripes" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(35)">
-          <image id="hoseTileImg" href="./overlay_hose_tile_64.png" x="0" y="0" width="6" height="6" />
-        </pattern>
-        <filter id="glow"><feGaussianBlur stdDeviation="1.2" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
-      </defs>
+    <div id="scroll" class="scroll">
+      <!-- Height of this SVG grows with hose length; engine stays at bottom -->
+      <svg id="stage" viewBox="0 0 390 800" height="800" preserveAspectRatio="xMidYMid slice" aria-label="Pump diagram">
+        <!-- Engine 181 (bottom) -->
+        <image id="truckImg" href="https://fireopssim.com/pump/engine181.png" x="10" y="700" width="260" height="120" />
 
-      <!-- ENGINE 181 overlay at bottom; path is ./enging181.png next to pump.html -->
-      <image id="truckImg" href="./enging181.png" x="6" y="250" width="200" height="95" />
+        <!-- Hose column right above the engine (straight up) -->
+        <g id="hoseGroup"></g>
 
-      <!-- Hose path (initially hidden because no hose yet) -->
-      <path id="hosePath" d="" stroke="var(--hose)" fill="none" stroke-linecap="round" filter="url(#glow)" stroke-width="12"/>
-      <path id="hoseStripePath" d="" stroke="url(#hoseStripes)" fill="none" stroke-linecap="round" stroke-width="9" opacity="0.5"/>
+        <!-- Nozzle marker at top of the stack -->
+        <g id="nozzleGroup"></g>
 
-      <!-- Sprites (safe if files are missing; start off-canvas) -->
-      <image id="cplStart" href="./overlay_coupling_96.png" x="-100" y="-100" width="18" height="18"/>
-      <image id="cplEnd"   href="./overlay_coupling_96.png" x="-100" y="-100" width="18" height="18"/>
-      <image id="wyeImg"   href="./overlay_wye_200.png"     x="-100" y="-100" width="26" height="26"/>
-      <image id="nozImg"   href="./overlay_nozzle_fog_160.png" x="-100" y="-100" width="26" height="26"/>
-
-      <text x="200" y="36" fill="#f7e39a" font-size="10" id="pathLabel">Engine is ready — add components to begin…</text>
-    </svg>
+        <!-- Labels -->
+        <text x="12" y="18" fill="#f7e39a" font-size="10" id="infoLabel">Add a hose segment to begin…</text>
+      </svg>
+    </div>
   </div>
 
-  <!-- Builder list & math -->
+  <!-- Builder + Math -->
   <div class="controls">
     <div class="card">
-      <div class="note">Order matters: Engine ➜ Hose(s) ➜ Appliance(s) ➜ Nozzle</div>
+      <div class="note">Order: Engine (bottom) ➜ Hose segments stacked upward ➜ Nozzle at the very top</div>
       <div class="list" id="builderList"></div>
     </div>
 
     <div class="card">
-      <h3 style="margin:0 0 8px;font-size:14px;color:#cfe4ff">Environment</h3>
+      <h3 style="margin:0 0 8px;font-size:14px;color:#cfe4ff">Environment & Nozzle</h3>
       <div class="grid2">
         <div>
           <label>Elevation (ft)</label>
@@ -105,10 +100,14 @@
           <input id="elevPsi" type="number" step="0.001" value="0.434" />
         </div>
       </div>
+      <div style="margin-top:8px">
+        <label>Nozzle (sets GPM & NP)</label>
+        <select id="nozzleSelect"></select>
+      </div>
     </div>
 
     <div class="card">
-      <div class="eq" id="equation">PDP = NP + ΣFL(hose @ GPM) + ΣAppliance ± Elev</div>
+      <div class="eq" id="equation">PDP = NP + ΣFL(hose @ GPM) ± Elev</div>
       <div class="kpis" style="margin-top:8px">
         <div class="kpi"><div>Flow</div><b id="GPM">— gpm</b></div>
         <div class="kpi"><div>PDP</div><b id="PDP">— psi</b></div>
@@ -119,285 +118,299 @@
 </div>
 
 <script>
-  // ---------- Paths (you can change these, but defaults assume same folder as pump.html) ----------
-  const PATH_TRUCK = "./enging181.png";              // <— EXACT filename you gave
-  const PATH_NOZ_FOG = "./overlay_nozzle_fog_160.png";
-  const PATH_NOZ_SB  = "./overlay_nozzle_sb_160.png";
-  const PATH_WYE     = "./overlay_wye_200.png";
-  const PATH_COUP    = "./overlay_coupling_96.png";
+  // ---------- Config ----------
+  // pixels per 50′ segment (visual scale)
+  const PX_PER_50FT = 90;
 
-  // ---------- Presets ----------
-  // FL = C * (Q/100)^2 * (L/100)
-  const COEFF = {"1.5":24,"1.75":15.5,"2":8,"2.5":2,"3":0.8,"4":0.2,"5":0.08};
-  const STROKE = {"1.5":10,"1.75":12,"2":14,"2.5":16,"3":18,"4":22,"5":26};
+  // Hose widths (in pixels)
+  const HOSE_WIDTH = { "5": 26, "2.5": 16, "1.75": 12 };
+  const HOSE_COLOR = { "5": "var(--hose5)", "2.5": "var(--hose25)", "1.75": "var(--hose175)" };
+
+  // Friction loss: FL = C * (Q/100)^2 * (L/100)
+  const COEFF = { "1.75":15.5, "2.5":2, "5":0.08 };
+
+  // Nozzles (incl. Chief XD)
   const NOZZLES = [
+    {name:"None (closed)", gpm:0, NP:0},
     {name:"Fog 95", gpm:95, NP:100},
     {name:"Fog 125", gpm:125, NP:100},
     {name:"Fog 150", gpm:150, NP:100},
-    {name:'SB 7/8\"', gpm:160, NP:50},
-    {name:'SB 15/16\"', gpm:185, NP:50},
-    {name:'SB 1\"', gpm:210, NP:50},
+    {name:'SB 7/8″', gpm:160, NP:50},
+    {name:'SB 15/16″', gpm:185, NP:50},
+    {name:'SB 1″', gpm:210, NP:50},
     {name:"ChiefXD 100 @50", gpm:100, NP:50},
     {name:"ChiefXD 150 @50", gpm:150, NP:50},
     {name:"ChiefXD 150 @75", gpm:150, NP:75},
     {name:"ChiefXD 185 @75", gpm:185, NP:75}
   ];
-  const APPLIANCE_PRESETS = [
-    {name:"Wye/Siamese", loss:10},
-    {name:"In-line eductor", loss:25},
-    {name:"Master monitor", loss:25},
-    {name:"Standpipe/PRV", loss:25},
-    {name:"Custom", loss:0}
-  ];
 
   // ---------- State ----------
-  let items = [];     // hose/appliances get pushed here
-  let nozzle = null;  // set when chosen
+  // Hose segments: {size: '5'|'2.5'|'1.75', lengthFt: 50|100}
+  let segments = [];
+  let nozzle = NOZZLES[3]; // Fog 150 default
   let elevFt = 0, elevPsiPerFt = 0.434;
 
-  // ---------- Add menu ----------
+  // ---------- Init ----------
   const addMenu = document.getElementById('addMenu');
   const addPanel = document.getElementById('addPanel');
+  const scrollEl = document.getElementById('scroll');
+  const stage = document.getElementById('stage');
+  const hoseGroup = document.getElementById('hoseGroup');
+  const nozzleGroup = document.getElementById('nozzleGroup');
+  const infoLabel = document.getElementById('infoLabel');
+
   document.getElementById('addBtn').onclick = ()=> addMenu.classList.toggle('open');
   document.addEventListener('click', (e)=>{ if(!addMenu.contains(e.target)) addMenu.classList.remove('open'); });
+
   addPanel.querySelectorAll('button').forEach(b=>{
     b.onclick = ()=>{
       const what = b.dataset.add;
-      if(what==='hose'){ items.push({type:'hose', dia:'1.75', length:200}); }
-      else if(what==='appliance'){ items.push({type:'appliance', name:'Wye/Siamese', loss:10}); }
-      else if(what==='nozzle'){ pickNozzle(); }
-      addMenu.classList.remove('open'); render();
+      if(what==='hose'){
+        // default: 1¾″ @ 100′
+        segments.push({size:'1.75', lengthFt:100});
+        render(true); // auto-scroll after add
+      } else if(what==='nozzle'){
+        pickNozzle();
+      } else if(what==='clear'){
+        segments = [];
+        render(true);
+      }
+      addMenu.classList.remove('open');
     };
   });
 
+  // Populate nozzle select
+  const nozSel = document.getElementById('nozzleSelect');
+  NOZZLES.forEach(n=>{
+    const o = document.createElement('option');
+    o.value = n.name; o.textContent = `${n.name} (${n.gpm} gpm, NP ${n.NP})`;
+    nozSel.appendChild(o);
+  });
+  nozSel.value = nozzle.name;
+  nozSel.onchange = ()=>{
+    const found = NOZZLES.find(n=>n.name===nozSel.value);
+    if(found){ nozzle = found; render(); }
+  };
+
+  // Environment inputs
+  document.getElementById('elevFt').oninput = e=>{ elevFt = parseFloat(e.target.value||0); render(); };
+  document.getElementById('elevPsi').oninput = e=>{ elevPsiPerFt = parseFloat(e.target.value||0); render(); };
+
   // ---------- Math ----------
-  function fl(C, Q, L){ return (C||0) * Math.pow(Q/100, 2) * (L/100); }
+  function fl(C, Q, L){ return (C||0) * Math.pow(Q/100, 2) * (L/100); } // psi
   function calc(){
-    const Q = nozzle?.gpm || 0;
-    const NP = nozzle?.NP || 0;
-    let totalFL = 0, totalApp = 0, hoses = [], apps = [];
-    items.forEach((it, idx)=>{
-      if(it.type==='hose'){
-        const C = COEFF[it.dia] || 0;
-        const segFL = fl(C, Q, it.length);
-        totalFL += segFL; hoses.push({i:idx+1, ...it, C, segFL});
-      } else { totalApp += Number(it.loss)||0; apps.push({i:idx+1, ...it}); }
+    const Q = nozzle.gpm || 0;
+    const NP = nozzle.NP || 0;
+
+    let totalFL = 0;
+    const parts = [];
+    segments.forEach((s, idx)=>{
+      const C = COEFF[s.size] || 0;
+      const segFL = fl(C, Q, s.lengthFt);
+      totalFL += segFL;
+      parts.push({i:idx+1, size:s.size, lengthFt:s.lengthFt, C, segFL});
     });
+
     const elevPsi = elevFt * elevPsiPerFt;
-    const PDP = NP + totalFL + totalApp + elevPsi;
-    return {Q, NP, totalFL, totalApp, elevPsi, PDP, hoses, apps};
+    const PDP = NP + totalFL + elevPsi;
+
+    return {Q, NP, elevPsi, PDP, parts};
   }
 
-  // ---------- Geometry (cubic Bézier) ----------
-  function cubicPoint(p0,p1,p2,p3,t){
-    const u=1-t, tt=t*t, uu=u*u, uuu=uu*u, ttt=tt*t;
-    return { x: uuu*p0.x + 3*uu*t*p1.x + 3*u*tt*p2.x + ttt*p3.x,
-             y: uuu*p0.y + 3*uu*t*p1.y + 3*u*tt*p2.y + ttt*p3.y };
+  // ---------- Diagram ----------
+  // Engine geometry (positioned at bottom)
+  const engine = { x:10, width:260, height:120, bottomPad: -10 };
+  function engineTopY(svgHeight){
+    const y = svgHeight - engine.height + engine.bottomPad - 5; // engine <image> y
+    return y; // top of engine image (hose exits above this)
   }
-  function cubicTangent(p0,p1,p2,p3,t){
-    const u=1-t;
-    return { x: 3*u*u*(p1.x-p0.x) + 6*u*t*(p2.x-p1.x) + 3*t*t*(p3.x-p2.x),
-             y: 3*u*u*(p1.y-p0.y) + 6*u*t*(p2.y-p1.y) + 3*t*t*(p3.y-p2.y) };
-  }
-
-  function pathForChain(){
-    // Pump port aligned for truckImg at x=6,y=250,width=200,height=95
-    const pump = {x:113, y:283};
-    const totalLen = items.filter(i=>i.type==='hose').reduce((s,h)=>s+h.length,0) || 80;
-    const t = Math.max(0, Math.min(1, (totalLen-80)/(600-80)));
-    const end = {x: 322 + 18*t, y: 90 + 6*t};
-    const c1 = {x: 160, y: 230 - 60*t};
-    const c2 = {x: 240, y: 180 - 90*t};
-    return {p0:pump, p1:c1, p2:c2, p3:end,
-            d:`M ${pump.x} ${pump.y} C ${c1.x} ${c1.y}, ${c2.x} ${c2.y}, ${end.x} ${end.y}`};
+  function hoseX(){
+    // Straight up from somewhere near pump panel; tweak as needed
+    return engine.x + 210; // right side of the truck image
   }
 
-  // ---------- Builder rows ----------
-  function builderRow(item, idx){
-    const row = document.createElement('div'); row.className = 'item';
-    if(item.type==='hose'){
-      row.innerHTML = `
-        <div><div>🧯 Hose <small>#${idx+1}</small></div>
-             <div class="note">FL uses nozzle GPM</div></div>
-        <div class="actions">
-          <label style="display:flex;flex-direction:column">
-            <span style="font-size:12px;color:#9fb0c8">Size</span>
-            <select data-k="dia">${Object.keys(COEFF).map(d=>`<option value="${d}" ${d===item.dia?'selected':''}>${d}″</option>`).join('')}</select>
-          </label>
-          <label style="display:flex;flex-direction:column">
-            <span style="font-size:12px;color:#9fb0c8">Length</span>
-            <input data-k="length" type="number" step="25" min="0" value="${item.length}" style="width:90px"/>
-          </label>
-          <button class="btn" data-act="up">↑</button>
-          <button class="btn" data-act="down">↓</button>
-          <button class="btn" data-act="del">✕</button>
-        </div>`;
-    } else {
-      row.innerHTML = `
-        <div><div>⚙️ Appliance <small>#${idx+1}</small></div>
-             <div class="note">Loss in psi added inline</div></div>
-        <div class="actions">
-          <label style="display:flex;flex-direction:column">
-            <span style="font-size:12px;color:#9fb0c8">Type</span>
-            <select data-k="name">
-              ${APPLIANCE_PRESETS.map(a=>`<option value="${a.name}" ${a.name===item.name?'selected':''}>${a.name}</option>`).join('')}
-            </select>
-          </label>
-          <label style="display:flex;flex-direction:column">
-            <span style="font-size:12px;color:#9fb0c8">Loss (psi)</span>
-            <input data-k="loss" type="number" step="1" min="0" value="${item.loss}" style="width:80px"/>
-          </label>
-          <button class="btn" data-act="up">↑</button>
-          <button class="btn" data-act="down">↓</button>
-          <button class="btn" data-act="del">✕</button>
-        </div>`;
+  function renderDiagram(){
+    // Determine stage height: base + total hose pixels
+    const totalFeet = segments.reduce((s,seg)=> s + seg.lengthFt, 0);
+    const hosePx = (totalFeet/50) * PX_PER_50FT;
+    const base = 180 + engine.height; // space above engine
+    const svgH = Math.max( engine.height + 220, engine.height + hosePx + base );
+    stage.setAttribute('height', svgH);
+    stage.setAttribute('viewBox', `0 0 390 ${svgH}`);
+
+    // Place engine at bottom
+    const engY = svgH - engine.height + engine.bottomPad - 5;
+    const truckImg = document.getElementById('truckImg');
+    truckImg.setAttribute('x', engine.x);
+    truckImg.setAttribute('y', engY);
+    truckImg.setAttribute('width', engine.width);
+    truckImg.setAttribute('height', engine.height);
+
+    // Draw hose segments straight up
+    hoseGroup.innerHTML = '';
+    nozzleGroup.innerHTML = '';
+
+    if(segments.length===0){
+      infoLabel.textContent = 'Add a hose segment to begin…';
+      return;
     }
-    row.querySelectorAll('select,input').forEach(el=>{
+
+    const x = hoseX();
+    // Center hose by width
+    let currentTop = engY; // start at engine top
+    const couplingStroke = '#2b3242';
+
+    segments.forEach((s, idx)=>{
+      const w = HOSE_WIDTH[s.size] || 12;
+      const h = (s.lengthFt===50 ? PX_PER_50FT : 2*PX_PER_50FT);
+      const rect = document.createElementNS('http://www.w3.org/2000/svg','rect');
+      rect.setAttribute('x', x - w/2);
+      rect.setAttribute('y', currentTop - h);
+      rect.setAttribute('width', w);
+      rect.setAttribute('height', h);
+      rect.setAttribute('fill', HOSE_COLOR[s.size] || 'goldenrod');
+      rect.setAttribute('stroke', 'rgba(255,255,255,.08)');
+      rect.setAttribute('stroke-width', '1');
+      hoseGroup.appendChild(rect);
+
+      // Coupling line at the top of each segment
+      const line = document.createElementNS('http://www.w3.org/2000/svg','line');
+      line.setAttribute('x1', x - w/2); line.setAttribute('x2', x + w/2);
+      line.setAttribute('y1', currentTop - h); line.setAttribute('y2', currentTop - h);
+      line.setAttribute('stroke', couplingStroke);
+      line.setAttribute('stroke-width', '2');
+      hoseGroup.appendChild(line);
+
+      currentTop -= h;
+    });
+
+    // Nozzle at very top
+    const noz = document.createElementNS('http://www.w3.org/2000/svg','g');
+    const topY = currentTop - 10;
+    const wTop = HOSE_WIDTH[segments[segments.length-1].size] || 12;
+
+    // simple nozzle glyph
+    const body = document.createElementNS('http://www.w3.org/2000/svg','rect');
+    body.setAttribute('x', x - wTop/2 - 4);
+    body.setAttribute('y', topY - 18);
+    body.setAttribute('width', wTop + 8);
+    body.setAttribute('height', 18);
+    body.setAttribute('fill', '#394357');
+    nozzleGroup.appendChild(body);
+
+    const tip = document.createElementNS('http://www.w3.org/2000/svg','rect');
+    tip.setAttribute('x', x - (wTop*0.4));
+    tip.setAttribute('y', topY - 28);
+    tip.setAttribute('width', wTop*0.8);
+    tip.setAttribute('height', 10);
+    tip.setAttribute('fill', '#9aa7bd');
+    nozzleGroup.appendChild(tip);
+
+    infoLabel.textContent = `Total hose: ${totalFeet}′ • Segments: ${segments.length}`;
+  }
+
+  // ---------- Builder UI ----------
+  function builderRow(s, idx){
+    const row = document.createElement('div');
+    row.className = 'item';
+    row.innerHTML = `
+      <div>
+        <div>🧯 Segment <small>#${idx+1}</small></div>
+        <div class="note">Straight up from engine</div>
+      </div>
+      <div class="actions">
+        <label style="display:flex;flex-direction:column">
+          <span style="font-size:12px;color:#9fb0c8">Size</span>
+          <select data-k="size">
+            <option value="5"   ${s.size==='5'?'selected':''}>5″ LDH</option>
+            <option value="2.5" ${s.size==='2.5'?'selected':''}>2½″</option>
+            <option value="1.75" ${s.size==='1.75'?'selected':''}>1¾″</option>
+          </select>
+        </label>
+        <label style="display:flex;flex-direction:column">
+          <span style="font-size:12px;color:#9fb0c8">Length</span>
+          <select data-k="lengthFt">
+            <option value="50"  ${s.lengthFt===50?'selected':''}>50′</option>
+            <option value="100" ${s.lengthFt===100?'selected':''}>100′</option>
+          </select>
+        </label>
+        <button class="btn" data-act="dup">＋</button>
+        <button class="btn" data-act="up">↑</button>
+        <button class="btn" data-act="down">↓</button>
+        <button class="btn" data-act="del">✕</button>
+      </div>
+    `;
+    // field handlers
+    row.querySelectorAll('select').forEach(el=>{
       el.onchange = ()=>{
         const k = el.dataset.k;
-        if(item.type==='hose'){
-          if(k==='dia') item.dia = el.value;
-          if(k==='length') item.length = Math.max(0, parseFloat(el.value||0));
-        } else {
-          if(k==='name'){
-            item.name = el.value;
-            const preset = APPLIANCE_PRESETS.find(a=>a.name===item.name);
-            if(preset) item.loss = preset.loss;
-          }
-          if(k==='loss') item.loss = Math.max(0, parseFloat(el.value||0));
-        }
+        if(k==='size') s.size = el.value;
+        if(k==='lengthFt') s.lengthFt = parseInt(el.value,10);
         render();
       };
     });
+    // row actions
     row.querySelectorAll('button[data-act]').forEach(btn=>{
       btn.onclick = ()=>{
         const act = btn.dataset.act;
-        if(act==='del'){ items.splice(idx,1); }
-        if(act==='up' && idx>0){ [items[idx-1],items[idx]] = [items[idx],items[idx-1]]; }
-        if(act==='down' && idx<items.length-1){ [items[idx+1],items[idx]] = [items[idx],items[idx+1]]; }
-        render();
+        if(act==='del'){ segments.splice(idx,1); }
+        if(act==='dup'){ segments.splice(idx+1,0,{...segments[idx]}); }
+        if(act==='up' && idx>0){ [segments[idx-1],segments[idx]] = [segments[idx],segments[idx-1]]; }
+        if(act==='down' && idx<segments.length-1){ [segments[idx+1],segments[idx]] = [segments[idx],segments[idx+1]]; }
+        render(true);
       };
     });
     return row;
   }
-  function builderNozzleRow(){
-    const row = document.createElement('div'); row.className = 'item';
-    const name = nozzle ? nozzle.name : 'None selected';
-    row.innerHTML = `
-      <div><div>🔫 Nozzle</div><div class="note">${name}</div></div>
-      <div class="actions">
-        <button class="btn" id="pickNozzleBtn">Choose…</button>
-        ${nozzle?'<button class="btn" id="clearNozzleBtn">Clear</button>':''}
-      </div>`;
-    row.querySelector('#pickNozzleBtn').onclick = pickNozzle;
-    if(nozzle){ row.querySelector('#clearNozzleBtn').onclick = ()=>{ nozzle=null; render(); }; }
-    return row;
-  }
-  function pickNozzle(){
-    const list = NOZZLES.map(n=>n.name).join(', ');
-    const sel = prompt(`Pick nozzle:\n${list}\n${nozzle?`(current: ${nozzle.name})`:''}`, nozzle?.name || "Fog 150");
-    const found = NOZZLES.find(n=>n.name.toLowerCase()===String(sel||'').toLowerCase());
-    if(found){ nozzle = found; render(); }
+
+  function renderBuilder(){
+    const list = document.getElementById('builderList');
+    list.innerHTML = '';
+    if(segments.length===0){
+      const empty = document.createElement('div');
+      empty.className = 'item';
+      empty.innerHTML = `<div>Add hose segments from the ➕ Add menu to start building the line.</div>`;
+      list.appendChild(empty);
+    } else {
+      segments.forEach((s,i)=> list.appendChild(builderRow(s,i)));
+    }
   }
 
-  // ---------- Renderers ----------
-  function renderBuilder(){
-    const list = document.getElementById('builderList'); list.innerHTML = '';
-    items.forEach((it,i)=> list.appendChild(builderRow(it,i)));
-    list.appendChild(builderNozzleRow());
-  }
+  // ---------- Math panel ----------
   function renderMath(){
     const out = calc();
     document.getElementById('GPM').textContent = `${out.Q} gpm`;
     document.getElementById('PDP').textContent = `${Math.round(out.PDP)} psi`;
-    const hoseLines = out.hoses.map(h=>`H${h.i}: C=${h.C}, ${h.length}ft × ${h.dia}″ @ ${out.Q}gpm → FL=${h.segFL.toFixed(1)}psi`).join(' • ');
-    const appLines = out.apps.length ? (' • Apps: '+out.apps.map(a=>`${a.name} ${Number(a.loss||0)}psi`).join(', ')) : '';
-    const elevLine = ` • Elev: ${elevFt}ft (${out.elevPsi.toFixed(1)}psi)`;
-    const npLine = `NP=${out.NP}psi`;
+
+    const parts = out.parts.map(p=>`S${p.i}: ${p.size}″, ${p.lengthFt}′ → FL=${p.segFL.toFixed(1)} psi`).join(' • ');
+    const np = `NP=${out.NP} psi`;
+    const elev = `Elev=${out.elevPsi.toFixed(1)} psi`;
+    const totalFL = `Total FL=${out.parts.reduce((s,a)=>s+a.segFL,0).toFixed(1)} psi`;
     document.getElementById('breakdown').textContent =
-      `${npLine} • Total FL=${out.totalFL.toFixed(1)}psi${appLines}${elevLine}` + (hoseLines?(' • '+hoseLines):'');
-    document.getElementById('equation').textContent =
-      `PDP = NP(${out.NP}) + FL(${out.totalFL.toFixed(1)}) + APP(${out.totalApp.toFixed(1)}) ${out.elevPsi>=0?'+':'-'} Elev(${Math.abs(out.elevPsi).toFixed(1)})`;
-  }
-  function renderDiagram(){
-    // ensure the truck uses the exact file next to pump.html
-    document.getElementById('truckImg').setAttribute('href', PATH_TRUCK);
-
-    const hosePath = document.getElementById('hosePath');
-    const hoseStripePath = document.getElementById('hoseStripePath');
-    const cplStart = document.getElementById('cplStart');
-    const cplEnd   = document.getElementById('cplEnd');
-    const wyeImg   = document.getElementById('wyeImg');
-    const nozImg   = document.getElementById('nozImg');
-    const label    = document.getElementById('pathLabel');
-
-    if(items.length===0){
-      // nothing drawn yet (as requested)
-      hosePath.setAttribute('d',''); hoseStripePath.setAttribute('d','');
-      [cplStart,cplEnd,wyeImg,nozImg].forEach(el=>{ el.setAttribute('x',-100); el.setAttribute('y',-100); });
-      label.textContent = 'Engine is ready — add components to begin…';
-      return;
-    }
-
-    // build hose curve
-    const {p0,p1,p2,p3,d} = pathForChain();
-    hosePath.setAttribute('d', d);
-    hoseStripePath.setAttribute('d', d);
-
-    // thickness by first hose dia
-    const firstDia = (items.find(i=>i.type==='hose')?.dia) || '1.75';
-    const sw = STROKE[firstDia] || 12;
-    hosePath.setAttribute('stroke-width', sw);
-    hoseStripePath.setAttribute('stroke-width', Math.max(6, sw-3));
-
-    // Start & end couplings (safe if image missing)
-    cplStart.setAttribute('href', PATH_COUP);
-    cplEnd.setAttribute('href', PATH_COUP);
-    cplStart.setAttribute('x', p0.x - 9); cplStart.setAttribute('y', p0.y - 9);
-    cplEnd.setAttribute('x', p3.x - 9);   cplEnd.setAttribute('y', p3.y - 9);
-
-    // Wye mid-path if any appliance contains "wye"
-    const hasWye = items.some(i=>i.type==='appliance' && /wye/i.test(i.name));
-    if(hasWye){
-      const mid = cubicPoint(p0,p1,p2,p3,0.55);
-      wyeImg.setAttribute('href', PATH_WYE);
-      wyeImg.setAttribute('x', mid.x - 13); wyeImg.setAttribute('y', mid.y - 13);
-    } else { wyeImg.setAttribute('x', -100); wyeImg.setAttribute('y', -100); }
-
-    // Nozzle sprite (choose fog vs SB) + orientation
-    if(nozzle){
-      const tEnd = cubicTangent(p0,p1,p2,p3,0.99);
-      const angle = Math.atan2(tEnd.y, tEnd.x) * 180/Math.PI;
-      const isSB = /SB|ChiefXD .*@50|15\/16|7\/8|1\"/.test(nozzle.name);
-      nozImg.setAttribute('href', isSB ? PATH_NOZ_SB : PATH_NOZ_FOG);
-      nozImg.setAttribute('x', p3.x - 13);
-      nozImg.setAttribute('y', p3.y - 13);
-      nozImg.setAttribute('transform', `rotate(${angle}, ${p3.x}, ${p3.y})`);
-      label.textContent = `${firstDia}″ • total ${items.filter(i=>i.type==='hose').reduce((s,h)=>s+h.length,0)} ft • ${nozzle.name}`;
-    } else {
-      nozImg.setAttribute('x', -100); nozImg.setAttribute('y', -100);
-      nozImg.removeAttribute('transform');
-      label.textContent = `${firstDia}″ • total ${items.filter(i=>i.type==='hose').reduce((s,h)=>s+h.length,0)} ft`;
-    }
+      `${np} • ${totalFL} • ${elev}${parts?(' • '+parts):''}`;
   }
 
-  function render(){
-    elevFt = parseFloat(document.getElementById('elevFt').value || 0);
-    elevPsiPerFt = parseFloat(document.getElementById('elevPsi').value || 0.434);
-    // builder UI
-    const list = document.getElementById('builderList'); list.innerHTML = '';
-    items.forEach((it,i)=> list.appendChild(builderRow(it,i)));
-    list.appendChild(builderNozzleRow());
+  // ---------- Nozzle quick picker (fallback prompt) ----------
+  function pickNozzle(){
+    const list = NOZZLES.map(n=>n.name).join(', ');
+    const sel = prompt(`Pick nozzle:\n${list}\n(current: ${nozzle.name})`, nozzle.name);
+    const found = NOZZLES.find(n=> n.name.toLowerCase() === String(sel||'').toLowerCase());
+    if(found){ nozzle = found; document.getElementById('nozzleSelect').value = nozzle.name; render(); }
+  }
 
+  // ---------- Render all ----------
+  function render(autoScroll=false){
+    renderBuilder();
     renderDiagram();
     renderMath();
+    if(autoScroll){
+      // keep engine in view when adding/duplicating/removing
+      setTimeout(()=>{ scrollEl.scrollTop = scrollEl.scrollHeight; }, 0);
+    }
   }
 
-  document.getElementById('elevFt').oninput = render;
-  document.getElementById('elevPsi').oninput = render;
-
-  // Initial render: only engine shows (no hose yet)
-  render();
+  // initial draw
+  render(true);
 </script>
 </body>
 </html>
