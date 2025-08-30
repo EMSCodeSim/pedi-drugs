@@ -3,64 +3,67 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-<title>Pump Pressure — Split Wye (Mobile Visual)</title>
+<title>Pump Pressure — Visual Builder</title>
 <style>
   :root{
     --bg:#0b0f14; --panel:#0f1624; --ink:#eaf2ff; --muted:#9fb0c8;
     --edge:rgba(255,255,255,.10); --accent:#49a3ff;
-    --truck:#d62839; --hoseCommon:#f3ce6a; --hoseA:#79cfff; --hoseB:#80ffb3;
+    --truck:#d62839; --hose:#f3ce6a;
   }
   *{box-sizing:border-box}
   html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);font-family:system-ui,Segoe UI,Inter,Arial,sans-serif}
   .app{display:flex;flex-direction:column;min-height:100vh}
-  header{padding:14px 16px 10px;background:linear-gradient(180deg,#0c1320 0%,#0b0f14 100%);border-bottom:1px solid var(--edge);position:sticky;top:0;z-index:3}
+  header{padding:14px 16px 10px;background:linear-gradient(180deg,#0c1320 0%,#0b0f14 100%);border-bottom:1px solid var(--edge);position:sticky;top:0;z-index:3;display:flex;justify-content:space-between;gap:10px;align-items:center}
   h1{margin:4px 0 2px;font-size:18px}
   .sub{font-size:12px;color:var(--muted)}
+  .btn{background:#0b1320;border:1px solid var(--edge);color:var(--ink);padding:8px 12px;border-radius:10px;cursor:pointer}
+  .btn:active{transform:translateY(1px)}
+  .menu{position:relative}
+  .menu-panel{position:absolute;top:44px;right:0;background:#0b1320;border:1px solid var(--edge);border-radius:10px;overflow:hidden;display:none;min-width:180px;z-index:5}
+  .menu.open .menu-panel{display:block}
+  .menu-panel button{display:block;width:100%;text-align:left;padding:10px 12px;background:transparent;border:none;color:var(--ink);font-size:14px}
+  .menu-panel button:hover{background:#101c30}
   .canvas{position:relative;overflow:hidden;background:linear-gradient(180deg,#0b0f14,#0e1726)}
-  svg{width:100%;height:52vh;display:block}
+  svg{width:100%;height:50vh;display:block}
   .controls{padding:10px 12px;background:var(--panel);border-top:1px solid var(--edge)}
   .card{background:#0e1726;border:1px solid var(--edge);border-radius:14px;padding:12px;margin:10px 0}
-  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
-  .grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px}
+  .list{display:flex;flex-direction:column;gap:8px}
+  .item{display:flex;justify-content:space-between;gap:10px;align-items:center;padding:10px;border:1px solid var(--edge);border-radius:12px;background:#0c1320}
+  .item small{color:var(--muted)}
+  .actions{display:flex;gap:6px;align-items:center}
+  input,select{background:#0b1320;color:var(--ink);border:1px solid var(--edge);border-radius:10px;padding:8px 10px}
   label{font-size:12px;color:var(--muted);display:block;margin-bottom:4px}
-  select,input{width:100%;padding:10px 12px;border-radius:10px;border:1px solid var(--edge);background:#0b1320;color:var(--ink);font-size:14px}
-  .eq{font-family:ui-monospace,Menlo,monospace;color:#cfe4ff;font-size:13px;line-height:1.3}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  .eq{font-family:ui-monospace,Menlo,monospace;color:#cfe4ff;font-size:13px;line-height:1.35}
   .kpis{display:flex;flex-wrap:wrap;gap:10px}
   .kpi{background:#0b1320;border:1px solid var(--edge);border-radius:12px;padding:10px 12px}
   .kpi b{font-size:20px}
   .note{font-size:12px;color:var(--muted)}
-  .small{font-size:12px}
 </style>
 </head>
 <body>
 <div class="app">
   <header>
-    <h1>Pump Pressure — Split Wye</h1>
-    <div class="sub">Common supply ➜ Wye ➜ Branch A & B (independent nozzles)</div>
+    <div>
+      <h1>Pump Pressure — Visual Builder</h1>
+      <div class="sub">Start with the truck • Add hose/appliance/nozzle • Live math</div>
+    </div>
+    <div class="menu" id="addMenu">
+      <button class="btn" id="addBtn">➕ Add</button>
+      <div class="menu-panel" id="addPanel">
+        <button data-add="hose">Hose segment</button>
+        <button data-add="appliance">Appliance (Wye, Eductor, etc.)</button>
+        <button data-add="nozzle">Nozzle… (incl. Chief XD)</button>
+      </div>
+    </div>
   </header>
 
-  <!-- Visual Diagram -->
+  <!-- Visual diagram -->
   <div class="canvas">
     <svg id="scene" viewBox="0 0 390 360" preserveAspectRatio="xMidYMid slice" aria-label="Pump diagram">
-      <!-- Elevation marker -->
-      <g>
-        <rect x="330" y="175" width="44" height="145" fill="#192740"/>
-        <text x="352" y="170" text-anchor="middle" fill="#cfe4ff" font-size="10" id="elevLabel">+0 ft</text>
-      </g>
-
       <defs>
         <filter id="glow"><feGaussianBlur stdDeviation="1.2" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
       </defs>
-
-      <!-- Common hose -->
-      <path id="commonHose" d="" stroke="var(--hoseCommon)" fill="none" stroke-linecap="round" filter="url(#glow)"/>
-      <circle id="wyeDot" r="3.5" fill="#ffd27a"/>
-
-      <!-- Branch hoses -->
-      <path id="branchAHose" d="" stroke="var(--hoseA)" fill="none" stroke-linecap="round" filter="url(#glow)"/>
-      <path id="branchBHose" d="" stroke="var(--hoseB)" fill="none" stroke-linecap="round" filter="url(#glow)"/>
-      <circle id="nozzleADot" r="4" fill="#e0ecff"/>
-      <circle id="nozzleBDot" r="4" fill="#e0ecff"/>
 
       <!-- Truck -->
       <g id="truck" transform="translate(18,258)">
@@ -72,30 +75,33 @@
         <text x="10" y="40" font-size="8" fill="#442">ENGINE 1</text>
         <circle cx="36" cy="70" r="10" fill="#263140"/>
         <circle cx="108" cy="70" r="10" fill="#263140"/>
-        <!-- pump port -->
         <circle id="pumpPort" cx="90" cy="25" r="3" fill="#ddd"/>
       </g>
 
+      <!-- Hose path (built from segments) -->
+      <path id="hosePath" d="" stroke="var(--hose)" fill="none" stroke-linecap="round" filter="url(#glow)" stroke-width="12"/>
+
+      <!-- Nozzle marker -->
+      <circle id="nozzleDot" r="0" fill="#e0ecff"/>
+
       <!-- Labels -->
-      <text x="208" y="40" fill="#f7e39a" font-size="10" id="commonLabel">—</text>
-      <text x="278" y="65" fill="#9fd8ff" font-size="10" id="labelA">—</text>
-      <text x="270" y="120" fill="#b9ffcf" font-size="10" id="labelB">—</text>
+      <text x="205" y="40" fill="#f7e39a" font-size="10" id="pathLabel">Add components to begin…</text>
     </svg>
   </div>
 
-  <!-- Controls -->
+  <!-- Builder list & math -->
   <div class="controls">
     <div class="card">
-      <div class="grid3">
+      <div class="note">Order matters: Engine ➜ Hose(s) ➜ Appliance(s) ➜ Nozzle</div>
+      <div class="list" id="builderList"></div>
+    </div>
+
+    <div class="card">
+      <h3 style="margin:0 0 8px;font-size:14px;color:#cfe4ff">Environment</h3>
+      <div class="grid2">
         <div>
           <label>Elevation (ft)</label>
           <input id="elevFt" type="number" step="5" value="0" />
-          <div class="small note">Applies to both branches</div>
-        </div>
-        <div>
-          <label>Wye / Appliance Loss (psi)</label>
-          <input id="wyeLoss" type="number" step="1" value="10" />
-          <div class="small note">Inline at split</div>
         </div>
         <div>
           <label>Elevation factor (psi/ft)</label>
@@ -105,61 +111,9 @@
     </div>
 
     <div class="card">
-      <h3 style="margin:0 0 8px;font-size:14px;color:#cfe4ff">Common Supply (truck ➜ wye)</h3>
-      <div class="grid2">
-        <div>
-          <label>Hose Size</label>
-          <select id="diaCommon"></select>
-        </div>
-        <div>
-          <label>Length (ft)</label>
-          <input id="lenCommon" type="number" step="25" value="200" />
-        </div>
-      </div>
-    </div>
-
-    <div class="card">
-      <h3 style="margin:0 0 8px;font-size:14px;color:#cfe4ff">Branch A</h3>
-      <div class="grid2">
-        <div>
-          <label>Hose Size</label>
-          <select id="diaA"></select>
-        </div>
-        <div>
-          <label>Length (ft)</label>
-          <input id="lenA" type="number" step="25" value="200" />
-        </div>
-      </div>
-      <div style="margin-top:8px">
-        <label>Nozzle (sets GPM & NP)</label>
-        <select id="nozA"></select>
-      </div>
-    </div>
-
-    <div class="card">
-      <h3 style="margin:0 0 8px;font-size:14px;color:#cfe4ff">Branch B</h3>
-      <div class="grid2">
-        <div>
-          <label>Hose Size</label>
-          <select id="diaB"></select>
-        </div>
-        <div>
-          <label>Length (ft)</label>
-          <input id="lenB" type="number" step="25" value="150" />
-        </div>
-      </div>
-      <div style="margin-top:8px">
-        <label>Nozzle (sets GPM & NP)</label>
-        <select id="nozB"></select>
-      </div>
-    </div>
-
-    <div class="card">
-      <div class="eq" id="eq">PDP = FL(common @ Qt) + Wye + max( NP+FL(A@Qa)+Elev , NP+FL(B@Qb)+Elev )</div>
+      <div class="eq" id="equation">PDP = NP + ΣFL(hose @ GPM) + ΣAppliance ± Elev</div>
       <div class="kpis" style="margin-top:8px">
-        <div class="kpi"><div>Total Flow</div><b id="Qt">— gpm</b></div>
-        <div class="kpi"><div>Branch A</div><b id="Qa">— gpm</b></div>
-        <div class="kpi"><div>Branch B</div><b id="Qb">— gpm</b></div>
+        <div class="kpi"><div>Flow</div><b id="GPM">— gpm</b></div>
         <div class="kpi"><div>PDP</div><b id="PDP">— psi</b></div>
       </div>
       <div class="note" id="breakdown" style="margin-top:8px"></div>
@@ -168,153 +122,273 @@
 </div>
 
 <script>
-  // ---- Presets ----
-  const COEFF = {"1.5":24,"1.75":15.5,"2":8,"2.5":2,"3":0.8,"4":0.2,"5":0.08}; // FL = C*(Q/100)^2*(L/100)
+  // ---------- Presets ----------
+  // Friction loss: FL = C * (Q/100)^2 * (L/100)
+  const COEFF = {"1.5":24,"1.75":15.5,"2":8,"2.5":2,"3":0.8,"4":0.2,"5":0.08};
+  // Stroke width by diameter (for visual thickness)
+  const STROKE = {"1.5":10,"1.75":12,"2":14,"2.5":16,"3":18,"4":22,"5":26};
+
+  // Nozzles (include Chief XD variants)
   const NOZZLES = [
-    {name:"None (closed)", gpm:0, NP:0},
     {name:"Fog 95", gpm:95, NP:100},
     {name:"Fog 125", gpm:125, NP:100},
     {name:"Fog 150", gpm:150, NP:100},
     {name:'SB 7/8"', gpm:160, NP:50},
     {name:'SB 15/16"', gpm:185, NP:50},
-    {name:'SB 1"', gpm:210, NP:50}
+    {name:'SB 1"', gpm:210, NP:50},
+    // Chief XD examples (common selectable gallonage / pressures)
+    {name:"ChiefXD 100 @50", gpm:100, NP:50},
+    {name:"ChiefXD 150 @50", gpm:150, NP:50},
+    {name:"ChiefXD 150 @75", gpm:150, NP:75},
+    {name:"ChiefXD 185 @75", gpm:185, NP:75}
   ];
-  const HOSE_STROKE = {"1.5":10,"1.75":12,"2":14,"2.5":16,"3":18,"4":22,"5":26};
 
-  // ---- State ----
-  const state = {
-    elevFt: 0,
-    elevPsiPerFt: 0.434,
-    wyeLoss: 10,
-    common: {dia:"2.5", length:200},
-    A: {dia:"1.75", length:200, nozzle: NOZZLES[3]}, // Fog 150
-    B: {dia:"1.75", length:150, nozzle: NOZZLES[4]}  // SB 7/8"
-  };
+  const APPLIANCE_PRESETS = [
+    {name:"Wye/Siamese", loss:10},
+    {name:"In-line eductor", loss:25},
+    {name:"Master monitor", loss:25},
+    {name:"Standpipe/PRV", loss:25},
+    {name:"Custom", loss:0}
+  ];
 
-  // ---- DOM helpers ----
-  function byId(id){ return document.getElementById(id); }
-  function opt(el, text, value, sel){ const o=document.createElement('option'); o.textContent=text; o.value=value; if(sel) o.selected=true; el.appendChild(o); }
+  // ---------- State ----------
+  // Ordered items between engine and nozzle: hose segments & appliances. Nozzle is separate.
+  // Hose: {type:'hose', dia:'1.75', length:200}
+  // Appliance: {type:'appliance', name:'Wye/Siamese', loss:10}
+  let items = []; // start empty (just the truck)
+  let nozzle = null; // set when user picks nozzle
+  let elevFt = 0, elevPsiPerFt = 0.434;
 
-  // Populate selects
-  (function initControls(){
-    const diaOpts = Object.keys(COEFF);
-    ["diaCommon","diaA","diaB"].forEach(id=>{
-      const sel = byId(id); sel.innerHTML="";
-      diaOpts.forEach(d=> opt(sel, `${d}″`, d, (id==="diaCommon"?state.common.dia:(id==="diaA"?state.A.dia:state.B.dia))===d));
-    });
-    ["nozA","nozB"].forEach(id=>{
-      const sel = byId(id); sel.innerHTML="";
-      NOZZLES.forEach(n=> opt(sel, n.name, n.name, (id==="nozA"?state.A.nozzle:state.B.nozzle).name===n.name));
-    });
-
-    byId("elevFt").value = state.elevFt;
-    byId("elevPsi").value = state.elevPsiPerFt;
-    byId("wyeLoss").value = state.wyeLoss;
-
-    // Listeners
-    byId("elevFt").oninput = e=>{ state.elevFt = parseFloat(e.target.value||0); render(); };
-    byId("elevPsi").oninput = e=>{ state.elevPsiPerFt = parseFloat(e.target.value||0); render(); };
-    byId("wyeLoss").oninput = e=>{ state.wyeLoss = parseFloat(e.target.value||0); render(); };
-
-    byId("diaCommon").onchange = e=>{ state.common.dia = e.target.value; render(); };
-    byId("lenCommon").oninput = e=>{ state.common.length = parseFloat(e.target.value||0); render(); };
-
-    byId("diaA").onchange = e=>{ state.A.dia = e.target.value; render(); };
-    byId("lenA").oninput = e=>{ state.A.length = parseFloat(e.target.value||0); render(); };
-    byId("nozA").onchange = e=>{
-      const found = NOZZLES.find(n=>n.name===e.target.value); if(found){ state.A.nozzle=found; render(); }
+  // ---------- UI: Add menu ----------
+  const addMenu = document.getElementById('addMenu');
+  const addPanel = document.getElementById('addPanel');
+  document.getElementById('addBtn').onclick = ()=> addMenu.classList.toggle('open');
+  document.addEventListener('click', (e)=>{ if(!addMenu.contains(e.target)) addMenu.classList.remove('open'); });
+  addPanel.querySelectorAll('button').forEach(b=>{
+    b.onclick = ()=>{
+      const what = b.dataset.add;
+      if(what==='hose'){
+        items.push({type:'hose', dia:'1.75', length:200});
+      } else if(what==='appliance'){
+        items.push({type:'appliance', name:'Wye/Siamese', loss:10});
+      } else if(what==='nozzle'){
+        pickNozzle();
+      }
+      addMenu.classList.remove('open');
+      render();
     };
+  });
 
-    byId("diaB").onchange = e=>{ state.B.dia = e.target.value; render(); };
-    byId("lenB").oninput = e=>{ state.B.length = parseFloat(e.target.value||0); render(); };
-    byId("nozB").onchange = e=>{
-      const found = NOZZLES.find(n=>n.name===e.target.value); if(found){ state.B.nozzle=found; render(); }
-    };
-  })();
-
-  // ---- Math ----
-  function fl(C, Q, L){ return (C||0) * Math.pow(Q/100, 2) * (L/100); } // psi
+  // ---------- Math ----------
+  function fl(C, Q, L){ return (C||0) * Math.pow(Q/100, 2) * (L/100); }
   function calc(){
-    const Qa = state.A.nozzle.gpm;
-    const Qb = state.B.nozzle.gpm;
-    const Qt = Qa + Qb;
+    const Q = nozzle?.gpm || 0;
+    const NP = nozzle?.NP || 0;
+    let totalFL = 0, totalApp = 0, hoses = [], apps = [];
 
-    const Cc = COEFF[state.common.dia];
-    const Ca = COEFF[state.A.dia];
-    const Cb = COEFF[state.B.dia];
+    items.forEach((it, idx)=>{
+      if(it.type==='hose'){
+        const C = COEFF[it.dia] || 0;
+        const segFL = fl(C, Q, it.length);
+        totalFL += segFL;
+        hoses.push({i:idx+1, ...it, C, segFL});
+      } else {
+        totalApp += Number(it.loss)||0;
+        apps.push({i:idx+1, ...it});
+      }
+    });
 
-    const FLc = fl(Cc, Qt, state.common.length);
-    const FLa = fl(Ca, Qa, state.A.length);
-    const FLb = fl(Cb, Qb, state.B.length);
-
-    const elevPsi = state.elevFt * state.elevPsiPerFt;
-
-    const needA = state.A.nozzle.NP + FLa + elevPsi;
-    const needB = state.B.nozzle.NP + FLb + elevPsi;
-
-    const PDP = FLc + state.wyeLoss + Math.max(needA, needB);
-
-    return {Qa,Qb,Qt, FLc,FLa,FLb, elevPsi, needA, needB, PDP};
+    const elevPsi = elevFt * elevPsiPerFt;
+    const PDP = NP + totalFL + totalApp + elevPsi;
+    return {Q, NP, totalFL, totalApp, elevPsi, PDP, hoses, apps};
   }
 
-  // ---- Diagram helpers ----
-  function pathCubic(p0, c1, c2, p3){ return `M ${p0.x} ${p0.y} C ${c1.x} ${c1.y}, ${c2.x} ${c2.y}, ${p3.x} ${p3.y}`; }
+  // ---------- Diagram ----------
+  function pathForChain(){
+    // Draw a single cubic path from pump ➜ "nozzle"
+    const pump = {x:113, y:283};
+    // Move end farther/curvier as hose length grows
+    const totalLen = items.filter(i=>i.type==='hose').reduce((s,h)=>s+h.length,0) || 100;
+    const t = Math.max(0, Math.min(1, (totalLen-100)/(600-100)));
+    const end = {x: 320 + 20*t, y: 90 + 5*t}; // nozzle-ish
+    const c1 = {x: 160, y: 230 - 60*t};
+    const c2 = {x: 240, y: 180 - 90*t};
+    return {d:`M ${pump.x} ${pump.y} C ${c1.x} ${c1.y}, ${c2.x} ${c2.y}, ${end.x} ${end.y}`, end};
+  }
 
   function renderDiagram(){
-    const pump = {x:113, y:283}; // pumpPort area
-    const wye = {x:240, y:175};
-    const nozA = {x:340, y:85};
-    const nozB = {x:315, y:130};
+    const hosePath = document.getElementById('hosePath');
+    const nozzleDot = document.getElementById('nozzleDot');
+    const label = document.getElementById('pathLabel');
 
-    // Common hose curve
-    const c1c = {x:150, y:230}, c2c = {x:200, y:200};
-    byId("commonHose").setAttribute("d", pathCubic(pump, c1c, c2c, wye));
-    byId("wyeDot").setAttribute("cx", wye.x); byId("wyeDot").setAttribute("cy", wye.y);
+    if(items.length===0){
+      hosePath.setAttribute('d','');
+      nozzleDot.setAttribute('r','0');
+      label.textContent = 'Add components to begin…';
+      return;
+    }
 
-    // Branch A curve
-    const c1a = {x:270, y:130}, c2a = {x:305, y:105};
-    byId("branchAHose").setAttribute("d", pathCubic(wye, c1a, c2a, nozA));
-    byId("nozzleADot").setAttribute("cx", nozA.x); byId("nozzleADot").setAttribute("cy", nozA.y);
+    const {d, end} = pathForChain();
+    hosePath.setAttribute('d', d);
+    // Thickness by the FIRST hose diameter (common in handline lays)
+    const firstDia = (items.find(i=>i.type==='hose')?.dia) || '1.75';
+    hosePath.setAttribute('stroke-width', STROKE[firstDia] || 12);
 
-    // Branch B curve
-    const c1b = {x:260, y:170}, c2b = {x:300, y:145};
-    byId("branchBHose").setAttribute("d", pathCubic(wye, c1b, c2b, nozB));
-    byId("nozzleBDot").setAttribute("cx", nozB.x); byId("nozzleBDot").setAttribute("cy", nozB.y);
-
-    // Stroke widths by hose size
-    byId("commonHose").setAttribute("stroke-width", HOSE_STROKE[state.common.dia] || 14);
-    byId("branchAHose").setAttribute("stroke-width", HOSE_STROKE[state.A.dia] || 12);
-    byId("branchBHose").setAttribute("stroke-width", HOSE_STROKE[state.B.dia] || 12);
-
-    // Labels
-    byId("commonLabel").textContent = `${state.common.dia}″ • ${state.common.length} ft`;
-    byId("labelA").textContent = `A: ${state.A.dia}″ • ${state.A.length} ft • ${state.A.nozzle.name}`;
-    byId("labelB").textContent = `B: ${state.B.dia}″ • ${state.B.length} ft • ${state.B.nozzle.name}`;
-
-    // Elevation label
-    byId("elevLabel").textContent = `${state.elevFt>0?'+':''}${state.elevFt} ft`;
+    if(nozzle){
+      nozzleDot.setAttribute('cx', end.x);
+      nozzleDot.setAttribute('cy', end.y);
+      nozzleDot.setAttribute('r', 4);
+      label.textContent = `${firstDia}″ • total ${items.filter(i=>i.type==='hose').reduce((s,h)=>s+h.length,0)} ft • ${nozzle.name}`;
+    } else {
+      nozzleDot.setAttribute('r', 0);
+      label.textContent = `${firstDia}″ • total ${items.filter(i=>i.type==='hose').reduce((s,h)=>s+h.length,0)} ft`;
+    }
   }
 
-  // ---- Render everything ----
+  // ---------- Builder rows ----------
+  function builderRow(item, idx){
+    const row = document.createElement('div');
+    row.className = 'item';
+
+    if(item.type==='hose'){
+      row.innerHTML = `
+        <div>
+          <div>🧯 Hose <small>#${idx+1}</small></div>
+          <div class="note">FL uses selected nozzle GPM</div>
+        </div>
+        <div class="actions">
+          <label style="display:flex;flex-direction:column">
+            <span style="font-size:12px;color:#9fb0c8">Size</span>
+            <select data-k="dia">${Object.keys(COEFF).map(d=>`<option value="${d}" ${d===item.dia?'selected':''}>${d}″</option>`).join('')}</select>
+          </label>
+          <label style="display:flex;flex-direction:column">
+            <span style="font-size:12px;color:#9fb0c8">Length</span>
+            <input data-k="length" type="number" step="25" min="0" value="${item.length}" style="width:90px"/>
+          </label>
+          <button class="btn" data-act="up">↑</button>
+          <button class="btn" data-act="down">↓</button>
+          <button class="btn" data-act="del">✕</button>
+        </div>`;
+    } else {
+      row.innerHTML = `
+        <div>
+          <div>⚙️ Appliance <small>#${idx+1}</small></div>
+          <div class="note">Inline loss added to PDP</div>
+        </div>
+        <div class="actions">
+          <label style="display:flex;flex-direction:column">
+            <span style="font-size:12px;color:#9fb0c8">Type</span>
+            <select data-k="name">
+              ${APPLIANCE_PRESETS.map(a=>`<option value="${a.name}" ${a.name===item.name?'selected':''}>${a.name}</option>`).join('')}
+            </select>
+          </label>
+          <label style="display:flex;flex-direction:column">
+            <span style="font-size:12px;color:#9fb0c8">Loss (psi)</span>
+            <input data-k="loss" type="number" step="1" min="0" value="${item.loss}" style="width:80px"/>
+          </label>
+          <button class="btn" data-act="up">↑</button>
+          <button class="btn" data-act="down">↓</button>
+          <button class="btn" data-act="del">✕</button>
+        </div>`;
+    }
+
+    // field changes
+    row.querySelectorAll('select,input').forEach(el=>{
+      el.onchange = ()=>{
+        const k = el.dataset.k;
+        if(item.type==='hose'){
+          if(k==='dia') item.dia = el.value;
+          if(k==='length') item.length = Math.max(0, parseFloat(el.value||0));
+        } else {
+          if(k==='name'){
+            item.name = el.value;
+            const preset = APPLIANCE_PRESETS.find(a=>a.name===item.name);
+            if(preset) item.loss = preset.loss;
+          }
+          if(k==='loss') item.loss = Math.max(0, parseFloat(el.value||0));
+        }
+        render();
+      };
+    });
+
+    // row actions
+    row.querySelectorAll('button[data-act]').forEach(btn=>{
+      btn.onclick = ()=>{
+        const act = btn.dataset.act;
+        if(act==='del'){ items.splice(idx,1); }
+        if(act==='up' && idx>0){ [items[idx-1],items[idx]] = [items[idx],items[idx-1]]; }
+        if(act==='down' && idx<items.length-1){ [items[idx+1],items[idx]] = [items[idx],items[idx+1]]; }
+        render();
+      };
+    });
+
+    return row;
+  }
+
+  function builderNozzleRow(){
+    const row = document.createElement('div');
+    row.className = 'item';
+    const name = nozzle ? nozzle.name : 'None selected';
+    row.innerHTML = `
+      <div>
+        <div>🔫 Nozzle</div>
+        <div class="note">${name}</div>
+      </div>
+      <div class="actions">
+        <button class="btn" id="pickNozzleBtn">Choose…</button>
+        ${nozzle?'<button class="btn" id="clearNozzleBtn">Clear</button>':''}
+      </div>`;
+    row.querySelector('#pickNozzleBtn').onclick = pickNozzle;
+    if(nozzle){
+      row.querySelector('#clearNozzleBtn').onclick = ()=>{ nozzle=null; render(); };
+    }
+    return row;
+  }
+
+  function pickNozzle(){
+    // Simple prompt picker (compact for one-file demo). Replace with a modal if you prefer.
+    const list = NOZZLES.map(n=>n.name).join(', ');
+    const sel = prompt(`Pick nozzle:\n${list}\n${nozzle?`(current: ${nozzle.name})`:''}`, nozzle?.name || "Fog 150");
+    const found = NOZZLES.find(n=>n.name.toLowerCase()===String(sel||'').toLowerCase());
+    if(found){ nozzle = found; render(); }
+  }
+
+  // ---------- Render ----------
   function render(){
+    // environment
+    elevFt = parseFloat(document.getElementById('elevFt').value || 0);
+    elevPsiPerFt = parseFloat(document.getElementById('elevPsi').value || 0.434);
+
+    // builder list
+    const list = document.getElementById('builderList');
+    list.innerHTML = '';
+    // show nozzle row (sticky at the end)
+    items.forEach((it,i)=> list.appendChild(builderRow(it,i)));
+    list.appendChild(builderNozzleRow());
+
+    // diagram & math
     renderDiagram();
     const out = calc();
+    document.getElementById('GPM').textContent = `${out.Q} gpm`;
+    document.getElementById('PDP').textContent = `${Math.round(out.PDP)} psi`;
 
-    byId("Qt").textContent = `${out.Qt} gpm`;
-    byId("Qa").textContent = `${out.Qa} gpm`;
-    byId("Qb").textContent = `${out.Qb} gpm`;
-    byId("PDP").textContent = `${Math.round(out.PDP)} psi`;
+    // breakdown text
+    const hoseLines = out.hoses.map(h=>`H${h.i}: C=${h.C}, ${h.length}ft × ${h.dia}″ @ ${out.Q}gpm → FL=${h.segFL.toFixed(1)}psi`).join(' • ');
+    const appLines = out.apps.length ? (' • Apps: '+out.apps.map(a=>`${a.name} ${Number(a.loss||0)}psi`).join(', ')) : '';
+    const elevLine = ` • Elev: ${elevFt}ft (${out.elevPsi.toFixed(1)}psi)`;
+    const npLine = `NP=${out.NP}psi`;
+    document.getElementById('breakdown').textContent =
+      `${npLine} • Total FL=${out.totalFL.toFixed(1)}psi${appLines}${elevLine}` + (hoseLines?(' • '+hoseLines):'');
 
-    const eq = [
-      `FL(common@Qt)=${out.FLc.toFixed(0)} psi`,
-      `Wye=${state.wyeLoss.toFixed(0)} psi`,
-      `A: NP(${state.A.nozzle.NP})+FL(${out.FLa.toFixed(0)})+Elev(${out.elevPsi.toFixed(0)}) → ${out.needA.toFixed(0)} psi`,
-      `B: NP(${state.B.nozzle.NP})+FL(${out.FLb.toFixed(0)})+Elev(${out.elevPsi.toFixed(0)}) → ${out.needB.toFixed(0)} psi`
-    ].join(' • ');
-    byId("breakdown").textContent = eq;
+    // update equation preview for clarity
+    document.getElementById('equation').textContent =
+      `PDP = NP(${out.NP}) + FL(${out.totalFL.toFixed(1)}) + APP(${out.totalApp.toFixed(1)}) ${out.elevPsi>=0?'+':'-'} Elev(${Math.abs(out.elevPsi).toFixed(1)})`;
   }
 
-  // Kick things off
+  // init environment listeners
+  document.getElementById('elevFt').oninput = render;
+  document.getElementById('elevPsi').oninput = render;
+
   render();
 </script>
 </body>
