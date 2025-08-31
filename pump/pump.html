@@ -53,8 +53,6 @@
   .stats{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
   .actions{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
   .actions select,.actions button{background:#0b1320;color:#eaf2ff;border:1px solid var(--edge);border-radius:8px;padding:6px 8px;font-size:13px}
-
-  /* Left/Right columns that never overflow phone width */
   .col2{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:8px}
   @media (max-width:420px){ .col2{grid-template-columns:1fr;} }
 </style>
@@ -64,7 +62,7 @@
 
   <header>
     <h1>Pump Pressure — Visual Builder</h1>
-    <div class="sub">Left tools • Wye supports Left & Right lines</div>
+    <div class="sub">Updated nozzle set • Wye supports Left & Right lines</div>
   </header>
 
   <div class="side">
@@ -173,24 +171,30 @@
   const HOSE_X_RATIO = 0.49;   // your anchor
   const ROOF_RATIO   = 0.71;   // your anchor
   const HOSE_TOUCH_OFFSET = -6;
-  const BRANCH_OFFSET = 34;    // px offset of left/right stacks from main
+  const BRANCH_OFFSET = 34;
 
   const HOSE_WIDTH = { "5": 12, "2.5": 9, "1.75": 6 };
   const HOSE_COLOR = { "5": "var(--hose5)", "2.5": "var(--hose25)", "1.75": "var(--hose175)" };
   const COEFF = { "1.75":15.5, "2.5":2, "5":0.08 };
 
+  // ===== NOZZLES (updated per your list) =====
+  // NP = nozzle pressure (psi)
   const NOZZLES = [
     {name:"None (closed)", gpm:0, NP:0},
-    {name:"Fog 95", gpm:95, NP:100},
-    {name:"Fog 125", gpm:125, NP:100},
-    {name:"Fog 150", gpm:150, NP:100},
-    {name:'SB 7/8″', gpm:160, NP:50},
-    {name:'SB 15/16″', gpm:185, NP:50},
-    {name:'SB 1″', gpm:210, NP:50},
-    {name:"ChiefXD 100 @50", gpm:100, NP:50},
-    {name:"ChiefXD 150 @50", gpm:150, NP:50},
-    {name:"ChiefXD 150 @75", gpm:150, NP:75},
-    {name:"ChiefXD 185 @75", gpm:185, NP:75}
+
+    // Fog
+    {name:"Fog 150 gpm @100 psi", gpm:150, NP:100},
+
+    // ChiefXD
+    {name:"ChiefXD 185 gpm @50 psi", gpm:185, NP:50},
+    {name:"ChiefXD 265 gpm @50 psi", gpm:265, NP:50},
+
+    // Solid Bore (50 psi handline)
+    {name:"SB 7/8″ @50 psi",   gpm:161, NP:50},
+    {name:"SB 15/16″ @50 psi", gpm:185, NP:50},
+    {name:"SB 1″ @50 psi",     gpm:210, NP:50},
+    {name:"SB 1 1/8″ @50 psi", gpm:265, NP:50},
+    {name:"SB 1 1/4″ @50 psi", gpm:325, NP:50}
   ];
 
   // ===== STATE =====
@@ -199,8 +203,9 @@
   let wyeLoss = 10;
   let itemsLeft = [];
   let itemsRight = [];
-  let nozzleLeft = NOZZLES[3];
-  let nozzleRight = NOZZLES[3];
+  // Default to Fog 150 @100 per your update
+  let nozzleLeft = NOZZLES[1];
+  let nozzleRight = NOZZLES[1];
   let elevFt = 0, elevPsiPerFt = 0.434;
 
   // ===== ELEMENTS =====
@@ -262,8 +267,8 @@
   const nozRowLeft = document.getElementById('nozRowLeft');
   const nozRowRight = document.getElementById('nozRowRight');
   NOZZLES.forEach(n=>{
-    const bL=document.createElement('button'); bL.textContent=`${n.name} (${n.gpm}@NP${n.NP})`; bL.onclick=()=>{ nozzleLeft=n; closeDrawers(); render(false); }; nozRowLeft.appendChild(bL);
-    const bR=document.createElement('button'); bR.textContent=`${n.name} (${n.gpm}@NP${n.NP})`; bR.onclick=()=>{ nozzleRight=n; closeDrawers(); render(false); }; nozRowRight.appendChild(bR);
+    const bL=document.createElement('button'); bL.textContent=`${n.name}`; bL.onclick=()=>{ nozzleLeft=n; closeDrawers(); render(false); }; nozRowLeft.appendChild(bL);
+    const bR=document.createElement('button'); bR.textContent=`${n.name}`; bR.onclick=()=>{ nozzleRight=n; closeDrawers(); render(false); }; nozRowRight.appendChild(bR);
   });
 
   // Env inputs
@@ -305,7 +310,7 @@
   function toVBX(px){ return px / stageWidthPx() * STAGE_W; }
   function toVBY(px){ return px; }
 
-  // ===== Draw diagram (unchanged core, supports split) =====
+  // ===== Draw diagram (split aware) =====
   function renderDiagram(){
     const nW = engineImg.naturalWidth || 0;
     const nH = engineImg.naturalHeight || 0;
@@ -366,7 +371,7 @@
       drawBranch(itemsLeft, xLeft, yStart);
       drawBranch(itemsRight, xRight, yStart);
     } else {
-      drawBranch([], xMain, y); // only nozzle
+      drawBranch([], xMain, y); // only nozzle stub
     }
 
     function drawBranch(list, x, yStart){
@@ -395,7 +400,7 @@
     hint.textContent = `Total hose: ${totalFeet}′  •  ${hasWye?'Split active':''}`;
   }
 
-  // ===== Builder list (now shows correct GPM per section) =====
+  // ===== Builder list (shows proper GPM per section) =====
   function builderRowHose(h, idx, where, Q_for_this_row){
     const div=document.createElement('div'); div.className='item';
     const segFL = fl(COEFF[h.size]||0, Q_for_this_row, h.lengthFt);
@@ -431,10 +436,9 @@
     div.querySelector('[data-act="rename"]').onclick=()=>{ const v=prompt('Accessory name:', a.name); if(v!==null) a.name=v||a.name; render(); };
     return div;
   }
-
   function renderBuilder(){
     builderList.innerHTML='';
-    const R = calc(); // get current flows for rows
+    const R = calc();
 
     if(itemsMain.length===0 && !hasWye && itemsLeft.length===0 && itemsRight.length===0){
       const e=document.createElement('div'); e.className='item';
@@ -442,7 +446,7 @@
       builderList.appendChild(e); return;
     }
 
-    // Main line (uses total flow)
+    // Main (uses total flow)
     const mainHead=document.createElement('div'); mainHead.className='item';
     mainHead.innerHTML=`<div><b>Main line (to Wye)</b> <span class="note">GPM ${R.Qtotal}</span></div>`;
     builderList.appendChild(mainHead);
@@ -452,12 +456,10 @@
     });
 
     if(hasWye){
-      // Split info
       const splitHead=document.createElement('div'); splitHead.className='item';
       splitHead.innerHTML=`<div><b>Wye/Siamese</b> <span class="note">+${wyeLoss} psi • Left ${R.QL} gpm • Right ${R.QR} gpm</span></div>`;
       builderList.appendChild(splitHead);
 
-      // Two responsive columns that never overflow
       const cols=document.createElement('div'); cols.className='col2';
       const leftCol=document.createElement('div'); const rightCol=document.createElement('div');
       leftCol.innerHTML=`<div class="note">Left branch (GPM ${R.QL})</div>`;
@@ -501,4 +503,3 @@
 </script>
 </body>
 </html>
-
