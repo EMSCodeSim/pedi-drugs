@@ -463,19 +463,20 @@
       // Labels for this branch (side-aware)
       labelConsecutiveWithStats(list, x, yStart, Qbranch, side);
 
-      // nozzle stub
+      // nozzle stub  (SVG namespace fixed below)
       const last = list.slice(-1)[0];
       const wTopPx = last ? (HOSE_WIDTH[last.size]||6) : 8;
-      const body=document.createElementNS('http://www.w3.org/200/svg','rect');
+      const body=document.createElementNS('http://www.w3.org/2000/svg','rect');
       body.setAttribute('x', toVBX(x - wTopPx/2 - 4)); body.setAttribute('y', toVBY(yB - 22));
       body.setAttribute('width', toVBX(wTopPx + 8)); body.setAttribute('height', toVBY(18));
       body.setAttribute('fill','#394357'); nozzleGroup.appendChild(body);
-      const tip=document.createElementNS('http://www.w3.org/200/svg','rect');
+
+      const tip=document.createElementNS('http://www.w3.org/2000/svg','rect');
       tip.setAttribute('x', toVBX(x - (wTopPx*0.4))); tip.setAttribute('y', toVBY(yB - 30));
       tip.setAttribute('width', toVBX(wTopPx*0.8)); tip.setAttribute('height', toVBY(8));
       tip.setAttribute('fill','#9aa7bd'); nozzleGroup.appendChild(tip);
 
-      // nozzle label (GPM @ NP), side-aware placement & clamped
+      // nozzle label (GPM @ NP), side-aware placement & clamped  (SVG namespace fixed below)
       const NPtxt = (hasWye && side==='left') ? (nozzleLeft.NP||0)
                   : (hasWye && side==='right') ? (nozzleRight.NP||0)
                   : (nozzleRight.NP||0);
@@ -496,7 +497,7 @@
       nzb.setAttribute('rx',6); nzb.setAttribute('fill','#172134'); nzb.setAttribute('stroke','rgba(255,255,255,.15)');
       labelGroup.appendChild(nzb);
 
-      const nz=document.createElementNS('http://www.w3.org/200/svg','text');
+      const nz=document.createElementNS('http://www.w3.org/2000/svg','text');
       nz.setAttribute('x', toVBX(nx + pad)); nz.setAttribute('y', toVBY(ny + pad + 13));
       nz.setAttribute('fill','#cfe4ff'); nz.setAttribute('font-size','10'); nz.textContent = text;
       labelGroup.appendChild(nz);
