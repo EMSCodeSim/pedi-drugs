@@ -46,10 +46,17 @@
   .kpi b{font-size:20px}
   .note{font-size:12px;color:#9fb0c8}
   .list{display:flex;flex-direction:column;gap:8px}
-  .item{display:flex;justify-content:space-between;gap:10px;align-items:center;padding:10px;border:1px solid var(--edge);border-radius:12px;background:#0c1320}
-  .actions{display:flex;gap:6px;align-items:center}
+  .item{
+    display:flex;justify-content:space-between;gap:10px;align-items:center;
+    padding:10px;border:1px solid var(--edge);border-radius:12px;background:#0c1320;flex-wrap:wrap
+  }
+  .stats{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+  .actions{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
   .actions select,.actions button{background:#0b1320;color:#eaf2ff;border:1px solid var(--edge);border-radius:8px;padding:6px 8px;font-size:13px}
-  .col2{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+
+  /* Left/Right columns that never overflow phone width */
+  .col2{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:8px}
+  @media (max-width:420px){ .col2{grid-template-columns:1fr;} }
 </style>
 </head>
 <body>
@@ -187,18 +194,13 @@
   ];
 
   // ===== STATE =====
-  // Main line up to the Wye (hoses + accessories that are BEFORE split)
-  let itemsMain = [];          // {type:'hose', size, lengthFt} | {type:'acc', name, loss}
-  // Split
+  let itemsMain = [];   // up to the wye
   let hasWye = false;
-  let wyeLoss = 10;            // default
-  // Branches after the Wye
-  let itemsLeft = [];          // hoses only for now
-  let itemsRight = [];         // hoses only for now
-  // Nozzles
-  let nozzleLeft = NOZZLES[3];   // Fog 150
-  let nozzleRight = NOZZLES[3];  // Fog 150
-  // Env
+  let wyeLoss = 10;
+  let itemsLeft = [];
+  let itemsRight = [];
+  let nozzleLeft = NOZZLES[3];
+  let nozzleRight = NOZZLES[3];
   let elevFt = 0, elevPsiPerFt = 0.434;
 
   // ===== ELEMENTS =====
@@ -228,9 +230,7 @@
   // Hose drawer behavior
   const hoseButtonsMain = document.getElementById('hoseButtonsMain');
   const hoseButtonsSplit = document.getElementById('hoseButtonsSplit');
-  function refreshHoseDrawer(){
-    hoseButtonsSplit.style.display = hasWye ? 'flex' : 'none';
-  }
+  function refreshHoseDrawer(){ hoseButtonsSplit.style.display = hasWye ? 'flex' : 'none'; }
   hoseButtonsMain.querySelectorAll('button[data-hose]').forEach(btn=>{
     btn.onclick = ()=>{ itemsMain.push({type:'hose', ...JSON.parse(btn.dataset.hose)}); closeDrawers(); render(true); };
   });
@@ -255,12 +255,8 @@
     closeDrawers(); render(true);
   };
   drawerAcc.querySelector('[data-act="clearAcc"]').onclick = ()=>{ itemsMain = itemsMain.filter(x=>x.type!=='acc'); closeDrawers(); render(true); };
-  document.getElementById('addWyeBtn').onclick = ()=>{
-    hasWye = true; wyeLoss = 10; refreshHoseDrawer(); closeDrawers(); render(true);
-  };
-  document.getElementById('removeWyeBtn').onclick = ()=>{
-    hasWye = false; itemsLeft=[]; itemsRight=[]; refreshHoseDrawer(); closeDrawers(); render(true);
-  };
+  document.getElementById('addWyeBtn').onclick = ()=>{ hasWye = true; wyeLoss = 10; refreshHoseDrawer(); closeDrawers(); render(true); };
+  document.getElementById('removeWyeBtn').onclick = ()=>{ hasWye = false; itemsLeft=[]; itemsRight=[]; refreshHoseDrawer(); closeDrawers(); render(true); };
 
   // Nozzle drawer
   const nozRowLeft = document.getElementById('nozRowLeft');
@@ -276,22 +272,16 @@
 
   // ===== MATH =====
   function fl(C, Q, L){ return (C||0) * Math.pow(Q/100, 2) * (L/100); }
-
-  function flForStack(hoses, Q){
-    const Cn = COEFF;
-    return hoses.reduce((sum,h)=> sum + fl(Cn[h.size]||0, Q, h.lengthFt||0), 0);
-  }
+  function flForStack(hoses, Q){ return hoses.reduce((s,h)=> s + fl(COEFF[h.size]||0, Q, h.lengthFt||0), 0); }
 
   function calc(){
     const QL = nozzleLeft.gpm || 0;
     const QR = nozzleRight.gpm || 0;
-    const Qtotal = hasWye ? (QL + QR) : QR; // if no Wye, use right as single line
+    const Qtotal = hasWye ? (QL + QR) : QR;
 
-    // Main (before Wye): FL uses total GPM
     const FL_main = flForStack(itemsMain.filter(x=>x.type==='hose'), Qtotal);
     const ACC_main = itemsMain.filter(x=>x.type==='acc').reduce((s,a)=>s+(+a.loss||0),0) + (hasWye ? wyeLoss : 0);
 
-    // Branches: each uses its own GPM + NP
     const FL_left  = hasWye ? flForStack(itemsLeft, QL) : 0;
     const FL_right = flForStack(hasWye ? itemsRight : [], QR);
 
@@ -306,11 +296,7 @@
     const branchMax = hasWye ? Math.max(PDP_left, PDP_right) : PDP_right;
     const PDP_total = branchMax + FL_main + ACC_main;
 
-    return {
-      QL, QR, Qtotal, elevPsi,
-      FL_main, ACC_main, FL_left, FL_right,
-      NP_left, NP_right, PDP_left, PDP_right, PDP_total
-    };
+    return {QL, QR, Qtotal, elevPsi, FL_main, ACC_main, FL_left, FL_right, NP_left, NP_right, PDP_left, PDP_right, PDP_total};
   }
 
   // ===== Helpers =====
@@ -319,7 +305,7 @@
   function toVBX(px){ return px / stageWidthPx() * STAGE_W; }
   function toVBY(px){ return px; }
 
-  // ===== Draw =====
+  // ===== Draw diagram (unchanged core, supports split) =====
   function renderDiagram(){
     const nW = engineImg.naturalWidth || 0;
     const nH = engineImg.naturalHeight || 0;
@@ -343,15 +329,12 @@
 
     let y = roofY + HOSE_TOUCH_OFFSET;
 
-    // clear
     hoseGroup.innerHTML=''; accGroup.innerHTML=''; nozzleGroup.innerHTML=''; portGroup.innerHTML=''; labelGroup.innerHTML='';
 
-    // port ring
     const port=document.createElementNS('http://www.w3.org/2000/svg','circle');
     port.setAttribute('cx', toVBX(xMain)); port.setAttribute('cy', toVBY(roofY)); port.setAttribute('r', toVBX(6));
     port.setAttribute('fill','#2b3142'); port.setAttribute('stroke','#111622'); port.setAttribute('stroke-width','1.5'); portGroup.appendChild(port);
 
-    // MAIN UP TO WYE
     for(const it of itemsMain){
       if(it.type==='hose'){
         const hPx = (it.lengthFt===50?PX_PER_50FT:2*PX_PER_50FT), wPx=HOSE_WIDTH[it.size]||6;
@@ -360,7 +343,7 @@
         rect.setAttribute('width', toVBX(wPx)); rect.setAttribute('height', toVBY(hPx));
         rect.setAttribute('fill', HOSE_COLOR[it.size]); rect.setAttribute('stroke','rgba(255,255,255,.1)'); rect.setAttribute('stroke-width','1'); hoseGroup.appendChild(rect);
         y -= hPx;
-      } else { // accessory (main)
+      } else {
         const bg=document.createElementNS('http://www.w3.org/2000/svg','rect');
         bg.setAttribute('x', toVBX(xMain+10)); bg.setAttribute('y', toVBY(y-18)); bg.setAttribute('width', 120); bg.setAttribute('height', 18);
         bg.setAttribute('rx',6); bg.setAttribute('fill','#172134'); bg.setAttribute('stroke','rgba(255,255,255,.15)'); accGroup.appendChild(bg);
@@ -371,29 +354,25 @@
       }
     }
 
-    // WYE SYMBOL + BRANCHES
     if(hasWye){
-      // wye box
       const wy=document.createElementNS('http://www.w3.org/2000/svg','path');
-      const d=`M ${toVBX(xMain)} ${toVBY(y-8)} L ${toVBX(xLeft)} ${toVBY(y-28)} M ${toVBX(xMain)} ${toVBY(y-8)} L ${toVBX(xRight)} ${toVBY(y-28)}`;
-      wy.setAttribute('d', d); wy.setAttribute('stroke','#8aa0c4'); wy.setAttribute('stroke-width','3'); wy.setAttribute('fill','none'); hoseGroup.appendChild(wy);
+      wy.setAttribute('d', `M ${toVBX(xMain)} ${toVBY(y-8)} L ${toVBX(xLeft)} ${toVBY(y-28)} M ${toVBX(xMain)} ${toVBY(y-8)} L ${toVBX(xRight)} ${toVBY(y-28)}`);
+      wy.setAttribute('stroke','#8aa0c4'); wy.setAttribute('stroke-width','3'); wy.setAttribute('fill','none'); hoseGroup.appendChild(wy);
       const wlabel=document.createElementNS('http://www.w3.org/2000/svg','text');
       wlabel.setAttribute('x', toVBX(xMain+16)); wlabel.setAttribute('y', toVBY(y-14)); wlabel.setAttribute('fill','#cfe4ff'); wlabel.setAttribute('font-size','10');
       wlabel.textContent=`Wye (+${wyeLoss} psi)`; accGroup.appendChild(wlabel);
 
       const yStart = y-30;
-      drawBranch(itemsLeft, xLeft, yStart, 'L');
-      drawBranch(itemsRight, xRight, yStart, 'R');
+      drawBranch(itemsLeft, xLeft, yStart);
+      drawBranch(itemsRight, xRight, yStart);
     } else {
-      // single branch uses "right" nozzle for simplicity
-      drawBranch([], xMain, y, 'R'); // only nozzle
+      drawBranch([], xMain, y); // only nozzle
     }
 
-    // helper to draw hose stack + nozzle on a branch
-    function drawBranch(list, x, yStart, side){
+    function drawBranch(list, x, yStart){
       let yB = yStart;
       for(const it of list){
-        const hPx = (it.lengthFt===50?PX_PER_50FT:2*PX_PER_50FT), wPx=HOSE_WIDTH[it.size]||6;
+        const hPx=(it.lengthFt===50?PX_PER_50FT:2*PX_PER_50FT), wPx=HOSE_WIDTH[it.size]||6;
         const rect=document.createElementNS('http://www.w3.org/2000/svg','rect');
         rect.setAttribute('x', toVBX(x-wPx/2)); rect.setAttribute('y', toVBY(yB-hPx));
         rect.setAttribute('width', toVBX(wPx)); rect.setAttribute('height', toVBY(hPx));
@@ -410,55 +389,22 @@
       tip.setAttribute('x', toVBX(x - (wTopPx*0.4))); tip.setAttribute('y', toVBY(yB - 30));
       tip.setAttribute('width', toVBX(wTopPx*0.8)); tip.setAttribute('height', toVBY(8));
       tip.setAttribute('fill','#9aa7bd'); nozzleGroup.appendChild(tip);
-
-      // size/length label per contiguous size on this branch
-      labelConsecutive(list, x, yStart, yB);
     }
 
-    function labelConsecutive(list, x, yStart, yEnd){
-      // We approximate label positions using segment heights (50' vs 100')
-      let yCursor = yStart;
-      let cur = null, total=0, startY=yCursor;
-      const addLabel = ()=>{
-        if(!cur || total<=0) return;
-        const mid = yCursor + (startY - yCursor)/2;
-        const pretty = (cur==='2.5'?'2½':cur==='1.75'?'1¾':cur) + '″ • ' + total + '′';
-        const tx=document.createElementNS('http://www.w3.org/2000/svg','text');
-        tx.setAttribute('x', toVBX(x + 16)); tx.setAttribute('y', toVBY(mid+3));
-        tx.setAttribute('fill','#cfe4ff'); tx.setAttribute('font-size','10'); tx.textContent=pretty;
-        labelGroup.appendChild(tx);
-        const w = Math.max(60, pretty.length*6.2), pad=6;
-        const bx=document.createElementNS('http://www.w3.org/2000/svg','rect');
-        bx.setAttribute('x', toVBX(x + 16)-pad); bx.setAttribute('y', toVBY(mid-10)-pad);
-        bx.setAttribute('width', w+pad*2); bx.setAttribute('height', 16+pad*2);
-        bx.setAttribute('rx',6); bx.setAttribute('fill','#172134'); bx.setAttribute('stroke','rgba(255,255,255,.15)');
-        labelGroup.insertBefore(bx, tx);
-      };
-      for(const it of list){
-        const hPx=(it.lengthFt===50?PX_PER_50FT:2*PX_PER_50FT);
-        if(cur===null){ cur=it.size; total=0; startY=yCursor; }
-        if(it.size!==cur){ addLabel(); cur=it.size; total=0; startY=yCursor; }
-        yCursor -= hPx; total += it.lengthFt;
-      }
-      addLabel();
-    }
-
-    // footer hint
     const totalFeet = hoseFeetMain+hoseFeetLeft+hoseFeetRight;
-    hint.textContent = `Total hose: ${totalFeet}′  •  ${hasWye?'Split: L/R':''}`;
+    hint.textContent = `Total hose: ${totalFeet}′  •  ${hasWye?'Split active':''}`;
   }
 
-  // ===== Builder list =====
-  function builderRowHose(h, idx, where){
+  // ===== Builder list (now shows correct GPM per section) =====
+  function builderRowHose(h, idx, where, Q_for_this_row){
     const div=document.createElement('div'); div.className='item';
-    const Q = (where==='Left'? (nozzleLeft.gpm||0) : (nozzleRight.gpm||0));
-    const segFL = fl(COEFF[h.size]||0, Q, h.lengthFt);
+    const segFL = fl(COEFF[h.size]||0, Q_for_this_row, h.lengthFt);
     div.innerHTML = `
       <div><div>🧯 ${where} Hose <small>#${idx+1}</small></div>
       <div class="note">${h.size}″ • ${h.lengthFt}′</div></div>
       <div class="actions">
         <span class="note">FL ${segFL.toFixed(1)} psi</span>
-        <span class="note">GPM ${Q}</span>
+        <span class="note">GPM ${Q_for_this_row}</span>
         <select data-k="size">
           <option value="5" ${h.size==='5'?'selected':''}>5″</option>
           <option value="2.5" ${h.size==='2.5'?'selected':''}>2½″</option>
@@ -485,33 +431,39 @@
     div.querySelector('[data-act="rename"]').onclick=()=>{ const v=prompt('Accessory name:', a.name); if(v!==null) a.name=v||a.name; render(); };
     return div;
   }
+
   function renderBuilder(){
     builderList.innerHTML='';
+    const R = calc(); // get current flows for rows
+
     if(itemsMain.length===0 && !hasWye && itemsLeft.length===0 && itemsRight.length===0){
       const e=document.createElement('div'); e.className='item';
       e.innerHTML='<div>Use the left tools: add <b>Hose</b>, add <b>Accessory</b> or <b>Wye</b>, then pick <b>Nozzles</b>.</div>';
       builderList.appendChild(e); return;
     }
-    // Main line
+
+    // Main line (uses total flow)
     const mainHead=document.createElement('div'); mainHead.className='item';
-    mainHead.innerHTML='<div><b>Main line (to Wye)</b></div>'; builderList.appendChild(mainHead);
+    mainHead.innerHTML=`<div><b>Main line (to Wye)</b> <span class="note">GPM ${R.Qtotal}</span></div>`;
+    builderList.appendChild(mainHead);
     itemsMain.forEach((it,i)=>{
-      if(it.type==='hose') builderList.appendChild(builderRowHose(it,i,'Main'));
+      if(it.type==='hose') builderList.appendChild(builderRowHose(it,i,'Main', R.Qtotal));
       else builderList.appendChild(builderRowAcc(it,i));
     });
 
-    // Split info
     if(hasWye){
+      // Split info
       const splitHead=document.createElement('div'); splitHead.className='item';
-      splitHead.innerHTML=`<div><b>Wye/Siamese</b> <span class="note">+${wyeLoss} psi • choose hoses left/right & set nozzles</span></div>`;
+      splitHead.innerHTML=`<div><b>Wye/Siamese</b> <span class="note">+${wyeLoss} psi • Left ${R.QL} gpm • Right ${R.QR} gpm</span></div>`;
       builderList.appendChild(splitHead);
 
+      // Two responsive columns that never overflow
       const cols=document.createElement('div'); cols.className='col2';
       const leftCol=document.createElement('div'); const rightCol=document.createElement('div');
-      leftCol.innerHTML='<div class="note">Left branch</div>';
-      rightCol.innerHTML='<div class="note">Right branch</div>';
-      itemsLeft.forEach((h,i)=> leftCol.appendChild(builderRowHose(h,i,'Left')));
-      itemsRight.forEach((h,i)=> rightCol.appendChild(builderRowHose(h,i,'Right')));
+      leftCol.innerHTML=`<div class="note">Left branch (GPM ${R.QL})</div>`;
+      rightCol.innerHTML=`<div class="note">Right branch (GPM ${R.QR})</div>`;
+      itemsLeft.forEach((h,i)=> leftCol.appendChild(builderRowHose(h,i,'Left', R.QL)));
+      itemsRight.forEach((h,i)=> rightCol.appendChild(builderRowHose(h,i,'Right', R.QR)));
       cols.appendChild(leftCol); cols.appendChild(rightCol); builderList.appendChild(cols);
     }
   }
@@ -522,7 +474,6 @@
     const flowLabel = hasWye ? `${R.QL}+${R.QR} = ${R.Qtotal} gpm` : `${R.QR} gpm`;
     document.getElementById('GPM').textContent = flowLabel;
     document.getElementById('PDP').textContent = `${Math.round(R.PDP_total)} psi`;
-
     const parts = [
       `Main FL=${R.FL_main.toFixed(1)}`,
       `Main Acc=${R.ACC_main.toFixed(1)}`,
@@ -531,11 +482,11 @@
       `Elev=${R.elevPsi.toFixed(1)}`
     ].filter(Boolean).join(' • ');
     document.getElementById('breakdown').textContent = parts;
-
     document.getElementById('equation').textContent =
       `PDP = max(Left:${hasWye?Math.round(R.PDP_left):'—'}, Right:${Math.round(R.PDP_right)}) + Main FL(${R.FL_main.toFixed(1)}) + Main Acc(${R.ACC_main.toFixed(1)})`;
   }
 
+  // ===== Master render =====
   function render(autoScroll=false){
     refreshHoseDrawer();
     renderDiagram();
@@ -550,3 +501,4 @@
 </script>
 </body>
 </html>
+
