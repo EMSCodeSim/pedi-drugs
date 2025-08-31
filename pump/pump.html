@@ -7,7 +7,7 @@
 <style>
   :root{
     --bg:#0b0f14; --panel:#0f1624; --ink:#eaf2ff; --muted:#9fb0c8;
-    --edge:rgba(255,255,255,.14); --accent:#49a3ff;
+    --edge:rgba(255,255,255,.14);
     --hose5:#ecd464; --hose25:#f2994a; --hose175:#ff6b6b;
   }
   *{box-sizing:border-box}
@@ -19,7 +19,7 @@
   .sub{font-size:11px;color:#9fb0c8}
 
   .wrapper{border-top:1px solid var(--edge);border-bottom:1px solid var(--edge)}
-  .scroll{height:65vh;overflow:auto;overscroll-behavior:contain;background:linear-gradient(180deg,#0b0f14,#0e1726)}
+  .scroll{height:65vh;overflow:auto;background:linear-gradient(180deg,#0b0f14,#0e1726)}
   .stage{position:relative;width:100%;min-height:520px}
   #engine{display:block;width:100%;height:auto;position:absolute;bottom:0;left:0}
   #overlay{position:absolute;inset:0;display:block;width:100%;height:100%}
@@ -29,8 +29,9 @@
   .side{position:fixed;left:8px;top:72px;z-index:4;display:flex;flex-direction:column;gap:8px}
   .fab{width:44px;height:44px;border-radius:12px;border:1px solid var(--edge);background:#0b1320;color:#eaf2ff;font-size:12px;display:flex;align-items:center;justify-content:center;cursor:pointer;box-shadow:0 4px 12px rgba(0,0,0,.25)}
   .fab:active{transform:translateY(1px)}
-  .drawer{position:fixed;left:60px;top:72px;z-index:5;background:#0b1320;border:1px solid var(--edge);border-radius:12px;box-shadow:0 8px 20px rgba(0,0,0,.35);width:min(78vw,340px);max-width:340px;display:none}
+  .drawer{position:fixed;left:60px;top:72px;z-index:5;background:#0b1320;border:1px solid var(--edge);border-radius:12px;box-shadow:0 8px 20px rgba(0,0,0,.35);width:min(78vw,360px);max-width:360px;display:none}
   .drawer.open{display:block}
+  .drawer h3{margin:10px 12px 6px;font-size:13px;color:#cfe4ff}
   .row{display:flex;flex-wrap:wrap;gap:8px;padding:8px 10px}
   .row button{background:#12203a;border:1px solid var(--edge);color:#eaf2ff;border-radius:10px;padding:8px 10px;font-size:13px;cursor:pointer}
 
@@ -46,9 +47,9 @@
   .note{font-size:12px;color:#9fb0c8}
   .list{display:flex;flex-direction:column;gap:8px}
   .item{display:flex;justify-content:space-between;gap:10px;align-items:center;padding:10px;border:1px solid var(--edge);border-radius:12px;background:#0c1320}
-  .stats{display:flex;gap:10px;align-items:center}
   .actions{display:flex;gap:6px;align-items:center}
   .actions select,.actions button{background:#0b1320;color:#eaf2ff;border:1px solid var(--edge);border-radius:8px;padding:6px 8px;font-size:13px}
+  .col2{display:grid;grid-template-columns:1fr 1fr;gap:8px}
 </style>
 </head>
 <body>
@@ -56,7 +57,7 @@
 
   <header>
     <h1>Pump Pressure — Visual Builder</h1>
-    <div class="sub">Left tools • Hose stack touches the truck</div>
+    <div class="sub">Left tools • Wye supports Left & Right lines</div>
   </header>
 
   <div class="side">
@@ -68,12 +69,24 @@
   <!-- Hose drawer -->
   <div class="drawer" id="drawerHose" role="dialog" aria-label="Hose options">
     <h3>Hose segments</h3>
-    <div class="row">
-      <button data-hose='{"type":"hose","size":"5","lengthFt":100}'>5″ 100′</button>
-      <button data-hose='{"type":"hose","size":"2.5","lengthFt":50}'>2½″ 50′</button>
-      <button data-hose='{"type":"hose","size":"1.75","lengthFt":100}'>1¾″ 100′</button>
-      <button data-hose='{"type":"hose","size":"1.75","lengthFt":50}'>1¾″ 50′</button>
-      <button data-act="clearHose">Clear hoses</button>
+    <div class="row" id="hoseButtonsMain">
+      <button data-hose='{"size":"5","lengthFt":100}'>5″ 100′</button>
+      <button data-hose='{"size":"2.5","lengthFt":50}'>2½″ 50′</button>
+      <button data-hose='{"size":"1.75","lengthFt":100}'>1¾″ 100′</button>
+      <button data-hose='{"size":"1.75","lengthFt":50}'>1¾″ 50′</button>
+      <button data-act="clearHose">Clear main hoses</button>
+    </div>
+    <div class="row" id="hoseButtonsSplit" style="display:none;border-top:1px solid var(--edge);margin-top:6px;padding-top:12px">
+      <div style="width:100%;color:#cfe4ff;font-size:12px;margin-bottom:2px">After Wye:</div>
+      <button data-side="L" data-hose='{"size":"5","lengthFt":100}'>Left 5″ 100′</button>
+      <button data-side="L" data-hose='{"size":"2.5","lengthFt":50}'>Left 2½″ 50′</button>
+      <button data-side="L" data-hose='{"size":"1.75","lengthFt":100}'>Left 1¾″ 100′</button>
+      <button data-side="L" data-hose='{"size":"1.75","lengthFt":50}'>Left 1¾″ 50′</button>
+      <button data-side="R" data-hose='{"size":"5","lengthFt":100}'>Right 5″ 100′</button>
+      <button data-side="R" data-hose='{"size":"2.5","lengthFt":50}'>Right 2½″ 50′</button>
+      <button data-side="R" data-hose='{"size":"1.75","lengthFt":100}'>Right 1¾″ 100′</button>
+      <button data-side="R" data-hose='{"size":"1.75","lengthFt":50}'>Right 1¾″ 50′</button>
+      <button data-act="clearBranches">Clear left/right</button>
     </div>
   </div>
 
@@ -81,19 +94,25 @@
   <div class="drawer" id="drawerAcc" role="dialog" aria-label="Accessory options">
     <h3>Accessories</h3>
     <div class="row">
-      <button data-acc='{"type":"acc","name":"Wye/Siamese","loss":10}'>Wye/Siamese (+10)</button>
-      <button data-acc='{"type":"acc","name":"In-line eductor","loss":25}'>In-line eductor (+25)</button>
-      <button data-acc='{"type":"acc","name":"Master monitor","loss":25}'>Master monitor (+25)</button>
-      <button data-acc='{"type":"acc","name":"Standpipe/PRV","loss":25}'>Standpipe/PRV (+25)</button>
+      <button data-acc='{"name":"In-line eductor","loss":25}'>In-line eductor (+25)</button>
+      <button data-acc='{"name":"Master monitor","loss":25}'>Master monitor (+25)</button>
+      <button data-acc='{"name":"Standpipe/PRV","loss":25}'>Standpipe/PRV (+25)</button>
       <button data-act="accCustom">Custom…</button>
       <button data-act="clearAcc">Clear accessories</button>
+    </div>
+    <h3 style="margin-top:4px">Split</h3>
+    <div class="row">
+      <button id="addWyeBtn">Wye/Siamese (split) +10 psi</button>
+      <button id="removeWyeBtn">Remove Wye</button>
     </div>
   </div>
 
   <!-- Nozzle drawer -->
   <div class="drawer" id="drawerNoz" role="dialog" aria-label="Nozzle options">
-    <h3>Nozzles</h3>
-    <div class="row" id="nozRow"></div>
+    <h3>Left Nozzle</h3>
+    <div class="row" id="nozRowLeft"></div>
+    <h3>Right / Single Nozzle</h3>
+    <div class="row" id="nozRowRight"></div>
   </div>
 
   <!-- Stage -->
@@ -129,7 +148,7 @@
     </div>
 
     <div class="card">
-      <div class="eq" id="equation">PDP = NP + ΣFL(hose @ GPM) + ΣAccessory ± Elev</div>
+      <div class="eq" id="equation">PDP = max(Left, Right) + Main FL + Main Acc ± Elev</div>
       <div class="kpis" style="margin-top:8px">
         <div class="kpi"><div>Flow</div><b id="GPM">— gpm</b></div>
         <div class="kpi"><div>PDP</div><b id="PDP">— psi</b></div>
@@ -144,9 +163,10 @@
   // ===== CONFIG =====
   const STAGE_W = 390;
   const PX_PER_50FT = 80;
-  const HOSE_X_RATIO = 0.49;  // your anchor
-  const ROOF_RATIO   = 0.71;  // your anchor
+  const HOSE_X_RATIO = 0.49;   // your anchor
+  const ROOF_RATIO   = 0.71;   // your anchor
   const HOSE_TOUCH_OFFSET = -6;
+  const BRANCH_OFFSET = 34;    // px offset of left/right stacks from main
 
   const HOSE_WIDTH = { "5": 12, "2.5": 9, "1.75": 6 };
   const HOSE_COLOR = { "5": "var(--hose5)", "2.5": "var(--hose25)", "1.75": "var(--hose175)" };
@@ -167,8 +187,18 @@
   ];
 
   // ===== STATE =====
-  let items = []; // {type:'hose', size, lengthFt} | {type:'acc', name, loss}
-  let nozzle = NOZZLES[3];
+  // Main line up to the Wye (hoses + accessories that are BEFORE split)
+  let itemsMain = [];          // {type:'hose', size, lengthFt} | {type:'acc', name, loss}
+  // Split
+  let hasWye = false;
+  let wyeLoss = 10;            // default
+  // Branches after the Wye
+  let itemsLeft = [];          // hoses only for now
+  let itemsRight = [];         // hoses only for now
+  // Nozzles
+  let nozzleLeft = NOZZLES[3];   // Fog 150
+  let nozzleRight = NOZZLES[3];  // Fog 150
+  // Env
   let elevFt = 0, elevPsiPerFt = 0.434;
 
   // ===== ELEMENTS =====
@@ -188,7 +218,6 @@
   const drawerHose = document.getElementById('drawerHose');
   const drawerAcc  = document.getElementById('drawerAcc');
   const drawerNoz  = document.getElementById('drawerNoz');
-
   function closeDrawers(){ drawerHose.classList.remove('open'); drawerAcc.classList.remove('open'); drawerNoz.classList.remove('open'); }
   document.getElementById('openHose').onclick = (e)=>{ e.stopPropagation(); toggleDrawer(drawerHose); };
   document.getElementById('openAcc').onclick  = (e)=>{ e.stopPropagation(); toggleDrawer(drawerAcc); };
@@ -196,321 +225,319 @@
   document.addEventListener('click', (e)=>{ if(!e.target.closest('.drawer') && !e.target.closest('.fab')) closeDrawers(); });
   function toggleDrawer(el){ const was = el.classList.contains('open'); closeDrawers(); if(!was) el.classList.add('open'); }
 
-  drawerHose.querySelectorAll('button[data-hose]').forEach(btn=>{
-    btn.onclick = ()=>{ items.push(JSON.parse(btn.dataset.hose)); closeDrawers(); render(true); };
+  // Hose drawer behavior
+  const hoseButtonsMain = document.getElementById('hoseButtonsMain');
+  const hoseButtonsSplit = document.getElementById('hoseButtonsSplit');
+  function refreshHoseDrawer(){
+    hoseButtonsSplit.style.display = hasWye ? 'flex' : 'none';
+  }
+  hoseButtonsMain.querySelectorAll('button[data-hose]').forEach(btn=>{
+    btn.onclick = ()=>{ itemsMain.push({type:'hose', ...JSON.parse(btn.dataset.hose)}); closeDrawers(); render(true); };
   });
-  drawerHose.querySelector('[data-act="clearHose"]').onclick = ()=>{ items = items.filter(x=>x.type!=='hose'); closeDrawers(); render(true); };
+  hoseButtonsMain.querySelector('[data-act="clearHose"]').onclick = ()=>{ itemsMain = itemsMain.filter(x=>x.type!=='hose'); closeDrawers(); render(true); };
+  hoseButtonsSplit.querySelectorAll('button[data-hose]').forEach(btn=>{
+    btn.onclick = ()=>{
+      const hose = {type:'hose', ...JSON.parse(btn.dataset.hose)};
+      (btn.dataset.side==='L' ? itemsLeft : itemsRight).push(hose);
+      closeDrawers(); render(true);
+    };
+  });
+  hoseButtonsSplit.querySelector('[data-act="clearBranches"]').onclick = ()=>{ itemsLeft=[]; itemsRight=[]; closeDrawers(); render(true); };
 
+  // Accessory drawer
   drawerAcc.querySelectorAll('button[data-acc]').forEach(btn=>{
-    btn.onclick = ()=>{ const d=JSON.parse(btn.dataset.acc); items.push({type:'acc',name:d.name,loss:+d.loss||0}); closeDrawers(); render(true); };
+    btn.onclick = ()=>{ const d=JSON.parse(btn.dataset.acc); itemsMain.push({type:'acc',name:d.name,loss:+d.loss||0}); closeDrawers(); render(true); };
   });
   drawerAcc.querySelector('[data-act="accCustom"]').onclick = ()=>{
     const name = prompt('Accessory name?','Appliance'); if(name===null) return;
     const loss = parseFloat(prompt('Pressure loss (psi)?','10')||'0');
-    items.push({type:'acc', name:name||'Custom', loss:isNaN(loss)?0:loss});
+    itemsMain.push({type:'acc', name:name||'Custom', loss:isNaN(loss)?0:loss});
     closeDrawers(); render(true);
   };
-  drawerAcc.querySelector('[data-act="clearAcc"]').onclick = ()=>{ items = items.filter(x=>x.type!=='acc'); closeDrawers(); render(true); };
+  drawerAcc.querySelector('[data-act="clearAcc"]').onclick = ()=>{ itemsMain = itemsMain.filter(x=>x.type!=='acc'); closeDrawers(); render(true); };
+  document.getElementById('addWyeBtn').onclick = ()=>{
+    hasWye = true; wyeLoss = 10; refreshHoseDrawer(); closeDrawers(); render(true);
+  };
+  document.getElementById('removeWyeBtn').onclick = ()=>{
+    hasWye = false; itemsLeft=[]; itemsRight=[]; refreshHoseDrawer(); closeDrawers(); render(true);
+  };
 
-  const nozRow = document.getElementById('nozRow');
-  NOZZLES.forEach(n=>{ const b=document.createElement('button'); b.textContent=`${n.name} (${n.gpm} gpm, NP ${n.NP})`; b.onclick=()=>{ nozzle=n; closeDrawers(); render(false); }; nozRow.appendChild(b); });
+  // Nozzle drawer
+  const nozRowLeft = document.getElementById('nozRowLeft');
+  const nozRowRight = document.getElementById('nozRowRight');
+  NOZZLES.forEach(n=>{
+    const bL=document.createElement('button'); bL.textContent=`${n.name} (${n.gpm}@NP${n.NP})`; bL.onclick=()=>{ nozzleLeft=n; closeDrawers(); render(false); }; nozRowLeft.appendChild(bL);
+    const bR=document.createElement('button'); bR.textContent=`${n.name} (${n.gpm}@NP${n.NP})`; bR.onclick=()=>{ nozzleRight=n; closeDrawers(); render(false); }; nozRowRight.appendChild(bR);
+  });
+
+  // Env inputs
+  document.getElementById('elevFt').oninput = e=>{ elevFt = parseFloat(e.target.value||0); render(); };
+  document.getElementById('elevPsi').oninput = e=>{ elevPsiPerFt = parseFloat(e.target.value||0); render(); };
 
   // ===== MATH =====
   function fl(C, Q, L){ return (C||0) * Math.pow(Q/100, 2) * (L/100); }
-  function calc(){
-    const Q = nozzle.gpm || 0, NP = nozzle.NP || 0;
-    let totalFL=0, totalAcc=0; const hoses=[], accs=[];
-    items.forEach((it, idx)=>{
-      if(it.type==='hose'){
-        const C = COEFF[it.size]||0, segFL=fl(C,Q,it.lengthFt);
-        totalFL += segFL; hoses.push({i:idx+1, ...it, C, segFL});
-      } else { totalAcc += +it.loss||0; accs.push({i:idx+1, ...it}); }
-    });
-    const elevPsi = elevFt * elevPsiPerFt;
-    return {Q, NP, totalFL, totalAcc, elevPsi, PDP: NP + totalFL + totalAcc + elevPsi, hoses, accs};
+
+  function flForStack(hoses, Q){
+    const Cn = COEFF;
+    return hoses.reduce((sum,h)=> sum + fl(Cn[h.size]||0, Q, h.lengthFt||0), 0);
   }
 
-  // ===== GEO HELPERS =====
+  function calc(){
+    const QL = nozzleLeft.gpm || 0;
+    const QR = nozzleRight.gpm || 0;
+    const Qtotal = hasWye ? (QL + QR) : QR; // if no Wye, use right as single line
+
+    // Main (before Wye): FL uses total GPM
+    const FL_main = flForStack(itemsMain.filter(x=>x.type==='hose'), Qtotal);
+    const ACC_main = itemsMain.filter(x=>x.type==='acc').reduce((s,a)=>s+(+a.loss||0),0) + (hasWye ? wyeLoss : 0);
+
+    // Branches: each uses its own GPM + NP
+    const FL_left  = hasWye ? flForStack(itemsLeft, QL) : 0;
+    const FL_right = flForStack(hasWye ? itemsRight : [], QR);
+
+    const NP_left  = hasWye ? (nozzleLeft.NP||0)  : 0;
+    const NP_right = nozzleRight.NP||0;
+
+    const elevPsi = elevFt * elevPsiPerFt;
+
+    const PDP_left  = hasWye ? (NP_left  + FL_left  + elevPsi) : -Infinity;
+    const PDP_right = NP_right + FL_right + elevPsi;
+
+    const branchMax = hasWye ? Math.max(PDP_left, PDP_right) : PDP_right;
+    const PDP_total = branchMax + FL_main + ACC_main;
+
+    return {
+      QL, QR, Qtotal, elevPsi,
+      FL_main, ACC_main, FL_left, FL_right,
+      NP_left, NP_right, PDP_left, PDP_right, PDP_total
+    };
+  }
+
+  // ===== Helpers =====
   function stageWidthPx(){ return stage.clientWidth || window.innerWidth || 390; }
   function hoseXpx(){ return Math.round(stageWidthPx() * HOSE_X_RATIO); }
   function toVBX(px){ return px / stageWidthPx() * STAGE_W; }
-  function toVBY(px){ return px; } // y is 1:1 after we set viewBox height to stageH
+  function toVBY(px){ return px; }
 
-  // ===== DRAW =====
+  // ===== Draw =====
   function renderDiagram(){
-    // image aspect height
     const nW = engineImg.naturalWidth || 0;
     const nH = engineImg.naturalHeight || 0;
     const eH = (nW && nH) ? (stageWidthPx() * (nH / nW)) : (engineImg.clientHeight || 180);
 
-    // stack sizing
-    const hoseFeet = items.filter(x=>x.type==='hose').reduce((s,h)=>s+h.lengthFt,0);
-    const hosePx   = (hoseFeet/50) * PX_PER_50FT;
-    const accPx    = items.filter(x=>x.type==='acc').length * 22;
-    const topPad   = 120;
+    const hoseFeetMain = itemsMain.filter(x=>x.type==='hose').reduce((s,h)=>s+h.lengthFt,0);
+    const hoseFeetLeft = itemsLeft.reduce((s,h)=>s+h.lengthFt,0);
+    const hoseFeetRight= itemsRight.reduce((s,h)=>s+h.lengthFt,0);
+    const hosePx = ((hoseFeetMain+hoseFeetLeft+hoseFeetRight)/50)*PX_PER_50FT;
+    const topPad = 140;
 
-    // stage height and viewBox
-    const stageH = Math.max(520, eH + hosePx + accPx + topPad);
+    const stageH = Math.max(520, eH + hosePx + topPad);
     stage.style.height = stageH + 'px';
     overlay.setAttribute('viewBox', `0 0 ${STAGE_W} ${Math.round(stageH)}`);
 
-    // roof position inside image (png has top padding)
     const imageTopPx = stageH - eH;
     const roofY = imageTopPx + (eH * ROOF_RATIO);
+    const xMain = hoseXpx();
+    const xLeft = xMain - BRANCH_OFFSET;
+    const xRight= xMain + BRANCH_OFFSET;
 
-    // start hose
-    let currentTopPx = roofY + HOSE_TOUCH_OFFSET;
-    const xPx = hoseXpx();
+    let y = roofY + HOSE_TOUCH_OFFSET;
 
     // clear
-    hoseGroup.innerHTML = '';
-    accGroup.innerHTML = '';
-    nozzleGroup.innerHTML = '';
-    portGroup.innerHTML = '';
-    labelGroup.innerHTML = '';
+    hoseGroup.innerHTML=''; accGroup.innerHTML=''; nozzleGroup.innerHTML=''; portGroup.innerHTML=''; labelGroup.innerHTML='';
 
     // port ring
-    const port = document.createElementNS('http://www.w3.org/2000/svg','circle');
-    port.setAttribute('cx', toVBX(xPx));
-    port.setAttribute('cy', toVBY(roofY));
-    port.setAttribute('r', toVBX(6));
-    port.setAttribute('fill', '#2b3142'); port.setAttribute('stroke','#111622'); port.setAttribute('stroke-width', '1.5');
-    portGroup.appendChild(port);
+    const port=document.createElementNS('http://www.w3.org/2000/svg','circle');
+    port.setAttribute('cx', toVBX(xMain)); port.setAttribute('cy', toVBY(roofY)); port.setAttribute('r', toVBX(6));
+    port.setAttribute('fill','#2b3142'); port.setAttribute('stroke','#111622'); port.setAttribute('stroke-width','1.5'); portGroup.appendChild(port);
 
-    if(items.length===0){ hint.textContent='Tap Hose and add a segment…'; return; }
-    hint.textContent='';
-
-    // --- Grouping for consecutive hoses of the same size (for on-canvas label) ---
-    let groupSize = null;
-    let groupTotalFt = 0;
-    let groupBottomY = currentTopPx; // y before first seg of group
-
-    const commitGroupLabel = ()=>{
-      if(!groupSize || groupTotalFt<=0) return;
-      const groupTopY = currentTopPx;                    // y after last seg drawn
-      const midY = groupTopY + (groupBottomY - groupTopY)/2;
-
-      // label bubble
-      const padX=6, padY=4;
-      const text = document.createElementNS('http://www.w3.org/2000/svg','text');
-      const label = (groupSize==='2.5'?'2½':groupSize==='1.75'?'1¾':groupSize) + '″ • ' + groupTotalFt + '′';
-      text.setAttribute('x', toVBX(xPx + 16));
-      text.setAttribute('y', toVBY(midY + 3));
-      text.setAttribute('fill', '#cfe4ff');
-      text.setAttribute('font-size', '10');
-      text.textContent = label;
-      labelGroup.appendChild(text);
-
-      const bboxWidth = Math.max(60, label.length*6.2); // quick width estimate
-      const rect = document.createElementNS('http://www.w3.org/2000/svg','rect');
-      rect.setAttribute('x', toVBX(xPx + 16) - padX);
-      rect.setAttribute('y', toVBY(midY - 10) - padY);
-      rect.setAttribute('width', bboxWidth + padX*2);
-      rect.setAttribute('height', 16 + padY*2);
-      rect.setAttribute('rx', 6); rect.setAttribute('ry', 6);
-      rect.setAttribute('fill', '#172134');
-      rect.setAttribute('stroke', 'rgba(255,255,255,.15)');
-      // send rect behind text (insert before)
-      labelGroup.insertBefore(rect, text);
-
-      // reset
-      groupSize = null;
-      groupTotalFt = 0;
-      groupBottomY = currentTopPx;
-    };
-
-    // draw upward
-    for(let i=0;i<items.length;i++){
-      const it = items[i];
-
+    // MAIN UP TO WYE
+    for(const it of itemsMain){
       if(it.type==='hose'){
-        // start or continue group
-        if(groupSize===null){ groupSize = it.size; groupTotalFt = 0; groupBottomY = currentTopPx; }
-        if(it.size!==groupSize){ commitGroupLabel(); groupSize = it.size; groupTotalFt = 0; groupBottomY = currentTopPx; }
-
-        const wPx = HOSE_WIDTH[it.size]||6;
-        const hPx = (it.lengthFt===50 ? PX_PER_50FT : 2*PX_PER_50FT);
-        const yPx = currentTopPx - hPx;
-
-        const r = document.createElementNS('http://www.w3.org/2000/svg','rect');
-        r.setAttribute('x', toVBX(xPx - wPx/2));
-        r.setAttribute('y', toVBY(yPx));
-        r.setAttribute('width', toVBX(wPx));
-        r.setAttribute('height', toVBY(hPx));
-        r.setAttribute('fill', HOSE_COLOR[it.size] || 'goldenrod');
-        r.setAttribute('stroke', 'rgba(255,255,255,.10)');
-        r.setAttribute('stroke-width', '1');
-        hoseGroup.appendChild(r);
-
-        // small coupling line at top of segment
-        const line = document.createElementNS('http://www.w3.org/2000/svg','line');
-        line.setAttribute('x1', toVBX(xPx - wPx/2));
-        line.setAttribute('x2', toVBX(xPx + wPx/2));
-        line.setAttribute('y1', toVBY(yPx));
-        line.setAttribute('y2', toVBY(yPx));
-        line.setAttribute('stroke', '#2b3242');
-        line.setAttribute('stroke-width', '2');
-        hoseGroup.appendChild(line);
-
-        currentTopPx -= hPx;
-        groupTotalFt += it.lengthFt;
-
-        // if next item ends group, place label
-        const next = items[i+1];
-        if(!next || next.type!=='hose' || next.size!==groupSize){
-          commitGroupLabel();
-        }
-
-      } else if(it.type==='acc'){
-        // accessory box
-        const boxYpx = currentTopPx - 18;
-
-        const bg = document.createElementNS('http://www.w3.org/2000/svg','rect');
-        bg.setAttribute('x', toVBX(xPx + 10));
-        bg.setAttribute('y', toVBY(boxYpx));
-        bg.setAttribute('width', 120);
-        bg.setAttribute('height', 18);
-        bg.setAttribute('rx', 6); bg.setAttribute('ry', 6);
-        bg.setAttribute('fill', '#172134'); bg.setAttribute('stroke','rgba(255,255,255,.15)');
-        accGroup.appendChild(bg);
-
-        const txt = document.createElementNS('http://www.w3.org/2000/svg','text');
-        txt.setAttribute('x', toVBX(xPx + 16));
-        txt.setAttribute('y', toVBY(boxYpx + 12));
-        txt.setAttribute('fill', '#cfe4ff'); txt.setAttribute('font-size', '10');
-        txt.textContent = `${it.name} (+${it.loss} psi)`;
-        accGroup.appendChild(txt);
-
-        currentTopPx -= 22;
-        // new group will start above this accessory
-        groupSize = null; groupTotalFt = 0; groupBottomY = currentTopPx;
+        const hPx = (it.lengthFt===50?PX_PER_50FT:2*PX_PER_50FT), wPx=HOSE_WIDTH[it.size]||6;
+        const rect=document.createElementNS('http://www.w3.org/2000/svg','rect');
+        rect.setAttribute('x', toVBX(xMain-wPx/2)); rect.setAttribute('y', toVBY(y-hPx));
+        rect.setAttribute('width', toVBX(wPx)); rect.setAttribute('height', toVBY(hPx));
+        rect.setAttribute('fill', HOSE_COLOR[it.size]); rect.setAttribute('stroke','rgba(255,255,255,.1)'); rect.setAttribute('stroke-width','1'); hoseGroup.appendChild(rect);
+        y -= hPx;
+      } else { // accessory (main)
+        const bg=document.createElementNS('http://www.w3.org/2000/svg','rect');
+        bg.setAttribute('x', toVBX(xMain+10)); bg.setAttribute('y', toVBY(y-18)); bg.setAttribute('width', 120); bg.setAttribute('height', 18);
+        bg.setAttribute('rx',6); bg.setAttribute('fill','#172134'); bg.setAttribute('stroke','rgba(255,255,255,.15)'); accGroup.appendChild(bg);
+        const t=document.createElementNS('http://www.w3.org/2000/svg','text');
+        t.setAttribute('x', toVBX(xMain+16)); t.setAttribute('y', toVBY(y-6)); t.setAttribute('fill','#cfe4ff'); t.setAttribute('font-size','10');
+        t.textContent=`${it.name} (+${it.loss} psi)`; accGroup.appendChild(t);
+        y -= 22;
       }
     }
 
-    // nozzle glyph on top (if any hose exists)
-    const lastHose = items.filter(i=>i.type==='hose').slice(-1)[0];
-    if(lastHose){
-      const wTopPx = HOSE_WIDTH[lastHose.size] || 6;
-      const body = document.createElementNS('http://www.w3.org/200/svg','rect'); // fallback namespace accepted by Safari/Chromium
-      body.setAttribute('x', toVBX(xPx - wTopPx/2 - 4));
-      body.setAttribute('y', toVBY(currentTopPx - 22));
-      body.setAttribute('width', toVBX(wTopPx + 8));
-      body.setAttribute('height', toVBY(18));
-      body.setAttribute('fill', '#394357'); nozzleGroup.appendChild(body);
+    // WYE SYMBOL + BRANCHES
+    if(hasWye){
+      // wye box
+      const wy=document.createElementNS('http://www.w3.org/2000/svg','path');
+      const d=`M ${toVBX(xMain)} ${toVBY(y-8)} L ${toVBX(xLeft)} ${toVBY(y-28)} M ${toVBX(xMain)} ${toVBY(y-8)} L ${toVBX(xRight)} ${toVBY(y-28)}`;
+      wy.setAttribute('d', d); wy.setAttribute('stroke','#8aa0c4'); wy.setAttribute('stroke-width','3'); wy.setAttribute('fill','none'); hoseGroup.appendChild(wy);
+      const wlabel=document.createElementNS('http://www.w3.org/2000/svg','text');
+      wlabel.setAttribute('x', toVBX(xMain+16)); wlabel.setAttribute('y', toVBY(y-14)); wlabel.setAttribute('fill','#cfe4ff'); wlabel.setAttribute('font-size','10');
+      wlabel.textContent=`Wye (+${wyeLoss} psi)`; accGroup.appendChild(wlabel);
 
-      const tip = document.createElementNS('http://www.w3.org/2000/svg','rect');
-      tip.setAttribute('x', toVBX(xPx - (wTopPx*0.4)));
-      tip.setAttribute('y', toVBY(currentTopPx - 30));
-      tip.setAttribute('width', toVBX(wTopPx*0.8));
-      tip.setAttribute('height', toVBY(8));
-      tip.setAttribute('fill', '#9aa7bd'); nozzleGroup.appendChild(tip);
+      const yStart = y-30;
+      drawBranch(itemsLeft, xLeft, yStart, 'L');
+      drawBranch(itemsRight, xRight, yStart, 'R');
+    } else {
+      // single branch uses "right" nozzle for simplicity
+      drawBranch([], xMain, y, 'R'); // only nozzle
     }
 
-    const totalFeet = items.filter(i=>i.type==='hose').reduce((s,h)=>s+h.lengthFt,0);
-    hint.textContent = `Total hose: ${totalFeet}′ • Items: ${items.length}`;
+    // helper to draw hose stack + nozzle on a branch
+    function drawBranch(list, x, yStart, side){
+      let yB = yStart;
+      for(const it of list){
+        const hPx = (it.lengthFt===50?PX_PER_50FT:2*PX_PER_50FT), wPx=HOSE_WIDTH[it.size]||6;
+        const rect=document.createElementNS('http://www.w3.org/2000/svg','rect');
+        rect.setAttribute('x', toVBX(x-wPx/2)); rect.setAttribute('y', toVBY(yB-hPx));
+        rect.setAttribute('width', toVBX(wPx)); rect.setAttribute('height', toVBY(hPx));
+        rect.setAttribute('fill', HOSE_COLOR[it.size]); rect.setAttribute('stroke','rgba(255,255,255,.1)'); rect.setAttribute('stroke-width','1'); hoseGroup.appendChild(rect);
+        yB -= hPx;
+      }
+      const last = list.slice(-1)[0];
+      const wTopPx = last ? (HOSE_WIDTH[last.size]||6) : 8;
+      const body=document.createElementNS('http://www.w3.org/2000/svg','rect');
+      body.setAttribute('x', toVBX(x - wTopPx/2 - 4)); body.setAttribute('y', toVBY(yB - 22));
+      body.setAttribute('width', toVBX(wTopPx + 8)); body.setAttribute('height', toVBY(18));
+      body.setAttribute('fill','#394357'); nozzleGroup.appendChild(body);
+      const tip=document.createElementNS('http://www.w3.org/2000/svg','rect');
+      tip.setAttribute('x', toVBX(x - (wTopPx*0.4))); tip.setAttribute('y', toVBY(yB - 30));
+      tip.setAttribute('width', toVBX(wTopPx*0.8)); tip.setAttribute('height', toVBY(8));
+      tip.setAttribute('fill','#9aa7bd'); nozzleGroup.appendChild(tip);
+
+      // size/length label per contiguous size on this branch
+      labelConsecutive(list, x, yStart, yB);
+    }
+
+    function labelConsecutive(list, x, yStart, yEnd){
+      // We approximate label positions using segment heights (50' vs 100')
+      let yCursor = yStart;
+      let cur = null, total=0, startY=yCursor;
+      const addLabel = ()=>{
+        if(!cur || total<=0) return;
+        const mid = yCursor + (startY - yCursor)/2;
+        const pretty = (cur==='2.5'?'2½':cur==='1.75'?'1¾':cur) + '″ • ' + total + '′';
+        const tx=document.createElementNS('http://www.w3.org/2000/svg','text');
+        tx.setAttribute('x', toVBX(x + 16)); tx.setAttribute('y', toVBY(mid+3));
+        tx.setAttribute('fill','#cfe4ff'); tx.setAttribute('font-size','10'); tx.textContent=pretty;
+        labelGroup.appendChild(tx);
+        const w = Math.max(60, pretty.length*6.2), pad=6;
+        const bx=document.createElementNS('http://www.w3.org/2000/svg','rect');
+        bx.setAttribute('x', toVBX(x + 16)-pad); bx.setAttribute('y', toVBY(mid-10)-pad);
+        bx.setAttribute('width', w+pad*2); bx.setAttribute('height', 16+pad*2);
+        bx.setAttribute('rx',6); bx.setAttribute('fill','#172134'); bx.setAttribute('stroke','rgba(255,255,255,.15)');
+        labelGroup.insertBefore(bx, tx);
+      };
+      for(const it of list){
+        const hPx=(it.lengthFt===50?PX_PER_50FT:2*PX_PER_50FT);
+        if(cur===null){ cur=it.size; total=0; startY=yCursor; }
+        if(it.size!==cur){ addLabel(); cur=it.size; total=0; startY=yCursor; }
+        yCursor -= hPx; total += it.lengthFt;
+      }
+      addLabel();
+    }
+
+    // footer hint
+    const totalFeet = hoseFeetMain+hoseFeetLeft+hoseFeetRight;
+    hint.textContent = `Total hose: ${totalFeet}′  •  ${hasWye?'Split: L/R':''}`;
   }
 
-  // ===== Builder (shows FL & GPM per hose, selectable size/length) =====
-  function row(it, idx){
-    const div = document.createElement('div');
-    div.className = 'item';
-
-    if(it.type==='hose'){
-      const Q = nozzle.gpm || 0;
-      const C = COEFF[it.size] || 0;
-      const segFL = fl(C, Q, it.lengthFt);
-
-      div.innerHTML = `
-        <div>
-          <div>🧯 Hose <small>#${idx+1}</small></div>
-          <div class="note">${it.size}″ • ${it.lengthFt}′</div>
-        </div>
-        <div class="actions">
-          <div class="stats">
-            <span class="note">FL: ${segFL.toFixed(1)} psi</span>
-            <span class="note">GPM: ${Q}</span>
-          </div>
-          <select data-k="size">
-            <option value="5" ${it.size==='5'?'selected':''}>5″</option>
-            <option value="2.5" ${it.size==='2.5'?'selected':''}>2½″</option>
-            <option value="1.75" ${it.size==='1.75'?'selected':''}>1¾″</option>
-          </select>
-          <select data-k="lengthFt">
-            <option value="50" ${it.lengthFt===50?'selected':''}>50′</option>
-            <option value="100" ${it.lengthFt===100?'selected':''}>100′</option>
-          </select>
-          <button data-act="del">✕</button>
-        </div>`;
-    } else {
-      div.innerHTML = `
-        <div>
-          <div>⚙️ Accessory <small>#${idx+1}</small></div>
-          <div class="note">${it.name} • +${it.loss} psi</div>
-        </div>
-        <div class="actions">
-          <button data-act="loss">Loss</button>
-          <button data-act="rename">Name</button>
-          <button data-act="del">✕</button>
-        </div>`;
-    }
-
-    // handle selects
+  // ===== Builder list =====
+  function builderRowHose(h, idx, where){
+    const div=document.createElement('div'); div.className='item';
+    const Q = (where==='Left'? (nozzleLeft.gpm||0) : (nozzleRight.gpm||0));
+    const segFL = fl(COEFF[h.size]||0, Q, h.lengthFt);
+    div.innerHTML = `
+      <div><div>🧯 ${where} Hose <small>#${idx+1}</small></div>
+      <div class="note">${h.size}″ • ${h.lengthFt}′</div></div>
+      <div class="actions">
+        <span class="note">FL ${segFL.toFixed(1)} psi</span>
+        <span class="note">GPM ${Q}</span>
+        <select data-k="size">
+          <option value="5" ${h.size==='5'?'selected':''}>5″</option>
+          <option value="2.5" ${h.size==='2.5'?'selected':''}>2½″</option>
+          <option value="1.75" ${h.size==='1.75'?'selected':''}>1¾″</option>
+        </select>
+        <select data-k="lengthFt">
+          <option value="50" ${h.lengthFt===50?'selected':''}>50′</option>
+          <option value="100" ${h.lengthFt===100?'selected':''}>100′</option>
+        </select>
+        <button data-act="del">✕</button>
+      </div>`;
     div.querySelectorAll('select').forEach(s=>{
-      s.onchange = ()=>{
-        const k = s.dataset.k;
-        if(k==='size') it.size = s.value;
-        if(k==='lengthFt') it.lengthFt = parseInt(s.value,10);
-        render();
-      };
+      s.onchange=()=>{ const k=s.dataset.k; if(k==='size') h.size=s.value; if(k==='lengthFt') h.lengthFt=parseInt(s.value,10); render(); };
     });
-    // buttons
-    div.querySelectorAll('button[data-act]').forEach(b=>{
-      b.onclick = ()=>{
-        const act=b.dataset.act;
-        if(act==='del'){ items.splice(idx,1); }
-        if(act==='loss' && it.type==='acc'){
-          const v=parseFloat(prompt('Accessory loss (psi):', String(it.loss))||String(it.loss));
-          if(!isNaN(v)) it.loss=v;
-        }
-        if(act==='rename' && it.type==='acc'){
-          const v=prompt('Accessory name:', it.name); if(v!==null) it.name=v||it.name;
-        }
-        render(true);
-      };
-    });
-
+    div.querySelector('[data-act="del"]').onclick=()=>{ const arr=(where==='Left'?itemsLeft:(where==='Right'?itemsRight:itemsMain)); arr.splice(idx,1); render(true); };
     return div;
   }
-
+  function builderRowAcc(a, idx){
+    const div=document.createElement('div'); div.className='item';
+    div.innerHTML = `<div><div>⚙️ Main Accessory <small>#${idx+1}</small></div><div class="note">${a.name} • +${a.loss} psi</div></div>
+      <div class="actions"><button data-act="loss">Loss</button><button data-act="rename">Name</button><button data-act="del">✕</button></div>`;
+    div.querySelector('[data-act="del"]').onclick=()=>{ itemsMain.splice(idx,1); render(true); };
+    div.querySelector('[data-act="loss"]').onclick=()=>{ const v=parseFloat(prompt('Accessory loss (psi):', String(a.loss))||String(a.loss)); if(!isNaN(v)) a.loss=v; render(); };
+    div.querySelector('[data-act="rename"]').onclick=()=>{ const v=prompt('Accessory name:', a.name); if(v!==null) a.name=v||a.name; render(); };
+    return div;
+  }
   function renderBuilder(){
     builderList.innerHTML='';
-    if(items.length===0){
+    if(itemsMain.length===0 && !hasWye && itemsLeft.length===0 && itemsRight.length===0){
       const e=document.createElement('div'); e.className='item';
-      e.innerHTML='<div>Use the left tools: add <b>Hose</b>, <b>Accessory</b>, then pick a <b>Nozzle</b>.</div>';
-      builderList.appendChild(e);
-    } else {
-      items.forEach((it,i)=> builderList.appendChild(row(it,i)));
+      e.innerHTML='<div>Use the left tools: add <b>Hose</b>, add <b>Accessory</b> or <b>Wye</b>, then pick <b>Nozzles</b>.</div>';
+      builderList.appendChild(e); return;
+    }
+    // Main line
+    const mainHead=document.createElement('div'); mainHead.className='item';
+    mainHead.innerHTML='<div><b>Main line (to Wye)</b></div>'; builderList.appendChild(mainHead);
+    itemsMain.forEach((it,i)=>{
+      if(it.type==='hose') builderList.appendChild(builderRowHose(it,i,'Main'));
+      else builderList.appendChild(builderRowAcc(it,i));
+    });
+
+    // Split info
+    if(hasWye){
+      const splitHead=document.createElement('div'); splitHead.className='item';
+      splitHead.innerHTML=`<div><b>Wye/Siamese</b> <span class="note">+${wyeLoss} psi • choose hoses left/right & set nozzles</span></div>`;
+      builderList.appendChild(splitHead);
+
+      const cols=document.createElement('div'); cols.className='col2';
+      const leftCol=document.createElement('div'); const rightCol=document.createElement('div');
+      leftCol.innerHTML='<div class="note">Left branch</div>';
+      rightCol.innerHTML='<div class="note">Right branch</div>';
+      itemsLeft.forEach((h,i)=> leftCol.appendChild(builderRowHose(h,i,'Left')));
+      itemsRight.forEach((h,i)=> rightCol.appendChild(builderRowHose(h,i,'Right')));
+      cols.appendChild(leftCol); cols.appendChild(rightCol); builderList.appendChild(cols);
     }
   }
 
   // ===== KPIs =====
   function calcAndRenderMath(){
-    const {Q, NP, totalFL, totalAcc, elevPsi, PDP, hoses, accs} = calc();
-    document.getElementById('GPM').textContent = `${Q} gpm`;
-    document.getElementById('PDP').textContent = `${Math.round(PDP)} psi`;
+    const R = calc();
+    const flowLabel = hasWye ? `${R.QL}+${R.QR} = ${R.Qtotal} gpm` : `${R.QR} gpm`;
+    document.getElementById('GPM').textContent = flowLabel;
+    document.getElementById('PDP').textContent = `${Math.round(R.PDP_total)} psi`;
 
-    const partsH = hoses.map(h=>`H${h.i}: ${h.size}″ ${h.lengthFt}′ → FL=${h.segFL.toFixed(1)} psi`).join(' • ');
-    const partsA = accs.length ? (' • Acc: '+accs.map(a=>`${a.name}+${a.loss}`).join(', ')) : '';
-    const elev = `Elev=${elevPsi.toFixed(1)} psi`;
-    const np = `NP=${NP} psi`;
-    const tFL = `Total FL=${totalFL.toFixed(1)} psi`;
-    const tAcc = `Accessories=${totalAcc.toFixed(1)} psi`;
-    document.getElementById('breakdown').textContent = `${np} • ${tFL} • ${tAcc} • ${elev}${partsH?(' • '+partsH):''}${partsA}`;
-    document.getElementById('equation').textContent = `PDP = NP(${NP}) + FL(${totalFL.toFixed(1)}) + ACC(${totalAcc.toFixed(1)}) ${elevPsi>=0?'+':'-'} Elev(${Math.abs(elevPsi).toFixed(1)})`;
+    const parts = [
+      `Main FL=${R.FL_main.toFixed(1)}`,
+      `Main Acc=${R.ACC_main.toFixed(1)}`,
+      hasWye?`Left PDP=${Math.round(R.PDP_left)}`:null,
+      `Right PDP=${Math.round(R.PDP_right)}`,
+      `Elev=${R.elevPsi.toFixed(1)}`
+    ].filter(Boolean).join(' • ');
+    document.getElementById('breakdown').textContent = parts;
+
+    document.getElementById('equation').textContent =
+      `PDP = max(Left:${hasWye?Math.round(R.PDP_left):'—'}, Right:${Math.round(R.PDP_right)}) + Main FL(${R.FL_main.toFixed(1)}) + Main Acc(${R.ACC_main.toFixed(1)})`;
   }
 
-  // ===== Master render =====
   function render(autoScroll=false){
+    refreshHoseDrawer();
     renderDiagram();
     renderBuilder();
     calcAndRenderMath();
