@@ -69,7 +69,7 @@
 
   <header>
     <h1>Pump Pressure — Visual Builder</h1>
-    <div class="sub">Labeled stacks • Wye supports Left & Right lines</div>
+    <div class="sub">Smart labels • Wye split • Phone-safe</div>
   </header>
 
   <div class="side">
@@ -88,13 +88,15 @@
       <button data-hose='{"size":"1.75","lengthFt":50}'>1¾″ 50′</button>
       <button data-act="clearHose">Clear main hoses</button>
     </div>
+
+    <!-- After Wye: 5" REMOVED; left choices shown first, right choices after -->
     <div class="row" id="hoseButtonsSplit" style="display:none;border-top:1px solid var(--edge);margin-top:6px;padding-top:12px">
       <div style="width:100%;color:#cfe4ff;font-size:12px;margin-bottom:2px">After Wye:</div>
-      <button data-side="L" data-hose='{"size":"5","lengthFt":100}'>Left 5″ 100′</button>
+      <!-- LEFT -->
       <button data-side="L" data-hose='{"size":"2.5","lengthFt":50}'>Left 2½″ 50′</button>
       <button data-side="L" data-hose='{"size":"1.75","lengthFt":100}'>Left 1¾″ 100′</button>
       <button data-side="L" data-hose='{"size":"1.75","lengthFt":50}'>Left 1¾″ 50′</button>
-      <button data-side="R" data-hose='{"size":"5","lengthFt":100}'>Right 5″ 100′</button>
+      <!-- RIGHT -->
       <button data-side="R" data-hose='{"size":"2.5","lengthFt":50}'>Right 2½″ 50′</button>
       <button data-side="R" data-hose='{"size":"1.75","lengthFt":100}'>Right 1¾″ 100′</button>
       <button data-side="R" data-hose='{"size":"1.75","lengthFt":50}'>Right 1¾″ 50′</button>
@@ -184,11 +186,11 @@
   const HOSE_COLOR = { "5": "var(--hose5)", "2.5": "var(--hose25)", "1.75": "var(--hose175)" };
   const COEFF = { "1.75":15.5, "2.5":2, "5":0.08 };
 
-  // Nozzles set (your list)
+  // Nozzles set
   const NOZZLES = [
     {name:"None (closed)", gpm:0, NP:0},
     {name:"Fog 150 gpm @100 psi", gpm:150, NP:100},
-    {name:"ChiefXD 185 gpm @50 psi", gpm:185, NP:50},
+    {name:"ChiefXD 185 gpm @50 psi", gpm:185, NP:50},   // default
     {name:"ChiefXD 265 gpm @50 psi", gpm:265, NP:50},
     {name:"SB 7/8″ @50 psi",   gpm:161, NP:50},
     {name:"SB 15/16″ @50 psi", gpm:185, NP:50},
@@ -198,13 +200,16 @@
   ];
 
   // ===== STATE =====
-  let itemsMain = [];   // up to the wye
+  let itemsMain = [];   // up to the wye (hoses + accessories before split)
   let hasWye = false;
   let wyeLoss = 10;
-  let itemsLeft = [];
-  let itemsRight = [];
-  let nozzleLeft = NOZZLES[1];   // default fog 150@100
-  let nozzleRight = NOZZLES[1];
+  let itemsLeft = [];   // hoses after wye (left)
+  let itemsRight = [];  // hoses after wye (right)
+
+  // Default nozzles: ChiefXD 185@50
+  let nozzleLeft = NOZZLES[2];
+  let nozzleRight = NOZZLES[2];
+
   let elevFt = 0, elevPsiPerFt = 0.434;
 
   // ===== ELEMENTS =====
@@ -239,6 +244,8 @@
     btn.onclick = ()=>{ itemsMain.push({type:'hose', ...JSON.parse(btn.dataset.hose)}); closeDrawers(); render(true); };
   });
   hoseButtonsMain.querySelector('[data-act="clearHose"]').onclick = ()=>{ itemsMain = itemsMain.filter(x=>x.type!=='hose'); closeDrawers(); render(true); };
+
+  // After-wye: only 2.5 and 1.75 (no 5")
   hoseButtonsSplit.querySelectorAll('button[data-hose]').forEach(btn=>{
     btn.onclick = ()=>{
       const hose = {type:'hose', ...JSON.parse(btn.dataset.hose)};
@@ -308,44 +315,68 @@
   function hoseXpx(){ return Math.round(stageWidthPx() * HOSE_X_RATIO); }
   function toVBX(px){ return px / stageWidthPx() * STAGE_W; }
   function toVBY(px){ return px; }
+  function clamp(n, min, max){ return Math.max(min, Math.min(max, n)); }
 
-  // ===== Label helper: contiguous same-size group with totals =====
-  function labelConsecutiveWithStats(list, x, yStart, Q){
+  // ===== Label helper with side-aware placement =====
+  // side = 'right' (default) or 'left'
+  function labelConsecutiveWithStats(list, x, yStart, Q, side='right'){
     let yCursor = yStart;
     let cur = null, totalFt=0, startY=yCursor, totalFL=0;
-    const addLabel = ()=>{
+
+    const commit = ()=>{
       if(!cur || totalFt<=0) return;
       const mid = yCursor + (startY - yCursor)/2;
       const sizePretty = (cur==='2.5'?'2½':cur==='1.75'?'1¾':cur) + '″';
-      const txt = `${sizePretty} • ${Q} gpm • ${totalFt}′ • FL ${totalFL.toFixed(1)} psi`;
+      const text = `${sizePretty} • ${Q} gpm • ${totalFt}′ • FL ${totalFL.toFixed(1)} psi`;
+
+      // rough width estimate for bubble
+      const estW = Math.max(100, text.length * 6.0);
+      const pad = 6;
+      const margin = 6;
+      let bxPx;
+      if(side==='left'){
+        // place bubble to the LEFT of stack
+        bxPx = (x - 16) - estW - pad*2; // 16px gap left of hose
+        bxPx = clamp(bxPx, margin, stageWidthPx() - estW - pad*2 - margin);
+      }else{
+        // place bubble to the RIGHT of stack
+        bxPx = (x + 16);
+        bxPx = clamp(bxPx, margin, stageWidthPx() - estW - pad*2 - margin);
+      }
+
+      const byPx = mid - 10 - pad;
+
+      const rect=document.createElementNS('http://www.w3.org/2000/svg','rect');
+      rect.setAttribute('x', toVBX(bxPx));
+      rect.setAttribute('y', toVBY(byPx));
+      rect.setAttribute('width', estW + pad*2);
+      rect.setAttribute('height', 16 + pad*2);
+      rect.setAttribute('rx', 6);
+      rect.setAttribute('fill', '#172134');
+      rect.setAttribute('stroke', 'rgba(255,255,255,.15)');
+      labelGroup.appendChild(rect);
 
       const tx=document.createElementNS('http://www.w3.org/2000/svg','text');
-      tx.setAttribute('x', toVBX(x + 16)); tx.setAttribute('y', toVBY(mid+3));
-      tx.setAttribute('fill','#cfe4ff'); tx.setAttribute('font-size','10'); tx.textContent=txt;
+      tx.setAttribute('x', toVBX(bxPx + pad));
+      tx.setAttribute('y', toVBY(byPx + pad + 13));
+      tx.setAttribute('fill','#cfe4ff'); tx.setAttribute('font-size','10'); tx.textContent=text;
       labelGroup.appendChild(tx);
 
-      const w = Math.max(100, txt.length*6.0), pad=6;
-      const bx=document.createElementNS('http://www.w3.org/2000/svg','rect');
-      bx.setAttribute('x', toVBX(x + 16)-pad); bx.setAttribute('y', toVBY(mid-10)-pad);
-      bx.setAttribute('width', w+pad*2); bx.setAttribute('height', 16+pad*2);
-      bx.setAttribute('rx',6); bx.setAttribute('fill','#172134'); bx.setAttribute('stroke','rgba(255,255,255,.15)');
-      labelGroup.insertBefore(bx, tx);
-
-      // reset
       cur=null; totalFt=0; totalFL=0; startY=yCursor;
     };
+
     for(const it of list){
       const hPx=(it.lengthFt===50?PX_PER_50FT:2*PX_PER_50FT);
       if(cur===null){ cur=it.size; totalFt=0; totalFL=0; startY=yCursor; }
-      if(it.size!==cur){ addLabel(); cur=it.size; totalFt=0; totalFL=0; startY=yCursor; }
+      if(it.size!==cur){ commit(); cur=it.size; totalFt=0; totalFL=0; startY=yCursor; }
       yCursor -= hPx;
       totalFt += it.lengthFt;
       totalFL += fl(COEFF[it.size]||0, Q, it.lengthFt);
     }
-    addLabel();
+    commit();
   }
 
-  // ===== Draw diagram (with labels) =====
+  // ===== Draw diagram (with side-aware labels) =====
   function renderDiagram(){
     const nW = engineImg.naturalWidth || 0;
     const nH = engineImg.naturalHeight || 0;
@@ -396,9 +427,9 @@
       }
     }
 
-    // Labels for MAIN (use total flow)
+    // Labels for MAIN (use total flow, placed to RIGHT)
     const flows = calc();
-    labelConsecutiveWithStats(itemsMain.filter(x=>x.type==='hose'), xMain, roofY + HOSE_TOUCH_OFFSET, flows.Qtotal);
+    labelConsecutiveWithStats(itemsMain.filter(x=>x.type==='hose'), xMain, roofY + HOSE_TOUCH_OFFSET, flows.Qtotal, 'right');
 
     // WYE + branches
     if(hasWye){
@@ -410,15 +441,15 @@
       wlabel.textContent=`Wye (+${wyeLoss} psi)`; accGroup.appendChild(wlabel);
 
       const yStart = y-30;
-      drawBranch(itemsLeft,  xLeft,  yStart, flows.QL);
-      drawBranch(itemsRight, xRight, yStart, flows.QR);
+      drawBranch(itemsLeft,  xLeft,  yStart, flows.QL,  'left');
+      drawBranch(itemsRight, xRight, yStart, flows.QR, 'right');
     } else {
       // single branch nozzle only (use right)
-      drawBranch([], xMain, y, flows.QR);
+      drawBranch([], xMain, y, flows.QR, 'right');
     }
 
-    // Nozzle & branch drawer
-    function drawBranch(list, x, yStart, Qbranch){
+    // Branch drawer
+    function drawBranch(list, x, yStart, Qbranch, side){
       let yB = yStart;
       for(const it of list){
         const hPx=(it.lengthFt===50?PX_PER_50FT:2*PX_PER_50FT), wPx=HOSE_WIDTH[it.size]||6;
@@ -428,37 +459,47 @@
         rect.setAttribute('fill', HOSE_COLOR[it.size]); rect.setAttribute('stroke','rgba(255,255,255,.1)'); rect.setAttribute('stroke-width','1'); hoseGroup.appendChild(rect);
         yB -= hPx;
       }
-      // Label contiguous groups on this branch
-      labelConsecutiveWithStats(list, x, yStart, Qbranch);
+
+      // Labels for this branch (side-aware)
+      labelConsecutiveWithStats(list, x, yStart, Qbranch, side);
 
       // nozzle stub
       const last = list.slice(-1)[0];
       const wTopPx = last ? (HOSE_WIDTH[last.size]||6) : 8;
-      const body=document.createElementNS('http://www.w3.org/2000/svg','rect');
+      const body=document.createElementNS('http://www.w3.org/200/svg','rect');
       body.setAttribute('x', toVBX(x - wTopPx/2 - 4)); body.setAttribute('y', toVBY(yB - 22));
       body.setAttribute('width', toVBX(wTopPx + 8)); body.setAttribute('height', toVBY(18));
       body.setAttribute('fill','#394357'); nozzleGroup.appendChild(body);
-      const tip=document.createElementNS('http://www.w3.org/2000/svg','rect');
+      const tip=document.createElementNS('http://www.w3.org/200/svg','rect');
       tip.setAttribute('x', toVBX(x - (wTopPx*0.4))); tip.setAttribute('y', toVBY(yB - 30));
       tip.setAttribute('width', toVBX(wTopPx*0.8)); tip.setAttribute('height', toVBY(8));
       tip.setAttribute('fill','#9aa7bd'); nozzleGroup.appendChild(tip);
 
-      // nozzle label (GPM @ NP)
-      const NPtxt = (hasWye && x===hoseXpx()-BRANCH_OFFSET) ? (nozzleLeft.NP||0)
-                  : (hasWye && x===hoseXpx()+BRANCH_OFFSET) ? (nozzleRight.NP||0)
+      // nozzle label (GPM @ NP), side-aware placement & clamped
+      const NPtxt = (hasWye && side==='left') ? (nozzleLeft.NP||0)
+                  : (hasWye && side==='right') ? (nozzleRight.NP||0)
                   : (nozzleRight.NP||0);
-      const nz=document.createElementNS('http://www.w3.org/2000/svg','text');
-      nz.setAttribute('x', toVBX(x + 16));
-      nz.setAttribute('y', toVBY(yB - 18));
-      nz.setAttribute('fill','#cfe4ff'); nz.setAttribute('font-size','10');
-      nz.textContent = `${Qbranch} gpm @ ${NPtxt} psi`;
-      labelGroup.appendChild(nz);
-      const ww = Math.max(90, nz.textContent.length*6.0), p=6;
+      const text = `${Qbranch} gpm @ ${NPtxt} psi`;
+      const estW = Math.max(90, text.length*6.0);
+      const pad=6, margin=6;
+      let nx;
+      if(side==='left'){
+        nx = clamp((x - 16) - estW - pad*2, margin, stageWidthPx() - estW - pad*2 - margin);
+      }else{
+        nx = clamp((x + 16), margin, stageWidthPx() - estW - pad*2 - margin);
+      }
+      const ny = (yB - 28) - pad;
+
       const nzb=document.createElementNS('http://www.w3.org/2000/svg','rect');
-      nzb.setAttribute('x', toVBX(x + 16)-p); nzb.setAttribute('y', toVBY(yB - 28)-p);
-      nzb.setAttribute('width', ww+p*2); nzb.setAttribute('height', 16+p*2);
+      nzb.setAttribute('x', toVBX(nx)); nzb.setAttribute('y', toVBY(ny));
+      nzb.setAttribute('width', estW+pad*2); nzb.setAttribute('height', 16+pad*2);
       nzb.setAttribute('rx',6); nzb.setAttribute('fill','#172134'); nzb.setAttribute('stroke','rgba(255,255,255,.15)');
-      labelGroup.insertBefore(nzb, nz);
+      labelGroup.appendChild(nzb);
+
+      const nz=document.createElementNS('http://www.w3.org/200/svg','text');
+      nz.setAttribute('x', toVBX(nx + pad)); nz.setAttribute('y', toVBY(ny + pad + 13));
+      nz.setAttribute('fill','#cfe4ff'); nz.setAttribute('font-size','10'); nz.textContent = text;
+      labelGroup.appendChild(nz);
     }
 
     // Footer total PDP & GPM centered near bottom of stage
@@ -469,7 +510,7 @@
     labelGroup.appendChild(footer);
   }
 
-  // ===== Builder list (color-coded, correct GPM/FL) =====
+  // ===== Build list (left in left column, right in right column) =====
   function rowClassForSize(size){
     if(size==='5') return 'hose-5';
     if(size==='2.5') return 'hose-25';
@@ -496,6 +537,13 @@
         </select>
         <button data-act="del">✕</button>
       </div>`;
+    // Prevent 5" from being selected on branches
+    if(where==='Left' || where==='Right'){
+      const sizeSel = div.querySelector('select[data-k="size"]');
+      [...sizeSel.options].forEach(opt=>{
+        if(opt.value==='5') opt.disabled = true;
+      });
+    }
     div.querySelectorAll('select').forEach(s=>{
       s.onchange=()=>{ const k=s.dataset.k; if(k==='size') h.size=s.value; if(k==='lengthFt') h.lengthFt=parseInt(s.value,10); render(); };
     });
@@ -535,6 +583,7 @@
       splitHead.innerHTML=`<div><b>Wye/Siamese</b> <span class="note">+${wyeLoss} psi • Left ${R.QL} gpm • Right ${R.QR} gpm</span></div>`;
       builderList.appendChild(splitHead);
 
+      // Left column strictly left, Right strictly right (responsive)
       const cols=document.createElement('div'); cols.className='col2';
       const leftCol=document.createElement('div'); const rightCol=document.createElement('div');
       leftCol.innerHTML=`<div class="note">Left branch (GPM ${R.QL})</div>`;
