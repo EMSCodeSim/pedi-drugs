@@ -53,8 +53,15 @@
   .stats{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
   .actions{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
   .actions select,.actions button{background:#0b1320;color:#eaf2ff;border:1px solid var(--edge);border-radius:8px;padding:6px 8px;font-size:13px}
+
+  /* Two responsive columns for branches */
   .col2{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:8px}
   @media (max-width:420px){ .col2{grid-template-columns:1fr;} }
+
+  /* Build list color coding by hose size */
+  .hose-5   { border-left:6px solid var(--hose5); }
+  .hose-25  { border-left:6px solid var(--hose25); }
+  .hose-175 { border-left:6px solid var(--hose175); }
 </style>
 </head>
 <body>
@@ -62,7 +69,7 @@
 
   <header>
     <h1>Pump Pressure — Visual Builder</h1>
-    <div class="sub">Updated nozzle set • Wye supports Left & Right lines</div>
+    <div class="sub">Labeled stacks • Wye supports Left & Right lines</div>
   </header>
 
   <div class="side">
@@ -168,28 +175,21 @@
   // ===== CONFIG =====
   const STAGE_W = 390;
   const PX_PER_50FT = 80;
-  const HOSE_X_RATIO = 0.49;   // your anchor
-  const ROOF_RATIO   = 0.71;   // your anchor
+  const HOSE_X_RATIO = 0.49;   // anchor
+  const ROOF_RATIO   = 0.71;   // anchor
   const HOSE_TOUCH_OFFSET = -6;
-  const BRANCH_OFFSET = 34;
+  const BRANCH_OFFSET = 34;    // px left/right spacing
 
   const HOSE_WIDTH = { "5": 12, "2.5": 9, "1.75": 6 };
   const HOSE_COLOR = { "5": "var(--hose5)", "2.5": "var(--hose25)", "1.75": "var(--hose175)" };
   const COEFF = { "1.75":15.5, "2.5":2, "5":0.08 };
 
-  // ===== NOZZLES (updated per your list) =====
-  // NP = nozzle pressure (psi)
+  // Nozzles set (your list)
   const NOZZLES = [
     {name:"None (closed)", gpm:0, NP:0},
-
-    // Fog
     {name:"Fog 150 gpm @100 psi", gpm:150, NP:100},
-
-    // ChiefXD
     {name:"ChiefXD 185 gpm @50 psi", gpm:185, NP:50},
     {name:"ChiefXD 265 gpm @50 psi", gpm:265, NP:50},
-
-    // Solid Bore (50 psi handline)
     {name:"SB 7/8″ @50 psi",   gpm:161, NP:50},
     {name:"SB 15/16″ @50 psi", gpm:185, NP:50},
     {name:"SB 1″ @50 psi",     gpm:210, NP:50},
@@ -203,8 +203,7 @@
   let wyeLoss = 10;
   let itemsLeft = [];
   let itemsRight = [];
-  // Default to Fog 150 @100 per your update
-  let nozzleLeft = NOZZLES[1];
+  let nozzleLeft = NOZZLES[1];   // default fog 150@100
   let nozzleRight = NOZZLES[1];
   let elevFt = 0, elevPsiPerFt = 0.434;
 
@@ -310,7 +309,43 @@
   function toVBX(px){ return px / stageWidthPx() * STAGE_W; }
   function toVBY(px){ return px; }
 
-  // ===== Draw diagram (split aware) =====
+  // ===== Label helper: contiguous same-size group with totals =====
+  function labelConsecutiveWithStats(list, x, yStart, Q){
+    let yCursor = yStart;
+    let cur = null, totalFt=0, startY=yCursor, totalFL=0;
+    const addLabel = ()=>{
+      if(!cur || totalFt<=0) return;
+      const mid = yCursor + (startY - yCursor)/2;
+      const sizePretty = (cur==='2.5'?'2½':cur==='1.75'?'1¾':cur) + '″';
+      const txt = `${sizePretty} • ${Q} gpm • ${totalFt}′ • FL ${totalFL.toFixed(1)} psi`;
+
+      const tx=document.createElementNS('http://www.w3.org/2000/svg','text');
+      tx.setAttribute('x', toVBX(x + 16)); tx.setAttribute('y', toVBY(mid+3));
+      tx.setAttribute('fill','#cfe4ff'); tx.setAttribute('font-size','10'); tx.textContent=txt;
+      labelGroup.appendChild(tx);
+
+      const w = Math.max(100, txt.length*6.0), pad=6;
+      const bx=document.createElementNS('http://www.w3.org/2000/svg','rect');
+      bx.setAttribute('x', toVBX(x + 16)-pad); bx.setAttribute('y', toVBY(mid-10)-pad);
+      bx.setAttribute('width', w+pad*2); bx.setAttribute('height', 16+pad*2);
+      bx.setAttribute('rx',6); bx.setAttribute('fill','#172134'); bx.setAttribute('stroke','rgba(255,255,255,.15)');
+      labelGroup.insertBefore(bx, tx);
+
+      // reset
+      cur=null; totalFt=0; totalFL=0; startY=yCursor;
+    };
+    for(const it of list){
+      const hPx=(it.lengthFt===50?PX_PER_50FT:2*PX_PER_50FT);
+      if(cur===null){ cur=it.size; totalFt=0; totalFL=0; startY=yCursor; }
+      if(it.size!==cur){ addLabel(); cur=it.size; totalFt=0; totalFL=0; startY=yCursor; }
+      yCursor -= hPx;
+      totalFt += it.lengthFt;
+      totalFL += fl(COEFF[it.size]||0, Q, it.lengthFt);
+    }
+    addLabel();
+  }
+
+  // ===== Draw diagram (with labels) =====
   function renderDiagram(){
     const nW = engineImg.naturalWidth || 0;
     const nH = engineImg.naturalHeight || 0;
@@ -320,7 +355,7 @@
     const hoseFeetLeft = itemsLeft.reduce((s,h)=>s+h.lengthFt,0);
     const hoseFeetRight= itemsRight.reduce((s,h)=>s+h.lengthFt,0);
     const hosePx = ((hoseFeetMain+hoseFeetLeft+hoseFeetRight)/50)*PX_PER_50FT;
-    const topPad = 140;
+    const topPad = 160;
 
     const stageH = Math.max(520, eH + hosePx + topPad);
     stage.style.height = stageH + 'px';
@@ -336,10 +371,12 @@
 
     hoseGroup.innerHTML=''; accGroup.innerHTML=''; nozzleGroup.innerHTML=''; portGroup.innerHTML=''; labelGroup.innerHTML='';
 
+    // port ring
     const port=document.createElementNS('http://www.w3.org/2000/svg','circle');
     port.setAttribute('cx', toVBX(xMain)); port.setAttribute('cy', toVBY(roofY)); port.setAttribute('r', toVBX(6));
     port.setAttribute('fill','#2b3142'); port.setAttribute('stroke','#111622'); port.setAttribute('stroke-width','1.5'); portGroup.appendChild(port);
 
+    // MAIN up to Wye
     for(const it of itemsMain){
       if(it.type==='hose'){
         const hPx = (it.lengthFt===50?PX_PER_50FT:2*PX_PER_50FT), wPx=HOSE_WIDTH[it.size]||6;
@@ -359,6 +396,11 @@
       }
     }
 
+    // Labels for MAIN (use total flow)
+    const flows = calc();
+    labelConsecutiveWithStats(itemsMain.filter(x=>x.type==='hose'), xMain, roofY + HOSE_TOUCH_OFFSET, flows.Qtotal);
+
+    // WYE + branches
     if(hasWye){
       const wy=document.createElementNS('http://www.w3.org/2000/svg','path');
       wy.setAttribute('d', `M ${toVBX(xMain)} ${toVBY(y-8)} L ${toVBX(xLeft)} ${toVBY(y-28)} M ${toVBX(xMain)} ${toVBY(y-8)} L ${toVBX(xRight)} ${toVBY(y-28)}`);
@@ -368,13 +410,15 @@
       wlabel.textContent=`Wye (+${wyeLoss} psi)`; accGroup.appendChild(wlabel);
 
       const yStart = y-30;
-      drawBranch(itemsLeft, xLeft, yStart);
-      drawBranch(itemsRight, xRight, yStart);
+      drawBranch(itemsLeft,  xLeft,  yStart, flows.QL);
+      drawBranch(itemsRight, xRight, yStart, flows.QR);
     } else {
-      drawBranch([], xMain, y); // only nozzle stub
+      // single branch nozzle only (use right)
+      drawBranch([], xMain, y, flows.QR);
     }
 
-    function drawBranch(list, x, yStart){
+    // Nozzle & branch drawer
+    function drawBranch(list, x, yStart, Qbranch){
       let yB = yStart;
       for(const it of list){
         const hPx=(it.lengthFt===50?PX_PER_50FT:2*PX_PER_50FT), wPx=HOSE_WIDTH[it.size]||6;
@@ -384,6 +428,10 @@
         rect.setAttribute('fill', HOSE_COLOR[it.size]); rect.setAttribute('stroke','rgba(255,255,255,.1)'); rect.setAttribute('stroke-width','1'); hoseGroup.appendChild(rect);
         yB -= hPx;
       }
+      // Label contiguous groups on this branch
+      labelConsecutiveWithStats(list, x, yStart, Qbranch);
+
+      // nozzle stub
       const last = list.slice(-1)[0];
       const wTopPx = last ? (HOSE_WIDTH[last.size]||6) : 8;
       const body=document.createElementNS('http://www.w3.org/2000/svg','rect');
@@ -394,15 +442,42 @@
       tip.setAttribute('x', toVBX(x - (wTopPx*0.4))); tip.setAttribute('y', toVBY(yB - 30));
       tip.setAttribute('width', toVBX(wTopPx*0.8)); tip.setAttribute('height', toVBY(8));
       tip.setAttribute('fill','#9aa7bd'); nozzleGroup.appendChild(tip);
+
+      // nozzle label (GPM @ NP)
+      const NPtxt = (hasWye && x===hoseXpx()-BRANCH_OFFSET) ? (nozzleLeft.NP||0)
+                  : (hasWye && x===hoseXpx()+BRANCH_OFFSET) ? (nozzleRight.NP||0)
+                  : (nozzleRight.NP||0);
+      const nz=document.createElementNS('http://www.w3.org/2000/svg','text');
+      nz.setAttribute('x', toVBX(x + 16));
+      nz.setAttribute('y', toVBY(yB - 18));
+      nz.setAttribute('fill','#cfe4ff'); nz.setAttribute('font-size','10');
+      nz.textContent = `${Qbranch} gpm @ ${NPtxt} psi`;
+      labelGroup.appendChild(nz);
+      const ww = Math.max(90, nz.textContent.length*6.0), p=6;
+      const nzb=document.createElementNS('http://www.w3.org/2000/svg','rect');
+      nzb.setAttribute('x', toVBX(x + 16)-p); nzb.setAttribute('y', toVBY(yB - 28)-p);
+      nzb.setAttribute('width', ww+p*2); nzb.setAttribute('height', 16+p*2);
+      nzb.setAttribute('rx',6); nzb.setAttribute('fill','#172134'); nzb.setAttribute('stroke','rgba(255,255,255,.15)');
+      labelGroup.insertBefore(nzb, nz);
     }
 
-    const totalFeet = hoseFeetMain+hoseFeetLeft+hoseFeetRight;
-    hint.textContent = `Total hose: ${totalFeet}′  •  ${hasWye?'Split active':''}`;
+    // Footer total PDP & GPM centered near bottom of stage
+    const footer=document.createElementNS('http://www.w3.org/2000/svg','text');
+    footer.setAttribute('x', toVBX(STAGE_W/2)); footer.setAttribute('y', toVBY(stageH - 8));
+    footer.setAttribute('text-anchor','middle'); footer.setAttribute('fill','#d7e7ff'); footer.setAttribute('font-size','12');
+    footer.textContent = `Total: ${Math.round(flows.PDP_total)} psi PDP • ${hasWye ? (flows.QL + flows.QR) : flows.QR} gpm`;
+    labelGroup.appendChild(footer);
   }
 
-  // ===== Builder list (shows proper GPM per section) =====
+  // ===== Builder list (color-coded, correct GPM/FL) =====
+  function rowClassForSize(size){
+    if(size==='5') return 'hose-5';
+    if(size==='2.5') return 'hose-25';
+    if(size==='1.75') return 'hose-175';
+    return '';
+  }
   function builderRowHose(h, idx, where, Q_for_this_row){
-    const div=document.createElement('div'); div.className='item';
+    const div=document.createElement('div'); div.className='item ' + rowClassForSize(h.size);
     const segFL = fl(COEFF[h.size]||0, Q_for_this_row, h.lengthFt);
     div.innerHTML = `
       <div><div>🧯 ${where} Hose <small>#${idx+1}</small></div>
