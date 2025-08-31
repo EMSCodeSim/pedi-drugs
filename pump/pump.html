@@ -14,46 +14,27 @@
   html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);font-family:system-ui,Segoe UI,Inter,Arial,sans-serif}
   .app{display:flex;flex-direction:column;min-height:100vh}
 
-  header{
-    position:sticky;top:0;z-index:3;
-    padding:8px 12px;background:linear-gradient(180deg,#0c1320 0%,#0b0f14 100%);
-    border-bottom:1px solid var(--edge)
-  }
+  header{position:sticky;top:0;z-index:3;padding:8px 12px;background:linear-gradient(180deg,#0c1320 0%,#0b0f14 100%);border-bottom:1px solid var(--edge)}
   h1{font-size:15px;margin:0}
-  .sub{font-size:11px;color:var(--muted)}
+  .sub{font-size:11px;color:#9fb0c8}
 
-  /* Stage */
   .wrapper{border-top:1px solid var(--edge);border-bottom:1px solid var(--edge)}
   .scroll{height:65vh;overflow:auto;overscroll-behavior:contain;background:linear-gradient(180deg,#0b0f14,#0e1726)}
-  .stage{position:relative;width:100%;min-height:520px;}
-  #engine{display:block;width:100%;height:auto;position:absolute;bottom:0;left:0;}
+  .stage{position:relative;width:100%;min-height:520px}
+  #engine{display:block;width:100%;height:auto;position:absolute;bottom:0;left:0}
   #overlay{position:absolute;inset:0;display:block;width:100%;height:100%}
   .hint{position:absolute;top:8px;left:10px;font-size:12px;color:#f7e39a}
 
-  /* Left toolbar */
-  .side{position:fixed;left:8px;top:72px;z-index:4;display:flex;flex-direction:column;gap:8px;}
-  .fab{
-    width:44px;height:44px;border-radius:12px;border:1px solid var(--edge);
-    background:#0b1320;color:#eaf2ff;font-size:12px;
-    display:flex;align-items:center;justify-content:center;cursor:pointer;
-    box-shadow:0 4px 12px rgba(0,0,0,.25)
-  }
+  /* Left tools */
+  .side{position:fixed;left:8px;top:72px;z-index:4;display:flex;flex-direction:column;gap:8px}
+  .fab{width:44px;height:44px;border-radius:12px;border:1px solid var(--edge);background:#0b1320;color:#eaf2ff;font-size:12px;display:flex;align-items:center;justify-content:center;cursor:pointer;box-shadow:0 4px 12px rgba(0,0,0,.25)}
   .fab:active{transform:translateY(1px)}
-  .drawer{
-    position:fixed;left:60px;top:72px;z-index:5;
-    background:#0b1320;border:1px solid var(--edge);border-radius:12px;box-shadow:0 8px 20px rgba(0,0,0,.35);
-    width:min(78vw,340px);max-width:340px;display:none
-  }
+  .drawer{position:fixed;left:60px;top:72px;z-index:5;background:#0b1320;border:1px solid var(--edge);border-radius:12px;box-shadow:0 8px 20px rgba(0,0,0,.35);width:min(78vw,340px);max-width:340px;display:none}
   .drawer.open{display:block}
-  .drawer h3{margin:10px 12px 6px;font-size:13px;color:#cfe4ff}
   .row{display:flex;flex-wrap:wrap;gap:8px;padding:8px 10px}
-  .row button{
-    background:#12203a;border:1px solid var(--edge);color:#eaf2ff;border-radius:10px;
-    padding:8px 10px;font-size:13px;cursor:pointer
-  }
-  .row button:active{transform:translateY(1px)}
+  .row button{background:#12203a;border:1px solid var(--edge);color:#eaf2ff;border-radius:10px;padding:8px 10px;font-size:13px;cursor:pointer}
 
-  /* Lower panels */
+  /* Panels */
   .panel{padding:10px 12px;background:var(--panel)}
   .card{background:#0e1726;border:1px solid var(--edge);border-radius:14px;padding:12px;margin:10px 0}
   .grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
@@ -67,9 +48,7 @@
   .item{display:flex;justify-content:space-between;gap:10px;align-items:center;padding:10px;border:1px solid var(--edge);border-radius:12px;background:#0c1320}
   .stats{display:flex;gap:10px;align-items:center}
   .actions{display:flex;gap:6px;align-items:center}
-  .actions select,.actions button{
-    background:#0b1320;color:#eaf2ff;border:1px solid var(--edge);border-radius:8px;padding:6px 8px;font-size:13px
-  }
+  .actions select,.actions button{background:#0b1320;color:#eaf2ff;border:1px solid var(--edge);border-radius:8px;padding:6px 8px;font-size:13px}
 </style>
 </head>
 <body>
@@ -80,11 +59,10 @@
     <div class="sub">Left tools • Hose stack touches the truck</div>
   </header>
 
-  <!-- Left tool buttons -->
   <div class="side">
-    <button class="fab" id="openHose" title="Add hose">Hose</button>
-    <button class="fab" id="openAcc"  title="Add accessory">Acc</button>
-    <button class="fab" id="openNoz"  title="Select nozzle">Noz</button>
+    <button class="fab" id="openHose">Hose</button>
+    <button class="fab" id="openAcc">Acc</button>
+    <button class="fab" id="openNoz">Noz</button>
   </div>
 
   <!-- Hose drawer -->
@@ -128,13 +106,14 @@
           <g id="accGroup"></g>
           <g id="nozzleGroup"></g>
           <g id="portGroup"></g>
+          <g id="labelGroup"></g>
           <text class="hint" id="hint">Tap Hose and add a segment…</text>
         </svg>
       </div>
     </div>
   </div>
 
-  <!-- Lower panels -->
+  <!-- Panels -->
   <div class="panel">
     <div class="card">
       <h3 style="margin:0 0 8px;font-size:14px;color:#cfe4ff">Environment</h3>
@@ -165,8 +144,8 @@
   // ===== CONFIG =====
   const STAGE_W = 390;
   const PX_PER_50FT = 80;
-  const HOSE_X_RATIO = 0.49;  // (your updated anchor)
-  const ROOF_RATIO   = 0.71;  // (your updated anchor)
+  const HOSE_X_RATIO = 0.49;  // your anchor
+  const ROOF_RATIO   = 0.71;  // your anchor
   const HOSE_TOUCH_OFFSET = -6;
 
   const HOSE_WIDTH = { "5": 12, "2.5": 9, "1.75": 6 };
@@ -201,6 +180,7 @@
   const accGroup = document.getElementById('accGroup');
   const nozzleGroup = document.getElementById('nozzleGroup');
   const portGroup = document.getElementById('portGroup');
+  const labelGroup = document.getElementById('labelGroup');
   const hint = document.getElementById('hint');
   const builderList = document.getElementById('builderList');
 
@@ -258,7 +238,7 @@
 
   // ===== DRAW =====
   function renderDiagram(){
-    // real rendered image height (aspect ratio)
+    // image aspect height
     const nW = engineImg.naturalWidth || 0;
     const nH = engineImg.naturalHeight || 0;
     const eH = (nW && nH) ? (stageWidthPx() * (nH / nW)) : (engineImg.clientHeight || 180);
@@ -269,23 +249,25 @@
     const accPx    = items.filter(x=>x.type==='acc').length * 22;
     const topPad   = 120;
 
-    // stage height
+    // stage height and viewBox
     const stageH = Math.max(520, eH + hosePx + accPx + topPad);
     stage.style.height = stageH + 'px';
     overlay.setAttribute('viewBox', `0 0 ${STAGE_W} ${Math.round(stageH)}`);
 
-    // image top (because engine is bottom:0)
+    // roof position inside image (png has top padding)
     const imageTopPx = stageH - eH;
-
-    // the truck roof (png has top padding) → use ROOF_RATIO
     const roofY = imageTopPx + (eH * ROOF_RATIO);
 
-    // start hose with tiny overlap
+    // start hose
     let currentTopPx = roofY + HOSE_TOUCH_OFFSET;
     const xPx = hoseXpx();
 
     // clear
-    hoseGroup.innerHTML = ''; accGroup.innerHTML=''; nozzleGroup.innerHTML=''; portGroup.innerHTML='';
+    hoseGroup.innerHTML = '';
+    accGroup.innerHTML = '';
+    nozzleGroup.innerHTML = '';
+    portGroup.innerHTML = '';
+    labelGroup.innerHTML = '';
 
     // port ring
     const port = document.createElementNS('http://www.w3.org/2000/svg','circle');
@@ -298,9 +280,54 @@
     if(items.length===0){ hint.textContent='Tap Hose and add a segment…'; return; }
     hint.textContent='';
 
-    // draw items upward
-    for(const it of items){
+    // --- Grouping for consecutive hoses of the same size (for on-canvas label) ---
+    let groupSize = null;
+    let groupTotalFt = 0;
+    let groupBottomY = currentTopPx; // y before first seg of group
+
+    const commitGroupLabel = ()=>{
+      if(!groupSize || groupTotalFt<=0) return;
+      const groupTopY = currentTopPx;                    // y after last seg drawn
+      const midY = groupTopY + (groupBottomY - groupTopY)/2;
+
+      // label bubble
+      const padX=6, padY=4;
+      const text = document.createElementNS('http://www.w3.org/2000/svg','text');
+      const label = (groupSize==='2.5'?'2½':groupSize==='1.75'?'1¾':groupSize) + '″ • ' + groupTotalFt + '′';
+      text.setAttribute('x', toVBX(xPx + 16));
+      text.setAttribute('y', toVBY(midY + 3));
+      text.setAttribute('fill', '#cfe4ff');
+      text.setAttribute('font-size', '10');
+      text.textContent = label;
+      labelGroup.appendChild(text);
+
+      const bboxWidth = Math.max(60, label.length*6.2); // quick width estimate
+      const rect = document.createElementNS('http://www.w3.org/2000/svg','rect');
+      rect.setAttribute('x', toVBX(xPx + 16) - padX);
+      rect.setAttribute('y', toVBY(midY - 10) - padY);
+      rect.setAttribute('width', bboxWidth + padX*2);
+      rect.setAttribute('height', 16 + padY*2);
+      rect.setAttribute('rx', 6); rect.setAttribute('ry', 6);
+      rect.setAttribute('fill', '#172134');
+      rect.setAttribute('stroke', 'rgba(255,255,255,.15)');
+      // send rect behind text (insert before)
+      labelGroup.insertBefore(rect, text);
+
+      // reset
+      groupSize = null;
+      groupTotalFt = 0;
+      groupBottomY = currentTopPx;
+    };
+
+    // draw upward
+    for(let i=0;i<items.length;i++){
+      const it = items[i];
+
       if(it.type==='hose'){
+        // start or continue group
+        if(groupSize===null){ groupSize = it.size; groupTotalFt = 0; groupBottomY = currentTopPx; }
+        if(it.size!==groupSize){ commitGroupLabel(); groupSize = it.size; groupTotalFt = 0; groupBottomY = currentTopPx; }
+
         const wPx = HOSE_WIDTH[it.size]||6;
         const hPx = (it.lengthFt===50 ? PX_PER_50FT : 2*PX_PER_50FT);
         const yPx = currentTopPx - hPx;
@@ -315,8 +342,27 @@
         r.setAttribute('stroke-width', '1');
         hoseGroup.appendChild(r);
 
-        const line = document.createElementNS('http://www.w3.org/200/svg','line'); // typo-proof variant not required
-      } else {
+        // small coupling line at top of segment
+        const line = document.createElementNS('http://www.w3.org/2000/svg','line');
+        line.setAttribute('x1', toVBX(xPx - wPx/2));
+        line.setAttribute('x2', toVBX(xPx + wPx/2));
+        line.setAttribute('y1', toVBY(yPx));
+        line.setAttribute('y2', toVBY(yPx));
+        line.setAttribute('stroke', '#2b3242');
+        line.setAttribute('stroke-width', '2');
+        hoseGroup.appendChild(line);
+
+        currentTopPx -= hPx;
+        groupTotalFt += it.lengthFt;
+
+        // if next item ends group, place label
+        const next = items[i+1];
+        if(!next || next.type!=='hose' || next.size!==groupSize){
+          commitGroupLabel();
+        }
+
+      } else if(it.type==='acc'){
+        // accessory box
         const boxYpx = currentTopPx - 18;
 
         const bg = document.createElementNS('http://www.w3.org/2000/svg','rect');
@@ -325,28 +371,27 @@
         bg.setAttribute('width', 120);
         bg.setAttribute('height', 18);
         bg.setAttribute('rx', 6); bg.setAttribute('ry', 6);
-        bg.setAttribute('fill', '#172134');
-        bg.setAttribute('stroke', 'rgba(255,255,255,.15)');
+        bg.setAttribute('fill', '#172134'); bg.setAttribute('stroke','rgba(255,255,255,.15)');
         accGroup.appendChild(bg);
 
         const txt = document.createElementNS('http://www.w3.org/2000/svg','text');
         txt.setAttribute('x', toVBX(xPx + 16));
         txt.setAttribute('y', toVBY(boxYpx + 12));
-        txt.setAttribute('fill', '#cfe4ff');
-        txt.setAttribute('font-size', '10');
+        txt.setAttribute('fill', '#cfe4ff'); txt.setAttribute('font-size', '10');
         txt.textContent = `${it.name} (+${it.loss} psi)`;
         accGroup.appendChild(txt);
 
         currentTopPx -= 22;
+        // new group will start above this accessory
+        groupSize = null; groupTotalFt = 0; groupBottomY = currentTopPx;
       }
-      if(it.type==='hose'){ currentTopPx -= (it.lengthFt===50 ? PX_PER_50FT : 2*PX_PER_50FT); }
     }
 
-    // nozzle glyph on top
+    // nozzle glyph on top (if any hose exists)
     const lastHose = items.filter(i=>i.type==='hose').slice(-1)[0];
     if(lastHose){
       const wTopPx = HOSE_WIDTH[lastHose.size] || 6;
-      const body = document.createElementNS('http://www.w3.org/2000/svg','rect');
+      const body = document.createElementNS('http://www.w3.org/200/svg','rect'); // fallback namespace accepted by Safari/Chromium
       body.setAttribute('x', toVBX(xPx - wTopPx/2 - 4));
       body.setAttribute('y', toVBY(currentTopPx - 22));
       body.setAttribute('width', toVBX(wTopPx + 8));
@@ -365,7 +410,7 @@
     hint.textContent = `Total hose: ${totalFeet}′ • Items: ${items.length}`;
   }
 
-  // ===== Builder (now shows FL & GPM per hose) =====
+  // ===== Builder (shows FL & GPM per hose, selectable size/length) =====
   function row(it, idx){
     const div = document.createElement('div');
     div.className = 'item';
@@ -418,18 +463,17 @@
         render();
       };
     });
-
-    // buttons in row
+    // buttons
     div.querySelectorAll('button[data-act]').forEach(b=>{
       b.onclick = ()=>{
-        const act = b.dataset.act;
+        const act=b.dataset.act;
         if(act==='del'){ items.splice(idx,1); }
         if(act==='loss' && it.type==='acc'){
-          const v = parseFloat(prompt('Accessory loss (psi):', String(it.loss))||String(it.loss));
-          if(!isNaN(v)) it.loss = v;
+          const v=parseFloat(prompt('Accessory loss (psi):', String(it.loss))||String(it.loss));
+          if(!isNaN(v)) it.loss=v;
         }
         if(act==='rename' && it.type==='acc'){
-          const v = prompt('Accessory name:', it.name); if(v!==null) it.name = v||it.name;
+          const v=prompt('Accessory name:', it.name); if(v!==null) it.name=v||it.name;
         }
         render(true);
       };
@@ -439,18 +483,17 @@
   }
 
   function renderBuilder(){
-    builderList.innerHTML = '';
+    builderList.innerHTML='';
     if(items.length===0){
-      const e = document.createElement('div');
-      e.className = 'item';
-      e.innerHTML = `<div>Use the left tools: add <b>Hose</b>, <b>Accessory</b>, then pick a <b>Nozzle</b>.</div>`;
+      const e=document.createElement('div'); e.className='item';
+      e.innerHTML='<div>Use the left tools: add <b>Hose</b>, <b>Accessory</b>, then pick a <b>Nozzle</b>.</div>';
       builderList.appendChild(e);
     } else {
       items.forEach((it,i)=> builderList.appendChild(row(it,i)));
     }
   }
 
-  // ===== Math KPIs =====
+  // ===== KPIs =====
   function calcAndRenderMath(){
     const {Q, NP, totalFL, totalAcc, elevPsi, PDP, hoses, accs} = calc();
     document.getElementById('GPM').textContent = `${Q} gpm`;
@@ -462,10 +505,8 @@
     const np = `NP=${NP} psi`;
     const tFL = `Total FL=${totalFL.toFixed(1)} psi`;
     const tAcc = `Accessories=${totalAcc.toFixed(1)} psi`;
-    document.getElementById('breakdown').textContent =
-      `${np} • ${tFL} • ${tAcc} • ${elev}${partsH?(' • '+partsH):''}${partsA}`;
-    document.getElementById('equation').textContent =
-      `PDP = NP(${NP}) + FL(${totalFL.toFixed(1)}) + ACC(${totalAcc.toFixed(1)}) ${elevPsi>=0?'+':'-'} Elev(${Math.abs(elevPsi).toFixed(1)})`;
+    document.getElementById('breakdown').textContent = `${np} • ${tFL} • ${tAcc} • ${elev}${partsH?(' • '+partsH):''}${partsA}`;
+    document.getElementById('equation').textContent = `PDP = NP(${NP}) + FL(${totalFL.toFixed(1)}) + ACC(${totalAcc.toFixed(1)}) ${elevPsi>=0?'+':'-'} Elev(${Math.abs(elevPsi).toFixed(1)})`;
   }
 
   // ===== Master render =====
