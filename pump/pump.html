@@ -1,22 +1,138 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <title>Pump Visual Builder</title>
-  <link rel="stylesheet" href="pump-style.css">
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>Pump Pressure — Visual Builder</title>
+<link rel="stylesheet" href="pump-style.css">
+
 </head>
 <body>
+<div class="app">
+
   <header>
-    <h1>Pump Visual Builder</h1>
-    <div class="controls">
-      <button id="line1Btn">Line 1</button>
-      <button id="line2Btn">Line 2</button>
-      <button id="line3Btn">Line 3</button>
-    </div>
+    <h1>Pump Pressure — Visual Builder</h1>
+    <div class="sub">Tap a line to deploy it • “+” at tip to edit</div>
   </header>
 
-  <main id="canvas"></main>
+  <div class="side">
+    <button class="fab" id="openHose">Hose</button>
+    <button class="fab" id="openAcc">Acc</button>
+    <button class="fab" id="openNoz">Noz</button>
+  </div>
 
-  <script src="pump-logic.js"></script>
+  <!-- Left Drawer: Hose / Acc / Nozzle pickers -->
+  <div class="drawer" id="drawer">
+    <h3 id="drawerTitle">Hose</h3>
+
+    <!-- Hose pickers -->
+    <div class="row" id="hoseButtonsMain">
+      <button data-hose='{"size":"5","lengthFt":100}'>5″ 100′</button>
+      <button data-hose='{"size":"2.5","lengthFt":50}'>2½″ 50′</button>
+      <button data-hose='{"size":"1.75","lengthFt":100}'>1¾″ 100′</button>
+      <button data-hose='{"size":"1.75","lengthFt":50}'>1¾″ 50′</button>
+      <button data-act="clearHose">Clear main hoses</button>
+    </div>
+
+    <div class="row" id="hoseButtonsSplit" style="display:none;border-top:1px solid var(--edge);margin-top:6px;padding-top:12px">
+      <div style="width:100%;color:#cfe4ff;font-size:12px;margin-bottom:2px">After Wye:</div>
+      <button data-side="L" data-hose='{"size":"2.5","lengthFt":50}'>Left 2½″ 50′</button>
+      <button data-side="L" data-hose='{"size":"1.75","lengthFt":100}'>Left 1¾″ 100′</button>
+      <button data-side="L" data-hose='{"size":"1.75","lengthFt":50}'>Left 1¾″ 50′</button>
+      <button data-side="R" data-hose='{"size":"2.5","lengthFt":50}'>Right 2½″ 50′</button>
+      <button data-side="R" data-hose='{"size":"1.75","lengthFt":100}'>Right 1¾″ 100′</button>
+      <button data-side="R" data-hose='{"size":"1.75","lengthFt":50}'>Right 1¾″ 50′</button>
+      <button data-act="clearSplit">Clear after-wye</button>
+    </div>
+
+    <!-- Accessories -->
+    <div class="row" id="accButtons" style="display:none">
+      <button data-acc='{"name":"Wye","loss":10}'>Add Wye</button>
+      <button data-acc='{"name":"Appliance","loss":10}'>+10 Appliance</button>
+      <button data-acc='{"name":"Master Stream","loss":25}'>+25 Master</button>
+      <button data-acc='{"name":"Siamesed","loss":10}'>+10 Siamese</button>
+      <button data-act="clearAcc">Clear accessories</button>
+    </div>
+
+    <!-- Nozzles -->
+    <div class="row" id="nozButtons" style="display:none">
+      <div class="row" id="nozRowLeft"><h3>Left Branch Nozzle</h3></div>
+      <div class="row" id="nozRowRight" style="border-top:1px solid var(--edge);padding-top:10px"><h3>Right/Single Nozzle</h3></div>
+    </div>
+  </div>
+
+  <!-- Stage -->
+  <div class="wrapper">
+    <div id="scroll" class="scroll">
+      <div id="stage" class="stage">
+        <img id="engine" alt="ENGINE 181" src="https://fireopssim.com/pump/engine181.png" />
+        <svg id="overlay" viewBox="0 0 390 800" preserveAspectRatio="none" aria-label="Diagram overlay">
+          <defs>
+            <marker id="arrow" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto">
+              <path d="M0,0 L6,3 L0,6 z" fill="#cfe4ff"></path>
+            </marker>
+          </defs>
+
+          <!-- Hoses + branches are injected here -->
+          <g id="hoses"></g>
+          <g id="branches"></g>
+
+          <!-- Tap helpers -->
+          <text id="hint" x="12" y="24" class="hint">Tap Line 1/2/3 to deploy…</text>
+        </svg>
+
+        <!-- Top info for selected line -->
+        <div id="lineinfo" class="lineinfo"></div>
+
+        <!-- Line selector under the truck -->
+        <div class="linebar" id="linebar">
+          <button class="linebtn" data-line="left">Line 1</button>
+          <button class="linebtn" data-line="right">Line 2</button>
+          <button class="linebtn" data-line="back">Line 3</button>
+        </div>
+
+        <!-- Discharge picker -->
+        <div id="dischargePicker" class="picker" role="dialog" aria-modal="true" aria-hidden="true">
+          <h3 id="dischTitle">Select Discharge</h3>
+          <div class="row" id="dischRow"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Bottom panel -->
+  <div class="panel">
+    <div class="card">
+      <div class="grid2">
+        <div>
+          <label>Elevation (ft)</label>
+          <input id="elevFt" type="number" min="-300" max="300" value="0" />
+        </div>
+        <div>
+          <label>Elevation PSI/ft</label>
+          <input id="elevPsiPerFt" type="number" step="0.001" value="0.434" />
+        </div>
+      </div>
+
+      <div class="kpis">
+        <div class="kpi"><div>Total FL (Main)</div><b id="FLmain">— psi</b></div>
+        <div class="kpi"><div>Left FL</div><b id="FLleft">— psi</b></div>
+        <div class="kpi"><div>Right FL</div><b id="FLright">— psi</b></div>
+        <div class="kpi"><div>Accessories</div><b id="ACC">— psi</b></div>
+        <div class="kpi"><div>Nozzle</div><b id="NP">— psi</b></div>
+      </div>
+
+      <div class="eq" id="equation">PDP = max(Left, Right) + Main FL + Main Acc ± Elev</div>
+      <div class="kpis" style="margin-top:8px">
+        <div class="kpi"><div>Flow</div><b id="GPM">— gpm</b></div>
+        <div class="kpi"><div>PDP</div><b id="PDP">— psi</b></div>
+      </div>
+      <div class="note" id="breakdown" style="margin-top:8px"></div>
+    </div>
+  </div>
+
+</div>
+
+<script src="pump-logic.js"></script>
 </body>
 </html>
