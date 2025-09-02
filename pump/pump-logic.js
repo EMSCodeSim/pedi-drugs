@@ -1,13 +1,21 @@
 /* =========================
-   Multi-line state + drawing
-   (with inline SVG fallbacks so hoses show even if CSS fails)
+   Multi-line state + curved upward hoses from pump panel
    ========================= */
 
 const STAGE_W = 390;
 const PX_PER_50FT = 80;
-const HOSE_X_RATIO = 0.49;
-const BRANCH_OFFSET = 34;
 
+/* Where the pump discharge sits on the truck image (tweak if needed) */
+const PUMP_X = Math.round(STAGE_W * 0.515); // ~right of center where pump panel is
+const PUMP_Y = 460;                          // vertical mid-pump; raise/lower to line up
+
+/* Curve/spacing */
+const MAIN_CURVE_PULL = 38;     // how far main hose bows left/right
+const BRANCH_CURVE_PULL = 44;   // how far branches bow left/right
+const BRANCH_LIFT = 28;         // initial upward lift before curving out
+const PER_LINE_X_SPREAD = 16;   // start X spread between Line1/2/3
+
+/* FL coefficients per 100' @ Q^2 */
 const COEFF = { "1.75":15.5, "2.5":2, "5":0.08 };
 
 const NOZZLES = [
@@ -35,12 +43,8 @@ function makeEmptyLine(){
     nozzleRight:null,
   };
 }
-const lines = {
-  left: makeEmptyLine(),   // Line 1
-  right: makeEmptyLine(),  // Line 2
-  back: makeEmptyLine()    // Line 3
-};
-let activeKey = 'left';     // which line is being edited
+const lines = { left: makeEmptyLine(), right: makeEmptyLine(), back: makeEmptyLine() };
+let activeKey = 'left';
 
 /* Elevation */
 let elevFt = 0, elevPsiPerFt = 0.434;
@@ -75,14 +79,11 @@ const breakdownEl = document.getElementById('breakdown');
 function ensureDefaults(key){
   const L = lines[key];
   if(L.itemsMain.length) return;
-
   if(key === 'left' || key === 'right'){
-    // Lines 1 & 2 default: 1¾″ × 200′, 185 gpm @ 50 psi
     L.itemsMain = [{size:"1.75", lengthFt:200}];
     L.nozzleLeft = NOZZLES[1];
     L.nozzleRight = NOZZLES[1];
   } else {
-    // Line 3 default: 2½″ × 200′, 265 gpm @ 50 psi
     L.itemsMain = [{size:"2.5", lengthFt:200}];
     L.nozzleLeft = NOZZLES[7];
     L.nozzleRight = NOZZLES[7];
@@ -99,16 +100,12 @@ function sumFL(items, gpm){
   return items.reduce((acc,h)=> acc + calcFL(gpm, h.size, h.lengthFt), 0);
 }
 function gpmForLine(L){
-  if(L.hasWye){
-    return (L.nozzleLeft?.gpm||0) + (L.nozzleRight?.gpm||0);
-  }
+  if(L.hasWye){ return (L.nozzleLeft?.gpm||0) + (L.nozzleRight?.gpm||0); }
   return L.nozzleRight?.gpm||0;
 }
-function classFor(size){
-  return size==='5' ? 'hose5' : (size==='2.5' ? 'hose25' : 'hose175');
-}
+function classFor(size){ return size==='5' ? 'hose5' : (size==='2.5' ? 'hose25' : 'hose175'); }
 
-/* ===== Inline SVG fallback colors (works even if CSS fails) ===== */
+/* ===== Inline SVG fallback colors (visible even if CSS fails) ===== */
 const HOSE_FALLBACK = {
   hose5:   { stroke:"#ecd464", width:12 },
   hose25:  { stroke:"#6ecbff", width:9  },
@@ -118,49 +115,76 @@ const HOSE_FALLBACK = {
 /* ===== Drawing helpers ===== */
 function clearGroup(g){ while(g.firstChild) g.removeChild(g.firstChild); }
 function applyStrokeFallback(el, cls){
-  const fb = HOSE_FALLBACK[cls];
-  if(!fb) return;
+  const fb = HOSE_FALLBACK[cls]; if(!fb) return;
   el.setAttribute("stroke", fb.stroke);
   el.setAttribute("stroke-width", fb.width);
   el.setAttribute("fill", "none");
   el.setAttribute("stroke-linecap", "round");
   el.setAttribute("stroke-linejoin", "round");
 }
-function hosePath(startX, startY, totalPx, widthClass){
-  const endX = Math.min(startX + totalPx, STAGE_W-12);
+
+/* Curved main hose that goes UP from the pump and bows left/right */
+function mainCurvePath(startX, startY, totalPx, widthClass, dir){
+  const endY = Math.max(36, startY - totalPx);                 // go upward
+  const endX = startX + (dir ? dir*14 : 0);                    // small lateral shift
+  const c1x = startX + (dir ? dir*MAIN_CURVE_PULL*0.6 : 0);
+  const c1y = startY - totalPx*0.25;
+  const c2x = startX + (dir ? dir*MAIN_CURVE_PULL : 0);
+  const c2y = startY - totalPx*0.75;
+
   const p = document.createElementNS("http://www.w3.org/2000/svg","path");
-  p.setAttribute("d", `M ${startX},${startY} L ${endX},${startY}`);
-  p.setAttribute("class", `hoseMain ${widthClass}`);
-  applyStrokeFallback(p, widthClass);   // ensure visible without CSS
-  return {path:p, endX, endY:startY};
-}
-function branchPath(x, y, side, totalPx, widthClass){
-  const dir = side==='L' ? -1 : 1;
-  const turnX = x + dir*BRANCH_OFFSET;
-  const endX = Math.max(12, Math.min(STAGE_W-12, turnX + dir*totalPx));
-  const p = document.createElementNS("http://www.w3.org/2000/svg","path");
-  p.setAttribute("d", `M ${x},${y} L ${turnX},${y-24} L ${endX},${y-24}`);
+  p.setAttribute("d", `M ${startX},${startY} C ${c1x},${c1y} ${c2x},${c2y} ${endX},${endY}`);
   p.setAttribute("class", `hoseMain ${widthClass}`);
   applyStrokeFallback(p, widthClass);
-  return {path:p, endX, endY:y-24};
+  return {path:p, endX, endY};
 }
+
+/* Branch that lifts then curves outward/up */
+function branchCurvePath(x, y, side, totalPx, widthClass){
+  const dir = side==='L' ? -1 : 1;
+  const rise = Math.max(20, totalPx*0.55);
+  const run  = Math.max(28, totalPx*0.45);
+  const midY = y - BRANCH_LIFT;
+  const endX = x + dir * run;
+  const endY = Math.max(24, y - rise);
+
+  const c1x = x + dir*BRANCH_CURVE_PULL*0.6;
+  const c1y = y - rise*0.35;
+  const c2x = x + dir*BRANCH_CURVE_PULL;
+  const c2y = y - rise*0.75;
+
+  const d = [
+    `M ${x},${y}`,
+    `L ${x},${midY}`,
+    `C ${c1x},${c1y} ${c2x},${c2y} ${endX},${endY}`
+  ].join(' ');
+
+  const p = document.createElementNS("http://www.w3.org/2000/svg","path");
+  p.setAttribute("d", d);
+  p.setAttribute("class", `hoseMain ${widthClass}`);
+  applyStrokeFallback(p, widthClass);
+  return {path:p, endX, endY};
+}
+
 function addBubble(text, x,y){
   const div = document.createElement('div');
   div.className='bubble';
-  div.style.left = `${x+8}px`;
-  div.style.top = `${y-18}px`;
+  div.style.left = `${Math.min(Math.max(x+8, 8), STAGE_W-160)}px`;
+  div.style.top = `${Math.max(y-18, 6)}px`;
   div.textContent = text;
   overlay.parentElement.appendChild(div);
   return div;
 }
 
-/* ===== Draw one line ===== */
-function drawLine(key, yOffset){
+/* ===== Draw one line (with curved main + curved branches) ===== */
+function drawLine(key){
   const L = lines[key];
   if(!L.deployed || !L.itemsMain.length) return;
 
-  const startY = 660 + yOffset;
-  const startX = Math.round(STAGE_W * HOSE_X_RATIO);
+  // curve direction & starting X per line for spacing
+  const dir = key==='left' ? -1 : (key==='right' ? 1 : 0);
+  const startX = PUMP_X + (dir * PER_LINE_X_SPREAD);
+  const startY = PUMP_Y;
 
   const gpm = gpmForLine(L);
   const mainLenFt = L.itemsMain.reduce((s,h)=>s+h.lengthFt,0);
@@ -168,7 +192,7 @@ function drawLine(key, yOffset){
   const firstSize = L.itemsMain[0]?.size || '1.75';
   const hClass = classFor(firstSize);
 
-  const mainSeg = hosePath(startX, startY, mainPx, hClass);
+  const mainSeg = mainCurvePath(startX, startY, mainPx, hClass, dir);
   hosesG.appendChild(mainSeg.path);
   const mainFL = sumFL(L.itemsMain, gpm);
   addBubble(`${L.itemsMain.map(h=>`${h.size}″×${h.lengthFt}′`).join(' + ')} | FL ${mainFL.toFixed(1)} psi`, mainSeg.endX, mainSeg.endY);
@@ -177,21 +201,21 @@ function drawLine(key, yOffset){
   if(L.hasWye){
     const leftFt = L.itemsLeft.reduce((s,h)=>s+h.lengthFt,0);
     if(L.itemsLeft.length){
-      const bL = branchPath(mainSeg.endX, mainSeg.endY, 'L', (leftFt/50)*PX_PER_50FT, classFor(L.itemsLeft[0]?.size||'1.75'));
+      const bL = branchCurvePath(mainSeg.endX, mainSeg.endY, 'L', (leftFt/50)*PX_PER_50FT, classFor(L.itemsLeft[0]?.size||'1.75'));
       branchesG.appendChild(bL.path);
       const gL = L.nozzleLeft?.gpm||0;
       const flLeft = sumFL(L.itemsLeft, gL);
       leftNeed = flLeft + (L.nozzleLeft?.NP||0);
-      addBubble(`${L.itemsLeft.map(h=>`${h.size}″×${h.lengthFt}′`).join(' + ')} | FL ${flLeft.toFixed(1)} psi | Noz ${(L.nozzleLeft?.NP||0)} psi @ ${gL} gpm`, bL.endX, bL.endY);
+      addBubble(`L: ${leftFt}′ | FL ${flLeft.toFixed(1)} + Noz ${(L.nozzleLeft?.NP||0)} psi`, bL.endX, bL.endY);
     }
     const rightFt = L.itemsRight.reduce((s,h)=>s+h.lengthFt,0);
     if(L.itemsRight.length){
-      const bR = branchPath(mainSeg.endX, mainSeg.endY, 'R', (rightFt/50)*PX_PER_50FT, classFor(L.itemsRight[0]?.size||'1.75'));
+      const bR = branchCurvePath(mainSeg.endX, mainSeg.endY, 'R', (rightFt/50)*PX_PER_50FT, classFor(L.itemsRight[0]?.size||'1.75'));
       branchesG.appendChild(bR.path);
       const gR = L.nozzleRight?.gpm||0;
       const flRight = sumFL(L.itemsRight, gR);
       rightNeed = flRight + (L.nozzleRight?.NP||0);
-      addBubble(`${L.itemsRight.map(h=>`${h.size}″×${h.lengthFt}′`).join(' + ')} | FL ${flRight.toFixed(1)} psi | Noz ${(L.nozzleRight?.NP||0)} psi @ ${gR} gpm`, bR.endX, bR.endY);
+      addBubble(`R: ${rightFt}′ | FL ${flRight.toFixed(1)} + Noz ${(L.nozzleRight?.NP||0)} psi`, bR.endX, bR.endY);
     }
   } else {
     rightNeed = (L.nozzleRight?.NP||0);
@@ -210,14 +234,13 @@ function update(){
   clearGroup(hosesG); clearGroup(branchesG);
   [...document.querySelectorAll('.bubble')].forEach(b=>b.remove());
 
-  const offsets = { left: 0, right: 14, back: 28 };
   let anyDeployed = false;
   let activeMetrics = null;
 
-  Object.keys(lines).forEach(k=>{
+  ['left','right','back'].forEach(k=>{
     if(lines[k].deployed){
       anyDeployed = true;
-      const m = drawLine(k, offsets[k]);
+      const m = drawLine(k);
       if(k === activeKey && m) activeMetrics = m;
     }
   });
@@ -262,12 +285,8 @@ lineBtns.forEach(btn=>{
     const key = btn.dataset.line;
     activeKey = key;
     const L = lines[key];
-    if(!L.deployed){
-      ensureDefaults(key);
-      L.deployed = true;
-    } else {
-      L.deployed = false;
-    }
+    if(!L.deployed){ ensureDefaults(key); L.deployed = true; }
+    else { L.deployed = false; }
     update();
   });
 });
@@ -328,28 +347,23 @@ document.addEventListener('click', (e)=>{
 
 /* ===== Drawer button actions ===== */
 hoseButtonsMain.addEventListener('click', (e)=>{
-  const btn = e.target.closest('button');
-  if(!btn) return;
-  const act = btn.dataset.act;
-  const L = lines[activeKey];
+  const btn = e.target.closest('button'); if(!btn) return;
+  const act = btn.dataset.act; const L = lines[activeKey];
   if(act==='clearHose'){ L.itemsMain = []; update(); return; }
   const hose = btn.dataset.hose && JSON.parse(btn.dataset.hose);
   if(hose){ L.itemsMain.push(hose); update(); }
 });
 hoseButtonsSplit.addEventListener('click', (e)=>{
   const btn = e.target.closest('button'); if(!btn) return;
-  const act = btn.dataset.act;
-  const L = lines[activeKey];
+  const act = btn.dataset.act; const L = lines[activeKey];
   if(act==='clearSplit'){ L.itemsLeft = []; L.itemsRight = []; update(); return; }
-  const side = btn.dataset.side;
-  const hose = JSON.parse(btn.dataset.hose);
+  const side = btn.dataset.side; const hose = JSON.parse(btn.dataset.hose);
   if(side==='L'){ L.itemsLeft.push(hose); } else { L.itemsRight.push(hose); }
   update();
 });
 accButtons.addEventListener('click', (e)=>{
   const btn = e.target.closest('button'); if(!btn) return;
-  const act = btn.dataset.act;
-  const L = lines[activeKey];
+  const act = btn.dataset.act; const L = lines[activeKey];
   if(act==='clearAcc'){ L.hasWye=false; L.wyeLoss=0; update(); return; }
   const acc = btn.dataset.acc && JSON.parse(btn.dataset.acc);
   if(!acc) return;
