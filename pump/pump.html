@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <title>Pump Pressure — Visual Builder</title>
   <meta name="theme-color" content="#0b0f14" />
+  <!-- Make sure the filename matches exactly: pump-style.css (not .ccs) -->
   <link rel="stylesheet" href="pump-style.css" />
 </head>
 <body>
@@ -92,13 +93,13 @@
 
           <!-- Selected line info -->
           <div id="lineinfo" class="lineinfo"></div>
-        </div>
 
-        <!-- 🚒 Line buttons now directly under the truck -->
-        <div class="linebar" id="linebar">
-          <button class="linebtn" data-line="left">Line 1</button>
-          <button class="linebtn" data-line="right">Line 2</button>
-          <button class="linebtn" data-line="back">Line 3</button>
+          <!-- ✅ Line buttons INSIDE the stage, right under the truck -->
+          <div class="linebar" id="linebar">
+            <button class="linebtn" data-line="left">Line 1</button>
+            <button class="linebtn" data-line="right">Line 2</button>
+            <button class="linebtn" data-line="back">Line 3</button>
+          </div>
         </div>
       </div>
     </div>
@@ -148,6 +149,7 @@
 
   </div>
 
+  <!-- Make sure this filename matches exactly: pump-logic.js -->
   <script src="pump-logic.js"></script>
 </body>
 </html>
