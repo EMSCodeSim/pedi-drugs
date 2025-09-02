@@ -19,10 +19,7 @@
   h1{font-size:15px;margin:0}
   .sub{font-size:11px;color:#9fb0c8}
 
-  .truckbar{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
-  .btn{background:#12203a;border:1px solid var(--edge);color:#eaf2ff;border-radius:10px;padding:8px 12px;font-size:13px;cursor:pointer}
-  .btn:disabled{opacity:.5;cursor:not-allowed}
-  .muted{color:var(--muted);font-size:12px;margin-left:auto;align-self:center}
+  /* Removed old truckbar; keep spacing minimal */
 
   .wrapper{border-top:1px solid var(--edge);border-bottom:1px solid var(--edge)}
   .scroll{height:65vh;overflow:auto;background:linear-gradient(180deg,#0b0f14,#0e1726)}
@@ -30,6 +27,19 @@
   #engine{display:block;width:100%;height:auto;position:absolute;bottom:0;left:0}
   #overlay{position:absolute;inset:0;display:block;width:100%;height:100%}
   .hint{position:absolute;top:8px;left:10px;font-size:12px;color:#f7e39a}
+
+  /* Line selector bar UNDER the truck */
+  .linebar{
+    position:absolute;left:0;right:0;bottom:8px;
+    display:flex;justify-content:center;gap:8px;z-index:6;
+    pointer-events:none; /* allow overlay interactions */
+  }
+  .linebar .linebtn{
+    pointer-events:auto;
+    background:#0b1320;border:1px solid var(--edge);color:#eaf2ff;
+    border-radius:10px;padding:8px 12px;font-size:13px;cursor:pointer;
+    box-shadow:0 6px 16px rgba(0,0,0,.35)
+  }
 
   .side{position:fixed;left:8px;top:72px;z-index:4;display:flex;flex-direction:column;gap:8px}
   .fab{width:44px;height:44px;border-radius:12px;border:1px solid var(--edge);background:#0b1320;color:#eaf2ff;font-size:12px;display:flex;align-items:center;justify-content:center;cursor:pointer;box-shadow:0 4px 12px rgba(0,0,0,.25)}
@@ -54,7 +64,6 @@
     display:flex;justify-content:space-between;gap:10px;align-items:center;
     padding:10px;border:1px solid var(--edge);border-radius:12px;background:#0c1320;flex-wrap:wrap
   }
-  .stats{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
   .actions{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
   .actions select,.actions button{background:#0b1320;color:#eaf2ff;border:1px solid var(--edge);border-radius:8px;padding:6px 8px;font-size:13px}
 
@@ -65,13 +74,13 @@
   .hose-25  { border-left:6px solid var(--hose25); }
   .hose-175 { border-left:6px solid var(--hose175); }
 
-  /* Discharge hoses (same overlay) */
+  /* Discharge visuals */
   .hose-end{pointer-events:all; cursor:pointer}
   .plus-circle{fill:#fff; stroke:#111; stroke-width:1.5; filter:drop-shadow(0 2px 4px rgba(0,0,0,.45))}
   .plus-sign{stroke:#111; stroke-width:3; stroke-linecap:round}
 
   .chip{position:absolute; transform:translate(-50%,-50%); background:var(--bubble); border:1px solid var(--bubble-edge); padding:6px 10px; border-radius:999px; font-size:11px; white-space:nowrap; box-shadow:0 8px 20px rgba(0,0,0,.35)}
-  .picker{position:absolute; background:#0b1320; border:1px solid var(--bubble-edge); border-radius:12px; min-width:230px; padding:8px; z-index:6; box-shadow:0 18px 40px rgba(0,0,0,.45); display:none}
+  .picker{position:absolute; background:#0b1320; border:1px solid var(--bubble-edge); border-radius:12px; min-width:230px; padding:8px; z-index:7; box-shadow:0 18px 40px rgba(0,0,0,.45); display:none}
   .picker h3{font-size:12px; color:#cfe4ff; margin:4px 8px 8px}
   .picker-grid{display:grid; grid-template-columns:1fr 1fr; gap:6px; padding:4px 6px 8px}
   .pick{display:flex; align-items:center; gap:8px; background:#0b1a29; border:1px solid #1f3a57; border-radius:10px; padding:10px; cursor:pointer}
@@ -89,12 +98,6 @@
   <header>
     <h1>Pump Pressure — Visual Builder</h1>
     <div class="sub">Smart labels • Wye split • Phone-safe</div>
-
-    <div class="truckbar">
-      <button id="addDischargeBtn" class="btn">➕ Add Hose</button>
-      <button id="resetDischargeBtn" class="btn">♻️ Reset Hoses</button>
-      <span class="muted" id="dischargeCounter">0 / 3 hoses</span>
-    </div>
   </header>
 
   <div class="side">
@@ -180,9 +183,16 @@
           <text class="hint" id="hint">Tap Hose and add a segment…</text>
         </svg>
 
+        <!-- New fixed line selector under the truck -->
+        <div class="linebar" id="linebar">
+          <button class="linebtn" data-line="left">Line 1</button>
+          <button class="linebtn" data-line="right">Line 2</button>
+          <button class="linebtn" data-line="back">Line 3</button>
+        </div>
+
         <!-- Discharge picker -->
         <div id="dischargePicker" class="picker" role="dialog" aria-modal="true" aria-hidden="true">
-          <h3 id="pickerTitle">Hose Tip</h3>
+          <h3 id="pickerTitle">Line</h3>
 
           <div id="pickerHome">
             <div class="section-title">Choose an action</div>
@@ -282,7 +292,7 @@
 
 <script>
   /* =========================
-     ORIGINAL CALCULATOR CODE
+     Calculator + drawing
      ========================= */
 
   const STAGE_W = 390;
@@ -338,7 +348,6 @@
   const pickerNozzle = document.getElementById('pickerNozzle');
   const pickerAcc = document.getElementById('pickerAcc');
   const pickerConfig = document.getElementById('pickerConfig');
-  const hint = document.getElementById('hint');
   const builderList = document.getElementById('builderList');
 
   const drawerHose = document.getElementById('drawerHose');
@@ -596,10 +605,45 @@
     const footer=document.createElementNS('http://www.w3.org/2000/svg','text');
     footer.setAttribute('x', toVBX(STAGE_W/2)); footer.setAttribute('y', toVBY(stageH - 8));
     footer.setAttribute('text-anchor','middle'); footer.setAttribute('fill','#d7e7ff'); footer.setAttribute('font-size','12');
+    const flows = calc();
     footer.textContent = `Total: ${Math.round(flows.PDP_total)} psi PDP • ${hasWye ? (flows.QL + flows.QR) : flows.QR} gpm`;
     labelGroup.appendChild(footer);
 
     renderDischargeHoses(roofY, xMain);
+  }
+
+  function renderBuilder(){
+    const el = document.getElementById('builderList');
+    el.innerHTML='';
+    const R = calc();
+
+    if(itemsMain.length===0 && !hasWye && itemsLeft.length===0 && itemsRight.length===0){
+      const e=document.createElement('div'); e.className='item';
+      e.innerHTML='<div>Use the left tools: add <b>Hose</b>, add <b>Accessory</b> or <b>Wye</b>, then pick <b>Nozzles</b>.</div>';
+      el.appendChild(e); return;
+    }
+
+    const mainHead=document.createElement('div'); mainHead.className='item';
+    mainHead.innerHTML=`<div><b>Main line (to Wye)</b> <span class="note">GPM ${R.Qtotal}</span></div>`;
+    el.appendChild(mainHead);
+    itemsMain.forEach((it,i)=>{
+      if(it.type==='hose') el.appendChild(builderRowHose(it,i,'Main', R.Qtotal));
+      else el.appendChild(builderRowAcc(it,i));
+    });
+
+    if(hasWye){
+      const splitHead=document.createElement('div'); splitHead.className='item';
+      splitHead.innerHTML=`<div><b>Wye/Siamese</b> <span class="note">+${wyeLoss} psi • Left ${R.QL} gpm • Right ${R.QR} gpm</span></div>`;
+      el.appendChild(splitHead);
+
+      const cols=document.createElement('div'); cols.className='col2';
+      const leftCol=document.createElement('div'); const rightCol=document.createElement('div');
+      leftCol.innerHTML=`<div class="note">Left branch (GPM ${R.QL})</div>`;
+      rightCol.innerHTML=`<div class="note">Right branch (GPM ${R.QR})</div>`;
+      itemsLeft.forEach((h,i)=> leftCol.appendChild(builderRowHose(h,i,'Left', R.QL)));
+      itemsRight.forEach((h,i)=> rightCol.appendChild(builderRowHose(h,i,'Right', R.QR)));
+      cols.appendChild(leftCol); cols.appendChild(rightCol); el.appendChild(cols);
+    }
   }
 
   function rowClassForSize(size){
@@ -647,38 +691,6 @@
     div.querySelector('[data-act="rename"]').onclick=()=>{ const v=prompt('Accessory name:', a.name); if(v!==null) a.name=v||a.name; render(); };
     return div;
   }
-  function renderBuilder(){
-    builderList.innerHTML='';
-    const R = calc();
-
-    if(itemsMain.length===0 && !hasWye && itemsLeft.length===0 && itemsRight.length===0){
-      const e=document.createElement('div'); e.className='item';
-      e.innerHTML='<div>Use the left tools: add <b>Hose</b>, add <b>Accessory</b> or <b>Wye</b>, then pick <b>Nozzles</b>.</div>';
-      builderList.appendChild(e); return;
-    }
-
-    const mainHead=document.createElement('div'); mainHead.className='item';
-    mainHead.innerHTML=`<div><b>Main line (to Wye)</b> <span class="note">GPM ${R.Qtotal}</span></div>`;
-    builderList.appendChild(mainHead);
-    itemsMain.forEach((it,i)=>{
-      if(it.type==='hose') builderList.appendChild(builderRowHose(it,i,'Main', R.Qtotal));
-      else builderList.appendChild(builderRowAcc(it,i));
-    });
-
-    if(hasWye){
-      const splitHead=document.createElement('div'); splitHead.className='item';
-      splitHead.innerHTML=`<div><b>Wye/Siamese</b> <span class="note">+${wyeLoss} psi • Left ${R.QL} gpm • Right ${R.QR} gpm</span></div>`;
-      builderList.appendChild(splitHead);
-
-      const cols=document.createElement('div'); cols.className='col2';
-      const leftCol=document.createElement('div'); const rightCol=document.createElement('div');
-      leftCol.innerHTML=`<div class="note">Left branch (GPM ${R.QL})</div>`;
-      rightCol.innerHTML=`<div class="note">Right branch (GPM ${R.QR})</div>`;
-      itemsLeft.forEach((h,i)=> leftCol.appendChild(builderRowHose(h,i,'Left', R.QL)));
-      itemsRight.forEach((h,i)=> rightCol.appendChild(builderRowHose(h,i,'Right', R.QR)));
-      cols.appendChild(leftCol); cols.appendChild(rightCol); builderList.appendChild(cols);
-    }
-  }
 
   function calcAndRenderMath(){
     const R = calc();
@@ -710,17 +722,13 @@
   engineImg.onload = ()=> render(true);
   window.addEventListener('resize', ()=> render(false));
 
-  /* ========= Discharge hoses (defaults + color-by-size) ========= */
-  const addDischargeBtn = document.getElementById('addDischargeBtn');
-  const resetDischargeBtn = document.getElementById('resetDischargeBtn');
-  const dischargeCounter = document.getElementById('dischargeCounter');
-
+  /* ========= Discharge hoses (fixed 3 lines + color-by-size) ========= */
   const DISCH_MAX = 3;
-  const dischargeOrder = ['left','right','back'];
+  const dischargeOrder = ['left','right','back']; // mapping to Line 1/2/3
   const dischargeDefaults = {
-    left:  { label:'Hose 1', size:'1.75', lengthFt:200, nozzle:{id:'chief185', gpm:185, NP:50}, accessories:[] },
-    right: { label:'Hose 2', size:'1.75', lengthFt:200, nozzle:{id:'chief185', gpm:185, NP:50}, accessories:[] },
-    back:  { label:'Hose 3', size:'2.5',  lengthFt:250, nozzle:{id:'chief265', gpm:265, NP:50}, accessories:[] },
+    left:  { label:'Line 1', size:'1.75', lengthFt:200, nozzle:{id:'chief185', gpm:185, NP:50}, accessories:[] },
+    right: { label:'Line 2', size:'1.75', lengthFt:200, nozzle:{id:'chief185', gpm:185, NP:50}, accessories:[] },
+    back:  { label:'Line 3', size:'2.5',  lengthFt:250, nozzle:{id:'chief265', gpm:265, NP:50}, accessories:[] },
   };
 
   const nozzleCatalog = {
@@ -730,22 +738,16 @@
     chief265:{name:'ChiefXD 265 @50', gpm:265, NP:50},
   };
 
-  const sizeStroke = s => (s==='1.75'?getComputedStyle(document.documentElement).getPropertyValue('--hose175')
-                           : s==='2.5'?getComputedStyle(document.documentElement).getPropertyValue('--hose25')
-                           : getComputedStyle(document.documentElement).getPropertyValue('--hose5'));
-  const sizeShadow = s => 'rgba(0,0,0,.35)';
-
-  const dischargeState = { hoses: [] };
-
-  function updateDischargeCounter(){
-    dischargeCounter.textContent = `${dischargeState.hoses.length} / ${DISCH_MAX} hoses`;
-    addDischargeBtn.disabled = dischargeState.hoses.length >= DISCH_MAX;
-  }
+  const dischargeState = { hoses: [] }; // array of {id,pos,label,size,lengthFt,nozzle,accessories,endVB,chipEl,nodes}
 
   function vbToScreen(x_vb, y_vb){
     const ov = overlay.getBoundingClientRect();
     return { x: ov.left + (x_vb / STAGE_W) * ov.width, y: ov.top + y_vb };
   }
+
+  const sizeStroke = s => (s==='1.75'?getComputedStyle(document.documentElement).getPropertyValue('--hose175')
+                           : s==='2.5'?getComputedStyle(document.documentElement).getPropertyValue('--hose25')
+                           : getComputedStyle(document.documentElement).getPropertyValue('--hose5'));
 
   function dischargeGeom(pos, roofY, xMain){
     const start = { x: toVBX(xMain), y: toVBY(roofY) };
@@ -772,7 +774,7 @@
 
       const sh = document.createElementNS('http://www.w3.org/2000/svg','path');
       sh.setAttribute('d', geom.d);
-      sh.setAttribute('stroke', sizeShadow(h.size));
+      sh.setAttribute('stroke', 'rgba(0,0,0,.35)');
       sh.setAttribute('stroke-width', '12');
       sh.setAttribute('opacity', '.35');
       sh.setAttribute('fill','none');
@@ -801,6 +803,7 @@
 
       h.nodes = {shadow:sh, path:p, endGroup:gEnd};
 
+      // Label near roof (“Line 1/2/3”)
       const labelY = roofY - 8;
       let labelX = xMain;
       if(h.pos==='left') labelX = xMain - 78;
@@ -881,15 +884,22 @@
     pickerForHoseId = null;
   }
 
+  // Picker events
   dischargePicker.addEventListener('click', (e)=>{
     const toView = e.target.getAttribute('data-view');
     if(toView){ showPickerView(toView); return; }
     if(e.target.hasAttribute('data-back')){ showPickerView('home'); return; }
   });
+  document.addEventListener('click', (e)=>{
+    if(dischargePicker.contains(e.target)) return;
+    if(e.target.closest('.hose-end')) return;
+    if(e.target.closest('.linebtn')) return;
+    hideDischargePicker();
+  });
 
-  pickerAddHose.addEventListener('click', (e)=>{
-    const btn = e.target.closest('[data-addlen]');
-    if(!btn) return;
+  // Picker actions
+  document.getElementById('pickerAddHose').addEventListener('click', (e)=>{
+    const btn = e.target.closest('[data-addlen]'); if(!btn) return;
     const len = parseInt(btn.getAttribute('data-addlen'),10);
     const size = btn.getAttribute('data-size');
     const hose = dischargeState.hoses.find(h=>h.id===pickerForHoseId); if(!hose) return;
@@ -898,8 +908,7 @@
     positionDischargeChips();
     hideDischargePicker();
   });
-
-  pickerNozzle.addEventListener('click', (e)=>{
+  document.getElementById('pickerNozzle').addEventListener('click', (e)=>{
     const pick = e.target.closest('.pick[data-type="nozzle"]'); if(!pick) return;
     const id = pick.getAttribute('data-id');
     const hose = dischargeState.hoses.find(h=>h.id===pickerForHoseId); if(!hose) return;
@@ -908,8 +917,7 @@
     positionDischargeChips();
     hideDischargePicker();
   });
-
-  pickerAcc.addEventListener('click', (e)=>{
+  document.getElementById('pickerAcc').addEventListener('click', (e)=>{
     const pick = e.target.closest('.pick[data-type="accessory"]'); if(!pick) return;
     const id = pick.getAttribute('data-id');
     const hose = dischargeState.hoses.find(h=>h.id===pickerForHoseId); if(!hose) return;
@@ -918,13 +926,11 @@
     if(hose.chipEl){ hose.chipEl.textContent = chipSummary(hose); }
     hideDischargePicker();
   });
-
-  pickerConfig.addEventListener('click', (e)=>{
+  document.getElementById('pickerConfig').addEventListener('click', (e)=>{
     const sizeSet = e.target.getAttribute('data-size-set');
     const lenSet  = e.target.getAttribute('data-len-set');
     const reset   = e.target.hasAttribute('data-reset-default');
     const hose = dischargeState.hoses.find(h=>h.id===pickerForHoseId); if(!hose) return;
-
     if(sizeSet){ hose.size = sizeSet; positionDischargeChips(); hideDischargePicker(); return; }
     if(lenSet){ hose.lengthFt = parseInt(lenSet,10); positionDischargeChips(); hideDischargePicker(); return; }
     if(reset){
@@ -934,74 +940,66 @@
     }
   });
 
+  // Open picker by tapping +, or via Line 1/2/3 buttons
   overlay.addEventListener('click', (e)=>{
     const end = e.target.closest('.hose-end'); if(!end) return;
     const id = end.getAttribute('data-hose');
     const hose = dischargeState.hoses.find(h=>h.id===id); if(!hose) return;
 
+    const ov = overlay.getBoundingClientRect();
     const circ = end.querySelector('.plus-circle');
-    let clientX = e.clientX, clientY = e.clientY;
-    if(circ){
-      const ov = overlay.getBoundingClientRect();
-      const cx = parseFloat(circ.getAttribute('cx'));
-      const cy = parseFloat(circ.getAttribute('cy'));
-      clientX = ov.left + (cx/STAGE_W)*ov.width;
-      clientY = ov.top  + cy;
-    }
+    const cx = parseFloat(circ.getAttribute('cx'));
+    const cy = parseFloat(circ.getAttribute('cy'));
+    const clientX = ov.left + (cx/STAGE_W)*ov.width;
+    const clientY = ov.top  + cy;
     showDischargePicker(hose, clientX, clientY);
   });
 
-  document.addEventListener('click', (e)=>{
-    if(dischargePicker.contains(e.target)) return;
-    if(e.target.closest('.hose-end')) return;
-    if(e.target.closest('#addDischargeBtn')) return;
-    hideDischargePicker();
+  // New: buttons under truck
+  document.getElementById('linebar').addEventListener('click', (e)=>{
+    const btn = e.target.closest('.linebtn'); if(!btn) return;
+    const pos = btn.getAttribute('data-line'); // left/right/back
+    const hose = dischargeState.hoses.find(h=>h.pos===pos); if(!hose || !hose.endVB) return;
+    const ov = overlay.getBoundingClientRect();
+    const clientX = ov.left + (hose.endVB.x/STAGE_W)*ov.width;
+    const clientY = ov.top  + hose.endVB.y;
+    // ensure the tip is in view (scroll to bottom/top as needed)
+    scrollEl.scrollTop = 0;
+    showDischargePicker(hose, clientX, clientY);
   });
 
-  function addDischargeHose(){
-    const used = new Set(dischargeState.hoses.map(h=>h.pos));
-    const pos = dischargeOrder.find(p=>!used.has(p));
-    if(!pos) return;
-    const base = dischargeDefaults[pos];
-    const hose = {
-      id: crypto.randomUUID(),
-      pos,
-      label: base.label,
-      size: base.size,
-      lengthFt: base.lengthFt,
-      nozzle: {...base.nozzle},
-      accessories: [],
-      nodes:{}
-    };
-    dischargeState.hoses.push(hose);
-    updateDischargeCounter();
-    render(false);
-  }
-  function resetDischarge(){
-    dischargeState.hoses.forEach(h=>{
-      if(h.chipEl && h.chipEl.parentNode) h.chipEl.parentNode.removeChild(h.chipEl);
-    });
+  // Init 3 fixed lines
+  function initFixedLines(){
     dischargeState.hoses = [];
-    updateDischargeCounter();
-    render(false);
+    for(const pos of dischargeOrder){
+      const base = dischargeDefaults[pos];
+      dischargeState.hoses.push({
+        id: crypto.randomUUID(),
+        pos,
+        label: base.label,
+        size: base.size,
+        lengthFt: base.lengthFt,
+        nozzle: {...base.nozzle},
+        accessories: [],
+        nodes:{}
+      });
+    }
   }
 
-  addDischargeBtn.onclick = addDischargeHose;
-  resetDischargeBtn.onclick = resetDischarge;
-
-  function initDefaultDischarges(){
-    resetDischarge();
-    addDischargeHose(); // Hose 1 (left)
-    addDischargeHose(); // Hose 2 (right)
-    addDischargeHose(); // Hose 3 (back)
+  // Draw helpers used above
+  function renderDischargeHoses(roofY, xMain){
+    // (defined earlier in file — kept consolidated here by hoist)
   }
 
-  function onDischargeAttachmentSelected(hose){
-    console.log('Attachment updated:', hose);
-  }
+  function chipSummary(h){ /* (defined above) */ }
 
-  updateDischargeCounter();
-  initDefaultDischarges();
+  function positionDischargeChips(){ /* (defined above) */ }
+
+  // Boot
+  initFixedLines();
+  if(engineImg.complete) render(true);
+  engineImg.onload = ()=> render(true);
+  window.addEventListener('resize', ()=> render(false));
 </script>
 </body>
 </html>
