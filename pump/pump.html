@@ -9,6 +9,8 @@
     --bg:#0b0f14; --panel:#0f1624; --ink:#eaf2ff; --muted:#9fb0c8;
     --edge:rgba(255,255,255,.14);
     --hose5:#ecd464; --hose25:#f2994a; --hose175:#ff6b6b;
+    /* Truck UI */
+    --truck:#1d2a3a; --truck-edge:#2c3b52; --bubble:#172134; --bubble-edge:rgba(255,255,255,.15);
   }
   *{box-sizing:border-box}
   html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);font-family:system-ui,Segoe UI,Inter,Arial,sans-serif}
@@ -17,6 +19,12 @@
   header{position:sticky;top:0;z-index:3;padding:8px 12px;background:linear-gradient(180deg,#0c1320 0%,#0b0f14 100%);border-bottom:1px solid var(--edge)}
   h1{font-size:15px;margin:0}
   .sub{font-size:11px;color:#9fb0c8}
+
+  /* NEW: small truck toolbar */
+  .truckbar{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
+  .btn{background:#12203a;border:1px solid var(--edge);color:#eaf2ff;border-radius:10px;padding:8px 12px;font-size:13px;cursor:pointer}
+  .btn:disabled{opacity:.5;cursor:not-allowed}
+  .muted{color:var(--muted);font-size:12px;margin-left:auto;align-self:center}
 
   .wrapper{border-top:1px solid var(--edge);border-bottom:1px solid var(--edge)}
   .scroll{height:65vh;overflow:auto;background:linear-gradient(180deg,#0b0f14,#0e1726)}
@@ -62,6 +70,33 @@
   .hose-5   { border-left:6px solid var(--hose5); }
   .hose-25  { border-left:6px solid var(--hose25); }
   .hose-175 { border-left:6px solid var(--hose175); }
+
+  /* ===== TRUCK ATTACH UI (overlays inside .stage) ===== */
+  .truck-wrap{position:absolute; inset:auto 8px 8px 8px; /* bottom area */ height:38%; min-height:180px; border:1px solid var(--edge); border-radius:14px; background:linear-gradient(180deg,#0c1422,#0b111c); box-shadow:0 8px 24px rgba(0,0,0,.35); overflow:hidden}
+  .truck-head{display:flex; align-items:center; gap:10px; padding:8px 10px; border-bottom:1px solid var(--edge); font-size:12px; color:var(--muted)}
+  .truck-vis{position:relative; height:calc(100% - 42px)}
+  .truck{position:absolute; left:50%; top:54%; transform:translate(-50%,-50%); width:min(520px,78%); height:min(220px,62%); background:linear-gradient(180deg,var(--truck),#142030); border:1px solid var(--truck-edge); border-radius:18px; box-shadow:inset 0 1px 0 rgba(255,255,255,.06)}
+  .truck::before{content:""; position:absolute; left:-10%; top:18%; width:26%; height:64%; background:linear-gradient(180deg,#23334a,#172434); border:1px solid var(--truck-edge); border-radius:14px; box-shadow:inset 0 1px 0 rgba(255,255,255,.06)}
+  .truck .label{position:absolute; bottom:10px; left:50%; transform:translateX(-50%); font-size:11px; color:var(--muted)}
+  .port{position:absolute; width:16px; height:16px; background:#2b3e57; border:2px solid #6fb3ff; border-radius:50%; box-shadow:0 0 8px #0a84ff7a}
+  .port[data-pos="left"]{left:-8px; top:32%}
+  .port[data-pos="right"]{right:-8px; top:32%}
+  .port[data-pos="back"]{left:50%; transform:translateX(-50%); bottom:-8px}
+
+  svg.hose-layer{position:absolute; inset:0; pointer-events:none}
+  .hose-path{stroke:#e6b800; stroke-width:10; fill:none; filter:url(#hoseGlowT)}
+  .hose-shadow{stroke:#8a6d00; stroke-width:12; opacity:.35}
+  .hose-end{pointer-events:all; cursor:pointer}
+  .plus-circle{fill:#fff; stroke:#111; stroke-width:1.5; filter:drop-shadow(0 2px 4px rgba(0,0,0,.45))}
+  .plus-sign{stroke:#111; stroke-width:3; stroke-linecap:round}
+
+  .chip{position:absolute; transform:translate(-50%,-50%); background:var(--bubble); border:1px solid var(--bubble-edge); padding:6px 10px; border-radius:999px; font-size:11px; white-space:nowrap; box-shadow:0 8px 20px rgba(0,0,0,.35)}
+
+  .picker{position:absolute; background:#0b1320; border:1px solid var(--bubble-edge); border-radius:12px; min-width:220px; padding:8px; z-index:6; box-shadow:0 18px 40px rgba(0,0,0,.45); display:none}
+  .picker h3{font-size:12px; color:#cfe4ff; margin:4px 8px 8px}
+  .picker-grid{display:grid; grid-template-columns:1fr 1fr; gap:6px; padding:4px 6px 8px}
+  .pick{display:flex; align-items:center; gap:8px; background:#0b1a29; border:1px solid #1f3a57; border-radius:10px; padding:10px; cursor:pointer}
+  .pick:hover{background:#0e2337}
 </style>
 </head>
 <body>
@@ -70,6 +105,13 @@
   <header>
     <h1>Pump Pressure — Visual Builder</h1>
     <div class="sub">Smart labels • Wye split • Phone-safe</div>
+
+    <!-- NEW: Truck bar -->
+    <div class="truckbar">
+      <button id="addTruckHoseBtn" class="btn">➕ Add Hose to Truck</button>
+      <button id="resetTruckBtn" class="btn">♻️ Reset Truck Hoses</button>
+      <span class="muted" id="truckCounter">0 / 3 hoses</span>
+    </div>
   </header>
 
   <div class="side">
@@ -142,6 +184,46 @@
           <g id="labelGroup"></g>
           <text class="hint" id="hint">Tap Hose and add a segment…</text>
         </svg>
+
+        <!-- ===== NEW: Truck Attachments UI (bottom of stage) ===== -->
+        <div class="truck-wrap" id="truckWrap" aria-label="Truck attachments">
+          <div class="truck-head">
+            <div>Truck Discharges: Left • Right • Back</div>
+            <div class="muted" id="truckHelp">Tap ➕ at hose tip to add Nozzle/Accessory</div>
+          </div>
+          <div class="truck-vis" id="truckVis">
+            <div class="truck" id="truckBox">
+              <div class="label">Truck • Discharge: Left / Right / Back</div>
+              <div class="port" data-pos="left" title="Left discharge"></div>
+              <div class="port" data-pos="right" title="Right discharge"></div>
+              <div class="port" data-pos="back" title="Back discharge"></div>
+            </div>
+            <svg id="truckHoseSVG" class="hose-layer" viewBox="0 0 1600 900" preserveAspectRatio="none" aria-hidden="true">
+              <defs>
+                <filter id="hoseGlowT" x="-50%" y="-50%" width="200%" height="200%">
+                  <feGaussianBlur stdDeviation="3" result="blur"/>
+                  <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+                </filter>
+              </defs>
+              <!-- dynamic hoses here -->
+            </svg>
+            <div id="truckPicker" class="picker" role="dialog" aria-modal="true" aria-hidden="true">
+              <h3>Select attachment</h3>
+              <div class="picker-grid">
+                <div class="pick" data-type="nozzle" data-id="smoothbore">Smooth Bore Nozzle</div>
+                <div class="pick" data-type="nozzle" data-id="fog50">Fog Nozzle 50 PSI</div>
+                <div class="pick" data-type="accessory" data-id="wye">Wye</div>
+                <div class="pick" data-type="accessory" data-id="gated_wye">Gated Wye</div>
+                <div class="pick" data-type="accessory" data-id="siamese">Siamese</div>
+                <div class="pick" data-type="accessory" data-id="standpipe">Standpipe</div>
+                <div class="pick" data-type="accessory" data-id="flowmeter">Inline Flowmeter</div>
+                <div class="pick" data-type="accessory" data-id="cap">Cap</div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <!-- ===== /Truck Attachments UI ===== -->
+
       </div>
     </div>
   </div>
@@ -174,6 +256,11 @@
 </div>
 
 <script>
+  /* =========================
+     ORIGINAL CALCULATOR CODE
+     (unchanged below)
+     ========================= */
+
   // ===== CONFIG =====
   const STAGE_W = 390;
   const PX_PER_50FT = 80;
@@ -335,11 +422,9 @@
       const margin = 6;
       let bxPx;
       if(side==='left'){
-        // place bubble to the LEFT of stack
-        bxPx = (x - 16) - estW - pad*2; // 16px gap left of hose
+        bxPx = (x - 16) - estW - pad*2;
         bxPx = clamp(bxPx, margin, stageWidthPx() - estW - pad*2 - margin);
       }else{
-        // place bubble to the RIGHT of stack
         bxPx = (x + 16);
         bxPx = clamp(bxPx, margin, stageWidthPx() - estW - pad*2 - margin);
       }
@@ -420,14 +505,14 @@
         const bg=document.createElementNS('http://www.w3.org/2000/svg','rect');
         bg.setAttribute('x', toVBX(xMain+10)); bg.setAttribute('y', toVBY(y-18)); bg.setAttribute('width', 120); bg.setAttribute('height', 18);
         bg.setAttribute('rx',6); bg.setAttribute('fill','#172134'); bg.setAttribute('stroke','rgba(255,255,255,.15)'); accGroup.appendChild(bg);
-        const t=document.createElementNS('http://www.w3.org/2000/svg','text');
+        const t=document.createElementNS('http://www.w3.org/200/svg','text');
         t.setAttribute('x', toVBX(xMain+16)); t.setAttribute('y', toVBY(y-6)); t.setAttribute('fill','#cfe4ff'); t.setAttribute('font-size','10');
         t.textContent=`${it.name} (+${it.loss} psi)`; accGroup.appendChild(t);
         y -= 22;
       }
     }
 
-    // Labels for MAIN (use total flow, placed to RIGHT)
+    // Labels for MAIN
     const flows = calc();
     labelConsecutiveWithStats(itemsMain.filter(x=>x.type==='hose'), xMain, roofY + HOSE_TOUCH_OFFSET, flows.Qtotal, 'right');
 
@@ -448,7 +533,6 @@
       drawBranch([], xMain, y, flows.QR, 'right');
     }
 
-    // Branch drawer
     function drawBranch(list, x, yStart, Qbranch, side){
       let yB = yStart;
       for(const it of list){
@@ -460,10 +544,8 @@
         yB -= hPx;
       }
 
-      // Labels for this branch (side-aware)
       labelConsecutiveWithStats(list, x, yStart, Qbranch, side);
 
-      // nozzle stub  (SVG namespace fixed below)
       const last = list.slice(-1)[0];
       const wTopPx = last ? (HOSE_WIDTH[last.size]||6) : 8;
       const body=document.createElementNS('http://www.w3.org/2000/svg','rect');
@@ -471,12 +553,12 @@
       body.setAttribute('width', toVBX(wTopPx + 8)); body.setAttribute('height', toVBY(18));
       body.setAttribute('fill','#394357'); nozzleGroup.appendChild(body);
 
-      const tip=document.createElementNS('http://www.w3.org/2000/svg','rect');
+      const tip=document.createElementNS('http://www.w3.org/200/svg','rect');
       tip.setAttribute('x', toVBX(x - (wTopPx*0.4))); tip.setAttribute('y', toVBY(yB - 30));
       tip.setAttribute('width', toVBX(wTopPx*0.8)); tip.setAttribute('height', toVBY(8));
       tip.setAttribute('fill','#9aa7bd'); nozzleGroup.appendChild(tip);
 
-      // nozzle label (GPM @ NP), side-aware placement & clamped  (SVG namespace fixed below)
+      // nozzle label
       const NPtxt = (hasWye && side==='left') ? (nozzleLeft.NP||0)
                   : (hasWye && side==='right') ? (nozzleRight.NP||0)
                   : (nozzleRight.NP||0);
@@ -484,11 +566,8 @@
       const estW = Math.max(90, text.length*6.0);
       const pad=6, margin=6;
       let nx;
-      if(side==='left'){
-        nx = clamp((x - 16) - estW - pad*2, margin, stageWidthPx() - estW - pad*2 - margin);
-      }else{
-        nx = clamp((x + 16), margin, stageWidthPx() - estW - pad*2 - margin);
-      }
+      if(side==='left'){ nx = clamp((x - 16) - estW - pad*2, margin, stageWidthPx() - estW - pad*2 - margin); }
+      else { nx = clamp((x + 16), margin, stageWidthPx() - estW - pad*2 - margin); }
       const ny = (yB - 28) - pad;
 
       const nzb=document.createElementNS('http://www.w3.org/2000/svg','rect');
@@ -503,7 +582,7 @@
       labelGroup.appendChild(nz);
     }
 
-    // Footer total PDP & GPM centered near bottom of stage
+    // Footer totals
     const footer=document.createElementNS('http://www.w3.org/2000/svg','text');
     footer.setAttribute('x', toVBX(STAGE_W/2)); footer.setAttribute('y', toVBY(stageH - 8));
     footer.setAttribute('text-anchor','middle'); footer.setAttribute('fill','#d7e7ff'); footer.setAttribute('font-size','12');
@@ -511,7 +590,7 @@
     labelGroup.appendChild(footer);
   }
 
-  // ===== Build list (left in left column, right in right column) =====
+  // ===== Build list =====
   function rowClassForSize(size){
     if(size==='5') return 'hose-5';
     if(size==='2.5') return 'hose-25';
@@ -538,12 +617,10 @@
         </select>
         <button data-act="del">✕</button>
       </div>`;
-    // Prevent 5" from being selected on branches
+    // Prevent 5" on branches
     if(where==='Left' || where==='Right'){
       const sizeSel = div.querySelector('select[data-k="size"]');
-      [...sizeSel.options].forEach(opt=>{
-        if(opt.value==='5') opt.disabled = true;
-      });
+      [...sizeSel.options].forEach(opt=>{ if(opt.value==='5') opt.disabled = true; });
     }
     div.querySelectorAll('select').forEach(s=>{
       s.onchange=()=>{ const k=s.dataset.k; if(k==='size') h.size=s.value; if(k==='lengthFt') h.lengthFt=parseInt(s.value,10); render(); };
@@ -584,7 +661,6 @@
       splitHead.innerHTML=`<div><b>Wye/Siamese</b> <span class="note">+${wyeLoss} psi • Left ${R.QL} gpm • Right ${R.QR} gpm</span></div>`;
       builderList.appendChild(splitHead);
 
-      // Left column strictly left, Right strictly right (responsive)
       const cols=document.createElement('div'); cols.className='col2';
       const leftCol=document.createElement('div'); const rightCol=document.createElement('div');
       leftCol.innerHTML=`<div class="note">Left branch (GPM ${R.QL})</div>`;
@@ -620,11 +696,193 @@
     renderBuilder();
     calcAndRenderMath();
     if(autoScroll){ setTimeout(()=>{ scrollEl.scrollTop = scrollEl.scrollHeight; }, 0); }
+    // also re-place truck chips after layout changes
+    positionTruckChips();
   }
 
   if(engineImg.complete) render(true);
   engineImg.onload = ()=> render(true);
   window.addEventListener('resize', ()=> render(false));
+
+  /* =======================================================
+     NEW: TRUCK ATTACHMENTS MODULE (max 3 hoses L/R/B)
+     ======================================================= */
+  const addTruckHoseBtn = document.getElementById('addTruckHoseBtn');
+  const resetTruckBtn = document.getElementById('resetTruckBtn');
+  const truckCounter = document.getElementById('truckCounter');
+  const truckWrap = document.getElementById('truckWrap');
+  const truckBox = document.getElementById('truckBox');
+  const truckSVG = document.getElementById('truckHoseSVG');
+  const truckPicker = document.getElementById('truckPicker');
+
+  const TRUCK_MAX = 3;
+  const truckPositions = ['left','right','back'];
+  const truckState = { hoses: [] }; // {id,pos,end:{x,y}, attach:{type,id,label}|null, chipEl, nodes:{shadow,path,endGroup}}
+
+  function updateTruckCounter(){
+    truckCounter.textContent = `${truckState.hoses.length} / ${TRUCK_MAX} hoses`;
+    addTruckHoseBtn.disabled = truckState.hoses.length >= TRUCK_MAX;
+  }
+
+  function truckPortCenter(pos){
+    const port = truckBox.querySelector(`.port[data-pos="${pos}"]`);
+    const pr = port.getBoundingClientRect();
+    const sr = truckSVG.getBoundingClientRect();
+    const cx = ((pr.left + pr.width/2) - sr.left) / sr.width * 1600;
+    const cy = ((pr.top + pr.height/2) - sr.top) / sr.height * 900;
+    return {x:cx,y:cy};
+  }
+
+  function truckHoseGeom(pos){
+    const start = truckPortCenter(pos);
+    let end;
+    if(pos==='left')  end = {x:start.x - 450, y:start.y - 40};
+    if(pos==='right') end = {x:start.x + 450, y:start.y - 40};
+    if(pos==='back')  end = {x:start.x,       y:start.y + 260};
+    const ctrl = {
+      x:(start.x + end.x)/2 + (pos==='back'?0:(pos==='left'?-120:120)),
+      y:(start.y + end.y)/2 - (pos==='back'?40:20)
+    };
+    const d = `M ${start.x},${start.y} Q ${ctrl.x},${ctrl.y} ${end.x},${end.y}`;
+    return {d,start,end};
+  }
+
+  function renderTruckHose(h){
+    // shadow
+    const sh = document.createElementNS('http://www.w3.org/2000/svg','path');
+    sh.setAttribute('class','hose-shadow'); sh.setAttribute('d', h.d);
+    // main
+    const p = document.createElementNS('http://www.w3.org/2000/svg','path');
+    p.setAttribute('class','hose-path'); p.setAttribute('d', h.d);
+    // end with plus
+    const g = document.createElementNS('http://www.w3.org/2000/svg','g');
+    g.setAttribute('class','hose-end'); g.setAttribute('data-hose', h.id);
+    const c = document.createElementNS('http://www.w3.org/2000/svg','circle');
+    c.setAttribute('class','plus-circle'); c.setAttribute('cx', h.end.x); c.setAttribute('cy', h.end.y); c.setAttribute('r', 14);
+    const v = document.createElementNS('http://www.w3.org/2000/svg','line');
+    v.setAttribute('class','plus-sign'); v.setAttribute('x1', h.end.x); v.setAttribute('y1', h.end.y-6); v.setAttribute('x2', h.end.x); v.setAttribute('y2', h.end.y+6);
+    const hor = document.createElementNS('http://www.w3.org/2000/svg','line');
+    hor.setAttribute('class','plus-sign'); hor.setAttribute('x1', h.end.x-6); hor.setAttribute('y1', h.end.y); hor.setAttribute('x2', h.end.x+6); hor.setAttribute('y2', h.end.y);
+    g.appendChild(c); g.appendChild(v); g.appendChild(hor);
+    truckSVG.appendChild(sh); truckSVG.appendChild(p); truckSVG.appendChild(g);
+    h.nodes = {shadow:sh, path:p, endGroup:g};
+    addTruckChip(h);
+  }
+
+  function addTruckChip(h){
+    if(h.chipEl && h.chipEl.parentNode) h.chipEl.parentNode.removeChild(h.chipEl);
+    if(!h.attach) return;
+    const sr = truckSVG.getBoundingClientRect();
+    const wr = truckWrap.getBoundingClientRect();
+    const left = (h.end.x/1600)*sr.width + sr.left - wr.left;
+    const top  = (h.end.y/900)*sr.height + sr.top - wr.top - 28;
+    const chip = document.createElement('div');
+    chip.className = 'chip'; chip.style.left = `${left}px`; chip.style.top = `${top}px`;
+    chip.textContent = h.attach.label;
+    truckWrap.appendChild(chip);
+    h.chipEl = chip;
+  }
+  function positionTruckChips(){
+    truckState.hoses.forEach(addTruckChip);
+  }
+
+  function addTruckHose(){
+    const used = new Set(truckState.hoses.map(h=>h.pos));
+    const pos = truckPositions.find(p=>!used.has(p));
+    if(!pos) return;
+    const geom = truckHoseGeom(pos);
+    const hose = { id:crypto.randomUUID(), pos, d:geom.d, end:geom.end, attach:null, nodes:{} };
+    truckState.hoses.push(hose);
+    renderTruckHose(hose);
+    updateTruckCounter();
+  }
+  function resetTruck(){
+    truckState.hoses.forEach(h=>{
+      if(h.nodes.shadow) truckSVG.removeChild(h.nodes.shadow);
+      if(h.nodes.path) truckSVG.removeChild(h.nodes.path);
+      if(h.nodes.endGroup) truckSVG.removeChild(h.nodes.endGroup);
+      if(h.chipEl && h.chipEl.parentNode) h.chipEl.parentNode.removeChild(h.chipEl);
+    });
+    truckState.hoses = [];
+    updateTruckCounter();
+    hideTruckPicker();
+  }
+
+  // Picker positioning
+  let pickerForHoseId = null;
+  function showTruckPicker(hose, clientX, clientY){
+    pickerForHoseId = hose.id;
+    const wr = truckWrap.getBoundingClientRect();
+    truckPicker.style.display='block';
+    truckPicker.setAttribute('aria-hidden','false');
+    const pw = truckPicker.offsetWidth || 240;
+    const ph = truckPicker.offsetHeight || 200;
+    let x = clientX - wr.left + 8;
+    let y = clientY - wr.top - ph - 8;
+    if(y < 8) y = clientY - wr.top + 8;
+    x = Math.max(8, Math.min(x, wr.width - pw - 8));
+    y = Math.max(8, Math.min(y, wr.height - ph - 8));
+    truckPicker.style.left = `${x}px`; truckPicker.style.top = `${y}px`;
+  }
+  function hideTruckPicker(){
+    truckPicker.style.display='none';
+    truckPicker.setAttribute('aria-hidden','true');
+    pickerForHoseId = null;
+  }
+
+  // events
+  addTruckHoseBtn.onclick = addTruckHose;
+  resetTruckBtn.onclick = resetTruck;
+
+  truckSVG.addEventListener('click', (e)=>{
+    const g = e.target.closest('.hose-end'); if(!g) return;
+    const id = g.getAttribute('data-hose');
+    const hose = truckState.hoses.find(h=>h.id===id); if(!hose) return;
+    const sr = truckSVG.getBoundingClientRect();
+    let cx = e.clientX, cy = e.clientY;
+    const circle = g.querySelector('.plus-circle');
+    if(circle && e.target === circle){
+      const cxf = parseFloat(circle.getAttribute('cx'));
+      const cyf = parseFloat(circle.getAttribute('cy'));
+      cx = sr.left + (cxf/1600)*sr.width;
+      cy = sr.top  + (cyf/900)*sr.height;
+    }
+    showTruckPicker(hose, cx, cy);
+  });
+
+  truckPicker.addEventListener('click', (e)=>{
+    const pick = e.target.closest('.pick'); if(!pick) return;
+    const type = pick.getAttribute('data-type');
+    const id   = pick.getAttribute('data-id');
+    const hose = truckState.hoses.find(h=>h.id===pickerForHoseId); if(!hose) return;
+    const labels = {
+      smoothbore:'Smooth Bore Nozzle',
+      fog50:'Fog Nozzle 50 PSI',
+      wye:'Wye', gated_wye:'Gated Wye', siamese:'Siamese',
+      standpipe:'Standpipe', flowmeter:'Inline Flowmeter', cap:'Cap'
+    };
+    hose.attach = {type,id,label:labels[id]||id};
+    addTruckChip(hose);
+    hideTruckPicker();
+    // 🔗 Hook for your calculator: tie discharge->line mapping here
+    onTruckAttachmentSelected(hose);
+  });
+
+  document.addEventListener('click', (e)=>{
+    if(truckPicker.contains(e.target)) return;
+    if(e.target.closest('.hose-end')) return;
+    if(e.target.closest('#addTruckHoseBtn')) return;
+    hideTruckPicker();
+  });
+
+  function onTruckAttachmentSelected(hose){
+    // Map hose.pos ('left'|'right'|'back') to your internal lines if desired
+    // Example: choose default nozzles, spawn branch UI, etc.
+    console.log('Truck attachment:', hose.pos, hose.attach);
+  }
+
+  // init
+  updateTruckCounter();
 </script>
 </body>
 </html>
