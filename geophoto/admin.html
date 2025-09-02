@@ -246,6 +246,7 @@
   import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-app.js";
   import { getDatabase, ref as dbRef, push, set, get, update } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-database.js";
   import { getStorage, ref as stRef, uploadString, getDownloadURL, deleteObject } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-storage.js";
+  import { getAuth, onAuthStateChanged, signInAnonymously } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-auth.js";
 
   const firebaseConfig = {
     apiKey:"AIzaSyDM6DpRSeZueVKRpbyJyDmhf8WY66KyCDk",
@@ -261,7 +262,25 @@
   const app = initializeApp(firebaseConfig);
   const db  = getDatabase(app);
   const storage = getStorage(app);
+  const auth = getAuth(app);
   const BUCKET = app.options?.storageBucket || (firebaseConfig.projectId + ".appspot.com");
+
+  // --- Ensure we are signed in (Anonymous Auth) before any Storage writes ---
+  let authedUser = null;
+  onAuthStateChanged(auth, (u) => { authedUser = u || null; });
+
+  async function ensureAuthed() {
+    if (auth.currentUser) return auth.currentUser;
+    try {
+      // Try to sign in anonymously (works if enabled in Firebase Console)
+      await signInAnonymously(auth);
+      return await new Promise((resolve) => {
+        const off = onAuthStateChanged(auth, (u) => { if (u) { off(); resolve(u); } });
+      });
+    } catch (e) {
+      throw new Error("Storage requires sign-in. Enable Anonymous Auth or relax Storage rules. (" + (e?.code || e?.message || e) + ")");
+    }
+  }
 
   // DOM
   const landing = document.getElementById('landing');
@@ -431,12 +450,13 @@
 
   // ---- Upload to Google Cloud Storage (Firebase Storage) ----
   async function uploadDataURLToStorage(dataURL, scenarioId){
+    await ensureAuthed(); // <-- make sure we are signed in before writing
     const ts = Date.now();
     const path = `scenarios/${scenarioId}/${ts}.jpg`;
     const ref = stRef(storage, path);
-    await uploadString(ref, dataURL, 'data_url');     // upload the compressed data URL
-    const url = await getDownloadURL(ref);            // public HTTPS
-    const gsUri = `gs://${BUCKET}/${path}`;           // gs:// URI
+    await uploadString(ref, dataURL, 'data_url');
+    const url = await getDownloadURL(ref);
+    const gsUri = `gs://${BUCKET}/${path}`;
     return { url, path, gsUri };
   }
 
@@ -468,6 +488,9 @@
       createStatus.textContent='Compressing photo…';
       const dataURL = await compressFileToDataURL(file);
 
+      createStatus.textContent='Signing in for cloud upload…';
+      await ensureAuthed();
+
       createStatus.textContent='Uploading to cloud storage…';
       const { url, path, gsUri } = await uploadDataURLToStorage(dataURL, currentScenarioId);
 
@@ -491,7 +514,9 @@
       renderThumbs();
       toast(createStatus, `Saved photo #${localStops.length} (uploaded).`);
     }catch(e){
+      console.error(e);
       alert('Save failed: ' + (e?.message||e));
+      createStatus.textContent = 'Error: ' + (e?.code || e?.message || e);
     }
   };
 
@@ -561,6 +586,8 @@
         delBtn.onclick=async()=>{
           if(!confirm('Delete this scenario? This cannot be undone.')) return;
 
+          try { await ensureAuthed(); } catch(_) {}
+
           // Try to delete any cloud files for its stops
           if (Array.isArray(sc.stops)) {
             await Promise.all(sc.stops.map(async s=>{
@@ -578,90 +605,3 @@
         right.appendChild(openBtn); right.appendChild(toggleBtn); right.appendChild(delBtn);
         row.appendChild(left); row.appendChild(right);
         scenarioList.appendChild(row);
-      });
-    }catch(e){
-      editStatus.textContent='Error: '+(e?.message||e);
-    }
-  }
-
-  // --------------- Photo Editor Modal ---------------
-  function openPhotoEditor(index){
-    const s = localStops[index];
-    if(!s){ return; }
-    editingIndex = index;
-    editorTitle.textContent = `Edit Photo #${index+1}`;
-    editorImg.src = s.imageURL || dataURLFromStored(s.imageData) || '';
-    imgInfo.textContent = s.imageURL ? (s.gsUri ? 'Cloud image (gs://)' : 'Cloud image (https)') : 'Embedded image';
-    editorCaption.value = s.caption || '';
-    editorRadius.value = s.radiusMeters ?? 50;
-    editorLat.value = Number(s.lat ?? '').toFixed(6);
-    editorLng.value = Number(s.lng ?? '').toFixed(6);
-    editorStatus.textContent = '';
-    showModal(photoEditor);
-  }
-
-  closeEditor.onclick = ()=> hideModal(photoEditor);
-
-  useGPSbtn.onclick = async ()=>{
-    try{
-      editorStatus.textContent = 'Getting current GPS…';
-      const gps = await getGPS();
-      if (gps.lat!=null) editorLat.value = Number(gps.lat).toFixed(6);
-      if (gps.lng!=null) editorLng.value = Number(gps.lng).toFixed(6);
-      editorStatus.textContent = 'GPS updated in editor (remember to Save Changes).';
-    }catch(e){
-      editorStatus.textContent = 'GPS error: ' + (e?.message || e);
-    }
-  };
-
-  saveChangesBtn.onclick = async ()=>{
-    try{
-      if(editingIndex<0) return;
-      const lat = parseFloat(editorLat.value);
-      const lng = parseFloat(editorLng.value);
-      let r = Math.round(parseInt(editorRadius.value||'50',10));
-      r = Math.max(5, Math.min(1000, r));
-      if(Number.isNaN(lat) || Number.isNaN(lng)){ alert('Please enter valid latitude/longitude.'); return; }
-
-      const s = localStops[editingIndex];
-      s.caption = (editorCaption.value||'').trim();
-      s.radiusMeters = r;
-      s.lat = lat;
-      s.lng = lng;
-
-      await set(dbRef(db,'scenarios/'+currentScenarioId+'/stops'), localStops);
-      renderThumbs();
-      editorStatus.textContent = 'Saved.';
-      setTimeout(()=> hideModal(photoEditor), 300);
-    }catch(e){
-      editorStatus.textContent = 'Save failed: ' + (e?.message||e);
-    }
-  };
-
-  async function deletePhotoAt(index){
-    if(index<0 || index>=localStops.length) return;
-    if(!confirm('Delete this photo? This cannot be undone.')) return;
-
-    const s = localStops[index];
-    // Prefer deleting by gs:// URI; if absent, use storagePath
-    try {
-      const ref = s?.gsUri ? stRef(storage, s.gsUri)
-                 : s?.storagePath ? stRef(storage, s.storagePath)
-                 : null;
-      if (ref) await deleteObject(ref);
-    } catch(_) {}
-
-    localStops.splice(index,1);
-    set(dbRef(db,'scenarios/'+currentScenarioId+'/stops'), localStops)
-      .then(()=>{
-        renderThumbs();
-        if(editingIndex===index){ hideModal(photoEditor); editingIndex=-1; }
-        toast(createStatus, 'Photo deleted.');
-      })
-      .catch(e=> alert('Delete failed: ' + (e?.message||e)));
-  }
-
-  deletePhotoBtn.onclick = ()=>{ if(editingIndex>=0) deletePhotoAt(editingIndex); };
-  </script>
-</body>
-</html>
