@@ -5,16 +5,13 @@
   <title>FireOps SIM — Admin (Geo-Photo)</title>
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <meta name="theme-color" content="#0b0f14" />
-  <meta name="description" content="Create and edit FireOps SIM ...cenarios with dispatch info, geofenced photos, and captions." />
+  <meta name="description" content="Create and edit FireOps SIM scenarios with dispatch info, geofenced photos, and captions." />
 
   <style>
     :root{
-      --brandName: "FireOps SIM";
-      --brandTag: "Real-Time Fire Scene Simulator";
       --bg:#0b0f14; --bg2:#0d121c; --panel:#0f1624; --text:#eaf2ff; --muted:#94a3b8;
       --edge: rgba(255,255,255,.08); --edge2: rgba(255,255,255,.14);
-      --grad1:#54a6ff; --grad2:#0a84ff; --accent:#0a84ff; --accent2:#22c55e; --danger:#ef4444;
-      --pill:#101827; --pillEdge: rgba(255,255,255,.06);
+      --grad1:#54a6ff; --grad2:#0a84ff; --accent:#0a84ff; --danger:#ef4444;
     }
     *{box-sizing:border-box}
     html,body{
@@ -47,10 +44,6 @@
       background:linear-gradient(135deg, #0a84ff, #54a6ff);
       display:grid; place-items:center; color:white; font-weight:900;
       box-shadow: 0 4px 16px rgba(10,132,255,.28), inset 0 0 18px rgba(255,255,255,.18);
-    }
-    .logo small{
-      display:block; font-weight:600; color:var(--muted); font-size:11px;
-      letter-spacing:.2px; margin-top:2px;
     }
     .spacer{flex:1}
 
@@ -165,7 +158,7 @@
   </div>
 
   <main class="grid">
-    <section class="panel" id="createPanel" style="display:none">
+    <section class="panel hidden" id="createPanel">
       <div class="field" id="scenarioMeta">
         <label>Scenario Name</label>
         <input class="input" id="scenarioName" placeholder="e.g., House Fire — Elm St." />
@@ -196,7 +189,7 @@
       <div class="thumbs" id="thumbs"></div>
     </section>
 
-    <section class="panel" id="editPanel" style="display:none">
+    <section class="panel hidden" id="editPanel">
       <div class="toolbar">
         <button class="btn secondary" id="backFromEdit">Back</button>
       </div>
@@ -204,7 +197,7 @@
       <div id="scenarioList"></div>
     </section>
 
-    <section class="panel" id="landing" style="display:block">
+    <section class="panel" id="landing">
       <div style="font-weight:800; font-size:18px; margin-bottom:8px">Welcome</div>
       <div class="tag">Start by creating a new scenario or editing an existing one.</div>
     </section>
@@ -267,7 +260,7 @@
   // Init
   const app = initializeApp(firebaseConfig);
   const db  = getDatabase(app);
-  const storage = getStorage(app); // Google Cloud (Firebase) Storage
+  const storage = getStorage(app);
   const BUCKET = app.options?.storageBucket || (firebaseConfig.projectId + ".appspot.com");
 
   // DOM
@@ -314,9 +307,9 @@
   let localStops = [];
   let editingIndex = -1;
 
-  // Helpers
-  const uiShow = el => el.classList.remove('hidden');
-  const uiHide = el => el.classList.add('hidden');
+  // Helpers (updated to manage inline display too)
+  const uiShow = el => { el.classList.remove('hidden'); el.style.display=''; };
+  const uiHide = el => { el.classList.add('hidden'); el.style.display='none'; };
   const showModal = el => el.classList.add('show');
   const hideModal = el => el.classList.remove('show');
   const toast = (el, msg) => el.textContent = msg;
@@ -330,7 +323,7 @@
     });
   }
 
-  // --- Image compression (unchanged) ---
+  // --- Image compression ---
   function loadImage(src){
     return new Promise((resolve, reject)=>{
       const img=new Image();
@@ -361,7 +354,7 @@
     for (const q of [0.8,0.75,0.7,0.65,0.6]){
       url = canvas.toDataURL('image/jpeg', q);
       b64 = url.split(',')[1];
-      if (bytesOf(b64) <= MAX_BYTES) return {format:'jpeg', data;b64};
+      if (bytesOf(b64) <= MAX_BYTES) return {format:'jpeg', data:b64};
     }
     const c2=document.createElement('canvas');
     c2.width=Math.round(canvas.width*0.85);
@@ -393,8 +386,8 @@
       );
     });
   }
+
   function renderThumbs(){
-    const thumbs = document.getElementById('thumbs');
     thumbs.innerHTML='';
     localStops.forEach((s,i)=>{
       const wrap=document.createElement('div');
@@ -423,16 +416,16 @@
 
   // Navigation
   goCreate.onclick = ()=>{
-    uiHide(landing); uiShow(createPanel);
+    uiHide(landing); uiHide(editPanel); uiShow(createPanel);
     createStatus.textContent='New scenario';
     currentScenarioId=null; localStops=[];
     scenarioName.value=''; dispatchInfo.value='';
     photoInput.value=''; radius.value=50; caption.value='';
     uiShow(scenarioMeta);
   };
-  goEdit.onclick = ()=>{ uiHide(landing); uiShow(editPanel); loadForEdit(); };
+  goEdit.onclick = ()=>{ uiHide(landing); uiHide(createPanel); uiShow(editPanel); loadForEdit(); };
   backFromEdit.onclick = ()=>{
-    uiHide(editPanel); uiShow(landing);
+    uiHide(editPanel); uiHide(createPanel); uiShow(landing);
     scenarioList.innerHTML=''; editStatus.textContent='Ready';
   };
 
@@ -443,7 +436,7 @@
     const ref = stRef(storage, path);
     await uploadString(ref, dataURL, 'data_url');     // upload the compressed data URL
     const url = await getDownloadURL(ref);            // public HTTPS
-    const gsUri = `gs://${BUCKET}/${path}`;           // gs:// URI for back-end tooling
+    const gsUri = `gs://${BUCKET}/${path}`;           // gs:// URI
     return { url, path, gsUri };
   }
 
@@ -551,9 +544,7 @@
         const openBtn=document.createElement('button');
         openBtn.className='btn'; openBtn.textContent='Open in Creator';
         openBtn.onclick=()=>{
-          landing.classList.add('hidden');
-          editPanel.classList.add('hidden');
-          createPanel.classList.remove('hidden');
+          uiHide(landing); uiHide(editPanel); uiShow(createPanel);
           currentScenarioId=sc.id;
           localStops=Array.isArray(sc.stops)? sc.stops : [];
           renderThumbs();
