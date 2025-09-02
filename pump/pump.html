@@ -17,19 +17,20 @@
   html,body{margin:0;background:var(--bg);color:var(--ink);font-family:system-ui,Segoe UI,Inter,Arial,sans-serif}
   .app{display:flex;flex-direction:column;min-height:100vh}
 
-  header{position:sticky;top:0;z-index:10;padding:10px 14px;background:linear-gradient(180deg,#0c1320,#0b0f14);border-bottom:1px solid var(--edge)}
+  header{position:sticky;top:0;z-index:100;padding:10px 14px;background:linear-gradient(180deg,#0c1320,#0b0f14);border-bottom:1px solid var(--edge)}
   .title{font-weight:700}
   .sub{font-size:12px;color:#9fb0c8}
 
   .wrapper{border-top:1px solid var(--edge);border-bottom:1px solid var(--edge);background:linear-gradient(180deg,#0b0f14,#0e1726)}
   .stage{position:relative;width:100%;max-width:900px;margin:0 auto;min-height:260px}
-  #overlay{position:absolute;inset:0;width:100%;height:100%;display:block}
-  .info{position:absolute;left:50%;top:8px;transform:translateX(-50%);background:var(--bubble);border:1px solid var(--bubble-edge);border-radius:999px;padding:6px 10px;font-size:12px;z-index:4}
+  /* Make sure SVG receives taps and can host absolutely-positioned picker over it */
+  #overlay{position:absolute;inset:0;width:100%;height:100%;display:block;pointer-events:auto}
+  .info{position:absolute;left:50%;top:8px;transform:translateX(-50%);background:var(--bubble);border:1px solid var(--bubble-edge);border-radius:999px;padding:6px 10px;font-size:12px;z-index:15}
 
   /* Buttons (iPhone one-row) */
   .linebar{
     position:absolute;left:0;right:0;bottom:8px;
-    display:flex;justify-content:center;align-items:center;gap:6px;z-index:6;flex-wrap:nowrap;padding:0 8px;
+    display:flex;justify-content:center;align-items:center;gap:6px;z-index:16;flex-wrap:nowrap;padding:0 8px;
   }
   .linebtn,.supplybtn{
     background:var(--btn);border:1px solid var(--btnEdge);color:#eaf2ff;border-radius:10px;
@@ -45,13 +46,17 @@
   .hose175{stroke:var(--hose175);stroke-width:6}
   .shadow{stroke:rgba(0,0,0,.35);stroke-width:12}
 
-  /* “+” tips */
-  .hose-end{cursor:pointer}
+  /* “+” tips — make very tappable & on top */
+  .hose-end{cursor:pointer;pointer-events:all}
+  .plus-hit{fill:transparent;stroke:transparent;rx:12;ry:12} /* large invisible hit box */
   .plus-circle{fill:#fff;stroke:#111;stroke-width:1.5;filter:drop-shadow(0 2px 4px rgba(0,0,0,.45))}
   .plus-sign{stroke:#111;stroke-width:3;stroke-linecap:round}
 
-  /* Picker */
-  .picker{position:absolute;background:#0b1320;border:1px solid var(--bubble-edge);border-radius:12px;min-width:280px;padding:8px;z-index:12;box-shadow:0 18px 40px rgba(0,0,0,.45);display:none}
+  /* Picker (menu) */
+  .picker{
+    position:absolute; background:#0b1320;border:1px solid var(--bubble-edge);border-radius:12px;
+    min-width:300px;padding:8px; z-index:50; box-shadow:0 18px 40px rgba(0,0,0,.55); display:none;
+  }
   .picker h3{font-size:12px;color:#cfe4ff;margin:4px 8px 8px}
   .section-title{font-size:11px;color:#9fb0c8;margin:4px 8px 6px}
   .picker-actions{display:flex;gap:6px;flex-wrap:wrap;padding:6px 8px 10px}
@@ -65,7 +70,7 @@
 
   /* Dropdown for Supply */
   .dropdown{
-    position:absolute; z-index:20; display:none; pointer-events:auto;
+    position:absolute; z-index:40; display:none; pointer-events:auto;
     background:#0b1320;border:1px solid var(--edge);border-radius:10px;box-shadow:0 12px 28px rgba(0,0,0,.45);overflow:hidden;
   }
   .dropdown button{
@@ -100,7 +105,7 @@
 
   <header>
     <div class="title">FireOps SIM — Visual Pump Builder</div>
-    <div class="sub">Tap a line button to display it. Use the <b>+</b> at the hose tip to add hose, add/remove Wye, change nozzle, change setup, or set elevation.</div>
+    <div class="sub">Tap Line 1/2/3 to toggle each line. Tap the <b>+</b> at the hose tip for Add Hose / Nozzle / Wye / Elevation / Setup.</div>
   </header>
 
   <!-- Stage -->
@@ -223,7 +228,7 @@
         <div class="kpi"><div>Total Flow (visible)</div><b id="GPM">— gpm</b></div>
         <div class="kpi"><div>Max PDP (visible)</div><b id="PDP">— psi</b></div>
       </div>
-      <div class="linesTable" id="linesTable"><!-- injected --></div>
+      <div class="linesTable" id="linesTable"></div>
     </div>
   </section>
 
@@ -286,7 +291,6 @@ const pickElev  = document.getElementById('pickElev');
 const pickSetup = document.getElementById('pickSetup');
 const elevInput = document.getElementById('elevInput');
 const addBtns   = document.getElementById('addBtns');
-
 const setupSize = document.getElementById('setupSize');
 const setupLen  = document.getElementById('setupLen');
 const setupNoz  = document.getElementById('setupNoz');
@@ -303,7 +307,9 @@ function FL(gpm, size, ft){ const C=COEFF[size]||0, Q=gpm/100; return C*(Q*Q)*(f
 function FLper100(gpm, size){ const C=COEFF[size]||0, Q=gpm/100; return C*(Q*Q); }
 function clearGroup(g){ while(g.firstChild) g.removeChild(g.firstChild); }
 function supplyHeight(){ return currentSupply==='drafting'?150: currentSupply==='pressurized'?150: currentSupply==='relay'?170: 0; }
+
 function computeNeededHeightPx(){
+  // Height must support the tallest visible line (not replacing others)
   const needs = Object.values(lines).filter(l=>l.visible);
   let maxUp = 0;
   needs.forEach(L=>{
@@ -459,7 +465,7 @@ function drawAll(){
   renderLinesPanel();
 }
 
-/* Supply (same as before) */
+/* Supply (unchanged visuals) */
 function drawSupply(viewH){
   const G = document.getElementById('supplyG'); clearGroup(G);
   const h = supplyHeight(); if(!h) return;
@@ -513,7 +519,6 @@ function renderLinesPanel(){
   ['left','back','right'].forEach(key=>{
     const L = lines[key];
     if(L.visible){
-      // breakdown row
       const gpm = L.hasWye ? (L.nozLeft?.gpm||0) + (L.nozRight?.gpm||0) : (L.nozRight?.gpm||0);
       const size = (L.itemsMain[0]?.size)||'1.75';
       const len  = sumFt(L.itemsMain);
@@ -539,7 +544,7 @@ function renderLinesPanel(){
       `;
       linesTable.appendChild(row);
     } else {
-      // builder card (hidden lines show nothing by default, but allow building)
+      // builder for hidden lines (doesn't hide others)
       const size = L.itemsMain[0]?.size || '1.75';
       const len  = sumFt(L.itemsMain) || 0;
       const row = document.createElement('div'); row.className='lineRow';
@@ -564,9 +569,7 @@ function renderLinesPanel(){
           <button class="pick-small" data-key="${key}" data-bld="show">Show</button>
 
           <button class="pick-small" data-key="${key}" data-bld="addSeg">➕ Add Segment</button>
-          <span data-key="${key}" data-bld="segOpts" style="display:none;">
-            <!-- smart options injected -->
-          </span>
+          <span data-key="${key}" data-bld="segOpts" style="display:none;"></span>
 
           <button class="pick-small" data-key="${key}" data-bld="addWye">➕ Add Wye</button>
         </div>
@@ -574,7 +577,7 @@ function renderLinesPanel(){
       linesTable.appendChild(row);
     }
 
-    // if has wye and hidden, expose branch editors
+    // extra editors if hidden + has wye
     if(!L.visible && L.hasWye){
       const br = document.createElement('div'); br.className='lineRow';
       br.innerHTML = `
@@ -614,8 +617,8 @@ function renderLinesPanel(){
       const nozId= (linesTable.querySelector(`[data-key="${key}"][data-bld="noz"]`)?.value)||'chiefXD';
       L.itemsMain=[{size, lengthFt:len}];
       L.nozLeft=L.nozRight=NOZ[nozId];
-      // autoview: show on graphic
-      L.visible=true; toggleLineBtn(key, true);
+      // auto-show this line; do NOT hide others
+      if(!L.visible){ L.visible=true; toggleLineBtn(key,true); }
       drawAll();
     });
   });
@@ -637,7 +640,8 @@ function renderLinesPanel(){
         b.textContent = `+${o.len}′ ${o.size==='2.5'?'2½″':'1¾″'}`;
         b.addEventListener('click', ()=>{
           L.itemsMain.push({size:o.size,lengthFt:o.len});
-          L.visible=true; toggleLineBtn(key,true); drawAll();
+          if(!L.visible){ L.visible=true; toggleLineBtn(key,true); }
+          drawAll();
         });
         span.appendChild(b);
       });
@@ -651,7 +655,7 @@ function renderLinesPanel(){
       L.hasWye = true;
       if(L.itemsLeft.length===0)  L.itemsLeft=[{size:'1.75',lengthFt:100}];
       if(L.itemsRight.length===0) L.itemsRight=[{size:'1.75',lengthFt:100}];
-      L.visible=true; toggleLineBtn(key,true);
+      if(!L.visible){ L.visible=true; toggleLineBtn(key,true); }
       drawAll();
     });
   });
@@ -664,10 +668,10 @@ function renderLinesPanel(){
       const lenSel  = linesTable.querySelector(`[data-key="${key}"][data-branch="${branch}"][data-bld="blen"]`);
       const size=sizeSel.value, len=parseInt(lenSel.value,10);
       const mainLast = L.itemsMain[L.itemsMain.length-1]?.size || '1.75';
-      // enforce same-or-smaller
+      // enforce same-or-smaller vs main
       if(mainLast==='1.75' && size==='2.5'){ sizeSel.value='1.75'; return; }
       if(branch==='L') L.itemsLeft=[{size,lengthFt:len}]; else L.itemsRight=[{size,lengthFt:len}];
-      L.visible=true; toggleLineBtn(key,true);
+      if(!L.visible){ L.visible=true; toggleLineBtn(key,true); }
       drawAll();
     });
   });
@@ -681,6 +685,23 @@ function toggleLineBtn(key,on){
 function allowedAddOptions(curr){
   if(curr==='2.5'){ return [{len:50,size:'2.5'},{len:50,size:'1.75'},{len:100,size:'1.75'}]; }
   return [{len:50,size:'1.75'},{len:100,size:'1.75'}];
+}
+
+/* ===== + Tips ===== */
+function addTip(key, where, x, y){
+  const g = document.createElementNS('http://www.w3.org/2000/svg','g');
+  g.setAttribute('class','hose-end'); g.setAttribute('data-line',key); g.setAttribute('data-where',where);
+  // a larger (invisible) rect to make tapping easy
+  const hit = document.createElementNS('http://www.w3.org/2000/svg','rect');
+  hit.setAttribute('class','plus-hit'); hit.setAttribute('x', x-20); hit.setAttribute('y', y-20); hit.setAttribute('width', 40); hit.setAttribute('height', 40);
+  const c = document.createElementNS('http://www.w3.org/2000/svg','circle');
+  c.setAttribute('class','plus-circle'); c.setAttribute('cx',x); c.setAttribute('cy',y); c.setAttribute('r',14);
+  const v = document.createElementNS('http://www.w3.org/2000/svg','line');
+  v.setAttribute('class','plus-sign'); v.setAttribute('x1',x); v.setAttribute('y1',y-6); v.setAttribute('x2',x); v.setAttribute('y2',y+6);
+  const h = document.createElementNS('http://www.w3.org/2000/svg','line');
+  h.setAttribute('class','plus-sign'); h.setAttribute('x1',x-6); h.setAttribute('y1',y); h.setAttribute('x2',x+6); h.setAttribute('y2',y);
+  g.appendChild(hit); g.appendChild(c); g.appendChild(v); g.appendChild(h);
+  G_tips.appendChild(g);
 }
 
 /* ===== + Picker behavior ===== */
@@ -726,7 +747,7 @@ function showPicker(key, where, cx, cy){
   showPane('pickHome');
 
   const stg = stage.getBoundingClientRect();
-  const pw = 310, ph = 260;
+  const pw = 320, ph = 270;
   let x = cx - stg.left + 8, y = cy - stg.top - ph - 8;
   if(y < 8) y = cy - stg.top + 8;
   x = Math.max(8, Math.min(x, stg.width - pw - 8));
@@ -767,14 +788,14 @@ pickAdd.addEventListener('click', (e)=>{
   if(plusContext.where==='L'){ L.itemsLeft.push({size,lengthFt:len}); }
   else if(plusContext.where==='R'){ L.itemsRight.push({size,lengthFt:len}); }
   else { L.itemsMain.push({size,lengthFt:len}); }
-  L.visible=true; toggleLineBtn(plusContext.key,true);
+  if(!L.visible){ L.visible=true; toggleLineBtn(plusContext.key,true); }
   hidePicker(); drawAll();
 });
 pickNoz.addEventListener('click', (e)=>{
   const id = e.target.closest('.pick')?.dataset.noz; if(!id) return;
   const L = lines[plusContext.key];
   if(plusContext.where==='L'){ L.nozLeft = NOZ[id]; } else { L.nozRight = NOZ[id]; }
-  L.visible=true; toggleLineBtn(plusContext.key,true);
+  if(!L.visible){ L.visible=true; toggleLineBtn(plusContext.key,true); }
   hidePicker(); drawAll();
 });
 pickAcc.addEventListener('click', (e)=>{
@@ -782,28 +803,28 @@ pickAcc.addEventListener('click', (e)=>{
   const L = lines[plusContext.key];
   if(acc==='wye'){ L.hasWye = true; if(!L.itemsLeft.length) L.itemsLeft=[{size:'1.75',lengthFt:100}]; if(!L.itemsRight.length) L.itemsRight=[{size:'1.75',lengthFt:100}]; }
   if(acc==='removeWye'){ L.hasWye = false; L.itemsLeft=[]; L.itemsRight=[]; }
-  L.visible=true; toggleLineBtn(plusContext.key,true);
+  if(!L.visible){ L.visible=true; toggleLineBtn(plusContext.key,true); }
   hidePicker(); drawAll();
 });
 pickElev.addEventListener('click', (e)=>{
   if(!e.target.hasAttribute('data-save-elev')) return;
   const L=lines[plusContext.key]; L.elevFt = Number(elevInput.value||0);
-  L.visible=true; toggleLineBtn(plusContext.key,true);
+  if(!L.visible){ L.visible=true; toggleLineBtn(plusContext.key,true); }
   hidePicker(); drawAll();
 });
 document.getElementById('setupApply').addEventListener('click', ()=>{
   const key=plusContext.key; const L=lines[key];
   const size=setupSize.value; const len=parseInt(setupLen.value,10); const noz=NOZ[setupNoz.value];
   L.itemsMain=[{size,lengthFt:len}]; L.nozLeft=L.nozRight=noz;
-  L.visible=true; toggleLineBtn(key,true);
+  if(!L.visible){ L.visible=true; toggleLineBtn(key,true); }
   hidePicker(); drawAll();
 });
 
-/* Line buttons */
+/* Line buttons — independent toggles */
 document.querySelectorAll('.linebtn').forEach(b=>{
   b.addEventListener('click', ()=>{
     const key=b.dataset.line;
-    lines[key].visible = !lines[key].visible;
+    lines[key].visible = !lines[key].visible;      // <-- NOT exclusive
     b.classList.toggle('active', lines[key].visible);
     drawAll();
   });
