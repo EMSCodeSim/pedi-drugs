@@ -25,14 +25,14 @@
       </nav>
     </header>
 
-    <!-- Floating action buttons (unchanged behavior) -->
+    <!-- Floating action buttons -->
     <div class="side">
       <button class="fab" id="openHose" title="Hose">H</button>
       <button class="fab" id="openAcc" title="Accessories">A</button>
       <button class="fab" id="openNoz" title="Nozzles">N</button>
     </div>
 
-    <!-- Left Drawer -->
+    <!-- Drawer (edits ACTIVE line only) -->
     <aside class="drawer" id="drawer" aria-hidden="true">
       <h3 id="drawerTitle">Hose</h3>
 
@@ -47,7 +47,7 @@
 
       <!-- After-wye branches -->
       <div class="row" id="hoseButtonsSplit" style="display:none;border-top:1px solid var(--edge);margin-top:6px;padding-top:12px">
-        <div class="drawer-note">After Wye:</div>
+        <div class="drawer-note">After Wye (active line):</div>
         <button data-side="L" data-hose='{"size":"2.5","lengthFt":50}'>Left 2½″ 50′</button>
         <button data-side="L" data-hose='{"size":"1.75","lengthFt":100}'>Left 1¾″ 100′</button>
         <button data-side="L" data-hose='{"size":"1.75","lengthFt":50}'>Left 1¾″ 50′</button>
@@ -77,9 +77,7 @@
     <div class="wrapper">
       <div id="scroll" class="scroll">
         <div id="stage" class="stage">
-          <!-- Branded engine image kept -->
           <img id="engine" alt="ENGINE 181" src="https://fireopssim.com/pump/engine181.png" />
-
           <svg id="overlay" viewBox="0 0 390 800" preserveAspectRatio="none" aria-label="Diagram overlay">
             <defs>
               <marker id="arrow" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto">
@@ -88,23 +86,17 @@
             </defs>
             <g id="hoses"></g>
             <g id="branches"></g>
-            <text id="hint" x="12" y="24" class="hint">Tap Line 1/2/3 to deploy…</text>
+            <text id="hint" x="12" y="24" class="hint">Tap a line below to deploy…</text>
           </svg>
 
           <!-- Selected line info -->
           <div id="lineinfo" class="lineinfo"></div>
 
-          <!-- Line buttons under truck (all deployable/togglable) -->
+          <!-- Line buttons (all can deploy) -->
           <div class="linebar" id="linebar">
             <button class="linebtn" data-line="left">Line 1</button>
             <button class="linebtn" data-line="right">Line 2</button>
             <button class="linebtn" data-line="back">Line 3</button>
-          </div>
-
-          <!-- (Optional) discharge picker; kept for future use -->
-          <div id="dischargePicker" class="picker" role="dialog" aria-modal="true" aria-hidden="true">
-            <h3 id="dischTitle">Select Discharge</h3>
-            <div class="row" id="dischRow"></div>
           </div>
         </div>
       </div>
@@ -132,7 +124,7 @@
           <div class="kpi"><div>Nozzle</div><b id="NP">— psi</b></div>
         </div>
 
-        <div class="eq" id="equation">PDP = max(Left, Right) + Main FL + Acc ± Elev</div>
+        <div class="eq" id="equation">PDP (active line) = max(Left, Right) + Main FL + Acc ± Elev</div>
         <div class="kpis" style="margin-top:8px">
           <div class="kpi"><div>Flow</div><b id="GPM">— gpm</b></div>
           <div class="kpi"><div>PDP</div><b id="PDP">— psi</b></div>
@@ -141,7 +133,7 @@
       </div>
     </section>
 
-    <!-- Branded Footer -->
+    <!-- Footer -->
     <footer class="brandfoot">
       <div class="foot-wrap">
         <div class="foot-badge">Part of the <a href="https://emscodesim.com" target="_blank" rel="noopener">EMSCodeSim</a> ecosystem.</div>
