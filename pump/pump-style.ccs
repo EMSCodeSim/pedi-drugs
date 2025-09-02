@@ -1,63 +1,80 @@
-body {
-  margin: 0;
-  font-family: Arial, sans-serif;
-  background: #111;
-  color: #fff;
-}
+  :root{
+    --bg:#0b0f14; --panel:#0f1624; --ink:#eaf2ff; --muted:#9fb0c8;
+    --edge:rgba(255,255,255,.14);
+    --hose5:#ecd464;             /* 5" */
+    --hose25:#6ecbff;            /* 2½" now bright sky/cyan for contrast */
+    --hose175:#ff6b6b;           /* 1¾" */
+    --bubble:#172134; --bubble-edge:rgba(255,255,255,.15);
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);font-family:system-ui,Segoe UI,Inter,Arial,sans-serif}
+  .app{display:flex;flex-direction:column;min-height:100vh}
 
-header {
-  padding: 10px;
-  background: #222;
-  text-align: center;
-}
+  header{position:sticky;top:0;z-index:3;padding:8px 12px;background:linear-gradient(180deg,#0c1320 0%,#0b0f14 100%);border-bottom:1px solid var(--edge)}
+  h1{font-size:15px;margin:0}
+  .sub{font-size:11px;color:#9fb0c8}
 
-.controls button {
-  margin: 5px;
-  padding: 10px 15px;
-  border: none;
-  border-radius: 6px;
-  cursor: pointer;
-}
+  .wrapper{border-top:1px solid var(--edge);border-bottom:1px solid var(--edge)}
+  .scroll{height:65vh;overflow:auto;background:linear-gradient(180deg,#0b0f14,#0e1726)}
+  .stage{position:relative;width:100%;min-height:520px}
+  #engine{display:block;width:100%;height:auto;position:absolute;bottom:0;left:0}
+  #overlay{position:absolute;inset:0;display:block;width:100%;height:100%}
+  .hint{position:absolute;top:8px;left:10px;font-size:12px;color:#f7e39a}
 
-#canvas {
-  width: 100%;
-  height: 600px;
-  background: #1c1c1c;
-  position: relative;
-  overflow: auto;
-}
+  /* Line selector bar under the truck */
+  .linebar{
+    position:absolute;left:0;right:0;bottom:8px;
+    display:flex;justify-content:center;gap:8px;z-index:6;
+    pointer-events:none;
+  }
+  .linebtn{
+    pointer-events:auto;
+    background:#0b1320;border:1px solid var(--edge);color:#eaf2ff;
+    border-radius:10px;padding:8px 12px;font-size:13px;cursor:pointer;
+    box-shadow:0 6px 16px rgba(0,0,0,.35)
+  }
+  .linebtn.active{outline:2px solid #3aa7ff}
 
-/* Hose styles */
-.hose {
-  padding: 10px;
-  margin: 10px;
-  border-radius: 6px;
-  cursor: pointer;
-  font-weight: bold;
-}
+  .lineinfo{
+    position:absolute;top:8px;right:8px;z-index:4;
+    background:var(--bubble);border:1px solid var(--bubble-edge);
+    border-radius:12px;padding:8px 10px;font-size:12px;min-width:160px
+  }
+  .lineinfo b{color:#cfe4ff}
 
-.hose-175 {
-  background: crimson;
-  color: white;
-}
+  /* Side FABs */
+  .side{position:fixed;left:8px;top:64px;display:flex;flex-direction:column;gap:8px;z-index:5}
+  .fab{width:44px;height:44px;border-radius:12px;border:1px solid var(--edge);background:#0b1320;color:#cfe4ff;display:grid;place-items:center;cursor:pointer;box-shadow:0 4px 12px rgba(0,0,0,.25)}
+  .fab:active{transform:translateY(1px)}
+  .drawer{position:fixed;left:60px;top:72px;z-index:5;background:#0e1726;border:1px solid var(--edge);box-shadow:0 12px 30px rgba(0,0,0,.35);width:min(78vw,360px);max-width:360px;display:none}
+  .drawer.open{display:block}
+  .drawer h3{margin:10px 12px 6px;font-size:13px;color:#cfe4ff}
+  .row{display:flex;flex-wrap:wrap;gap:8px;padding:8px 10px}
+  .row button{background:#12203a;border:1px solid var(--edge);color:#eaf2ff;border-radius:10px;padding:8px 10px;font-size:13px;cursor:pointer}
 
-.hose-25 {
-  background: #6ecbff; /* Blue 2½" line */
-  color: black;
-}
+  .panel{padding:10px 12px;background:var(--panel)}
+  .card{background:#0e1726;border:1px solid var(--edge);border-radius:14px;padding:12px;margin:10px 0}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  label{font-size:12px;color:#9fb0c8;display:block;margin-bottom:4px}
+  input{background:#0b1320;color:#eaf2ff;border:1px solid var(--edge);border-radius:10px;padding:8px 10px}
+  .kpis{display:flex;gap:10px;flex-wrap:wrap}
+  .kpi{background:#0b1320;border:1px solid var(--edge);border-radius:12px;padding:8px 10px;font-size:12px;color:#9fb0c8}
+  .kpi b{font-size:16px;color:#eaf2ff}
+  .eq{margin-top:10px;font-size:12px;color:#cfe4ff}
 
-/* Wye styles */
-.wye {
-  margin-top: 10px;
-  padding: 5px;
-  background: #333;
-  border-radius: 6px;
-}
+  /* Hose/branch graphics (SVG) */
+  .hoseMain{stroke:var(--ink);stroke-linecap:round;stroke-linejoin:round;fill:none}
+  .hose5{stroke:var(--hose5);stroke-width:12}
+  .hose25{stroke:var(--hose25);stroke-width:9}
+  .hose175{stroke:var(--hose175);stroke-width:6}
+  .hoseAcc{stroke:#cfe4ff;stroke-dasharray:6 6}
+  .bubble{
+    position:absolute;background:var(--bubble);
+    border:1px solid var(--bubble-edge);border-radius:12px;
+    padding:6px 8px;font-size:11px;color:#cfe4ff;pointer-events:none
+  }
 
-.wye button {
-  margin: 5px;
-  padding: 6px 10px;
-  border: none;
-  border-radius: 4px;
-  cursor: pointer;
-}
+  /* Picker (discharges) */
+  .picker{position:absolute;inset:auto 10px 82px auto;background:#0e1726;border:1px solid var(--edge);border-radius:12px;display:none}
+  .picker.open{display:block}
+  .picker h3{font-size:12px; color:#cfe4ff; margin:4px 8px }
