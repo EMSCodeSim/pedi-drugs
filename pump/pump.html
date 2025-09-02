@@ -23,11 +23,9 @@
 
   .wrapper{border-top:1px solid var(--edge);border-bottom:1px solid var(--edge);background:linear-gradient(180deg,#0b0f14,#0e1726)}
   .stage{position:relative;width:100%;max-width:900px;margin:0 auto;min-height:260px}
-  /* Make sure SVG receives taps and can host absolutely-positioned picker over it */
   #overlay{position:absolute;inset:0;width:100%;height:100%;display:block;pointer-events:auto}
   .info{position:absolute;left:50%;top:8px;transform:translateX(-50%);background:var(--bubble);border:1px solid var(--bubble-edge);border-radius:999px;padding:6px 10px;font-size:12px;z-index:15}
 
-  /* Buttons (iPhone one-row) */
   .linebar{
     position:absolute;left:0;right:0;bottom:8px;
     display:flex;justify-content:center;align-items:center;gap:6px;z-index:16;flex-wrap:nowrap;padding:0 8px;
@@ -39,20 +37,17 @@
   .linebtn.active{outline:2px solid #3aa7ff}
   @media (max-width:390px){ .linebtn,.supplybtn{padding:9px 10px;font-size:13px} .linebar{gap:4px} }
 
-  /* Hoses */
   .hoseBase{fill:none;stroke-linecap:round;stroke-linejoin:round}
   .hose5{stroke:var(--hose5);stroke-width:12}
   .hose25{stroke:var(--hose25);stroke-width:9}
   .hose175{stroke:var(--hose175);stroke-width:6}
   .shadow{stroke:rgba(0,0,0,.35);stroke-width:12}
 
-  /* “+” tips — make very tappable & on top */
   .hose-end{cursor:pointer;pointer-events:all}
-  .plus-hit{fill:transparent;stroke:transparent;rx:12;ry:12} /* large invisible hit box */
+  .plus-hit{fill:transparent;stroke:transparent;rx:12;ry:12}
   .plus-circle{fill:#fff;stroke:#111;stroke-width:1.5;filter:drop-shadow(0 2px 4px rgba(0,0,0,.45))}
   .plus-sign{stroke:#111;stroke-width:3;stroke-linecap:round}
 
-  /* Picker (menu) */
   .picker{
     position:absolute; background:#0b1320;border:1px solid var(--bubble-edge);border-radius:12px;
     min-width:300px;padding:8px; z-index:50; box-shadow:0 18px 40px rgba(0,0,0,.55); display:none;
@@ -68,7 +63,6 @@
   .row{display:flex;gap:8px;align-items:center;padding:6px 8px}
   .row input, .row select{background:#0b1320;color:#eaf2ff;border:1px solid var(--edge);border-radius:10px;padding:8px 10px;font-size:14px}
 
-  /* Dropdown for Supply */
   .dropdown{
     position:absolute; z-index:40; display:none; pointer-events:auto;
     background:#0b1320;border:1px solid var(--edge);border-radius:10px;box-shadow:0 12px 28px rgba(0,0,0,.45);overflow:hidden;
@@ -78,7 +72,6 @@
   }
   .dropdown button:hover{background:#0e2337}
 
-  /* KPI panel */
   .panel{padding:10px 12px;background:var(--panel)}
   .card{background:#0e1726;border:1px solid var(--edge);border-radius:14px;padding:12px;margin:10px 0}
   .kpis{display:flex;gap:10px;flex-wrap:wrap}
@@ -86,17 +79,12 @@
   .kpi b{font-size:18px}
   .linesTable{margin-top:8px;border-top:1px solid var(--edge);padding-top:8px;display:grid;gap:10px}
 
-  /* rows */
   .lineRow{display:flex;flex-wrap:wrap;gap:8px;align-items:center;background:#0b1320;border:1px solid var(--edge);border-radius:12px;padding:8px 10px}
   .lineRow .title{font-weight:700;margin-right:8px}
   .lineRow .break{font-size:12px;color:#cfe4ff}
-  .lineRow .ctrls{display:flex;gap:6px;align-items:center;margin-left:auto}
-  .lineRow input[type=number]{width:84px}
-  .lineRow select{min-width:82px}
   .builder{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-left:auto}
   .builder small{color:#9fb0c8}
 
-  /* labels */
   .lbl{font-size:10px;fill:#0b0f14}
 </style>
 </head>
@@ -105,10 +93,9 @@
 
   <header>
     <div class="title">FireOps SIM — Visual Pump Builder</div>
-    <div class="sub">Tap Line 1/2/3 to toggle each line. Tap the <b>+</b> at the hose tip for Add Hose / Nozzle / Wye / Elevation / Setup.</div>
+    <div class="sub">Toggle Line 1/2/3 to show. Use the <b>+</b> for Add Hose / Nozzle / Wye / Elevation / Setup. Wye adds with no branches until you add them.</div>
   </header>
 
-  <!-- Stage -->
   <section class="wrapper">
     <div class="stage" id="stage">
       <svg id="overlay" viewBox="0 0 390 260" preserveAspectRatio="xMidYMax meet" aria-label="Visual stage">
@@ -119,7 +106,6 @@
 
       <div class="info" id="topInfo">No lines selected</div>
 
-      <!-- Buttons -->
       <div class="linebar" id="linebar">
         <button class="linebtn" data-line="left">Line 1</button>
         <button class="linebtn" data-line="back">Line 2</button>
@@ -146,14 +132,12 @@
           </div>
         </div>
 
-        <!-- Smart Add -->
         <div id="pickAdd" style="display:none">
           <div class="section-title">Add hose (same or smaller)</div>
           <div class="picker-actions" id="addBtns"></div>
           <div class="picker-actions"><button class="pick-small" data-back>⬅ Back</button></div>
         </div>
 
-        <!-- Nozzle -->
         <div id="pickNoz" style="display:none">
           <div class="section-title">Set nozzle for this side</div>
           <div class="picker-grid">
@@ -165,7 +149,6 @@
           <div class="picker-actions"><button class="pick-small" data-back>⬅ Back</button></div>
         </div>
 
-        <!-- Accessory / Wye -->
         <div id="pickAcc" style="display:none">
           <div class="section-title">Wye</div>
           <div class="picker-actions">
@@ -175,7 +158,6 @@
           <div class="picker-actions"><button class="pick-small" data-back>⬅ Back</button></div>
         </div>
 
-        <!-- Elevation -->
         <div id="pickElev" style="display:none">
           <div class="section-title">Elevation (feet, ±)</div>
           <div class="row">
@@ -188,7 +170,6 @@
           </div>
         </div>
 
-        <!-- Setup (size/length/nozzle) -->
         <div id="pickSetup" style="display:none">
           <div class="section-title">Change main setup</div>
           <div class="row">
@@ -221,7 +202,7 @@
     </div>
   </section>
 
-  <!-- KPIs + per-line area -->
+  <!-- KPIs + per-line editor -->
   <section class="panel">
     <div class="card">
       <div class="kpis">
@@ -309,7 +290,6 @@ function clearGroup(g){ while(g.firstChild) g.removeChild(g.firstChild); }
 function supplyHeight(){ return currentSupply==='drafting'?150: currentSupply==='pressurized'?150: currentSupply==='relay'?170: 0; }
 
 function computeNeededHeightPx(){
-  // Height must support the tallest visible line (not replacing others)
   const needs = Object.values(lines).filter(l=>l.visible);
   let maxUp = 0;
   needs.forEach(L=>{
@@ -413,7 +393,7 @@ function drawAll(){
     drawSegmentedPath(G_hoses, base, L.itemsMain, clsFor);
     addTip(key,'main',geom.endX,geom.endY);
 
-    // group contiguous same-size runs & label
+    // group contiguous runs & label
     const groups=[]; let acc=0, cur=null;
     L.itemsMain.forEach(seg=>{
       if(!cur || cur.size!==seg.size){ if(cur) groups.push(cur); cur={size:seg.size,lengthFt:0,startFt:acc}; }
@@ -436,7 +416,7 @@ function drawAll(){
 
     // Wye branches
     if(L.hasWye){
-      if(L.itemsLeft.length){
+      if(sumFt(L.itemsLeft)>0){
         const gL = straightBranch('L', geom.endX, geom.endY, (sumFt(L.itemsLeft)/50)*PX_PER_50FT);
         const pathL = document.createElementNS('http://www.w3.org/2000/svg','path');
         pathL.setAttribute('d', gL.d); G_branches.appendChild(pathL);
@@ -444,9 +424,12 @@ function drawAll(){
         addTip(key,'L',gL.endX,gL.endY);
         const mid = pathL.getTotalLength()/2, pt = pathL.getPointAtLength(mid);
         addLabel(`${sumFt(L.itemsLeft)}′ ${L.itemsLeft[0].size==='2.5'?'2½″':'1¾″'} ${L.nozLeft.gpm} gpm`, pt.x, pt.y, labelDyForLine(key)-8);
-      } else addTip(key,'L',geom.endX-20,geom.endY-20);
+      } else {
+        // No branch hose yet — show tip nub right at the wye
+        addTip(key,'L',geom.endX-20,geom.endY-20);
+      }
 
-      if(L.itemsRight.length){
+      if(sumFt(L.itemsRight)>0){
         const gR = straightBranch('R', geom.endX, geom.endY, (sumFt(L.itemsRight)/50)*PX_PER_50FT);
         const pathR = document.createElementNS('http://www.w3.org/2000/svg','path');
         pathR.setAttribute('d', gR.d); G_branches.appendChild(pathR);
@@ -454,7 +437,9 @@ function drawAll(){
         addTip(key,'R',gR.endX,gR.endY);
         const mid = pathR.getTotalLength()/2, pt = pathR.getPointAtLength(mid);
         addLabel(`${sumFt(L.itemsRight)}′ ${L.itemsRight[0].size==='2.5'?'2½″':'1¾″'} ${L.nozRight.gpm} gpm`, pt.x, pt.y, labelDyForLine(key)-8);
-      } else addTip(key,'R',geom.endX+20,geom.endY-20);
+      } else {
+        addTip(key,'R',geom.endX+20,geom.endY-20);
+      }
     }
 
     base.remove();
@@ -465,7 +450,7 @@ function drawAll(){
   renderLinesPanel();
 }
 
-/* Supply (unchanged visuals) */
+/* Supply */
 function drawSupply(viewH){
   const G = document.getElementById('supplyG'); clearGroup(G);
   const h = supplyHeight(); if(!h) return;
@@ -513,94 +498,84 @@ function refreshTotals(){
   document.getElementById('PDP').textContent = vis.length? `${maxPDP.toFixed(1)} psi` : '— psi';
 }
 
-/* ===== Lines panel ===== */
+/* ===== Lines panel (editable for ALL lines) ===== */
 function renderLinesPanel(){
   linesTable.innerHTML = '';
   ['left','back','right'].forEach(key=>{
     const L = lines[key];
-    if(L.visible){
-      const gpm = L.hasWye ? (L.nozLeft?.gpm||0) + (L.nozRight?.gpm||0) : (L.nozRight?.gpm||0);
-      const size = (L.itemsMain[0]?.size)||'1.75';
-      const len  = sumFt(L.itemsMain);
-      const per100 = FLper100(gpm, size);
-      const mainFL = FL(gpm, size, len);
-      let PDP;
+    const size = L.itemsMain[0]?.size || '1.75';
+    const len  = sumFt(L.itemsMain) || 0;
+    const gpm = L.hasWye ? (L.nozLeft?.gpm||0)+(L.nozRight?.gpm||0) : (L.nozRight?.gpm||0);
+    const per100 = gpm ? FLper100(gpm, size) : 0;
+    const mainFL = gpm ? FL(gpm, size, len) : 0;
+    let PDP;
+    if(gpm){
       if(L.hasWye){
         const leftNeed = FL(L.nozLeft?.gpm||0, L.itemsLeft[0]?.size||'1.75', sumFt(L.itemsLeft)) + (L.nozLeft?.NP||0);
         const rightNeed= FL(L.nozRight?.gpm||0, L.itemsRight[0]?.size||size, sumFt(L.itemsRight)) + (L.nozRight?.NP||0);
-        PDP = Math.max(leftNeed,rightNeed) + mainFL + L.wyeLoss + (L.elevFt*PSI_PER_FT);
-      } else { PDP = (L.nozRight?.NP||0) + mainFL + (L.elevFt*PSI_PER_FT); }
-
-      const row = document.createElement('div');
-      row.className='lineRow';
-      row.innerHTML = `
-        <div class="title">${L.label} — showing</div>
-        <div class="break">
-          ${len}′ of ${size==='1.75'?'1¾″':'2½″'} @ ${gpm||0} gpm (${per100.toFixed(1)} psi/100′)
-          ${L.hasWye? ` + Wye ${L.wyeLoss} psi`:''}
-          + ${L.hasWye? 'max(branch NP+FL)': `Nozzle ${(L.nozRight?.NP||0)} psi`}
-          = <b>${PDP.toFixed(1)} psi PDP</b>
-        </div>
-      `;
-      linesTable.appendChild(row);
-    } else {
-      // builder for hidden lines (doesn't hide others)
-      const size = L.itemsMain[0]?.size || '1.75';
-      const len  = sumFt(L.itemsMain) || 0;
-      const row = document.createElement('div'); row.className='lineRow';
-      row.innerHTML = `
-        <div class="title">${L.label} — hidden</div>
-        <div class="builder">
-          <small>Main:</small>
-          <select data-key="${key}" data-bld="size">
-            <option value="1.75" ${size==='1.75'?'selected':''}>1¾″</option>
-            <option value="2.5"  ${size==='2.5'?'selected':''}>2½″</option>
-          </select>
-          <select data-key="${key}" data-bld="len">
-            ${[50,100,150,200,250,300].map(v=>`<option value="${v}" ${len===v?'selected':''}>${v}′</option>`).join('')}
-          </select>
-          <select data-key="${key}" data-bld="noz">
-            <option value="chiefXD">ChiefXD 50/185</option>
-            <option value="smooth185">Smooth 185 @50</option>
-            <option value="fog150_75">Fog 150 @75</option>
-            <option value="sb265">SB 1 1/8″ 265 @50</option>
-          </select>
-
-          <button class="pick-small" data-key="${key}" data-bld="show">Show</button>
-
-          <button class="pick-small" data-key="${key}" data-bld="addSeg">➕ Add Segment</button>
-          <span data-key="${key}" data-bld="segOpts" style="display:none;"></span>
-
-          <button class="pick-small" data-key="${key}" data-bld="addWye">➕ Add Wye</button>
-        </div>
-      `;
-      linesTable.appendChild(row);
+        PDP = Math.max(leftNeed,rightNeed) + mainFL + (L.hasWye?L.wyeLoss:0) + (L.elevFt*PSI_PER_FT);
+      } else {
+        PDP = (L.nozRight?.NP||0) + mainFL + (L.elevFt*PSI_PER_FT);
+      }
     }
 
-    // extra editors if hidden + has wye
-    if(!L.visible && L.hasWye){
+    const row = document.createElement('div');
+    row.className='lineRow';
+    row.innerHTML = `
+      <div class="title">${L.label} — ${L.visible?'showing':'hidden'}</div>
+      <div class="break">
+        ${gpm? `${len}′ of ${size==='1.75'?'1¾″':'2½″'} @ ${gpm} gpm (${per100.toFixed(1)} psi/100′) ${L.hasWye? ` + Wye ${L.wyeLoss} psi`:''} = <b>${PDP.toFixed(1)} psi PDP</b>` : `<i>Pick size/length/nozzle to compute PDP</i>`}
+      </div>
+      <div class="builder">
+        <small>Main:</small>
+        <select data-key="${key}" data-bld="size">
+          <option value="1.75" ${size==='1.75'?'selected':''}>1¾″</option>
+          <option value="2.5"  ${size==='2.5'?'selected':''}>2½″</option>
+        </select>
+        <select data-key="${key}" data-bld="len">
+          ${[50,100,150,200,250,300].map(v=>`<option value="${v}" ${len===v?'selected':''}>${v}′</option>`).join('')}
+        </select>
+        <select data-key="${key}" data-bld="noz">
+          ${Object.entries(NOZ).map(([id,n])=>`<option value="${id}" ${L.nozRight===n?'selected':''}>${n.name} ${n.NP}psi/${n.gpm}</option>`).join('')}
+        </select>
+        <button class="pick-small" data-key="${key}" data-bld="toggle">${L.visible?'Hide':'Show'}</button>
+        <button class="pick-small" data-key="${key}" data-bld="addSeg">➕ Add Segment</button>
+        <span data-key="${key}" data-bld="segOpts" style="display:none;"></span>
+        <button class="pick-small" data-key="${key}" data-bld="addWye">➕ Add Wye</button>
+        ${L.hasWye? `<button class="pick-small" data-key="${key}" data-bld="removeWye">Remove Wye</button>`:''}
+      </div>
+    `;
+    linesTable.appendChild(row);
+
+    if(L.hasWye){
+      // Branch editors even if arrays are empty (user can build from here)
       const br = document.createElement('div'); br.className='lineRow';
+      const leftSize  = L.itemsLeft[0]?.size || size;   // default to main size for UI
+      const leftLen   = sumFt(L.itemsLeft) || 0;
+      const rightSize = L.itemsRight[0]?.size || size;
+      const rightLen  = sumFt(L.itemsRight) || 0;
+
       br.innerHTML = `
         <div class="title">${L.label}A</div>
         <div class="builder">
           <small>Branch A:</small>
           <select data-key="${key}" data-branch="L" data-bld="bsize">
-            <option value="1.75" ${(L.itemsLeft[0]?.size||'1.75')==='1.75'?'selected':''}>1¾″</option>
-            <option value="2.5"  ${(L.itemsLeft[0]?.size||'1.75')==='2.5'?'selected':''}>2½″</option>
+            <option value="1.75" ${leftSize==='1.75'?'selected':''}>1¾″</option>
+            <option value="2.5"  ${leftSize==='2.5'?'selected':''}>2½″</option>
           </select>
           <select data-key="${key}" data-branch="L" data-bld="blen">
-            ${[50,100,150,200,250].map(v=>`<option value="${v}" ${ (sumFt(L.itemsLeft)||100)===v?'selected':''}>${v}′</option>`).join('')}
+            ${[0,50,100,150,200,250].map(v=>`<option value="${v}" ${leftLen===v?'selected':''}>${v}′</option>`).join('')}
           </select>
         </div>
         <div class="title">${L.label}B</div>
         <div class="builder">
           <small>Branch B:</small>
           <select data-key="${key}" data-branch="R" data-bld="bsize">
-            <option value="1.75" ${(L.itemsRight[0]?.size||'1.75')==='1.75'?'selected':''}>1¾″</option>
-            <option value="2.5"  ${(L.itemsRight[0]?.size||'1.75')==='2.5'?'selected':''}>2½″</option>
+            <option value="1.75" ${rightSize==='1.75'?'selected':''}>1¾″</option>
+            <option value="2.5"  ${rightSize==='2.5'?'selected':''}>2½″</option>
           </select>
           <select data-key="${key}" data-branch="R" data-bld="blen">
-            ${[50,100,150,200,250].map(v=>`<option value="${v}" ${ (sumFt(L.itemsRight)||100)===v?'selected':''}>${v}′</option>`).join('')}
+            ${[0,50,100,150,200,250].map(v=>`<option value="${v}" ${rightLen===v?'selected':''}>${v}′</option>`).join('')}
           </select>
         </div>
       `;
@@ -608,7 +583,7 @@ function renderLinesPanel(){
     }
   });
 
-  // builder handlers
+  // builder handlers (main)
   linesTable.querySelectorAll('[data-bld="size"],[data-bld="len"],[data-bld="noz"]').forEach(sel=>{
     sel.addEventListener('change', e=>{
       const key=e.target.dataset.key; const L=lines[key];
@@ -617,18 +592,17 @@ function renderLinesPanel(){
       const nozId= (linesTable.querySelector(`[data-key="${key}"][data-bld="noz"]`)?.value)||'chiefXD';
       L.itemsMain=[{size, lengthFt:len}];
       L.nozLeft=L.nozRight=NOZ[nozId];
-      // auto-show this line; do NOT hide others
-      if(!L.visible){ L.visible=true; toggleLineBtn(key,true); }
       drawAll();
     });
   });
-  linesTable.querySelectorAll('[data-bld="show"]').forEach(btn=>{
+  linesTable.querySelectorAll('[data-bld="toggle"]').forEach(btn=>{
     btn.addEventListener('click', e=>{
-      const key=e.target.dataset.key; lines[key].visible=true; toggleLineBtn(key,true); drawAll();
+      const key=e.target.dataset.key; const L=lines[key];
+      L.visible = !L.visible; toggleLineBtn(key, L.visible); drawAll();
     });
   });
 
-  // add segment smart (same or smaller)
+  // add segment
   linesTable.querySelectorAll('[data-bld="addSeg"]').forEach(btn=>{
     btn.addEventListener('click', e=>{
       const key=e.target.dataset.key; const L=lines[key];
@@ -640,7 +614,6 @@ function renderLinesPanel(){
         b.textContent = `+${o.len}′ ${o.size==='2.5'?'2½″':'1¾″'}`;
         b.addEventListener('click', ()=>{
           L.itemsMain.push({size:o.size,lengthFt:o.len});
-          if(!L.visible){ L.visible=true; toggleLineBtn(key,true); }
           drawAll();
         });
         span.appendChild(b);
@@ -648,30 +621,37 @@ function renderLinesPanel(){
     });
   });
 
-  // add wye
+  // wye controls
   linesTable.querySelectorAll('[data-bld="addWye"]').forEach(btn=>{
     btn.addEventListener('click', e=>{
       const key=e.target.dataset.key; const L=lines[key];
-      L.hasWye = true;
-      if(L.itemsLeft.length===0)  L.itemsLeft=[{size:'1.75',lengthFt:100}];
-      if(L.itemsRight.length===0) L.itemsRight=[{size:'1.75',lengthFt:100}];
-      if(!L.visible){ L.visible=true; toggleLineBtn(key,true); }
+      L.hasWye = true;  // DO NOT auto-add branch hose
+      drawAll();
+    });
+  });
+  linesTable.querySelectorAll('[data-bld="removeWye"]').forEach(btn=>{
+    btn.addEventListener('click', e=>{
+      const key=e.target.dataset.key; const L=lines[key];
+      L.hasWye = false; L.itemsLeft=[]; L.itemsRight=[];
       drawAll();
     });
   });
 
-  // branch editors
+  // branch editors (can create from empty, length 0 means none)
   linesTable.querySelectorAll('[data-bld="bsize"],[data-bld="blen"]').forEach(sel=>{
     sel.addEventListener('change', e=>{
       const key=e.target.dataset.key; const branch=e.target.dataset.branch; const L=lines[key];
       const sizeSel = linesTable.querySelector(`[data-key="${key}"][data-branch="${branch}"][data-bld="bsize"]`);
       const lenSel  = linesTable.querySelector(`[data-key="${key}"][data-branch="${branch}"][data-bld="blen"]`);
-      const size=sizeSel.value, len=parseInt(lenSel.value,10);
+      let size=sizeSel.value, len=parseInt(lenSel.value,10);
       const mainLast = L.itemsMain[L.itemsMain.length-1]?.size || '1.75';
       // enforce same-or-smaller vs main
-      if(mainLast==='1.75' && size==='2.5'){ sizeSel.value='1.75'; return; }
-      if(branch==='L') L.itemsLeft=[{size,lengthFt:len}]; else L.itemsRight=[{size,lengthFt:len}];
-      if(!L.visible){ L.visible=true; toggleLineBtn(key,true); }
+      if(mainLast==='1.75' && size==='2.5'){ size='1.75'; sizeSel.value='1.75'; }
+      if(len<=0){ // treat 0 as "no hose yet"
+        if(branch==='L') L.itemsLeft=[]; else L.itemsRight=[];
+      } else {
+        if(branch==='L') L.itemsLeft=[{size,lengthFt:len}]; else L.itemsRight=[{size,lengthFt:len}];
+      }
       drawAll();
     });
   });
@@ -691,7 +671,6 @@ function allowedAddOptions(curr){
 function addTip(key, where, x, y){
   const g = document.createElementNS('http://www.w3.org/2000/svg','g');
   g.setAttribute('class','hose-end'); g.setAttribute('data-line',key); g.setAttribute('data-where',where);
-  // a larger (invisible) rect to make tapping easy
   const hit = document.createElementNS('http://www.w3.org/2000/svg','rect');
   hit.setAttribute('class','plus-hit'); hit.setAttribute('x', x-20); hit.setAttribute('y', y-20); hit.setAttribute('width', 40); hit.setAttribute('height', 40);
   const c = document.createElementNS('http://www.w3.org/2000/svg','circle');
@@ -704,7 +683,7 @@ function addTip(key, where, x, y){
   G_tips.appendChild(g);
 }
 
-/* ===== + Picker behavior ===== */
+/* Picker open/close */
 overlay.addEventListener('click', (e)=>{
   const tip = e.target.closest('.hose-end'); if(!tip) return;
   const key = tip.getAttribute('data-line'); const where = tip.getAttribute('data-where');
@@ -727,12 +706,10 @@ function showPicker(key, where, cx, cy){
   const L = lines[key];
   pickerTitle.textContent = where==='main' ? `${L.label} — Main` : `${L.label} — ${where==='L'?'Left':'Right'}`;
 
-  // init setup pane with current values
   setupSize.value = L.itemsMain[0]?.size || '1.75';
   setupLen.value  = String(sumFt(L.itemsMain) || 200);
   setupNoz.value  = Object.entries(NOZ).find(([id,n])=>n===L.nozRight)?.[0] || 'chiefXD';
 
-  // build smart add options
   const currentSize = currentSegmentSize(L, where);
   addBtns.innerHTML = '';
   allowedAddOptions(currentSize).forEach(o=>{
@@ -755,18 +732,14 @@ function showPicker(key, where, cx, cy){
   picker.style.left = `${x}px`; picker.style.top = `${y}px`;
 }
 function hidePicker(){ picker.style.display='none'; picker.setAttribute('aria-hidden','true'); }
-function showPane(id){
-  ['pickHome','pickAdd','pickNoz','pickAcc','pickElev','pickSetup'].forEach(pid=>{
-    document.getElementById(pid).style.display = (pid===id)?'block':'none';
-  });
-}
+function showPane(id){ ['pickHome','pickAdd','pickNoz','pickAcc','pickElev','pickSetup'].forEach(pid=>{ document.getElementById(pid).style.display = (pid===id)?'block':'none'; }); }
 function currentSegmentSize(L, where){
   if(where==='L')  return L.itemsLeft[0]?.size || '1.75';
   if(where==='R')  return L.itemsRight[0]?.size || L.itemsMain[0]?.size || '1.75';
   return L.itemsMain[L.itemsMain.length-1]?.size || '1.75';
 }
 
-/* Picker navigation */
+/* Picker navigation + actions */
 picker.addEventListener('click', (e)=>{
   const view = e.target.closest('.pick')?.dataset.view;
   if(view==='addhose') showPane('pickAdd');
@@ -777,7 +750,6 @@ picker.addEventListener('click', (e)=>{
   if(e.target.hasAttribute('data-back')) showPane('pickHome');
 });
 
-/* Picker actions */
 pickAdd.addEventListener('click', (e)=>{
   const btn = e.target.closest('[data-addlen]'); if(!btn) return;
   const len = parseInt(btn.dataset.addlen,10);
@@ -801,7 +773,9 @@ pickNoz.addEventListener('click', (e)=>{
 pickAcc.addEventListener('click', (e)=>{
   const acc = e.target.closest('button')?.dataset.acc; if(!acc) return;
   const L = lines[plusContext.key];
-  if(acc==='wye'){ L.hasWye = true; if(!L.itemsLeft.length) L.itemsLeft=[{size:'1.75',lengthFt:100}]; if(!L.itemsRight.length) L.itemsRight=[{size:'1.75',lengthFt:100}]; }
+  if(acc==='wye'){
+    L.hasWye = true; // DO NOT auto-add branch hose
+  }
   if(acc==='removeWye'){ L.hasWye = false; L.itemsLeft=[]; L.itemsRight=[]; }
   if(!L.visible){ L.visible=true; toggleLineBtn(plusContext.key,true); }
   hidePicker(); drawAll();
@@ -824,7 +798,7 @@ document.getElementById('setupApply').addEventListener('click', ()=>{
 document.querySelectorAll('.linebtn').forEach(b=>{
   b.addEventListener('click', ()=>{
     const key=b.dataset.line;
-    lines[key].visible = !lines[key].visible;      // <-- NOT exclusive
+    lines[key].visible = !lines[key].visible;
     b.classList.toggle('active', lines[key].visible);
     drawAll();
   });
