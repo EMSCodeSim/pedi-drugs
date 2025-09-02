@@ -12,7 +12,6 @@
     --hose175:#ff6b6b;     /* 1¾" (red) */
     --bubble:#172134; --bubble-edge:rgba(255,255,255,.15);
     --btn:#0b1320; --btnEdge:#20324f;
-    --supplyH: 0px;        /* dynamic height reserved for supply diagram */
   }
   *{box-sizing:border-box}
   html,body{margin:0;background:var(--bg);color:var(--ink);font-family:system-ui,Segoe UI,Inter,Arial,sans-serif}
@@ -27,7 +26,7 @@
   #overlay{position:absolute;inset:0;width:100%;height:100%;display:block}
   .info{position:absolute;left:50%;top:8px;transform:translateX(-50%);background:var(--bubble);border:1px solid var(--bubble-edge);border-radius:999px;padding:6px 10px;font-size:12px;z-index:4}
 
-  /* Buttons directly under truck (must fit one row on iPhone) */
+  /* Buttons (single row on iPhone) */
   .linebar{
     position:absolute;left:0;right:0;bottom:8px;
     display:flex;justify-content:center;align-items:center;gap:6px;z-index:6;flex-wrap:nowrap;
@@ -38,12 +37,7 @@
     padding:10px 12px;font-size:14px;cursor:pointer;box-shadow:0 6px 16px rgba(0,0,0,.35);white-space:nowrap
   }
   .linebtn.active{outline:2px solid #3aa7ff}
-
-  /* Compact on small phones */
-  @media (max-width:390px){
-    .linebtn,.supplybtn{padding:9px 10px;font-size:13px}
-    .linebar{gap:4px}
-  }
+  @media (max-width:390px){ .linebtn,.supplybtn{padding:9px 10px;font-size:13px} .linebar{gap:4px} }
 
   /* Hose drawings */
   .hoseMain{fill:none;stroke-linecap:round;stroke-linejoin:round}
@@ -70,16 +64,7 @@
   .row{display:flex;gap:8px;align-items:center;padding:6px 8px}
   .row input{width:90px;background:#0b1320;color:#eaf2ff;border:1px solid var(--edge);border-radius:10px;padding:8px 10px;font-size:14px}
 
-  /* Supply dropdown + dock area */
-  .supplyWrap{
-    position:absolute;left:0;right:0;bottom:calc(8px + var(--supplyH));
-    display:flex;justify-content:center;z-index:5;pointer-events:none;
-  }
-  .supplyDock{
-    position:absolute;left:0;right:0;bottom:calc(8px + var(--supplyH));
-    height:var(--supplyH); z-index:5; pointer-events:none;
-  }
-  .supplyDock svg{position:absolute;left:50%;transform:translateX(-50%);bottom:0;pointer-events:none}
+  /* Supply dropdown */
   .dropdown{
     position:absolute; z-index:20; display:none; pointer-events:auto;
     background:#0b1320;border:1px solid var(--edge);border-radius:10px;box-shadow:0 12px 28px rgba(0,0,0,.45);overflow:hidden;
@@ -111,18 +96,18 @@
       <svg id="overlay" viewBox="0 0 390 260" preserveAspectRatio="xMidYMax meet" aria-label="Visual stage">
         <image id="truckImg" href="https://fireopssim.com/pump/engine181.png" x="0" y="0" width="390" height="260" preserveAspectRatio="xMidYMax meet"></image>
         <g id="hoses"></g><g id="branches"></g><g id="tips"></g>
+        <!-- Supply graphic rendered here, directly under the truck -->
+        <g id="supplyG"></g>
       </svg>
 
       <div class="info" id="topInfo">No lines selected</div>
 
-      <!-- Supply diagram dock (pushes buttons down via CSS var) -->
-      <div class="supplyDock" id="supplyDock"></div>
-
-      <!-- Buttons directly under truck (one row on iPhone) -->
+      <!-- Buttons (single row) -->
       <div class="linebar" id="linebar">
+        <!-- order: left (Line 1), back/center (Line 2), right (Line 3) -->
         <button class="linebtn" data-line="left">Line 1</button>
-        <button class="linebtn" data-line="right">Line 2</button>
-        <button class="linebtn" data-line="back">Line 3</button>
+        <button class="linebtn" data-line="back">Line 2</button>
+        <button class="linebtn" data-line="right">Line 3</button>
         <button class="supplybtn" id="supplyBtn">Supply ▾</button>
         <!-- Dropdown -->
         <div id="supplyMenu" class="dropdown" role="menu" aria-hidden="true">
@@ -219,6 +204,11 @@ const CURVE_PULL = 36;
 const BRANCH_LIFT = 10;
 const PSI_PER_FT = 0.434;
 
+/* Defaults per request:
+   Line 1 (left)  = 1¾" 200'
+   Line 2 (center)= 1¾" 200'
+   Line 3 (right) = 2½" 250'
+*/
 const COEFF = { "1.75":15.5, "2.5":2, "5":0.08 };
 const NOZ = {
   smooth185:{name:'Smooth 185 @50', gpm:185, NP:50},
@@ -240,18 +230,21 @@ function emptyHose(label, size, len, noz){
 }
 const lines = {
   left:  emptyHose('Line 1','1.75',200, NOZ.smooth185),
-  right: emptyHose('Line 2','1.75',200, NOZ.smooth185),
-  back:  emptyHose('Line 3','2.5', 250, NOZ.sb265)
+  back:  emptyHose('Line 2','1.75',200, NOZ.smooth185),
+  right: emptyHose('Line 3','2.5', 250, NOZ.sb265) // right side 2½″ 250′
 };
 
 let plusContext = { key:null, where:'main' };
+let currentSupply = 'none'; // drafting | pressurized | relay | none
 
+/* DOM */
 const overlay   = document.getElementById('overlay');
 const truckImg  = document.getElementById('truckImg');
 const stage     = document.getElementById('stage');
 const G_hoses   = document.getElementById('hoses');
 const G_branches= document.getElementById('branches');
 const G_tips    = document.getElementById('tips');
+const G_supply  = document.getElementById('supplyG');
 const topInfo   = document.getElementById('topInfo');
 
 const picker    = document.getElementById('picker');
@@ -265,10 +258,7 @@ const elevInput = document.getElementById('elevInput');
 
 const supplyBtn = document.getElementById('supplyBtn');
 const supplyMenu= document.getElementById('supplyMenu');
-const supplyDock= document.getElementById('supplyDock');
 const linebar   = document.getElementById('linebar');
-
-let currentSupply = 'none';
 
 /* Helpers */
 function clsFor(size){ return size==='5'?'hose5':(size==='2.5'?'hose25':'hose175'); }
@@ -277,7 +267,10 @@ function hoseClassFromItems(items){ return clsFor(items[0]?.size || '1.75'); }
 function FL(gpm, size, ft){ const C=COEFF[size]||0, Q=gpm/100; return C*(Q*Q)*(ft/100); }
 function clearGroup(g){ while(g.firstChild) g.removeChild(g.firstChild); }
 
-/* Dynamic stage height / viewBox so full hose length is visible */
+/* Supply heights (to reserve space) */
+function supplyHeight(){ return currentSupply==='drafting'?150: currentSupply==='pressurized'?150: currentSupply==='relay'?170: 0; }
+
+/* Dynamic stage height / viewBox so full hose length + supply graphic is visible */
 function computeNeededHeightPx(){
   const needs = Object.values(lines).filter(l=>l.visible);
   let maxUp = 0;
@@ -291,18 +284,17 @@ function computeNeededHeightPx(){
     }
     maxUp = Math.max(maxUp, mainPx + branchPx);
   });
-  // reserve space for supply diagram at the bottom
-  const dock = parseInt(getComputedStyle(stage).getPropertyValue('--supplyH')) || 0;
-  return TRUCK_H + maxUp + 40 + dock;
+  // truck + hoses up + supply graphic below + top padding
+  return TRUCK_H + maxUp + 40 + supplyHeight();
 }
 
-function truckTopY(viewH){ return viewH - TRUCK_H; }
+function truckTopY(viewH){ return viewH - TRUCK_H - supplyHeight(); } // keep supply space below truck
 function pumpXY(viewH){
   const top = truckTopY(viewH);
   return { x: TRUCK_W * PUMP_REL.x, y: top + TRUCK_H * PUMP_REL.y };
 }
 
-/* Geometry: main = gentle curve; branches = straight upward */
+/* Geometry */
 function mainGeom(dir, totalPx, viewH){
   const {x:sx,y:sy} = pumpXY(viewH);
   const ex = dir===-1 ? sx - 110 : dir===1 ? sx + 110 : sx;
@@ -319,16 +311,69 @@ function straightBranch(side, startX, startY, totalPx){
   return { d:`M ${startX},${startY} L ${startX},${y1} L ${x},${y1} L ${x},${y2}`, endX:x, endY:y2 };
 }
 
-/* Draw everything visible; auto-resize stage */
+/* Draw the supply diagram inside SVG, directly under the truck */
+function drawSupply(viewH){
+  clearGroup(G_supply);
+  const h = supplyHeight(); if(!h) return;
+  const baseY = truckTopY(viewH) + TRUCK_H + 6; // just under truck
+  if(currentSupply==='drafting'){
+    renderDrafting(G_supply, baseY);
+  } else if(currentSupply==='pressurized'){
+    renderPressurized(G_supply, baseY);
+  } else if(currentSupply==='relay'){
+    renderRelay(G_supply, baseY);
+  }
+}
+function renderDrafting(g, baseY){
+  const ns=g.namespaceURI;
+  // static source
+  let r=document.createElementNS(ns,'rect'); r.setAttribute('x','10'); r.setAttribute('y', String(baseY+60)); r.setAttribute('width','120'); r.setAttribute('height','70');
+  r.setAttribute('fill','#10233b'); r.setAttribute('stroke','#4a6a9b'); g.appendChild(r);
+  let t=document.createElementNS(ns,'text'); t.setAttribute('x','70'); t.setAttribute('y', String(baseY+100)); t.setAttribute('fill','#cfe4ff'); t.setAttribute('text-anchor','middle'); t.setAttribute('font-size','12'); t.textContent='Static Source'; g.appendChild(t);
+  // truck (same art) above-right is the main truck; no need to re-draw the truck here.
+  // hard suction path from pump area to source
+  const pump = pumpXY(Number(overlay.getAttribute('viewBox').split(' ')[3]));
+  let path=document.createElementNS(ns,'path');
+  path.setAttribute('d',`M ${pump.x},${pump.y} C 240 ${baseY+40}, 190 ${baseY+65}, 130 ${baseY+95}`);
+  path.setAttribute('stroke','#6ecbff'); path.setAttribute('stroke-width','8'); path.setAttribute('fill','none'); path.setAttribute('stroke-linecap','round');
+  g.appendChild(path);
+}
+function renderPressurized(g, baseY){
+  const ns=g.namespaceURI;
+  // hydrant
+  let hyd=document.createElementNS(ns,'rect'); hyd.setAttribute('x','10'); hyd.setAttribute('y', String(baseY+20)); hyd.setAttribute('width','80'); hyd.setAttribute('height','60');
+  hyd.setAttribute('fill','#243614'); hyd.setAttribute('stroke','#7aa35e'); g.appendChild(hyd);
+  let t=document.createElementNS(ns,'text'); t.setAttribute('x','50'); t.setAttribute('y', String(baseY+55)); t.setAttribute('fill','#cfe4ff'); t.setAttribute('text-anchor','middle'); t.setAttribute('font-size','12'); t.textContent='Hydrant'; g.appendChild(t);
+  // 5" from hydrant to pump
+  const pump = pumpXY(Number(overlay.getAttribute('viewBox').split(' ')[3]));
+  let hose=document.createElementNS(ns,'path');
+  hose.setAttribute('d',`M 90 ${baseY+50} C 160 ${baseY+50} 240 ${baseY+50} ${pump.x} ${pump.y-20}`);
+  hose.setAttribute('stroke','#ecd464'); hose.setAttribute('stroke-width','12'); hose.setAttribute('fill','none'); hose.setAttribute('stroke-linecap','round');
+  g.appendChild(hose);
+}
+function renderRelay(g, baseY){
+  const ns=g.namespaceURI;
+  // second truck on the left (same .png)
+  let img=document.createElementNS(ns,'image'); img.setAttribute('href','https://fireopssim.com/pump/engine181.png');
+  img.setAttribute('x','10'); img.setAttribute('y', String(baseY)); img.setAttribute('width','120'); img.setAttribute('height','80'); g.appendChild(img);
+  // 5" from second truck to pump
+  const pump = pumpXY(Number(overlay.getAttribute('viewBox').split(' ')[3]));
+  let hose=document.createElementNS(ns,'path');
+  hose.setAttribute('d',`M 130 ${baseY+40} C 190 ${baseY+36} 250 ${baseY+36} ${pump.x} ${pump.y-20}`);
+  hose.setAttribute('stroke','#ecd464'); hose.setAttribute('stroke-width','12'); hose.setAttribute('fill','none'); hose.setAttribute('stroke-linecap','round');
+  g.appendChild(hose);
+}
+
+/* Draw visible hoses + supply; auto-resize stage */
 function drawAll(){
-  const needH = Math.ceil(computeNeededHeightPx());
-  overlay.setAttribute('viewBox', `0 0 ${TRUCK_W} ${needH}`);
-  stage.style.height = needH + 'px';
-  truckImg.setAttribute('y', String(truckTopY(needH)));
+  const viewH = Math.ceil(computeNeededHeightPx());
+  overlay.setAttribute('viewBox', `0 0 ${TRUCK_W} ${viewH}`);
+  stage.style.height = viewH + 'px';
+  truckImg.setAttribute('y', String(truckTopY(viewH)));
 
   clearGroup(G_hoses); clearGroup(G_branches); clearGroup(G_tips);
 
-  const visibleKeys = ['left','right','back'].filter(k=>lines[k].visible);
+  const visibleKeys = ['left','back','right'].filter(k=>lines[k].visible);
   topInfo.textContent = visibleKeys.length ? `Showing: ${visibleKeys.map(k=>lines[k].label).join(' • ')}` : 'No lines selected';
 
   visibleKeys.forEach(key=>{
@@ -338,7 +383,7 @@ function drawAll(){
     const mainFt = sumFt(L.itemsMain);
     const mainPx = (mainFt/50)*PX_PER_50FT;
     const mainClass = hoseClassFromItems(L.itemsMain);
-    const m = mainGeom(dir, mainPx, needH);
+    const m = mainGeom(dir, mainPx, viewH);
 
     const sh = document.createElementNS('http://www.w3.org/2000/svg','path');
     sh.setAttribute('class','hoseMain shadow'); sh.setAttribute('stroke-width','12'); sh.setAttribute('d', m.d);
@@ -375,6 +420,8 @@ function drawAll(){
     }
   });
 
+  // draw supply under the truck inside the same SVG, then update totals
+  drawSupply(viewH);
   refreshTotals();
 }
 
@@ -423,7 +470,8 @@ overlay.addEventListener('click', (e)=>{
   showPicker(key, where, clientX, clientY);
 });
 document.addEventListener('click', (e)=>{
-  if(picker.contains(e.target) || supplyMenu.contains(e.target) || e.target===supplyBtn) return;
+  const inSupplyUI = e.target.closest('#supplyMenu') || e.target.closest('#supplyBtn');
+  if(picker.contains(e.target) || inSupplyUI) return;
   if(e.target.closest('.hose-end')) return;
   hidePicker(); hideSupplyMenu();
 });
@@ -477,7 +525,7 @@ document.querySelectorAll('.linebtn').forEach(b=>{
   });
 });
 
-/* ===== Supply dropdown & diagrams ===== */
+/* ===== Supply dropdown & selection ===== */
 function showSupplyMenu(){
   const rect = supplyBtn.getBoundingClientRect();
   const lbRect = linebar.getBoundingClientRect();
@@ -490,89 +538,15 @@ function hideSupplyMenu(){
   supplyMenu.style.display='none';
   supplyMenu.setAttribute('aria-hidden','true');
 }
-supplyBtn.addEventListener('click', (e)=>{
+supplyBtn.addEventListener('click', ()=>{
   if(supplyMenu.style.display==='block') hideSupplyMenu(); else showSupplyMenu();
 });
 supplyMenu.addEventListener('click', (e)=>{
   const src = e.target.closest('button')?.dataset.supply; if(!src) return;
-  setSupply(src);
+  currentSupply = src;
   hideSupplyMenu();
+  drawAll(); // stage will reserve space & draw graphic right under truck
 });
-
-/* Render supply diagram into dock and set stage bottom reserve */
-function setSupply(type){
-  currentSupply = type;
-  supplyDock.innerHTML='';
-  let h=0;
-  if(type==='drafting'){
-    h=150;
-    const svg = draftingSVG();
-    supplyDock.appendChild(svg);
-  } else if(type==='pressurized'){
-    h=150;
-    const svg = pressurizedSVG();
-    supplyDock.appendChild(svg);
-  } else if(type==='relay'){
-    h=170;
-    const svg = relaySVG();
-    supplyDock.appendChild(svg);
-  }
-  stage.style.setProperty('--supplyH', h ? h+'px' : '0px');
-  drawAll();
-}
-
-/* Diagrams (reuse same truck art) */
-function draftingSVG(){
-  const svg = document.createElementNS('http://www.w3.org/2000/svg','svg');
-  svg.setAttribute('viewBox','0 0 390 150'); svg.style.width='100%'; svg.style.height='var(--supplyH)';
-  // static source box
-  const src = document.createElementNS(svg.namespaceURI,'rect');
-  src.setAttribute('x','10'); src.setAttribute('y','75'); src.setAttribute('width','120'); src.setAttribute('height','60');
-  src.setAttribute('fill','#10233b'); src.setAttribute('stroke','#4a6a9b');
-  const txt = document.createElementNS(svg.namespaceURI,'text');
-  txt.setAttribute('x','70'); txt.setAttribute('y','110'); txt.setAttribute('fill','#cfe4ff'); txt.setAttribute('text-anchor','middle'); txt.setAttribute('font-size','12'); txt.textContent='Static Source';
-  // truck at right
-  const img = document.createElementNS(svg.namespaceURI,'image');
-  img.setAttribute('href','https://fireopssim.com/pump/engine181.png'); img.setAttribute('x','250'); img.setAttribute('y','10'); img.setAttribute('width','120'); img.setAttribute('height','80');
-  // hard suction
-  const hose = document.createElementNS(svg.namespaceURI,'path');
-  hose.setAttribute('d','M 130 105 C 170 100 210 95 250 75'); hose.setAttribute('stroke','#6ecbff'); hose.setAttribute('stroke-width','8'); hose.setAttribute('fill','none'); hose.setAttribute('stroke-linecap','round');
-  svg.appendChild(src); svg.appendChild(txt); svg.appendChild(img); svg.appendChild(hose);
-  return svg;
-}
-function pressurizedSVG(){
-  const svg = document.createElementNS('http://www.w3.org/2000/svg','svg');
-  svg.setAttribute('viewBox','0 0 390 150'); svg.style.width='100%'; svg.style.height='var(--supplyH)';
-  // hydrant box
-  const hyd = document.createElementNS(svg.namespaceURI,'rect');
-  hyd.setAttribute('x','10'); hyd.setAttribute('y','40'); hyd.setAttribute('width','80'); hyd.setAttribute('height','60');
-  hyd.setAttribute('fill','#243614'); hyd.setAttribute('stroke','#7aa35e');
-  const txt = document.createElementNS(svg.namespaceURI,'text');
-  txt.setAttribute('x','50'); txt.setAttribute('y','75'); txt.setAttribute('fill','#cfe4ff'); txt.setAttribute('text-anchor','middle'); txt.setAttribute('font-size','12'); txt.textContent='Hydrant';
-  // truck at right
-  const img = document.createElementNS(svg.namespaceURI,'image');
-  img.setAttribute('href','https://fireopssim.com/pump/engine181.png'); img.setAttribute('x','250'); img.setAttribute('y','10'); img.setAttribute('width','120'); img.setAttribute('height','80');
-  // 5" supply
-  const hose = document.createElementNS(svg.namespaceURI,'path');
-  hose.setAttribute('d','M 90 70 C 140 70 195 70 250 70'); hose.setAttribute('stroke','#ecd464'); hose.setAttribute('stroke-width','12'); hose.setAttribute('fill','none'); hose.setAttribute('stroke-linecap','round');
-  svg.appendChild(hyd); svg.appendChild(txt); svg.appendChild(img); svg.appendChild(hose);
-  return svg;
-}
-function relaySVG(){
-  const svg = document.createElementNS('http://www.w3.org/2000/svg','svg');
-  svg.setAttribute('viewBox','0 0 390 170'); svg.style.width='100%'; svg.style.height='var(--supplyH)';
-  // left truck
-  const img1 = document.createElementNS(svg.namespaceURI,'image');
-  img1.setAttribute('href','https://fireopssim.com/pump/engine181.png'); img1.setAttribute('x','10'); img1.setAttribute('y','20'); img1.setAttribute('width','120'); img1.setAttribute('height','80');
-  // right truck
-  const img2 = document.createElementNS(svg.namespaceURI,'image');
-  img2.setAttribute('href','https://fireopssim.com/pump/engine181.png'); img2.setAttribute('x','260'); img2.setAttribute('y','20'); img2.setAttribute('width','120'); img2.setAttribute('height','80');
-  // 5" between
-  const hose = document.createElementNS(svg.namespaceURI,'path');
-  hose.setAttribute('d','M 130 60 C 170 58 220 58 260 60'); hose.setAttribute('stroke','#ecd464'); hose.setAttribute('stroke-width','12'); hose.setAttribute('fill','none'); hose.setAttribute('stroke-linecap','round');
-  svg.appendChild(img1); svg.appendChild(img2); svg.appendChild(hose);
-  return svg;
-}
 
 /* Totals */
 function refreshTotals(){
@@ -590,8 +564,6 @@ function refreshTotals(){
   document.getElementById('GPM').textContent = vis.length? `${totalGPM} gpm` : '— gpm';
   document.getElementById('PDP').textContent = vis.length? `${maxPDP.toFixed(1)} psi` : '— psi';
 }
-
-/* Events: supply menu and outside clicks handled above */
 
 /* Init */
 drawAll();
