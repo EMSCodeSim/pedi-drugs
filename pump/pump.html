@@ -7,33 +7,13 @@
   <meta name="theme-color" content="#0b0f14" />
 
   <!-- Primary CSS (same-folder) with cache-bust -->
-  <link rel="preload" as="style" href="pump-style.css?v=6">
-  <link rel="stylesheet" href="pump-style.css?v=6" id="pumpCSS">
-
-  <!-- Tiny runtime fallback so page is usable if CSS path is wrong -->
-  <script>
-    (function(){
-      const ok = () => {
-        try { return getComputedStyle(document.documentElement).getPropertyValue('--bg').trim(); }
-        catch(e){ return false; }
-      };
-      function add(href){ return new Promise((res,rej)=>{ const l=document.createElement('link'); l.rel='stylesheet'; l.href=href; l.onload=()=>res(); l.onerror=rej; document.head.appendChild(l);}); }
-      setTimeout(async ()=>{
-        if (ok()) return;
-        for (const href of ['./pump-style.css?v=6','/pump/pump-style.css?v=6','/assets/css/pump-style.css?v=6']){
-          try { await add(href); if (ok()) return; } catch(e){}
-        }
-        const s=document.createElement('style');
-        s.textContent=':root{--bg:#0b0f14;--ink:#eaf2ff;--edge:rgba(255,255,255,.14)}html,body{margin:0;background:var(--bg);color:var(--ink);font-family:system-ui}.linebar{position:absolute;left:0;right:0;bottom:8px;display:flex;justify-content:center;gap:10px}.linebtn{background:#0b1320;border:1px solid var(--edge);color:#eaf2ff;border-radius:12px;padding:12px 16px}.hose5,.hose25,.hose175{fill:none;stroke-linecap:round;stroke-linejoin:round}.hose5{stroke:#ecd464;stroke-width:12}.hose25{stroke:#6ecbff;stroke-width:9}.hose175{stroke:#ff6b6b;stroke-width:6}';
-        document.head.appendChild(s);
-      },0);
-    })();
-  </script>
+  <link rel="preload" as="style" href="pump-style.css?v=7">
+  <link rel="stylesheet" href="pump-style.css?v=7" id="pumpCSS">
 </head>
 <body>
   <div class="app">
 
-    <!-- ===== Branded Header ===== -->
+    <!-- Header -->
     <header class="brandbar">
       <div class="brand-left">
         <img class="brand-logo" src="https://fireopssim.com/pump/fireops-badge.svg" alt=""
@@ -44,31 +24,28 @@
         </div>
       </div>
       <nav class="brand-right">
-        <a class="brand-link" href="/" aria-label="Home">Home</a>
-        <a class="brand-link" href="/visual-pump" aria-label="Visual Pump Calculator">Visual Pump</a>
+        <a class="brand-link" href="/">Home</a>
+        <a class="brand-link" href="/visual-pump">Visual Pump</a>
       </nav>
     </header>
 
-    <!-- ===== Floating action buttons (drawer toggles) ===== -->
+    <!-- Floating action buttons -->
     <div class="side">
       <button class="fab" id="openHose" title="Hose">H</button>
-      <button class="fab" id="openAcc" title="Accessories">A</button>
-      <button class="fab" id="openNoz" title="Nozzles">N</button>
+      <button class="fab" id="openAcc"  title="Accessories">A</button>
+      <button class="fab" id="openNoz"  title="Nozzles">N</button>
     </div>
 
-    <!-- ===== Drawer (edits ACTIVE line only) ===== -->
+    <!-- Drawer -->
     <aside class="drawer" id="drawer" aria-hidden="true">
       <h3 id="drawerTitle">Configure Line</h3>
-
-      <!-- Quick mode tabs -->
       <div class="tabs" id="drawerTabs">
-        <button data-tab="hose" class="tab active">Hose</button>
-        <button data-tab="noz" class="tab">Nozzle</button>
-        <button data-tab="acc" class="tab">Accessories</button>
+        <button data-tab="hose"  class="tab active">Hose</button>
+        <button data-tab="noz"   class="tab">Nozzle</button>
+        <button data-tab="acc"   class="tab">Accessories</button>
         <button data-tab="split" class="tab">Split</button>
       </div>
 
-      <!-- Hose choices -->
       <div class="row" id="hoseButtonsMain">
         <button data-hose='{"size":"5","lengthFt":100}'>5″ 100′</button>
         <button data-hose='{"size":"2.5","lengthFt":50}'>2½″ 50′</button>
@@ -77,7 +54,6 @@
         <button data-act="clearHose">Clear main hoses</button>
       </div>
 
-      <!-- Split / after-wye -->
       <div class="row" id="hoseButtonsSplit" style="display:none">
         <div class="drawer-note">After Wye (active line):</div>
         <button data-side="L" data-hose='{"size":"2.5","lengthFt":50}'>Left 2½″ 50′</button>
@@ -89,7 +65,6 @@
         <button data-act="clearSplit">Clear after-wye</button>
       </div>
 
-      <!-- Accessories -->
       <div class="row" id="accButtons" style="display:none">
         <button data-acc='{"name":"Wye","loss":10}'>Add Wye</button>
         <button data-acc='{"name":"Appliance","loss":10}'>+10 Appliance</button>
@@ -98,38 +73,35 @@
         <button data-act="clearAcc">Clear accessories</button>
       </div>
 
-      <!-- Nozzles -->
       <div class="row" id="nozButtons" style="display:none">
         <div class="row" id="nozRowLeft"><h3>Left Branch Nozzle</h3></div>
         <div class="row" id="nozRowRight" style="border-top:1px solid var(--edge);padding-top:10px"><h3>Right/Single Nozzle</h3></div>
       </div>
     </aside>
 
-    <!-- ===== Stage ===== -->
-    <div class="wrapper">
-      <div id="scroll" class="scroll">
-        <div id="stage" class="stage">
-          <img id="engine" alt="ENGINE 181" src="https://fireopssim.com/pump/engine181.png" />
+    <!-- Stage -->
+    <section class="wrapper">
+      <div id="stage" class="stage">
+        <!-- Everything inside one responsive SVG so coordinates match image -->
+        <svg id="overlay" viewBox="0 0 390 260" preserveAspectRatio="xMidYMax meet" aria-label="Visual stage">
+          <!-- Truck image lives inside the same SVG coordinate system -->
+          <image href="https://fireopssim.com/pump/engine181.png" x="0" y="0" width="390" height="260" preserveAspectRatio="xMidYMax meet"></image>
+          <!-- Hoses -->
+          <g id="hoses"></g>
+          <g id="branches"></g>
+        </svg>
 
-          <svg id="overlay" viewBox="0 0 390 800" preserveAspectRatio="none" aria-label="Diagram overlay">
-            <g id="hoses"></g>
-            <g id="branches"></g>
-          </svg>
-
-          <!-- Selected line info -->
-          <div id="lineinfo" class="lineinfo"></div>
-
-          <!-- ✅ Line buttons directly under truck, inside the stage -->
-          <div class="linebar" id="linebar">
-            <button class="linebtn" data-line="left">Line 1</button>
-            <button class="linebtn" data-line="right">Line 2</button>
-            <button class="linebtn" data-line="back">Line 3</button>
-          </div>
+        <!-- Info + line buttons under the truck -->
+        <div id="lineinfo" class="lineinfo"></div>
+        <div class="linebar" id="linebar">
+          <button class="linebtn" data-line="left">Line 1</button>
+          <button class="linebtn" data-line="right">Line 2</button>
+          <button class="linebtn" data-line="back">Line 3</button>
         </div>
       </div>
-    </div>
+    </section>
 
-    <!-- ===== KPI Panel ===== -->
+    <!-- KPIs -->
     <section class="panel">
       <div class="card">
         <div class="grid2">
@@ -160,7 +132,7 @@
       </div>
     </section>
 
-    <!-- ===== Footer ===== -->
+    <!-- Footer -->
     <footer class="brandfoot">
       <div class="foot-wrap">
         <div class="foot-badge">Part of the <a href="https://emscodesim.com" target="_blank" rel="noopener">EMSCodeSim</a> ecosystem.</div>
@@ -171,7 +143,6 @@
         </div>
       </div>
     </footer>
-
   </div>
 
   <script src="pump-logic.js"></script>
