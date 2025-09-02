@@ -2,656 +2,230 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <title>FireOps SIM — Admin (Geo-Photo)</title>
+  <title>FireOps SIM — Advanced Editor</title>
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <meta name="theme-color" content="#0b0f14" />
-  <meta name="description" content="Create and edit FireOps SIM scenarios with dispatch info, geofenced photos, and captions." />
-
   <style>
-    :root{
-      --bg:#0b0f14; --bg2:#0d121c; --panel:#0f1624; --text:#eaf2ff; --muted:#94a3b8;
-      --edge: rgba(255,255,255,.08); --edge2: rgba(255,255,255,.14);
-      --accent:#0a84ff; --danger:#ef4444;
-    }
-    *{box-sizing:border-box}
-    html,body{
-      margin:0; height:100%;
-      color:var(--text);
-      font-family:system-ui,-apple-system,Segoe UI,Roboto,Inter,Arial,sans-serif;
-      background:
-        radial-gradient(1400px 700px at 15% -15%, rgba(10,132,255,.28), transparent 60%),
-        radial-gradient(1200px 600px at 110% 0%, rgba(255,59,48,.22), transparent 60%),
-        linear-gradient(165deg, var(--bg2), var(--bg) 55%);
-      -webkit-text-size-adjust:100%;
-      scroll-behavior:smooth;
-    }
-    a{color:inherit; text-decoration:none}
-    img{max-width:100%; height:auto; display:block}
-
-    .topbar{
-      position:sticky; top:0; z-index:20;
-      background:rgba(12,15,22,.75);
-      backdrop-filter:saturate(180%) blur(8px);
-      border-bottom:1px solid var(--edge2);
-    }
-    .wrap{max-width:1050px; margin:0 auto; padding:14px 16px; display:flex; align-items:center; gap:12px}
-    .logo{
-      display:flex; align-items:center; gap:12px; line-height:1;
-      letter-spacing:.4px; font-weight:800; font-size:18px;
-    }
-    .logoBadge{
-      width:34px; height:34px; border-radius:9px;
-      background:linear-gradient(135deg, #0a84ff, #54a6ff);
-      display:grid; place-items:center; color:white; font-weight:900;
-      box-shadow: 0 4px 16px rgba(10,132,255,.28), inset 0 0 18px rgba(255,255,255,.18);
-    }
-    .spacer{flex:1}
-
-    .hero{
-      padding:28px 16px; border-bottom:1px solid var(--edge);
-      background:
-        radial-gradient(900px 500px at 120% -10%, rgba(10,132,255,.1), transparent 60%),
-        linear-gradient(180deg, rgba(255,255,255,.02), transparent);
-    }
-    .heroInner{max-width:1050px; margin:0 auto; display:flex; align-items:center; gap:18px; flex-wrap:wrap}
-    .hTitle{font-size:26px; font-weight:900; letter-spacing:.3px}
-    .hTag{color:var(--muted); margin-top:4px}
-
-    .toolbar{display:flex; gap:10px; flex-wrap:wrap}
-    .btn{
-      appearance:none; border:0; border-radius:12px; padding:10px 14px;
-      background:linear-gradient(180deg, #122036, #0f1a2e);
-      color:var(--text); font-weight:700; letter-spacing:.3px;
-      border:1px solid var(--edge2); cursor:pointer;
-      box-shadow: 0 2px 10px rgba(0,0,0,.25), inset 0 0 0 1px rgba(255,255,255,.06);
-      transition: transform .06s ease, background .2s ease;
-    }
-    .btn:hover{ transform: translateY(-1px); }
-    .btn.secondary{ background:linear-gradient(180deg, #0f1a2e, #0e1829); }
-    .btn.danger{ background:linear-gradient(180deg, #2a0f14, #1f0f12); border-color: rgba(255,71,71,.25); }
-
-    .panel{
-      background:linear-gradient(180deg, rgba(255,255,255,.02), transparent 26%),
-                 linear-gradient(180deg, #0e1524, #0e131e);
-      border:1px solid var(--edge);
-      box-shadow: 0 10px 40px rgba(0,0,0,.25), inset 0 0 0 1px rgba(255,255,255,.04);
-      border-radius:18px; padding:16px; margin:16px
-    }
-    .hidden{display:none}
-
-    .grid{display:grid; gap:14px}
-    @media(min-width:860px){ .grid{grid-template-columns: 1.2fr .8fr} }
-
-    .field{display:grid; gap:6px; margin:8px 0}
-    .field label{font-weight:700; color:var(--text)}
-    .input, textarea{
-      border-radius:12px; padding:10px 12px; background:#0c1322; color:var(--text);
-      border:1px solid var(--edge2); outline:none; font:inherit;
-    }
-    textarea{min-height:86px; resize:vertical}
-
-    .thumbs{display:grid; grid-template-columns: repeat(auto-fill, minmax(140px,1fr)); gap:12px}
-    .thumbWrap{position:relative; border:1px solid var(--edge2); border-radius:12px; overflow:hidden; background:#0e1624}
-    .thumb{width:100%; display:block}
-    .delBtn{
-      position:absolute; right:8px; bottom:8px; border:0; border-radius:9px; padding:6px 8px;
-      background:rgba(255,71,71,.12); color:#ffd6d6; cursor:pointer; font-weight:800;
-      border:1px solid rgba(255,71,71,.35)
-    }
-
-    .listItem{
-      display:flex; align-items:center; justify-content:space-between; gap:12px;
-      padding:12px 10px; border-radius:12px; border:1px solid var(--edge);
-      background:linear-gradient(0deg, rgba(255,255,255,.01), rgba(255,255,255,.02));
-      margin:10px 0;
-    }
-    .tag{color:var(--muted); font-size:12px; margin-top:2px}
-
-    /* Modal */
-    .modal{
-      position:fixed; inset:0; display:none; place-items:center;
-      background:rgba(4,7,12,.6); backdrop-filter: blur(6px) saturate(160%); z-index:50;
-    }
-    .modal.show{display:grid}
-    .modalCard{
-      width:min(900px, 94vw); background:#0b1120; border:1px solid var(--edge2); border-radius:18px;
-      box-shadow: 0 30px 120px rgba(0,0,0,.45), inset 0 0 0 1px rgba(255,255,255,.05);
-      padding:14px; display:grid; gap:12px;
-    }
-    .row{display:grid; gap:12px}
-    @media(min-width:860px){ .row{grid-template-columns: 1.2fr .8fr} }
-    .editorImg{width:100%; border-radius:12px; border:1px solid var(--edge2); background:#0c1422; max-height:60vh; object-fit:contain}
-    .info{color:var(--muted); font-size:12px}
-
-    .status{color:var(--muted); font-size:12px; padding:6px 0}
-
-    /* Error bar */
-    #errbar{
-      position:fixed; left:10px; bottom:10px; z-index:9999;
-      background:#2b0d0d; color:#ffd7d7; border:1px solid #7a2b2b;
-      border-radius:12px; padding:8px 12px; max-width:80vw; display:none;
-      box-shadow:0 8px 24px rgba(0,0,0,.35)
-    }
+    body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,Inter,Arial,sans-serif;color:#eaf2ff;background:#0b0f14}
+    .wrap{max-width:1200px;margin:16px auto;padding:0 16px}
+    .bar{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+    .btn{appearance:none;border:0;border-radius:12px;padding:10px 12px;background:#0f1a2e;color:#fff;border:1px solid rgba(255,255,255,.14);cursor:pointer}
+    .pill{display:inline-flex;gap:8px;align-items:center;padding:6px 10px;border-radius:999px;border:1px solid rgba(255,255,255,.14);color:#94a3b8}
+    .grid{display:grid;grid-template-columns:320px 1fr 360px;gap:12px}
+    .card{background:#0f1624;border:1px solid rgba(255,255,255,.08);border-radius:14px;padding:12px}
+    label{display:block;margin:8px 0 4px 2px;font-size:12px;color:#94a3b8}
+    input,textarea,select{width:100%;padding:10px;border-radius:10px;border:1px solid rgba(255,255,255,.12);background:#0d2430;color:#eaf2ff}
+    #c{display:block;width:100%;height:62vh;background:#061621;border:1px solid rgba(255,255,255,.12);border-radius:12px}
+    #errbar{position:fixed;left:10px;bottom:10px;background:#2b0d0d;color:#ffd7d7;border:1px solid #7a2b2b;border-radius:12px;padding:8px 12px;display:none;z-index:9999}
+    @media (max-width:1200px){ .grid{grid-template-columns:1fr} #c{height:56vh} }
   </style>
 </head>
 <body>
   <div id="errbar"></div>
+  <div class="wrap">
+    <div class="bar" style="justify-content:space-between;margin-bottom:10px">
+      <div class="pill" id="status">Loading…</div>
+      <div class="bar">
+        <button class="btn" id="refresh">Refresh</button>
+      </div>
+    </div>
 
-  <div class="topbar">
-    <div class="wrap">
-      <div class="logo">
-        <div class="logoBadge">F</div>
-        <div>
-          <div>FireOps SIM — Admin</div>
-          <small>Geo-Photo Scenario Builder</small>
+    <div class="grid">
+      <div class="card">
+        <label>Scenario</label>
+        <select id="scenarioSel"><option value="">Select…</option></select>
+
+        <div style="height:8px"></div>
+        <div class="pill">Stops</div>
+        <div id="stopList" style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px"></div>
+
+        <div style="height:10px"></div>
+        <div class="pill">Selected Stop</div>
+        <label>Title</label><input id="stopTitle">
+        <label>Caption</label><textarea id="stopCaption"></textarea>
+
+        <div class="bar" style="margin-top:8px">
+          <button class="btn" id="saveMeta">Save Meta</button>
+          <button class="btn" id="deleteStop">Delete</button>
         </div>
-      </div>
-      <div class="spacer"></div>
-      <div class="toolbar">
-        <button class="btn" id="goCreate">Create Scenario</button>
-        <button class="btn secondary" id="goEdit">Edit Existing</button>
-      </div>
-    </div>
-  </div>
+        <div id="metaMsg" class="pill" style="margin-top:8px">Ready</div>
 
-  <div class="hero">
-    <div class="heroInner">
-      <div class="hTitle">Manage Scenarios</div>
-      <div class="spacer"></div>
-      <div class="hTag">Build dispatch + geo-fenced photo stops</div>
-    </div>
-  </div>
-
-  <main class="grid">
-    <section class="panel hidden" id="createPanel">
-      <div class="field" id="scenarioMeta">
-        <label>Scenario Name</label>
-        <input class="input" id="scenarioName" placeholder="e.g., House Fire — Elm St." />
-        <label style="margin-top:8px">Dispatch Information (read to users)</label>
-        <textarea id="dispatchInfo" placeholder="Engine 1, Engine 2, Medic 1 to..."></textarea>
+        <div style="height:12px"></div>
+        <div class="pill">Replace photo (local preview)</div>
+        <div class="bar"><input type="file" accept="image/*" id="replaceFile"><button class="btn" id="replaceApply">Preview</button></div>
       </div>
 
-      <div class="field">
-        <label>Add Photo Stop</label>
-        <input type="file" id="photoInput" accept="image/*;capture=camera">
-      </div>
-      <div class="field">
-        <label>Caption (optional)</label>
-        <input class="input" id="caption" placeholder="e.g., Alpha side" />
-      </div>
-      <div class="field">
-        <label>Radius (meters)</label>
-        <input class="input" id="radius" type="number" min="5" max="1000" value="50" />
-      </div>
-
-      <div class="toolbar" style="margin-top:8px">
-        <button class="btn" id="savePhoto">Save Photo</button>
-        <button class="btn secondary" id="finalizeScenario">Save Scenario</button>
-      </div>
-
-      <div class="status" id="createStatus">Ready</div>
-
-      <div class="thumbs" id="thumbs"></div>
-    </section>
-
-    <section class="panel hidden" id="editPanel">
-      <div class="toolbar">
-        <button class="btn secondary" id="backFromEdit">Back</button>
-      </div>
-      <div class="status" id="editStatus">Ready</div>
-      <div id="scenarioList"></div>
-    </section>
-
-    <section class="panel" id="landing">
-      <div style="font-weight:800; font-size:18px; margin-bottom:8px">Welcome</div>
-      <div class="tag">Start by creating a new scenario or editing an existing one.</div>
-    </section>
-  </main>
-
-  <!-- Photo Editor Modal -->
-  <div class="modal" id="photoEditor">
-    <div class="modalCard">
-      <div style="display:flex; align-items:center; justify-content:space-between">
-        <div id="editorTitle" style="font-weight:900">Edit Photo</div>
-        <button class="btn secondary" id="closeEditor">Close</button>
-      </div>
-
-      <div class="row">
-        <img id="editorImg" class="editorImg" alt="Photo preview" />
-        <div>
-          <div class="info" id="imgInfo">Info</div>
-          <div class="field">
-            <label>Caption</label>
-            <input class="input" id="editorCaption" />
-          </div>
-          <div class="field">
-            <label>Radius (m)</label>
-            <input class="input" id="editorRadius" type="number" min="5" max="1000" value="50" />
-          </div>
-          <div class="field">
-            <label>Latitude</label>
-            <input class="input" id="editorLat" />
-          </div>
-          <div class="field">
-            <label>Longitude</label>
-            <input class="input" id="editorLng" />
-          </div>
-          <div class="toolbar">
-            <button class="btn" id="useGPS">Use Current GPS</button>
-            <button class="btn secondary" id="saveChanges">Save Changes</button>
-            <button class="btn danger" id="deletePhoto">Delete Photo</button>
-          </div>
-          <div class="status" id="editorStatus"></div>
+      <div class="card">
+        <div class="bar" style="margin-bottom:8px">
+          <button class="btn" id="fit">Fit</button>
+          <span class="pill" id="cInfo">Canvas</span>
+          <button class="btn" id="saveImage">Save Image</button>
+          <button class="btn" id="exportPNG">Export PNG</button>
         </div>
+        <canvas id="c"></canvas>
+      </div>
+
+      <div class="card">
+        <div class="pill">GPS</div>
+        <div class="bar"><button class="btn" id="useGPS">Use my location</button></div>
+        <div class="bar" style="margin-top:8px"><div style="flex:1"><label>Lat</label><input id="stopLat"></div><div style="flex:1"><label>Lng</label><input id="stopLng"></div></div>
+        <label>Radius (m)</label><input id="stopRadius" value="50">
       </div>
     </div>
   </div>
 
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/fabric.js/5.3.0/fabric.min.js" crossorigin="anonymous"></script>
   <script type="module">
-  // --- Surface any runtime error so UI isn't "silently" broken
-  const errbar = document.getElementById('errbar');
-  function showErr(m){ errbar.textContent = m; errbar.style.display='block'; }
-  window.addEventListener('error', e => showErr('JS error: ' + (e.message || e.error)));
-  window.addEventListener('unhandledrejection', e => showErr('Promise error: ' + (e.reason?.message || e.reason)));
+  const errbar=document.getElementById('errbar'); const ERR=m=>{errbar.textContent=m;errbar.style.display='block';};
 
-  // Bind nav buttons ASAP (before any imports that could fail)
-  const landing = document.getElementById('landing');
-  const createPanel = document.getElementById('createPanel');
-  const editPanel = document.getElementById('editPanel');
-  const scenarioList = document.getElementById('scenarioList');
-  const editStatus = document.getElementById('editStatus');
-  const createStatus = document.getElementById('createStatus');
+  (async ()=>{
+    try{
+      const [{ initializeApp }] = await Promise.all([ import('https://www.gstatic.com/firebasejs/10.12.4/firebase-app.js') ]);
+      const [{ getDatabase, ref, onValue, get, set }] = await Promise.all([ import('https://www.gstatic.com/firebasejs/10.12.4/firebase-database.js') ]);
+      const [{ getStorage, ref:stRef, uploadString, getDownloadURL }] = await Promise.all([ import('https://www.gstatic.com/firebasejs/10.12.4/firebase-storage.js') ]);
+      const [{ getAuth, onAuthStateChanged, signInAnonymously }] = await Promise.all([ import('https://www.gstatic.com/firebasejs/10.12.4/firebase-auth.js') ]);
 
-  const uiShow = el => { el.classList.remove('hidden'); el.style.display=''; };
-  const uiHide = el => { el.classList.add('hidden'); el.style.display='none'; };
+      const firebaseConfig = {
+        apiKey:"AIzaSyDM6DpRSeZueVKRpbyJyDmhf8WY66KyCDk",
+        authDomain:"dailyquiz-d5279.firebaseapp.com",
+        databaseURL:"https://dailyquiz-d5279-default-rtdb.firebaseio.com",
+        projectId:"dailyquiz-d5279",
+        storageBucket:"dailyquiz-d5279.appspot.com",
+        appId:"1:94577748034:web:c032d3a1d72db1313de5db",
+        measurementId:"G-19DVN7NNH7"
+      };
+      const app = initializeApp(firebaseConfig);
+      const db  = getDatabase(app);
+      const storage = getStorage(app);
+      const auth = getAuth(app);
+      const BUCKET = app.options?.storageBucket || (firebaseConfig.projectId + '.appspot.com');
 
-  document.getElementById('goCreate').addEventListener('click', ()=>{
-    uiHide(landing); uiHide(editPanel); uiShow(createPanel);
-    createStatus.textContent='New scenario';
-  });
-  document.getElementById('goEdit').addEventListener('click', ()=>{
-    uiHide(landing); uiHide(createPanel); uiShow(editPanel);
-    editStatus.textContent = 'Loading scenarios…';
-    if (window.loadForEdit) window.loadForEdit();   // call later-defined loader if available
-  });
-  document.getElementById('backFromEdit').addEventListener('click', ()=>{
-    uiHide(editPanel); uiHide(createPanel); uiShow(landing);
-    scenarioList.innerHTML=''; editStatus.textContent='Ready';
-  });
-
-  // ===== Firebase (wrapped so failure won’t kill the UI) =====
-  try {
-    const [{ initializeApp }] = await Promise.all([ import("https://www.gstatic.com/firebasejs/10.12.4/firebase-app.js") ]);
-    const [{ getDatabase, ref:dbRef, push, set, get, update }] = await Promise.all([ import("https://www.gstatic.com/firebasejs/10.12.4/firebase-database.js") ]);
-    const [{ getStorage, ref:stRef, uploadString, getDownloadURL, deleteObject }] = await Promise.all([ import("https://www.gstatic.com/firebasejs/10.12.4/firebase-storage.js") ]);
-    const [{ getAuth, onAuthStateChanged, signInAnonymously }] = await Promise.all([ import("https://www.gstatic.com/firebasejs/10.12.4/firebase-auth.js") ]);
-
-    const firebaseConfig = {
-      apiKey:"AIzaSyDM6DpRSeZueVKRpbyJyDmhf8WY66KyCDk",
-      authDomain:"dailyquiz-d5279.firebaseapp.com",
-      databaseURL:"https://dailyquiz-d5279-default-rtdb.firebaseio.com",
-      projectId:"dailyquiz-d5279",
-      storageBucket:"dailyquiz-d5279.appspot.com",
-      appId:"1:94577748034:web:c032d3a1d72db1313de5db",
-      measurementId:"G-19DVN7NNH7"
-    };
-    const app = initializeApp(firebaseConfig);
-    const db  = getDatabase(app);
-    const storage = getStorage(app);
-    const auth = getAuth(app);
-    const BUCKET = app.options?.storageBucket || (firebaseConfig.projectId + ".appspot.com");
-
-    let authedUser = null;
-    onAuthStateChanged(auth, (u)=>{ authedUser = u || null; });
-
-    // --- Friendly explicit error if Auth isn't set up yet
-    async function ensureAuthed() {
-      if (auth.currentUser) return auth.currentUser;
-      try {
-        await signInAnonymously(auth);
-        return await new Promise((resolve) => {
-          const off = onAuthStateChanged(auth, (u) => { if (u) { off(); resolve(u); } });
-        });
-      } catch (e) {
-        const code = e?.code || '';
-        if (code === 'auth/configuration-not-found' || code === 'auth/operation-not-allowed') {
-          throw new Error('Anonymous Auth not set up yet. In Firebase Console: Authentication → Get started → enable Anonymous.');
+      let STORAGE_ENABLED = true;
+      async function ensureAuthed(){
+        if (auth.currentUser) return auth.currentUser;
+        try{
+          await signInAnonymously(auth);
+          return await new Promise(res=>{ const off=onAuthStateChanged(auth,u=>{ if(u){ off(); res(u);} }); });
+        }catch(e){
+          const code=e?.code||'';
+          if (code==='auth/configuration-not-found' || code==='auth/operation-not-allowed'){
+            STORAGE_ENABLED=false; document.getElementById('cInfo').textContent='Saving inline (Auth not enabled)';
+            return null;
+          }
+          throw e;
         }
-        throw e;
       }
-    }
 
-    // DOM (rest)
-    const scenarioMeta = document.getElementById('scenarioMeta');
-    const scenarioName = document.getElementById('scenarioName');
-    const dispatchInfo = document.getElementById('dispatchInfo');
-    const photoInput = document.getElementById('photoInput');
-    const radius = document.getElementById('radius');
-    const caption = document.getElementById('caption');
-    const savePhoto = document.getElementById('savePhoto');
-    const finalizeScenario = document.getElementById('finalizeScenario');
-    const thumbs = document.getElementById('thumbs');
+      // DOM
+      const status=document.getElementById('status'); const scenarioSel=document.getElementById('scenarioSel'); const stopList=document.getElementById('stopList'); const refresh=document.getElementById('refresh');
+      const stopTitle=document.getElementById('stopTitle'); const stopCaption=document.getElementById('stopCaption'); const metaMsg=document.getElementById('metaMsg');
+      const stopLat=document.getElementById('stopLat'); const stopLng=document.getElementById('stopLng'); const stopRadius=document.getElementById('stopRadius'); const useGPS=document.getElementById('useGPS');
+      const replaceFile=document.getElementById('replaceFile'); const replaceApply=document.getElementById('replaceApply'); // <- fixed const
+      const fit=document.getElementById('fit'); const saveImage=document.getElementById('saveImage'); const exportPNG=document.getElementById('exportPNG'); const cInfo=document.getElementById('cInfo');
+      const deleteStop=document.getElementById('deleteStop');
 
-    const photoEditor = document.getElementById('photoEditor');
-    const closeEditor = document.getElementById('closeEditor');
-    const editorTitle = document.getElementById('editorTitle');
-    const editorImg = document.getElementById('editorImg');
-    const imgInfo = document.getElementById('imgInfo');
-    const editorCaption = document.getElementById('editorCaption');
-    const editorRadius = document.getElementById('editorRadius');
-    const editorLat = document.getElementById('editorLat');
-    const editorLng = document.getElementById('editorLng');
-    const editorStatus = document.getElementById('editorStatus');
-    const useGPSbtn = document.getElementById('useGPS');
-    const saveChangesBtn = document.getElementById('saveChanges');
-    const deletePhotoBtn = document.getElementById('deletePhoto');
+      const ROOT='scenarios'; let scenarios=[], current=null, stopIndex=-1;
 
-    // State
-    let currentScenarioId = null;
-    let localStops = [];
-    let editingIndex = -1;
+      const fabricCanvas = new fabric.Canvas('c', { backgroundColor:'#061621', preserveObjectStacking:true }); let baseImage=null;
+      function fitCanvas(){ const el=document.getElementById('c'); const h=Math.max(380, window.innerHeight-320); el.style.height=h+'px'; fabricCanvas.setHeight(h); fabricCanvas.calcOffset(); fabricCanvas.requestRenderAll(); } fitCanvas(); addEventListener('resize',fitCanvas);
+      function setBaseFromURL(url){ return new Promise((res,rej)=>{ fabric.Image.fromURL(url, img=>{ if(!img){rej(new Error('Load failed'));return;}
+        if(baseImage) fabricCanvas.remove(baseImage); baseImage=img; baseImage.set({ selectable:false, evented:false, erasable:false });
+        const cw=fabricCanvas.getWidth(), ch=fabricCanvas.getHeight(); const sc=Math.min(cw/img.width, ch/img.height); baseImage.scale(sc); baseImage.set({ left:(cw-img.width*sc)/2, top:(ch-img.height*sc)/2 }); fabricCanvas.add(baseImage); baseImage.moveTo(0); fabricCanvas.requestRenderAll(); cInfo.textContent=`Image ${img.width}×${img.height}`; res(); }, { crossOrigin:'anonymous' }); }); }
+      function imgURLFromStored(v){ return (typeof v==='string' && v.startsWith('data:') || typeof v==='string' && v.startsWith('http')) ? v :
+                                     (v?.data ? `data:image/${(v.format==='jpeg'?'jpeg':'png')};base64,${v.data}` : ''); }
 
-    const showModal = el => el.classList.add('show');
-    const hideModal = el => el.classList.remove('show');
-    const toast = (el, msg) => el.textContent = msg;
+      function stopsOf(sc){ return Array.isArray(sc?.stops) ? sc.stops : Array.isArray(sc?.photos) ? sc.photos : []; }
+      function setStops(sc, stops){ if (Array.isArray(sc?.stops)) sc.stops=stops; else if (Array.isArray(sc?.photos)) sc.photos=stops; else sc.stops=stops; }
 
-    function readFileAsDataURL(file){
-      return new Promise((res, rej)=>{
-        const r=new FileReader();
-        r.onload=()=>res(r.result);
-        r.onerror=rej;
-        r.readAsDataURL(file);
-      });
-    }
-
-    // --- Image compression helpers ---
-    function loadImage(src){
-      return new Promise((resolve, reject)=>{
-        const img=new Image();
-        img.onload=()=>resolve(img);
-        img.onerror=reject;
-        img.crossOrigin='anonymous';
-        img.src=src;
-      });
-    }
-    function dataURLToCanvas(img, maxW=1920, maxH=1920){
-      const canvas=document.createElement('canvas');
-      let {width:w, height:h} = img;
-      const ratio=Math.min(maxW/w, maxH/h, 1);
-      const nw=Math.round(w*ratio), nh=Math.round(h*ratio);
-      canvas.width=nw; canvas.height=nh;
-      const ctx=canvas.getContext('2d');
-      ctx.drawImage(img, 0, 0, nw, nh);
-      return canvas;
-    }
-    function encodeCanvasSmart(canvas){
-      const MAX_BYTES = 8_500_000;
-      const bytesOf = (b64)=>Math.floor((b64.length*3)/4);
-      let url = canvas.toDataURL('image/jpeg', 0.85);
-      let b64 = url.split(',')[1];
-      if (bytesOf(b64) <= MAX_BYTES) return {format:'jpeg', data:b64};
-      for (const q of [0.8,0.75,0.7,0.65,0.6]){
-        url = canvas.toDataURL('image/jpeg', q);
-        b64 = url.split(',')[1];
-        if (bytesOf(b64) <= MAX_BYTES) return {format:'jpeg', data:b64};
+      async function loadScenarios(){
+        try{ const snap=await get(ref(db,ROOT)); const obj=snap.exists()? (snap.val()||{}):{}; scenarios=Object.entries(obj).map(([id,s])=>({id,_raw:s,_stops:stopsOf(s),...s})).sort((a,b)=>(b.createdAt||0)-(a.createdAt||0));
+          scenarioSel.innerHTML='<option value="">Select…</option>'; scenarios.forEach(s=>{ const o=document.createElement('option'); o.value=s.id; o.textContent=(s.title||'(untitled)'); scenarioSel.appendChild(o); });
+          status.textContent=`${scenarios.length} scenario(s) loaded`;
+        }catch(e){ status.textContent='Error: '+(e?.message||e); ERR(e?.message||e); }
       }
-      const c2=document.createElement('canvas');
-      c2.width=Math.round(canvas.width*0.85);
-      c2.height=Math.round(canvas.height*0.85);
-      c2.getContext('2d').drawImage(canvas,0,0,c2.width,c2.height);
-      url=c2.toDataURL('image/jpeg',0.6);
-      return {format:'jpeg', data:url.split(',')[1]};
-    }
-    async function compressFileToDataURL(file){
-      const raw = await readFileAsDataURL(file);
-      const img = await loadImage(raw);
-      const canvas = dataURLToCanvas(img, 1920, 1920);
-      const {format,data} = encodeCanvasSmart(canvas);
-      return `data:image/${format};base64,${data}`;
-    }
-    function dataURLFromStored(objOrString){
-      if (typeof objOrString === 'string') return objOrString;
-      if (!objOrString || !objOrString.data) return '';
-      const fmt = objOrString.format === 'jpeg' ? 'jpeg' : 'png';
-      return `data:image/${fmt};base64,${objOrString.data}`;
-    }
+      function renderThumbs(){ stopList.innerHTML=''; if(!current) return; current._stops.forEach((s,i)=>{ const img=document.createElement('img'); img.style.cssText='width:64px;height:64px;border-radius:10px;object-fit:cover;border:1px solid rgba(255,255,255,.14);cursor:pointer';
+        img.src = imgURLFromStored(s.imageURL || s.imageData) || ''; img.title=s.title||`Stop ${i+1}`; img.onclick=()=>loadStop(i); stopList.appendChild(img); }); }
 
-    function getGPS(){
-      return new Promise((resolve)=>{
-        navigator.geolocation.getCurrentPosition(
-          pos => resolve({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
-          _err => resolve({ lat:null, lng:null }),
-          { enableHighAccuracy:true, timeout:15000, maximumAge:0 }
-        );
-      });
-    }
+      scenarioSel.onchange=()=>{ const id=scenarioSel.value; current=scenarios.find(s=>s.id===id)||null; stopIndex=-1; renderThumbs(); fabricCanvas.clear(); baseImage=null; };
+      refresh.onclick=loadScenarios;
 
-    function renderThumbs(){
-      thumbs.innerHTML='';
-      localStops.forEach((s,i)=>{
-        const wrap=document.createElement('div');
-        wrap.className='thumbWrap';
-        const img=document.createElement('img');
-        img.className='thumb';
-        img.title=s.title || `Stop ${i+1}`;
-        img.src=s.imageURL || dataURLFromStored(s.imageData) || '';
-        img.onerror = ()=>{ img.style.opacity=.7; img.title='Image failed to load'; };
-        img.addEventListener('click', ()=> openPhotoEditor(i));
-        const del=document.createElement('button');
-        del.className='delBtn'; del.textContent='Delete';
-        del.addEventListener('click', (e)=>{ e.stopPropagation(); deletePhotoAt(i); });
-        wrap.appendChild(img); wrap.appendChild(del);
-        thumbs.appendChild(wrap);
-      });
-    }
-
-    async function uploadDataURLToStorage(dataURL, scenarioId){
-      await ensureAuthed(); // must be signed in (Anonymous allowed)
-      const ts = Date.now();
-      const path = `scenarios/${scenarioId}/${ts}.jpg`;
-      const refObj = stRef(storage, path);
-      await uploadString(refObj, dataURL, 'data_url');
-      const url = await getDownloadURL(refObj);
-      const gsUri = `gs://${BUCKET}/${path}`;
-      return { url, path, gsUri };
-    }
-
-    // Create flow
-    savePhoto.addEventListener('click', async ()=>{
-      try{
-        const file = photoInput.files?.[0];
-        if(!file){ alert('Please choose a photo first.'); return; }
-
-        if(!currentScenarioId){
-          const name=(scenarioName.value||'').trim();
-          if(!name){ alert('Please enter a Scenario Name.'); return; }
-          const dispatch=(dispatchInfo.value||'').trim();
-          const newRef = push(dbRef(db,'scenarios'));
-          currentScenarioId=newRef.key;
-          await set(newRef,{ id:currentScenarioId, title:name, dispatch:dispatch, createdAt:Date.now(), active:true, stops:[] });
-          uiHide(scenarioMeta);
-        }
-
-        createStatus.textContent='Compressing photo…';
-        const dataURL = await compressFileToDataURL(file);
-
-        createStatus.textContent='Signing in for cloud upload…';
-        await ensureAuthed();
-
-        createStatus.textContent='Uploading to cloud storage…';
-        const { url, path, gsUri } = await uploadDataURLToStorage(dataURL, currentScenarioId);
-
-        const gps = await getGPS();
-        const r = Math.max(5, Math.min(1000, Math.round(parseInt(radius.value||'50',10))));
-        const stop = {
-          title:'', caption:(caption.value||'').trim(),
-          lat:gps.lat, lng:gps.lng, radiusMeters:r,
-          imageURL:url, storagePath:path, gsUri
-        };
-        localStops.push(stop);
-        await set(dbRef(db,'scenarios/'+currentScenarioId+'/stops'), localStops);
-
-        photoInput.value=''; caption.value=''; radius.value=50;
-        renderThumbs();
-        createStatus.textContent = `Saved photo #${localStops.length} (uploaded).`;
-      }catch(e){
-        showErr(e?.message||String(e));
-        createStatus.textContent='Error: '+(e?.message||e);
+      async function loadStop(i){
+        const s=current?._stops[i]; if(!s) return; stopIndex=i; stopTitle.value=s.title||''; stopCaption.value=s.caption||'';
+        stopLat.value=(s.lat??''); stopLng.value=(s.lng??''); stopRadius.value=(s.radiusMeters??50);
+        const src=imgURLFromStored(s.imageURL||s.imageData); if(!src){ metaMsg.textContent='No image.'; return; }
+        await setBaseFromURL(src);
       }
-    });
 
-    finalizeScenario.addEventListener('click', async ()=>{
-      try{
-        if(!currentScenarioId){
-          const name=(scenarioName.value||'').trim();
-          if(!name){ alert('Enter Scenario Name, then Save a Photo or press Save Scenario again to create empty.'); return; }
-          const dispatch=(dispatchInfo.value||'').trim();
-          const newRef=push(dbRef(db,'scenarios'));
-          currentScenarioId=newRef.key;
-          await set(newRef,{ id:currentScenarioId, title:name, dispatch:dispatch, createdAt:Date.now(), active:true, stops:[] });
-          uiHide(scenarioMeta);
-        }
-        createStatus.textContent='Scenario saved.';
-        currentScenarioId=null; localStops=[];
-        renderThumbs();
-        scenarioName.value=''; dispatchInfo.value='';
-        photoInput.value=''; caption.value=''; radius.value=50;
-        uiShow(scenarioMeta);
-      }catch(e){ showErr(e?.message||String(e)); }
-    });
+      function serializeOverlays(){ // (none for this minimal build)
+        return [];
+      }
 
-    async function loadForEdit(){
-      try{
-        editStatus.textContent='Loading scenarios…';
-        const snap=await get(dbRef(db,'scenarios'));
-        if(!snap.exists()){ editStatus.textContent='No scenarios found.'; scenarioList.innerHTML=''; return; }
-        const obj=snap.val()||{};
-        const arr=Object.entries(obj).map(([id,s])=>({id,...s})).sort((a,b)=>(b.createdAt||0)-(a.createdAt||0));
-        editStatus.textContent=`${arr.length} scenario(s)`;
-        scenarioList.innerHTML='';
+      async function saveStopMeta(){
+        try{
+          if(!current || stopIndex<0) throw new Error('Select a stop.');
+          const s={ ...current._stops[stopIndex] };
+          s.title=stopTitle.value.trim(); s.caption=stopCaption.value.trim();
+          s.lat = stopLat.value.trim()===''? null : parseFloat(stopLat.value);
+          s.lng = stopLng.value.trim()===''? null : parseFloat(stopLng.value);
+          s.radiusMeters = Math.max(5, Math.min(1000, Math.round(parseInt(stopRadius.value||'50',10))));
+          s.overlays = serializeOverlays();
+          const next=[...current._stops]; next[stopIndex]=s;
+          const updated={ ...current._raw }; setStops(updated,next);
+          await set(ref(db,`${ROOT}/${current.id}`), updated);
+          current._raw=updated; current._stops=next; renderThumbs(); metaMsg.textContent='Meta saved.';
+        }catch(e){ metaMsg.textContent='Error: '+(e?.message||e); }
+      }
+      document.getElementById('saveMeta').onclick=saveStopMeta;
 
-        arr.forEach(sc=>{
-          const row=document.createElement('div'); row.className='listItem';
-          const left=document.createElement('div');
-          left.innerHTML = `<div style="font-weight:800">${sc.title||'(untitled)'}</div>
-                            <div class="tag">Stops: ${Array.isArray(sc.stops)? sc.stops.length : 0} • ${new Date(sc.createdAt||Date.now()).toLocaleString()}</div>`;
-          const right=document.createElement('div');
-          const openBtn=document.createElement('button'); openBtn.className='btn'; openBtn.textContent='Open in Creator';
-          openBtn.onclick=()=>{
-            uiHide(landing); uiHide(editPanel); uiShow(createPanel);
-            currentScenarioId=sc.id; localStops=Array.isArray(sc.stops)? sc.stops : [];
-            renderThumbs(); uiHide(scenarioMeta);
-            createStatus.textContent = `Editing: ${sc.title||'(untitled)'}`;
-          };
-          const toggleBtn=document.createElement('button'); toggleBtn.className='btn secondary'; toggleBtn.style.marginLeft='8px';
-          toggleBtn.textContent=sc.active ? 'Deactivate' : 'Activate';
-          toggleBtn.onclick=()=>update(dbRef(db,'scenarios/'+sc.id), { active: !sc.active });
-          const delBtn=document.createElement('button'); delBtn.className='btn danger'; delBtn.style.marginLeft='8px'; delBtn.textContent='Delete';
-          delBtn.onclick=async()=>{
-            if(!confirm('Delete this scenario? This cannot be undone.')) return;
-            try { await ensureAuthed(); } catch(_) {}
-            if (Array.isArray(sc.stops)) {
-              await Promise.all(sc.stops.map(async s=>{
-                try {
-                  const refObj = s?.gsUri ? stRef(storage, s.gsUri) : s?.storagePath ? stRef(storage, s.storagePath) : null;
-                  if (refObj) await deleteObject(refObj);
-                } catch(_) {}
-              }));
-            }
-            await set(dbRef(db,'scenarios/'+sc.id), null);
-            row.remove();
-          };
-          right.appendChild(openBtn); right.appendChild(toggleBtn); right.appendChild(delBtn);
-          row.appendChild(left); row.appendChild(right);
-          scenarioList.appendChild(row);
-        });
-      }catch(e){ editStatus.textContent='Error: '+(e?.message||e); showErr(e?.message||String(e)); }
-    }
-    // expose for early click handler
-    window.loadForEdit = loadForEdit;
+      // Save Image (to Cloud when possible, otherwise inline)
+      function encodeCanvas(){ const url=fabricCanvas.toDataURL({ format:'jpeg', quality:0.9 }); return { format:'jpeg', data:url.split(',')[1], dataURL:url }; }
+      async function uploadEditedToStorage(dataURL, scenarioId, idx){
+        await ensureAuthed(); if(!STORAGE_ENABLED) return null;
+        const ts=Date.now(); const path=`scenarios/${scenarioId}/${ts}_edited_${idx}.jpg`; const refObj=stRef(storage,path);
+        await uploadString(refObj,dataURL,'data_url'); const url=await getDownloadURL(refObj); const gsUri=`gs://${BUCKET}/${path}`; return {url,path,gsUri};
+      }
+      async function persistImage(){
+        try{
+          if(!current || stopIndex<0) throw new Error('Select a stop first.');
+          const enc=encodeCanvas(); let cloud=null;
+          try{ cloud=await uploadEditedToStorage(`data:image/${enc.format};base64,${enc.data}`, current.id, stopIndex); }catch(_){ STORAGE_ENABLED=false; }
+          const s={ ...current._stops[stopIndex] };
+          if (cloud){ s.imageURL=cloud.url; s.storagePath=cloud.path; s.gsUri=cloud.gsUri; s.imageData=null; metaMsg.textContent='Saved to Cloud Storage.'; }
+          else { s.imageURL=null; s.storagePath=null; s.gsUri=null; s.imageData={ format:enc.format, data:enc.data }; metaMsg.textContent='Saved inline (Auth not enabled).'; }
+          s.overlays = serializeOverlays();
+          const next=[...current._stops]; next[stopIndex]=s; const updated={ ...current._raw }; setStops(updated,next);
+          await set(ref(db,`${ROOT}/${current.id}`), updated); current._raw=updated; current._stops=next; renderThumbs();
+        }catch(e){ metaMsg.textContent='Error: '+(e?.message||e); }
+      }
+      saveImage.onclick=persistImage;
 
-    // ----- Photo editor modal -----
-    function openPhotoEditor(index){
-      const s = localStops[index]; if(!s){ return; }
-      editingIndex = index;
-      editorTitle.textContent = `Edit Photo #${index+1}`;
-      editorImg.src = s.imageURL || dataURLFromStored(s.imageData) || '';
-      imgInfo.textContent = s.imageURL ? (s.gsUri ? 'Cloud image (gs://)' : 'Cloud image (https)') : 'Embedded image';
-      editorCaption.value = s.caption || '';
-      editorRadius.value = s.radiusMeters ?? 50;
-      editorLat.value = Number(s.lat ?? '').toFixed(6);
-      editorLng.value = Number(s.lng ?? '').toFixed(6);
-      editorStatus.textContent = '';
-      showModal(photoEditor);
-    }
-    function getGPS(){ /* already defined above; reusing */ }
-    closeEditor.addEventListener('click', ()=> hideModal(photoEditor));
+      exportPNG.onclick=()=>{ const url=fabricCanvas.toDataURL({format:'png',quality:1}); const a=document.createElement('a'); a.href=url; a.download='edited.png'; a.click(); };
+      fit.onclick=()=>{ if(!baseImage) return; setBaseFromURL(baseImage.toDataURL({})); };
 
-    document.getElementById('useGPS').addEventListener('click', async ()=>{
-      try{
-        editorStatus.textContent = 'Getting current GPS…';
-        const gps = await new Promise((resolve)=>navigator.geolocation.getCurrentPosition(
-          p=>resolve({lat:p.coords.latitude,lng:p.coords.longitude}),
-          _=>resolve({lat:null,lng:null}),
-          {enableHighAccuracy:true,timeout:10000}
-        ));
-        if (gps.lat!=null) editorLat.value = Number(gps.lat).toFixed(6);
-        if (gps.lng!=null) editorLng.value = Number(gps.lng).toFixed(6);
-        editorStatus.textContent = 'GPS updated in editor (remember to Save Changes).';
-      }catch(e){ editorStatus.textContent = 'GPS error: ' + (e?.message || e); }
-    });
+      // GPS + replace preview
+      useGPS.onclick=()=>navigator.geolocation.getCurrentPosition(p=>{ stopLat.value=p.coords.latitude.toFixed(6); stopLng.value=p.coords.longitude.toFixed(6); metaMsg.textContent='GPS captured.'; }, e=>{ metaMsg.textContent='GPS error: '+e.message; }, {enableHighAccuracy:true, timeout:10000});
+      const readAsDataURL=f=>new Promise((res,rej)=>{ const r=new FileReader(); r.onload=()=>res(r.result); r.onerror=rej; r.readAsDataURL(f); });
+      replaceApply.onclick=async()=>{ const f=replaceFile.files?.[0]; if(!f){ metaMsg.textContent='Choose a file first.'; return; } const data=await readAsDataURL(f); await setBaseFromURL(data); };
 
-    document.getElementById('saveChanges').addEventListener('click', async ()=>{
-      try{
-        if(editingIndex<0) return;
-        const lat = parseFloat(editorLat.value);
-        const lng = parseFloat(editorLng.value);
-        let r = Math.round(parseInt(editorRadius.value||'50',10));
-        r = Math.max(5, Math.min(1000, r));
-        if(Number.isNaN(lat) || Number.isNaN(lng)){ alert('Please enter valid latitude/longitude.'); return; }
+      // Delete stop
+      deleteStop.onclick=async()=>{ try{
+        if(!current || stopIndex<0) return; if(!confirm('Delete this stop?')) return;
+        const next=[...current._stops]; next.splice(stopIndex,1); const updated={ ...current._raw }; setStops(updated,next);
+        await set(ref(db,`${ROOT}/${current.id}`), updated); current._stops=next; stopIndex=-1; fabricCanvas.clear(); baseImage=null; renderThumbs(); metaMsg.textContent='Deleted.';
+      }catch(e){ metaMsg.textContent='Error: '+(e?.message||e); } };
 
-        const s = localStops[editingIndex];
-        s.caption = (editorCaption.value||'').trim();
-        s.radiusMeters = r;
-        s.lat = lat; s.lng = lng;
+      // Live updates
+      onValue(ref(db,ROOT), snap=>{
+        const v=snap.val()||{}; scenarios=Object.entries(v).map(([id,s])=>({id,_raw:s,_stops:stopsOf(s),...s})).sort((a,b)=>(b.createdAt||0)-(a.createdAt||0));
+        const curId=scenarioSel.value; scenarioSel.innerHTML='<option value="">Select…</option>'; scenarios.forEach(s=>{ const o=document.createElement('option'); o.value=s.id; o.textContent=s.title||'(untitled)'; scenarioSel.appendChild(o); });
+        if(curId){ scenarioSel.value=curId; current=scenarios.find(s=>s.id===curId)||null; renderThumbs(); }
+        status.textContent=`${scenarios.length} scenario(s) loaded`;
+      });
 
-        await set(dbRef(db,'scenarios/'+currentScenarioId+'/stops'), localStops);
-        renderThumbs();
-        editorStatus.textContent = 'Saved.';
-        setTimeout(()=> hideModal(photoEditor), 300);
-      }catch(e){ editorStatus.textContent = 'Save failed: ' + (e?.message||e); }
-    });
+      await loadScenarios();
 
-    async function deletePhotoAt(index){
-      if(index<0 || index>=localStops.length) return;
-      if(!confirm('Delete this photo? This cannot be undone.')) return;
-      try { await ensureAuthed(); } catch(_) {}
-      const s = localStops[index];
-      try {
-        const refObj = s?.gsUri ? stRef(storage, s.gsUri) : s?.storagePath ? stRef(storage, s.storagePath) : null;
-        if (refObj) await deleteObject(refObj);
-      } catch(_) {}
-      localStops.splice(index,1);
-      set(dbRef(db,'scenarios/'+currentScenarioId+'/stops'), localStops)
-        .then(()=>{
-          renderThumbs();
-          if(editingIndex===index){ hideModal(photoEditor); editingIndex=-1; }
-          createStatus.textContent = 'Photo deleted.';
-        })
-        .catch(e=> showErr('Delete failed: ' + (e?.message||e)));
-    }
-    document.getElementById('deletePhoto').addEventListener('click', ()=>{ if(editingIndex>=0) deletePhotoAt(editingIndex); });
-
-    // Make the whole "Edit Existing" path work even if user clicked before modules finished
-    if (document.getElementById('editPanel').style.display !== 'none') {
-      loadForEdit();
-    }
-
-  } catch (e) {
-    // If Firebase modules fail to load, the UI still works and we show the error
-    showErr('Failed to initialize Firebase: ' + (e?.message || e));
-    editStatus.textContent = 'Firebase init failed.';
-  }
+    }catch(e){ ERR(e?.message||e); }
+  })();
   </script>
 </body>
 </html>
