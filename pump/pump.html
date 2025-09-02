@@ -19,7 +19,6 @@
   h1{font-size:15px;margin:0}
   .sub{font-size:11px;color:#9fb0c8}
 
-  /* Truck/Discharge toolbar (no new diagram) */
   .truckbar{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
   .btn{background:#12203a;border:1px solid var(--edge);color:#eaf2ff;border-radius:10px;padding:8px 12px;font-size:13px;cursor:pointer}
   .btn:disabled{opacity:.5;cursor:not-allowed}
@@ -32,7 +31,6 @@
   #overlay{position:absolute;inset:0;display:block;width:100%;height:100%}
   .hint{position:absolute;top:8px;left:10px;font-size:12px;color:#f7e39a}
 
-  /* Left tools */
   .side{position:fixed;left:8px;top:72px;z-index:4;display:flex;flex-direction:column;gap:8px}
   .fab{width:44px;height:44px;border-radius:12px;border:1px solid var(--edge);background:#0b1320;color:#eaf2ff;font-size:12px;display:flex;align-items:center;justify-content:center;cursor:pointer;box-shadow:0 4px 12px rgba(0,0,0,.25)}
   .fab:active{transform:translateY(1px)}
@@ -42,7 +40,6 @@
   .row{display:flex;flex-wrap:wrap;gap:8px;padding:8px 10px}
   .row button{background:#12203a;border:1px solid var(--edge);color:#eaf2ff;border-radius:10px;padding:8px 10px;font-size:13px;cursor:pointer}
 
-  /* Panels */
   .panel{padding:10px 12px;background:var(--panel)}
   .card{background:#0e1726;border:1px solid var(--edge);border-radius:14px;padding:12px;margin:10px 0}
   .grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
@@ -61,18 +58,14 @@
   .actions{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
   .actions select,.actions button{background:#0b1320;color:#eaf2ff;border:1px solid var(--edge);border-radius:8px;padding:6px 8px;font-size:13px}
 
-  /* Two responsive columns for branches */
   .col2{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:8px}
   @media (max-width:420px){ .col2{grid-template-columns:1fr;} }
 
-  /* Build list color coding by hose size */
   .hose-5   { border-left:6px solid var(--hose5); }
   .hose-25  { border-left:6px solid var(--hose25); }
   .hose-175 { border-left:6px solid var(--hose175); }
 
-  /* ===== DISCHARGE HOSES (drawn on main overlay) ===== */
-  .hose-path{stroke:#e6b800; stroke-width:10; fill:none; filter:url(#hoseGlowT)}
-  .hose-shadow{stroke:#8a6d00; stroke-width:12; opacity:.35}
+  /* Discharge hoses (same overlay) */
   .hose-end{pointer-events:all; cursor:pointer}
   .plus-circle{fill:#fff; stroke:#111; stroke-width:1.5; filter:drop-shadow(0 2px 4px rgba(0,0,0,.45))}
   .plus-sign{stroke:#111; stroke-width:3; stroke-linecap:round}
@@ -97,7 +90,6 @@
     <h1>Pump Pressure — Visual Builder</h1>
     <div class="sub">Smart labels • Wye split • Phone-safe</div>
 
-    <!-- Discharge bar (uses main picture; no separate diagram) -->
     <div class="truckbar">
       <button id="addDischargeBtn" class="btn">➕ Add Hose</button>
       <button id="resetDischargeBtn" class="btn">♻️ Reset Hoses</button>
@@ -122,14 +114,11 @@
       <button data-act="clearHose">Clear main hoses</button>
     </div>
 
-    <!-- After Wye: 5" REMOVED; left choices shown first, right choices after -->
     <div class="row" id="hoseButtonsSplit" style="display:none;border-top:1px solid var(--edge);margin-top:6px;padding-top:12px">
       <div style="width:100%;color:#cfe4ff;font-size:12px;margin-bottom:2px">After Wye:</div>
-      <!-- LEFT -->
       <button data-side="L" data-hose='{"size":"2.5","lengthFt":50}'>Left 2½″ 50′</button>
       <button data-side="L" data-hose='{"size":"1.75","lengthFt":100}'>Left 1¾″ 100′</button>
       <button data-side="L" data-hose='{"size":"1.75","lengthFt":50}'>Left 1¾″ 50′</button>
-      <!-- RIGHT -->
       <button data-side="R" data-hose='{"size":"2.5","lengthFt":50}'>Right 2½″ 50′</button>
       <button data-side="R" data-hose='{"size":"1.75","lengthFt":100}'>Right 1¾″ 100′</button>
       <button data-side="R" data-hose='{"size":"1.75","lengthFt":50}'>Right 1¾″ 50′</button>
@@ -169,12 +158,10 @@
         <img id="engine" alt="ENGINE 181" src="https://fireopssim.com/pump/engine181.png" />
         <svg id="overlay" viewBox="0 0 390 800" preserveAspectRatio="none" aria-label="Diagram overlay">
           <defs>
-            <!-- glow for discharge hoses -->
             <filter id="hoseGlowT" x="-50%" y="-50%" width="200%" height="200%">
               <feGaussianBlur stdDeviation="3" result="blur"/>
               <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
             </filter>
-            <!-- clip hose so it's hidden below roof -->
             <clipPath id="roofClip">
               <rect id="roofClipRect" x="0" y="0" width="390" height="0"></rect>
             </clipPath>
@@ -197,7 +184,6 @@
         <div id="dischargePicker" class="picker" role="dialog" aria-modal="true" aria-hidden="true">
           <h3 id="pickerTitle">Hose Tip</h3>
 
-          <!-- Top-level categories -->
           <div id="pickerHome">
             <div class="section-title">Choose an action</div>
             <div class="picker-grid">
@@ -208,16 +194,13 @@
             </div>
           </div>
 
-          <!-- Subviews (swapped in/out) -->
           <div id="pickerAddHose" style="display:none">
             <div class="section-title">Add hose length</div>
             <div class="picker-actions">
               <button class="pick-small" data-addlen="50" data-size="1.75">+50′ 1¾″</button>
               <button class="pick-small" data-addlen="50" data-size="2.5">+50′ 2½″</button>
             </div>
-            <div class="picker-actions">
-              <button class="pick-small" data-back>⬅ Back</button>
-            </div>
+            <div class="picker-actions"><button class="pick-small" data-back>⬅ Back</button></div>
           </div>
 
           <div id="pickerNozzle" style="display:none">
@@ -302,11 +285,10 @@
      ORIGINAL CALCULATOR CODE
      ========================= */
 
-  // ===== CONFIG =====
   const STAGE_W = 390;
   const PX_PER_50FT = 80;
-  const HOSE_X_RATIO = 0.49;   // anchor near mid-truck
-  const ROOF_RATIO   = 0.71;   // roof line on the picture
+  const HOSE_X_RATIO = 0.49;
+  const ROOF_RATIO   = 0.71;
   const HOSE_TOUCH_OFFSET = -6;
   const BRANCH_OFFSET = 34;
 
@@ -326,7 +308,6 @@
     {name:"SB 1 1/4″ @50 psi", gpm:325, NP:50}
   ];
 
-  // ===== STATE =====
   let itemsMain = [];
   let hasWye = false;
   let wyeLoss = 10;
@@ -338,7 +319,6 @@
 
   let elevFt = 0, elevPsiPerFt = 0.434;
 
-  // ===== ELEMENTS =====
   const engineImg = document.getElementById('engine');
   const stage = document.getElementById('stage');
   const scrollEl = document.getElementById('scroll');
@@ -361,7 +341,6 @@
   const hint = document.getElementById('hint');
   const builderList = document.getElementById('builderList');
 
-  // ===== DRAWERS =====
   const drawerHose = document.getElementById('drawerHose');
   const drawerAcc  = document.getElementById('drawerAcc');
   const drawerNoz  = document.getElementById('drawerNoz');
@@ -372,7 +351,6 @@
   document.addEventListener('click', (e)=>{ if(!e.target.closest('.drawer') && !e.target.closest('.fab')) closeDrawers(); });
   function toggleDrawer(el){ const was = el.classList.contains('open'); closeDrawers(); if(!was) el.classList.add('open'); }
 
-  // Hose drawer behavior
   const hoseButtonsMain = document.getElementById('hoseButtonsMain');
   const hoseButtonsSplit = document.getElementById('hoseButtonsSplit');
   function refreshHoseDrawer(){ hoseButtonsSplit.style.display = hasWye ? 'flex' : 'none'; }
@@ -381,7 +359,6 @@
   });
   hoseButtonsMain.querySelector('[data-act="clearHose"]').onclick = ()=>{ itemsMain = itemsMain.filter(x=>x.type!=='hose'); closeDrawers(); render(true); };
 
-  // After-wye: only 2.5 and 1.75 (no 5")
   hoseButtonsSplit.querySelectorAll('button[data-hose]').forEach(btn=>{
     btn.onclick = ()=>{
       const hose = {type:'hose', ...JSON.parse(btn.dataset.hose)};
@@ -391,7 +368,6 @@
   });
   hoseButtonsSplit.querySelector('[data-act="clearBranches"]').onclick = ()=>{ itemsLeft=[]; itemsRight=[]; closeDrawers(); render(true); };
 
-  // Accessory drawer
   drawerAcc.querySelectorAll('button[data-acc]').forEach(btn=>{
     btn.onclick = ()=>{ const d=JSON.parse(btn.dataset.acc); itemsMain.push({type:'acc',name:d.name,loss:+d.loss||0}); closeDrawers(); render(true); };
   });
@@ -405,7 +381,6 @@
   document.getElementById('addWyeBtn').onclick = ()=>{ hasWye = true; wyeLoss = 10; refreshHoseDrawer(); closeDrawers(); render(true); };
   document.getElementById('removeWyeBtn').onclick = ()=>{ hasWye = false; itemsLeft=[]; itemsRight=[]; refreshHoseDrawer(); closeDrawers(); render(true); };
 
-  // Nozzle drawer
   const nozRowLeft = document.getElementById('nozRowLeft');
   const nozRowRight = document.getElementById('nozRowRight');
   NOZZLES.forEach(n=>{
@@ -413,11 +388,9 @@
     const bR=document.createElement('button'); bR.textContent=`${n.name}`; bR.onclick=()=>{ nozzleRight=n; closeDrawers(); render(false); }; nozRowRight.appendChild(bR);
   });
 
-  // Env inputs
   document.getElementById('elevFt').oninput = e=>{ elevFt = parseFloat(e.target.value||0); render(); };
   document.getElementById('elevPsi').oninput = e=>{ elevPsiPerFt = parseFloat(e.target.value||0); render(); };
 
-  // ===== MATH =====
   function fl(C, Q, L){ return (C||0) * Math.pow(Q/100, 2) * (L/100); }
   function flForStack(hoses, Q){ return hoses.reduce((s,h)=> s + fl(COEFF[h.size]||0, Q, h.lengthFt||0), 0); }
 
@@ -446,7 +419,6 @@
     return {QL, QR, Qtotal, elevPsi, FL_main, ACC_main, FL_left, FL_right, NP_left, NP_right, PDP_left, PDP_right, PDP_total};
   }
 
-  // ===== Helpers =====
   function stageWidthPx(){ return stage.clientWidth || window.innerWidth || 390; }
   function hoseXpx(){ return Math.round(stageWidthPx() * HOSE_X_RATIO); }
   function toVBX(px){ return px / stageWidthPx() * STAGE_W; }
@@ -454,7 +426,6 @@
   function clamp(n, min, max){ return Math.max(min, Math.min(max, n)); }
   const prettySize = s => s==='2.5' ? '2½' : (s==='1.75' ? '1¾' : s);
 
-  // ===== Label helper with side-aware placement =====
   function labelConsecutiveWithStats(list, x, yStart, Q, side='right'){
     let yCursor = yStart;
     let cur = null, totalFt=0, startY=yCursor, totalFL=0;
@@ -502,7 +473,6 @@
     commit();
   }
 
-  // ===== Draw diagram =====
   function renderDiagram(){
     const nW = engineImg.naturalWidth || 0;
     const nH = engineImg.naturalHeight || 0;
@@ -524,7 +494,6 @@
     const xLeft = xMain - BRANCH_OFFSET;
     const xRight= xMain + BRANCH_OFFSET;
 
-    // clip discharge hoses below roof
     roofClipRect.setAttribute('y', 0);
     roofClipRect.setAttribute('height', roofY - 2);
     roofClipRect.setAttribute('width', STAGE_W);
@@ -535,12 +504,10 @@
     hoseGroup.innerHTML=''; accGroup.innerHTML=''; nozzleGroup.innerHTML=''; portGroup.innerHTML=''; labelGroup.innerHTML='';
     dischargeGroup.innerHTML=''; dischargeLabels.innerHTML='';
 
-    // port ring (existing)
     const port=document.createElementNS('http://www.w3.org/2000/svg','circle');
     port.setAttribute('cx', toVBX(xMain)); port.setAttribute('cy', toVBY(roofY)); port.setAttribute('r', toVBX(6));
     port.setAttribute('fill','#2b3142'); port.setAttribute('stroke','#111622'); port.setAttribute('stroke-width','1.5'); portGroup.appendChild(port);
 
-    // MAIN up to Wye
     for(const it of itemsMain){
       if(it.type==='hose'){
         const hPx = (it.lengthFt===50?PX_PER_50FT:2*PX_PER_50FT), wPx=HOSE_WIDTH[it.size]||6;
@@ -553,18 +520,16 @@
         const bg=document.createElementNS('http://www.w3.org/2000/svg','rect');
         bg.setAttribute('x', toVBX(xMain+10)); bg.setAttribute('y', toVBY(y-18)); bg.setAttribute('width', 120); bg.setAttribute('height', 18);
         bg.setAttribute('rx',6); bg.setAttribute('fill','#172134'); bg.setAttribute('stroke','rgba(255,255,255,.15)'); accGroup.appendChild(bg);
-        const t=document.createElementNS('http://www.w3.org/200/svg','text');
+        const t=document.createElementNS('http://www.w3.org/2000/svg','text');
         t.setAttribute('x', toVBX(xMain+16)); t.setAttribute('y', toVBY(y-6)); t.setAttribute('fill','#cfe4ff'); t.setAttribute('font-size','10');
         t.textContent=`${it.name} (+${it.loss} psi)`; accGroup.appendChild(t);
         y -= 22;
       }
     }
 
-    // Labels for MAIN
     const flows = calc();
     labelConsecutiveWithStats(itemsMain.filter(x=>x.type==='hose'), xMain, roofY + HOSE_TOUCH_OFFSET, flows.Qtotal, 'right');
 
-    // WYE + branches
     if(hasWye){
       const wy=document.createElementNS('http://www.w3.org/2000/svg','path');
       wy.setAttribute('d', `M ${toVBX(xMain)} ${toVBY(y-8)} L ${toVBX(xLeft)} ${toVBY(y-28)} M ${toVBX(xMain)} ${toVBY(y-8)} L ${toVBX(xRight)} ${toVBY(y-28)}`);
@@ -600,7 +565,7 @@
       body.setAttribute('width', toVBX(wTopPx + 8)); body.setAttribute('height', toVBY(18));
       body.setAttribute('fill','#394357'); nozzleGroup.appendChild(body);
 
-      const tip=document.createElementNS('http://www.w3.org/200/svg','rect');
+      const tip=document.createElementNS('http://www.w3.org/2000/svg','rect');
       tip.setAttribute('x', toVBX(x - (wTopPx*0.4))); tip.setAttribute('y', toVBY(yB - 30));
       tip.setAttribute('width', toVBX(wTopPx*0.8)); tip.setAttribute('height', toVBY(8));
       tip.setAttribute('fill','#9aa7bd'); nozzleGroup.appendChild(tip);
@@ -622,24 +587,21 @@
       nzb.setAttribute('rx',6); nzb.setAttribute('fill','#172134'); nzb.setAttribute('stroke','rgba(255,255,255,.15)');
       labelGroup.appendChild(nzb);
 
-      const nz=document.createElementNS('http://www.w3.org/200/svg','text');
+      const nz=document.createElementNS('http://www.w3.org/2000/svg','text');
       nz.setAttribute('x', toVBX(nx + pad)); nz.setAttribute('y', toVBY(ny + pad + 13));
       nz.setAttribute('fill','#cfe4ff'); nz.setAttribute('font-size','10'); nz.textContent = text;
       labelGroup.appendChild(nz);
     }
 
-    // Footer totals
     const footer=document.createElementNS('http://www.w3.org/2000/svg','text');
     footer.setAttribute('x', toVBX(STAGE_W/2)); footer.setAttribute('y', toVBY(stageH - 8));
     footer.setAttribute('text-anchor','middle'); footer.setAttribute('fill','#d7e7ff'); footer.setAttribute('font-size','12');
     footer.textContent = `Total: ${Math.round(flows.PDP_total)} psi PDP • ${hasWye ? (flows.QL + flows.QR) : flows.QR} gpm`;
     labelGroup.appendChild(footer);
 
-    // Re-render discharge hoses since roofY changed
     renderDischargeHoses(roofY, xMain);
   }
 
-  // ===== Build list =====
   function rowClassForSize(size){
     if(size==='5') return 'hose-5';
     if(size==='2.5') return 'hose-25';
@@ -718,7 +680,6 @@
     }
   }
 
-  // ===== KPIs =====
   function calcAndRenderMath(){
     const R = calc();
     const flowLabel = hasWye ? `${R.QL}+${R.QR} = ${R.Qtotal} gpm` : `${R.QR} gpm`;
@@ -736,7 +697,6 @@
       `PDP = max(Left:${hasWye?Math.round(R.PDP_left):'—'}, Right:${Math.round(R.PDP_right)}) + Main FL(${R.FL_main.toFixed(1)}) + Main Acc(${R.ACC_main.toFixed(1)})`;
   }
 
-  // ===== Master render =====
   function render(autoScroll=false){
     refreshHoseDrawer();
     renderDiagram();
@@ -750,16 +710,13 @@
   engineImg.onload = ()=> render(true);
   window.addEventListener('resize', ()=> render(false));
 
-  /* =======================================================
-     DISCHARGE HOSES ON MAIN PICTURE (max 3: L/R/Back)
-     Defaults + labeling + category picker at tip
-     ======================================================= */
+  /* ========= Discharge hoses (defaults + color-by-size) ========= */
   const addDischargeBtn = document.getElementById('addDischargeBtn');
   const resetDischargeBtn = document.getElementById('resetDischargeBtn');
   const dischargeCounter = document.getElementById('dischargeCounter');
 
   const DISCH_MAX = 3;
-  const dischargeOrder = ['left','right','back']; // Hose1=left, Hose2=right, Hose3=back
+  const dischargeOrder = ['left','right','back'];
   const dischargeDefaults = {
     left:  { label:'Hose 1', size:'1.75', lengthFt:200, nozzle:{id:'chief185', gpm:185, NP:50}, accessories:[] },
     right: { label:'Hose 2', size:'1.75', lengthFt:200, nozzle:{id:'chief185', gpm:185, NP:50}, accessories:[] },
@@ -767,13 +724,18 @@
   };
 
   const nozzleCatalog = {
-    smoothbore:{name:'Smooth Bore', gpm:185, NP:50},  // generic placeholder
+    smoothbore:{name:'Smooth Bore', gpm:185, NP:50},
     fog50:{name:'Fog @50', gpm:150, NP:50},
     chief185:{name:'ChiefXD 185 @50', gpm:185, NP:50},
     chief265:{name:'ChiefXD 265 @50', gpm:265, NP:50},
   };
 
-  const dischargeState = { hoses: [] }; // {id,pos,endVB:{x,y}, size,lengthFt,nozzle,accessories[], chipEl, nodes{}}
+  const sizeStroke = s => (s==='1.75'?getComputedStyle(document.documentElement).getPropertyValue('--hose175')
+                           : s==='2.5'?getComputedStyle(document.documentElement).getPropertyValue('--hose25')
+                           : getComputedStyle(document.documentElement).getPropertyValue('--hose5'));
+  const sizeShadow = s => 'rgba(0,0,0,.35)';
+
+  const dischargeState = { hoses: [] };
 
   function updateDischargeCounter(){
     dischargeCounter.textContent = `${dischargeState.hoses.length} / ${DISCH_MAX} hoses`;
@@ -785,10 +747,9 @@
     return { x: ov.left + (x_vb / STAGE_W) * ov.width, y: ov.top + y_vb };
   }
 
-  // Build a nice upward curve from mid-truck roof to near top, fanning left/right
   function dischargeGeom(pos, roofY, xMain){
     const start = { x: toVBX(xMain), y: toVBY(roofY) };
-    const topY = 30; // near top
+    const topY = 30;
     const spread = 120;
     let endX = xMain;
     if(pos==='left')  endX = xMain - spread;
@@ -802,7 +763,6 @@
   }
 
   function renderDischargeHoses(roofY, xMain){
-    // draw hoses and labels
     dischargeGroup.innerHTML = '';
     dischargeLabels.innerHTML = '';
 
@@ -810,19 +770,28 @@
       const geom = dischargeGeom(h.pos, roofY, xMain);
       h.endVB = geom.end;
 
-      const sh = document.createElementNS('http://www.w3.org/200/svg','path');
-      sh.setAttribute('class','hose-shadow'); sh.setAttribute('d', geom.d);
-      const p  = document.createElementNS('http://www.w3.org/200/svg','path');
-      p.setAttribute('class','hose-path'); p.setAttribute('d', geom.d);
+      const sh = document.createElementNS('http://www.w3.org/2000/svg','path');
+      sh.setAttribute('d', geom.d);
+      sh.setAttribute('stroke', sizeShadow(h.size));
+      sh.setAttribute('stroke-width', '12');
+      sh.setAttribute('opacity', '.35');
+      sh.setAttribute('fill','none');
 
-      const gEnd = document.createElementNS('http://www.w3.org/200/svg','g');
+      const p  = document.createElementNS('http://www.w3.org/2000/svg','path');
+      p.setAttribute('d', geom.d);
+      p.setAttribute('stroke', sizeStroke(h.size));
+      p.setAttribute('stroke-width', '10');
+      p.setAttribute('fill','none');
+      p.setAttribute('filter','url(#hoseGlowT)');
+
+      const gEnd = document.createElementNS('http://www.w3.org/2000/svg','g');
       gEnd.setAttribute('class','hose-end'); gEnd.setAttribute('data-hose', h.id);
       const cx = geom.end.x, cy = geom.end.y;
-      const c  = document.createElementNS('http://www.w3.org/200/svg','circle');
+      const c  = document.createElementNS('http://www.w3.org/2000/svg','circle');
       c.setAttribute('class','plus-circle'); c.setAttribute('cx', cx); c.setAttribute('cy', cy); c.setAttribute('r', 14);
-      const v  = document.createElementNS('http://www.w3.org/200/svg','line');
+      const v  = document.createElementNS('http://www.w3.org/2000/svg','line');
       v.setAttribute('class','plus-sign'); v.setAttribute('x1', cx); v.setAttribute('y1', cy-6); v.setAttribute('x2', cx); v.setAttribute('y2', cy+6);
-      const hln= document.createElementNS('http://www.w3.org/200/svg','line');
+      const hln= document.createElementNS('http://www.w3.org/2000/svg','line');
       hln.setAttribute('class','plus-sign'); hln.setAttribute('x1', cx-6); hln.setAttribute('y1', cy); hln.setAttribute('x2', cx+6); hln.setAttribute('y2', cy);
       gEnd.appendChild(c); gEnd.appendChild(v); gEnd.appendChild(hln);
 
@@ -832,13 +801,12 @@
 
       h.nodes = {shadow:sh, path:p, endGroup:gEnd};
 
-      // Line label near roof, offset per side
       const labelY = roofY - 8;
       let labelX = xMain;
       if(h.pos==='left') labelX = xMain - 78;
       if(h.pos==='right') labelX = xMain + 78;
-      const lblRect = document.createElementNS('http://www.w3.org/200/svg','rect');
-      const lblText = document.createElementNS('http://www.w3.org/200/svg','text');
+      const lblRect = document.createElementNS('http://www.w3.org/2000/svg','rect');
+      const lblText = document.createElementNS('http://www.w3.org/2000/svg','text');
       const textStr = `${h.label}`;
       const estW = Math.max(60, textStr.length*6.2);
       const pad = 4;
@@ -858,7 +826,6 @@
       dischargeLabels.appendChild(lblText);
     });
 
-    // place chips after draw
     positionDischargeChips();
   }
 
@@ -883,7 +850,6 @@
     });
   }
 
-  // Picker navigation
   function showPickerView(which){
     pickerHome.style.display = (which==='home') ? 'block' : 'none';
     pickerAddHose.style.display = (which==='addhose') ? 'block' : 'none';
@@ -892,7 +858,6 @@
     pickerConfig.style.display = (which==='config') ? 'block' : 'none';
   }
 
-  // Picker positioning
   let pickerForHoseId = null;
   function showDischargePicker(hose, clientX, clientY){
     pickerForHoseId = hose.id;
@@ -916,27 +881,24 @@
     pickerForHoseId = null;
   }
 
-  // Events for picker navigation
   dischargePicker.addEventListener('click', (e)=>{
     const toView = e.target.getAttribute('data-view');
     if(toView){ showPickerView(toView); return; }
     if(e.target.hasAttribute('data-back')){ showPickerView('home'); return; }
   });
 
-  // Subview: Add Hose (+length)
   pickerAddHose.addEventListener('click', (e)=>{
     const btn = e.target.closest('[data-addlen]');
     if(!btn) return;
     const len = parseInt(btn.getAttribute('data-addlen'),10);
-    const size = btn.getAttribute('data-size'); // size of added section; we’ll just bump total length
+    const size = btn.getAttribute('data-size');
     const hose = dischargeState.hoses.find(h=>h.id===pickerForHoseId); if(!hose) return;
     hose.lengthFt = (hose.lengthFt||0) + len;
-    if(size) hose.size = size; // if user picked size with the add, adopt it
+    if(size) hose.size = size;
     positionDischargeChips();
     hideDischargePicker();
   });
 
-  // Subview: Nozzle
   pickerNozzle.addEventListener('click', (e)=>{
     const pick = e.target.closest('.pick[data-type="nozzle"]'); if(!pick) return;
     const id = pick.getAttribute('data-id');
@@ -947,19 +909,16 @@
     hideDischargePicker();
   });
 
-  // Subview: Accessory
   pickerAcc.addEventListener('click', (e)=>{
     const pick = e.target.closest('.pick[data-type="accessory"]'); if(!pick) return;
     const id = pick.getAttribute('data-id');
     const hose = dischargeState.hoses.find(h=>h.id===pickerForHoseId); if(!hose) return;
     const map = {wye:'Wye', gated_wye:'Gated Wye', siamese:'Siamese', standpipe:'Standpipe', flowmeter:'Inline Flowmeter', cap:'Cap'};
     hose.accessories.push(map[id]||id);
-    // reflect in chip by appending last accessory short tag
     if(hose.chipEl){ hose.chipEl.textContent = chipSummary(hose); }
     hideDischargePicker();
   });
 
-  // Subview: Config (size/length/reset)
   pickerConfig.addEventListener('click', (e)=>{
     const sizeSet = e.target.getAttribute('data-size-set');
     const lenSet  = e.target.getAttribute('data-len-set');
@@ -975,7 +934,6 @@
     }
   });
 
-  // Tip click to open picker
   overlay.addEventListener('click', (e)=>{
     const end = e.target.closest('.hose-end'); if(!end) return;
     const id = end.getAttribute('data-hose');
@@ -1000,7 +958,6 @@
     hideDischargePicker();
   });
 
-  // Add/remove hoses
   function addDischargeHose(){
     const used = new Set(dischargeState.hoses.map(h=>h.pos));
     const pos = dischargeOrder.find(p=>!used.has(p));
@@ -1018,7 +975,7 @@
     };
     dischargeState.hoses.push(hose);
     updateDischargeCounter();
-    render(false); // positions and chips updated in render
+    render(false);
   }
   function resetDischarge(){
     dischargeState.hoses.forEach(h=>{
@@ -1032,22 +989,17 @@
   addDischargeBtn.onclick = addDischargeHose;
   resetDischargeBtn.onclick = resetDischarge;
 
-  // Init with your requested defaults
   function initDefaultDischarges(){
     resetDischarge();
-    // Add all three in order (Hose1 left, Hose2 right, Hose3 back)
-    addDischargeHose(); // left
-    addDischargeHose(); // right
-    addDischargeHose(); // back
+    addDischargeHose(); // Hose 1 (left)
+    addDischargeHose(); // Hose 2 (right)
+    addDischargeHose(); // Hose 3 (back)
   }
 
-  // Hook point if you later want these to affect your calculator
   function onDischargeAttachmentSelected(hose){
-    // Map hose.pos and hose.nozzle/size/lengthFt/accessories into your calculation state if desired
     console.log('Attachment updated:', hose);
   }
 
-  // Boot
   updateDischargeCounter();
   initDefaultDischarges();
 </script>
