@@ -1,5 +1,6 @@
 /* =========================
-   Multi-line state + drawing (fixed)
+   Multi-line state + drawing
+   (with inline SVG fallbacks so hoses show even if CSS fails)
    ========================= */
 
 const STAGE_W = 390;
@@ -107,13 +108,30 @@ function classFor(size){
   return size==='5' ? 'hose5' : (size==='2.5' ? 'hose25' : 'hose175');
 }
 
+/* ===== Inline SVG fallback colors (works even if CSS fails) ===== */
+const HOSE_FALLBACK = {
+  hose5:   { stroke:"#ecd464", width:12 },
+  hose25:  { stroke:"#6ecbff", width:9  },
+  hose175: { stroke:"#ff6b6b", width:6  }
+};
+
 /* ===== Drawing helpers ===== */
 function clearGroup(g){ while(g.firstChild) g.removeChild(g.firstChild); }
+function applyStrokeFallback(el, cls){
+  const fb = HOSE_FALLBACK[cls];
+  if(!fb) return;
+  el.setAttribute("stroke", fb.stroke);
+  el.setAttribute("stroke-width", fb.width);
+  el.setAttribute("fill", "none");
+  el.setAttribute("stroke-linecap", "round");
+  el.setAttribute("stroke-linejoin", "round");
+}
 function hosePath(startX, startY, totalPx, widthClass){
   const endX = Math.min(startX + totalPx, STAGE_W-12);
   const p = document.createElementNS("http://www.w3.org/2000/svg","path");
   p.setAttribute("d", `M ${startX},${startY} L ${endX},${startY}`);
   p.setAttribute("class", `hoseMain ${widthClass}`);
+  applyStrokeFallback(p, widthClass);   // ensure visible without CSS
   return {path:p, endX, endY:startY};
 }
 function branchPath(x, y, side, totalPx, widthClass){
@@ -123,6 +141,7 @@ function branchPath(x, y, side, totalPx, widthClass){
   const p = document.createElementNS("http://www.w3.org/2000/svg","path");
   p.setAttribute("d", `M ${x},${y} L ${turnX},${y-24} L ${endX},${y-24}`);
   p.setAttribute("class", `hoseMain ${widthClass}`);
+  applyStrokeFallback(p, widthClass);
   return {path:p, endX, endY:y-24};
 }
 function addBubble(text, x,y){
@@ -251,6 +270,91 @@ lineBtns.forEach(btn=>{
     }
     update();
   });
+});
+
+/* ===== Drawer (edits ACTIVE line) ===== */
+function buildNozzleButtons(){
+  nozRowLeft.innerHTML = '';
+  nozRowRight.innerHTML = '';
+  NOZZLES.forEach(n=>{
+    const bL = document.createElement('button');
+    bL.textContent = n.name;
+    bL.onclick = ()=>{ lines[activeKey].nozzleLeft = n; update(); };
+    nozRowLeft.appendChild(bL);
+
+    const bR = document.createElement('button');
+    bR.textContent = n.name;
+    bR.onclick = ()=>{ lines[activeKey].nozzleRight = n; update(); };
+    nozRowRight.appendChild(bR);
+  });
+}
+buildNozzleButtons();
+
+document.getElementById('openHose').onclick = ()=>openDrawer('hose');
+document.getElementById('openAcc').onclick = ()=>openDrawer('acc');
+document.getElementById('openNoz').onclick = ()=>openDrawer('noz');
+
+const drawer = document.getElementById('drawer');
+const drawerTitle = document.getElementById('drawerTitle');
+function openDrawer(section){
+  drawer.classList.add('open');
+  drawer.setAttribute('aria-hidden','false');
+
+  document.getElementById('hoseButtonsMain').style.display = 'none';
+  document.getElementById('hoseButtonsSplit').style.display = 'none';
+  document.getElementById('accButtons').style.display = 'none';
+  document.getElementById('nozButtons').style.display = 'none';
+
+  if(section==='hose'){
+    drawerTitle.textContent = 'Hose';
+    document.getElementById('hoseButtonsMain').style.display = 'flex';
+    if(lines[activeKey].hasWye) document.getElementById('hoseButtonsSplit').style.display = 'flex';
+  }else if(section==='acc'){
+    drawerTitle.textContent = 'Accessories';
+    document.getElementById('accButtons').style.display = 'flex';
+  }else if(section==='noz'){
+    drawerTitle.textContent = 'Nozzles';
+    document.getElementById('nozButtons').style.display = 'block';
+  }
+}
+document.addEventListener('click', (e)=>{
+  const clickInDrawer = drawer.contains(e.target);
+  const clickFAB = e.target.classList && e.target.classList.contains('fab');
+  if(drawer.classList.contains('open') && !clickInDrawer && !clickFAB){
+    drawer.classList.remove('open');
+    drawer.setAttribute('aria-hidden','true');
+  }
+});
+
+/* ===== Drawer button actions ===== */
+hoseButtonsMain.addEventListener('click', (e)=>{
+  const btn = e.target.closest('button');
+  if(!btn) return;
+  const act = btn.dataset.act;
+  const L = lines[activeKey];
+  if(act==='clearHose'){ L.itemsMain = []; update(); return; }
+  const hose = btn.dataset.hose && JSON.parse(btn.dataset.hose);
+  if(hose){ L.itemsMain.push(hose); update(); }
+});
+hoseButtonsSplit.addEventListener('click', (e)=>{
+  const btn = e.target.closest('button'); if(!btn) return;
+  const act = btn.dataset.act;
+  const L = lines[activeKey];
+  if(act==='clearSplit'){ L.itemsLeft = []; L.itemsRight = []; update(); return; }
+  const side = btn.dataset.side;
+  const hose = JSON.parse(btn.dataset.hose);
+  if(side==='L'){ L.itemsLeft.push(hose); } else { L.itemsRight.push(hose); }
+  update();
+});
+accButtons.addEventListener('click', (e)=>{
+  const btn = e.target.closest('button'); if(!btn) return;
+  const act = btn.dataset.act;
+  const L = lines[activeKey];
+  if(act==='clearAcc'){ L.hasWye=false; L.wyeLoss=0; update(); return; }
+  const acc = btn.dataset.acc && JSON.parse(btn.dataset.acc);
+  if(!acc) return;
+  if(acc.name==='Wye'){ L.hasWye = true; L.wyeLoss = acc.loss || 10; }
+  update();
 });
 
 /* ===== Inputs ===== */
