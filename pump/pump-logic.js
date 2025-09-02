@@ -1,5 +1,5 @@
 /* =========================
-   Multi-line state + drawing
+   Multi-line state + drawing (fixed)
    ========================= */
 
 const STAGE_W = 390;
@@ -11,13 +11,13 @@ const COEFF = { "1.75":15.5, "2.5":2, "5":0.08 };
 
 const NOZZLES = [
   {name:"Smooth 7/8″ @50 psi", gpm:160, NP:50},
-  {name:"Smooth 15/16″ @50 psi", gpm:185, NP:50},   // used for 1¾ default
+  {name:"Smooth 15/16″ @50 psi", gpm:185, NP:50},   // default for 1¾
   {name:"Smooth 1″ @50 psi", gpm:210, NP:50},
   {name:"Fog 150 @75", gpm:150, NP:75},
   {name:"Fog 150 @100", gpm:150, NP:100},
   {name:"Fog 185 @75", gpm:185, NP:75},
   {name:"Fog 185 @100", gpm:185, NP:100},
-  {name:"SB 1 1/8″ @50 psi", gpm:265, NP:50},       // used for 2½ default
+  {name:"SB 1 1/8″ @50 psi", gpm:265, NP:50},       // default for 2½
   {name:"SB 1 1/4″ @50 psi", gpm:325, NP:50}
 ];
 
@@ -25,13 +25,13 @@ const NOZZLES = [
 function makeEmptyLine(){
   return {
     deployed:false,
-    itemsMain:[],     // [{size:"1.75"|"2.5"|"5", lengthFt:Number}]
+    itemsMain:[],
     hasWye:false,
     wyeLoss:0,
     itemsLeft:[],
     itemsRight:[],
-    nozzleLeft:NOZZLES[1],   // defaults will be overwritten on init
-    nozzleRight:NOZZLES[1],
+    nozzleLeft:null,
+    nozzleRight:null,
   };
 }
 const lines = {
@@ -39,27 +39,22 @@ const lines = {
   right: makeEmptyLine(),  // Line 2
   back: makeEmptyLine()    // Line 3
 };
-let activeKey = 'left';     // which line's KPIs + drawer we’re editing
+let activeKey = 'left';     // which line is being edited
 
 /* Elevation */
 let elevFt = 0, elevPsiPerFt = 0.434;
 
-/* DOM */
+/* DOM refs */
 const overlay = document.getElementById('overlay');
 const hosesG = document.getElementById('hoses');
 const branchesG = document.getElementById('branches');
 const hint = document.getElementById('hint');
 const lineInfo = document.getElementById('lineinfo');
+const lineBtns = [...document.querySelectorAll('.linebtn')];
 
-const linebar = document.getElementById('linebar');
-const lineBtns = [...linebar.querySelectorAll('.linebtn')];
-
-const drawer = document.getElementById('drawer');
-const drawerTitle = document.getElementById('drawerTitle');
 const hoseButtonsMain = document.getElementById('hoseButtonsMain');
 const hoseButtonsSplit = document.getElementById('hoseButtonsSplit');
 const accButtons = document.getElementById('accButtons');
-const nozButtons = document.getElementById('nozButtons');
 const nozRowLeft = document.getElementById('nozRowLeft');
 const nozRowRight = document.getElementById('nozRowRight');
 
@@ -75,7 +70,25 @@ const GMPEl = document.getElementById('GPM');
 const PDPEl = document.getElementById('PDP');
 const breakdownEl = document.getElementById('breakdown');
 
-/* ===== Helpers ===== */
+/* ===== Defaults ===== */
+function ensureDefaults(key){
+  const L = lines[key];
+  if(L.itemsMain.length) return;
+
+  if(key === 'left' || key === 'right'){
+    // Lines 1 & 2 default: 1¾″ × 200′, 185 gpm @ 50 psi
+    L.itemsMain = [{size:"1.75", lengthFt:200}];
+    L.nozzleLeft = NOZZLES[1];
+    L.nozzleRight = NOZZLES[1];
+  } else {
+    // Line 3 default: 2½″ × 200′, 265 gpm @ 50 psi
+    L.itemsMain = [{size:"2.5", lengthFt:200}];
+    L.nozzleLeft = NOZZLES[7];
+    L.nozzleRight = NOZZLES[7];
+  }
+}
+
+/* ===== Math ===== */
 function calcFL(gpm, size, lengthFt){
   const C = COEFF[size] || 0;
   const Q = gpm/100;
@@ -90,81 +103,164 @@ function gpmForLine(L){
   }
   return L.nozzleRight?.gpm||0;
 }
-function ensureDefaults(key){
+function classFor(size){
+  return size==='5' ? 'hose5' : (size==='2.5' ? 'hose25' : 'hose175');
+}
+
+/* ===== Drawing helpers ===== */
+function clearGroup(g){ while(g.firstChild) g.removeChild(g.firstChild); }
+function hosePath(startX, startY, totalPx, widthClass){
+  const endX = Math.min(startX + totalPx, STAGE_W-12);
+  const p = document.createElementNS("http://www.w3.org/2000/svg","path");
+  p.setAttribute("d", `M ${startX},${startY} L ${endX},${startY}`);
+  p.setAttribute("class", `hoseMain ${widthClass}`);
+  return {path:p, endX, endY:startY};
+}
+function branchPath(x, y, side, totalPx, widthClass){
+  const dir = side==='L' ? -1 : 1;
+  const turnX = x + dir*BRANCH_OFFSET;
+  const endX = Math.max(12, Math.min(STAGE_W-12, turnX + dir*totalPx));
+  const p = document.createElementNS("http://www.w3.org/2000/svg","path");
+  p.setAttribute("d", `M ${x},${y} L ${turnX},${y-24} L ${endX},${y-24}`);
+  p.setAttribute("class", `hoseMain ${widthClass}`);
+  return {path:p, endX, endY:y-24};
+}
+function addBubble(text, x,y){
+  const div = document.createElement('div');
+  div.className='bubble';
+  div.style.left = `${x+8}px`;
+  div.style.top = `${y-18}px`;
+  div.textContent = text;
+  overlay.parentElement.appendChild(div);
+  return div;
+}
+
+/* ===== Draw one line ===== */
+function drawLine(key, yOffset){
   const L = lines[key];
-  if(L.itemsMain.length) return;
+  if(!L.deployed || !L.itemsMain.length) return;
 
-  if(key === 'left' || key === 'right'){
-    // 1¾″ × 200′, 185 @ 50
-    L.itemsMain = [{size:"1.75", lengthFt:200}];
-    L.nozzleLeft = NOZZLES[1];
-    L.nozzleRight = NOZZLES[1];
+  const startY = 660 + yOffset;
+  const startX = Math.round(STAGE_W * HOSE_X_RATIO);
+
+  const gpm = gpmForLine(L);
+  const mainLenFt = L.itemsMain.reduce((s,h)=>s+h.lengthFt,0);
+  const mainPx = (mainLenFt/50) * PX_PER_50FT;
+  const firstSize = L.itemsMain[0]?.size || '1.75';
+  const hClass = classFor(firstSize);
+
+  const mainSeg = hosePath(startX, startY, mainPx, hClass);
+  hosesG.appendChild(mainSeg.path);
+  const mainFL = sumFL(L.itemsMain, gpm);
+  addBubble(`${L.itemsMain.map(h=>`${h.size}″×${h.lengthFt}′`).join(' + ')} | FL ${mainFL.toFixed(1)} psi`, mainSeg.endX, mainSeg.endY);
+
+  let leftNeed=0, rightNeed=0;
+  if(L.hasWye){
+    const leftFt = L.itemsLeft.reduce((s,h)=>s+h.lengthFt,0);
+    if(L.itemsLeft.length){
+      const bL = branchPath(mainSeg.endX, mainSeg.endY, 'L', (leftFt/50)*PX_PER_50FT, classFor(L.itemsLeft[0]?.size||'1.75'));
+      branchesG.appendChild(bL.path);
+      const gL = L.nozzleLeft?.gpm||0;
+      const flLeft = sumFL(L.itemsLeft, gL);
+      leftNeed = flLeft + (L.nozzleLeft?.NP||0);
+      addBubble(`${L.itemsLeft.map(h=>`${h.size}″×${h.lengthFt}′`).join(' + ')} | FL ${flLeft.toFixed(1)} psi | Noz ${(L.nozzleLeft?.NP||0)} psi @ ${gL} gpm`, bL.endX, bL.endY);
+    }
+    const rightFt = L.itemsRight.reduce((s,h)=>s+h.lengthFt,0);
+    if(L.itemsRight.length){
+      const bR = branchPath(mainSeg.endX, mainSeg.endY, 'R', (rightFt/50)*PX_PER_50FT, classFor(L.itemsRight[0]?.size||'1.75'));
+      branchesG.appendChild(bR.path);
+      const gR = L.nozzleRight?.gpm||0;
+      const flRight = sumFL(L.itemsRight, gR);
+      rightNeed = flRight + (L.nozzleRight?.NP||0);
+      addBubble(`${L.itemsRight.map(h=>`${h.size}″×${h.lengthFt}′`).join(' + ')} | FL ${flRight.toFixed(1)} psi | Noz ${(L.nozzleRight?.NP||0)} psi @ ${gR} gpm`, bR.endX, bR.endY);
+    }
   } else {
-    // back: 2½″ × 200′, 265 @ 50
-    L.itemsMain = [{size:"2.5", lengthFt:200}];
-    L.nozzleLeft = NOZZLES[7];
-    L.nozzleRight = NOZZLES[7];
+    rightNeed = (L.nozzleRight?.NP||0);
   }
+
+  const accLoss = L.hasWye ? (L.wyeLoss||10) : 0;
+  const elev = Number(elevFt) * Number(elevPsiPerFt);
+  const branchMax = L.hasWye ? Math.max(leftNeed, rightNeed) : rightNeed;
+  const PDP = branchMax + mainFL + accLoss + elev;
+
+  return {gpm, mainFL, leftNeed, rightNeed, accLoss, PDP, branchMax};
 }
 
-/* ===== Drawer (edits ACTIVE line) ===== */
-function buildNozzleButtons(){
-  nozRowLeft.innerHTML = '';
-  nozRowRight.innerHTML = '';
-  NOZZLES.forEach(n=>{
-    const bL = document.createElement('button');
-    bL.textContent = n.name;
-    bL.onclick = ()=>{ lines[activeKey].nozzleLeft = n; update(); };
-    nozRowLeft.appendChild(bL);
+/* ===== Update ===== */
+function update(){
+  clearGroup(hosesG); clearGroup(branchesG);
+  [...document.querySelectorAll('.bubble')].forEach(b=>b.remove());
 
-    const bR = document.createElement('button');
-    bR.textContent = n.name;
-    bR.onclick = ()=>{ lines[activeKey].nozzleRight = n; update(); };
-    nozRowRight.appendChild(bR);
+  const offsets = { left: 0, right: 14, back: 28 };
+  let anyDeployed = false;
+  let activeMetrics = null;
+
+  Object.keys(lines).forEach(k=>{
+    if(lines[k].deployed){
+      anyDeployed = true;
+      const m = drawLine(k, offsets[k]);
+      if(k === activeKey && m) activeMetrics = m;
+    }
   });
-}
-buildNozzleButtons();
+  hint.style.display = anyDeployed ? 'none' : '';
 
-const openHose = document.getElementById('openHose');
-const openAcc = document.getElementById('openAcc');
-const openNoz = document.getElementById('openNoz');
+  lineBtns.forEach(b=>{
+    const k = b.dataset.line;
+    b.classList.toggle('active', lines[k].deployed && k===activeKey);
+  });
 
-function openDrawer(section){
-  drawer.classList.add('open');
-  drawer.setAttribute('aria-hidden','false');
-
-  hoseButtonsMain.style.display = 'none';
-  hoseButtonsSplit.style.display = 'none';
-  accButtons.style.display = 'none';
-  nozButtons.style.display = 'none';
-
-  if(section==='hose'){
-    drawerTitle.textContent = 'Hose';
-    hoseButtonsMain.style.display = 'flex';
-    if(lines[activeKey].hasWye) hoseButtonsSplit.style.display = 'flex';
-  }else if(section==='acc'){
-    drawerTitle.textContent = 'Accessories';
-    accButtons.style.display = 'flex';
-  }else if(section==='noz'){
-    drawerTitle.textContent = 'Nozzles';
-    nozButtons.style.display = 'block';
+  if(activeMetrics){
+    FLmainEl.textContent = `${activeMetrics.mainFL.toFixed(1)} psi`;
+    FLleftEl.textContent = `${(lines[activeKey].hasWye?activeMetrics.leftNeed:0).toFixed(1)} psi`;
+    FLrightEl.textContent = `${activeMetrics.rightNeed.toFixed(1)} psi`;
+    ACCEl.textContent = `${activeMetrics.accLoss.toFixed(0)} psi`;
+    const NPdisp = lines[activeKey].hasWye
+      ? `${lines[activeKey].nozzleLeft?.NP||0}/${lines[activeKey].nozzleRight?.NP||0}`
+      : `${lines[activeKey].nozzleRight?.NP||0}`;
+    NPEl.textContent = `${NPdisp} psi`;
+    GMPEl.textContent = `${activeMetrics.gpm} gpm`;
+    PDPEl.textContent = `${activeMetrics.PDP.toFixed(1)} psi`;
+    breakdownEl.textContent = lines[activeKey].hasWye
+      ? `Branch (max L/R) ${activeMetrics.branchMax.toFixed(1)} + Main FL ${activeMetrics.mainFL.toFixed(1)} + Acc ${activeMetrics.accLoss.toFixed(0)} ${Number(elevFt)>=0?'+':'-'} Elev ${Math.abs(Number(elevFt)*Number(elevPsiPerFt)).toFixed(1)}`
+      : `Nozzle ${activeMetrics.rightNeed.toFixed(1)} + Main FL ${activeMetrics.mainFL.toFixed(1)} + Acc ${activeMetrics.accLoss.toFixed(0)} ${Number(elevFt)>=0?'+':'-'} Elev ${Math.abs(Number(elevFt)*Number(elevPsiPerFt)).toFixed(1)}`;
+  } else {
+    FLmainEl.textContent='— psi'; FLleftEl.textContent='— psi'; FLrightEl.textContent='— psi';
+    ACCEl.textContent='— psi'; NPEl.textContent='— psi'; GMPEl.textContent='— gpm'; PDPEl.textContent='— psi'; breakdownEl.textContent='';
   }
+
+  const L = lines[activeKey];
+  const hoseStr = L.itemsMain.length ? L.itemsMain.map(h=>`${h.size}″×${h.lengthFt}′`).join(' + ') : '—';
+  const splitStr = L.hasWye
+    ? `L:${L.itemsLeft.map(h=>`${h.size}″×${h.lengthFt}′`).join('+')||'—'} | R:${L.itemsRight.map(h=>`${h.size}″×${h.lengthFt}′`).join('+')||'—'}`
+    : 'Single';
+  const label = activeKey==='left'?'Line 1':activeKey==='right'?'Line 2':'Line 3';
+  lineInfo.innerHTML = `<b>${label}${L.deployed?' (active)':''}</b><div>Hose: ${hoseStr}</div><div>After Wye: ${splitStr}</div>`;
 }
-openHose.onclick = ()=>openDrawer('hose');
-openAcc.onclick = ()=>openDrawer('acc');
-openNoz.onclick = ()=>openDrawer('noz');
 
-document.addEventListener('click', (e)=>{
-  const clickInDrawer = drawer.contains(e.target);
-  const clickFAB = e.target.classList && e.target.classList.contains('fab');
-  if(drawer.classList.contains('open') && !clickInDrawer && !clickFAB){
-    drawer.classList.remove('open');
-    drawer.setAttribute('aria-hidden','true');
-  }
-});
-
-/* ===== Line buttons (deploy/toggle + select) ===== */
+/* ===== Line button handlers ===== */
 lineBtns.forEach(btn=>{
   btn.addEventListener('click', ()=>{
     const key = btn.dataset.line;
-    activeK
+    activeKey = key;
+    const L = lines[key];
+    if(!L.deployed){
+      ensureDefaults(key);
+      L.deployed = true;
+    } else {
+      L.deployed = false;
+    }
+    update();
+  });
+});
+
+/* ===== Inputs ===== */
+elevFtEl.addEventListener('input', ()=>{ elevFt = Number(elevFtEl.value||0); update(); });
+elevPsiEl.addEventListener('input', ()=>{ elevPsiPerFt = Number(elevPsiEl.value||0.434); update(); });
+
+/* ===== Init ===== */
+function init(){
+  elevFt = Number(elevFtEl.value||0);
+  elevPsiPerFt = Number(elevPsiEl.value||0.434);
+  update();
+}
+init();
