@@ -19,7 +19,7 @@
 
   header{position:sticky;top:0;z-index:10;padding:10px 14px;background:linear-gradient(180deg,#0c1320,#0b0f14);border-bottom:1px solid var(--edge)}
   .title{font-weight:700}
-  .sub{font-size:12px;color:var(--muted)}
+  .sub{font-size:12px;color:#9fb0c8}
 
   .wrapper{border-top:1px solid var(--edge);border-bottom:1px solid var(--edge);background:linear-gradient(180deg,#0b0f14,#0e1726)}
   .stage{position:relative;width:100%;max-width:900px;margin:0 auto}
@@ -62,9 +62,9 @@
   .pick-small{font-size:12px;padding:8px 10px;border-radius:10px;background:#0b1a29;border:1px solid #1f3a57;cursor:pointer}
   .pick-small:hover{background:#0e2337}
   .row{display:flex;gap:8px;align-items:center;padding:6px 8px}
-  .row input{width:90px;background:#0b1320;color:#eaf2ff;border:1px solid var(--edge);border-radius:10px;padding:8px 10px;font-size:14px}
+  .row input, .row select{background:#0b1320;color:#eaf2ff;border:1px solid var(--edge);border-radius:10px;padding:8px 10px;font-size:14px}
 
-  /* Supply dropdown */
+  /* Dropdown for Supply */
   .dropdown{
     position:absolute; z-index:20; display:none; pointer-events:auto;
     background:#0b1320;border:1px solid var(--edge);border-radius:10px;box-shadow:0 12px 28px rgba(0,0,0,.45);overflow:hidden;
@@ -74,12 +74,19 @@
   }
   .dropdown button:hover{background:#0e2337}
 
-  /* KPIs */
+  /* KPI + breakdown panel */
   .panel{padding:10px 12px;background:var(--panel)}
   .card{background:#0e1726;border:1px solid var(--edge);border-radius:14px;padding:12px;margin:10px 0}
   .kpis{display:flex;gap:10px;flex-wrap:wrap}
   .kpi{background:#0b1320;border:1px solid var(--edge);border-radius:12px;padding:10px 12px;font-size:13px;color:#cfe4ff}
   .kpi b{font-size:18px}
+  .linesTable{margin-top:8px;border-top:1px solid var(--edge);padding-top:8px;display:grid;gap:10px}
+  .lineRow{display:flex;flex-wrap:wrap;gap:8px;align-items:center;background:#0b1320;border:1px solid var(--edge);border-radius:12px;padding:8px 10px}
+  .lineRow .title{font-weight:700;margin-right:8px}
+  .lineRow .break{font-size:12px;color:#cfe4ff}
+  .lineRow .ctrls{display:flex;gap:6px;align-items:center;margin-left:auto}
+  .lineRow input[type=number]{width:84px}
+  .lineRow select{min-width:82px}
 </style>
 </head>
 <body>
@@ -104,7 +111,7 @@
 
       <!-- Buttons (single row) -->
       <div class="linebar" id="linebar">
-        <!-- order: left (Line 1), back/center (Line 2), right (Line 3) -->
+        <!-- order: left (Line 1), center (Line 2), right (Line 3) -->
         <button class="linebtn" data-line="left">Line 1</button>
         <button class="linebtn" data-line="back">Line 2</button>
         <button class="linebtn" data-line="right">Line 3</button>
@@ -117,75 +124,17 @@
           <button data-supply="none">Clear</button>
         </div>
       </div>
-
-      <!-- Context menu from + -->
-      <div id="picker" class="picker" role="dialog" aria-modal="true" aria-hidden="true">
-        <h3 id="pickerTitle">Hose</h3>
-
-        <div id="pickHome">
-          <div class="section-title">Choose an action</div>
-          <div class="picker-grid">
-            <div class="pick" data-view="addhose">➕ Add Hose</div>
-            <div class="pick" data-view="nozzle">🧩 Change Nozzle</div>
-            <div class="pick" data-view="accessory">⚙️ Add/Remove Wye</div>
-            <div class="pick" data-view="elevation">⛰️ Elevation</div>
-          </div>
-        </div>
-
-        <div id="pickAdd" style="display:none">
-          <div class="section-title">Add hose to this segment</div>
-          <div class="picker-actions">
-            <button class="pick-small" data-addlen="50" data-size="1.75">+50′ 1¾″</button>
-            <button class="pick-small" data-addlen="100" data-size="1.75">+100′ 1¾″</button>
-            <button class="pick-small" data-addlen="50" data-size="2.5">+50′ 2½″</button>
-            <button class="pick-small" data-addlen="100" data-size="2.5">+100′ 2½″</button>
-          </div>
-          <div class="picker-actions"><button class="pick-small" data-back>⬅ Back</button></div>
-        </div>
-
-        <div id="pickNoz" style="display:none">
-          <div class="section-title">Set nozzle for this side</div>
-          <div class="picker-grid">
-            <div class="pick" data-noz="smooth185">Smooth 185 @50</div>
-            <div class="pick" data-noz="fog150_75">Fog 150 @75</div>
-            <div class="pick" data-noz="fog150_100">Fog 150 @100</div>
-            <div class="pick" data-noz="sb265">SB 1 1/8″ 265 @50</div>
-          </div>
-          <div class="picker-actions"><button class="pick-small" data-back>⬅ Back</button></div>
-        </div>
-
-        <div id="pickAcc" style="display:none">
-          <div class="section-title">Wye</div>
-          <div class="picker-grid">
-            <div class="pick" data-acc="wye">Add Wye (+10)</div>
-            <div class="pick" data-acc="removeWye">Remove Wye</div>
-          </div>
-          <div class="picker-actions"><button class="pick-small" data-back>⬅ Back</button></div>
-        </div>
-
-        <div id="pickElev" style="display:none">
-          <div class="section-title">Elevation for this hose</div>
-          <div class="row">
-            <label for="elevInput" style="font-size:12px;color:#cfe4ff">Feet (±)</label>
-            <input id="elevInput" type="number" step="1" value="0">
-            <span style="font-size:12px;color:#9fb0c8">× 0.434 psi/ft</span>
-          </div>
-          <div class="picker-actions">
-            <button class="pick-small" data-save-elev>Save</button>
-            <button class="pick-small" data-back>Cancel</button>
-          </div>
-        </div>
-      </div>
     </div>
   </section>
 
-  <!-- KPIs -->
+  <!-- KPIs + per-line breakdown + inline controls -->
   <section class="panel">
     <div class="card">
       <div class="kpis">
         <div class="kpi"><div>Total Flow (visible)</div><b id="GPM">— gpm</b></div>
         <div class="kpi"><div>Max PDP (visible)</div><b id="PDP">— psi</b></div>
       </div>
+      <div class="linesTable" id="linesTable"><!-- rows injected here --></div>
     </div>
   </section>
 
@@ -193,7 +142,7 @@
 
 <script>
 /* ========================
-   Visual + logic (multi-line, iPhone-friendly)
+   Visual + logic (multi-line, iPhone-friendly) + per-line breakdown edits
    ======================== */
 
 const TRUCK_W = 390, TRUCK_H = 260;
@@ -231,7 +180,7 @@ function emptyHose(label, size, len, noz){
 const lines = {
   left:  emptyHose('Line 1','1.75',200, NOZ.smooth185),
   back:  emptyHose('Line 2','1.75',200, NOZ.smooth185),
-  right: emptyHose('Line 3','2.5', 250, NOZ.sb265) // right side 2½″ 250′
+  right: emptyHose('Line 3','2.5', 250, NOZ.sb265) // right side 2½″ 250′ (blue)
 };
 
 let plusContext = { key:null, where:'main' };
@@ -246,6 +195,7 @@ const G_branches= document.getElementById('branches');
 const G_tips    = document.getElementById('tips');
 const G_supply  = document.getElementById('supplyG');
 const topInfo   = document.getElementById('topInfo');
+const linesTable= document.getElementById('linesTable');
 
 const picker    = document.getElementById('picker');
 const pickerTitle = document.getElementById('pickerTitle');
@@ -265,12 +215,13 @@ function clsFor(size){ return size==='5'?'hose5':(size==='2.5'?'hose25':'hose175
 function sumFt(items){ return items.reduce((s,h)=>s + (h.lengthFt||0), 0); }
 function hoseClassFromItems(items){ return clsFor(items[0]?.size || '1.75'); }
 function FL(gpm, size, ft){ const C=COEFF[size]||0, Q=gpm/100; return C*(Q*Q)*(ft/100); }
+function FLper100(gpm, size){ const C=COEFF[size]||0, Q=gpm/100; return C*(Q*Q); } // psi per 100′
 function clearGroup(g){ while(g.firstChild) g.removeChild(g.firstChild); }
 
 /* Supply heights (to reserve space) */
 function supplyHeight(){ return currentSupply==='drafting'?150: currentSupply==='pressurized'?150: currentSupply==='relay'?170: 0; }
 
-/* Dynamic stage height / viewBox so full hose length + supply graphic is visible */
+/* Dynamic stage height */
 function computeNeededHeightPx(){
   const needs = Object.values(lines).filter(l=>l.visible);
   let maxUp = 0;
@@ -284,7 +235,6 @@ function computeNeededHeightPx(){
     }
     maxUp = Math.max(maxUp, mainPx + branchPx);
   });
-  // truck + hoses up + supply graphic below + top padding
   return TRUCK_H + maxUp + 40 + supplyHeight();
 }
 
@@ -326,12 +276,9 @@ function drawSupply(viewH){
 }
 function renderDrafting(g, baseY){
   const ns=g.namespaceURI;
-  // static source
   let r=document.createElementNS(ns,'rect'); r.setAttribute('x','10'); r.setAttribute('y', String(baseY+60)); r.setAttribute('width','120'); r.setAttribute('height','70');
   r.setAttribute('fill','#10233b'); r.setAttribute('stroke','#4a6a9b'); g.appendChild(r);
   let t=document.createElementNS(ns,'text'); t.setAttribute('x','70'); t.setAttribute('y', String(baseY+100)); t.setAttribute('fill','#cfe4ff'); t.setAttribute('text-anchor','middle'); t.setAttribute('font-size','12'); t.textContent='Static Source'; g.appendChild(t);
-  // truck (same art) above-right is the main truck; no need to re-draw the truck here.
-  // hard suction path from pump area to source
   const pump = pumpXY(Number(overlay.getAttribute('viewBox').split(' ')[3]));
   let path=document.createElementNS(ns,'path');
   path.setAttribute('d',`M ${pump.x},${pump.y} C 240 ${baseY+40}, 190 ${baseY+65}, 130 ${baseY+95}`);
@@ -340,11 +287,9 @@ function renderDrafting(g, baseY){
 }
 function renderPressurized(g, baseY){
   const ns=g.namespaceURI;
-  // hydrant
   let hyd=document.createElementNS(ns,'rect'); hyd.setAttribute('x','10'); hyd.setAttribute('y', String(baseY+20)); hyd.setAttribute('width','80'); hyd.setAttribute('height','60');
   hyd.setAttribute('fill','#243614'); hyd.setAttribute('stroke','#7aa35e'); g.appendChild(hyd);
   let t=document.createElementNS(ns,'text'); t.setAttribute('x','50'); t.setAttribute('y', String(baseY+55)); t.setAttribute('fill','#cfe4ff'); t.setAttribute('text-anchor','middle'); t.setAttribute('font-size','12'); t.textContent='Hydrant'; g.appendChild(t);
-  // 5" from hydrant to pump
   const pump = pumpXY(Number(overlay.getAttribute('viewBox').split(' ')[3]));
   let hose=document.createElementNS(ns,'path');
   hose.setAttribute('d',`M 90 ${baseY+50} C 160 ${baseY+50} 240 ${baseY+50} ${pump.x} ${pump.y-20}`);
@@ -353,10 +298,8 @@ function renderPressurized(g, baseY){
 }
 function renderRelay(g, baseY){
   const ns=g.namespaceURI;
-  // second truck on the left (same .png)
   let img=document.createElementNS(ns,'image'); img.setAttribute('href','https://fireopssim.com/pump/engine181.png');
   img.setAttribute('x','10'); img.setAttribute('y', String(baseY)); img.setAttribute('width','120'); img.setAttribute('height','80'); g.appendChild(img);
-  // 5" from second truck to pump
   const pump = pumpXY(Number(overlay.getAttribute('viewBox').split(' ')[3]));
   let hose=document.createElementNS(ns,'path');
   hose.setAttribute('d',`M 130 ${baseY+40} C 190 ${baseY+36} 250 ${baseY+36} ${pump.x} ${pump.y-20}`);
@@ -420,9 +363,10 @@ function drawAll(){
     }
   });
 
-  // draw supply under the truck inside the same SVG, then update totals
+  // draw supply under the truck inside the same SVG, then update totals & UI
   drawSupply(viewH);
   refreshTotals();
+  renderBreakdownRows();
 }
 
 /* + tips */
@@ -446,18 +390,19 @@ function showPicker(key, where, cx, cy){
   pickerTitle.textContent = where==='main' ? `${L.label} — Main` : `${L.label} — ${where==='L'?'Left':'Right'}`;
   document.getElementById('elevInput').value = String(L.elevFt || 0);
 
+  const picker = document.getElementById('picker');
+  const stg = stage.getBoundingClientRect();
+  const pw = 280, ph = 260;
   picker.style.display='block'; picker.setAttribute('aria-hidden','false');
   pickHome.style.display='block'; pickAdd.style.display='none'; pickNoz.style.display='none'; pickAcc.style.display='none'; pickElev.style.display='none';
 
-  const stg = stage.getBoundingClientRect();
-  const pw = 280, ph = 260;
   let x = cx - stg.left + 8, y = cy - stg.top - ph - 8;
   if(y < 8) y = cy - stg.top + 8;
   x = Math.max(8, Math.min(x, stg.width - pw - 8));
   y = Math.max(8, Math.min(y, stg.height - ph - 8));
   picker.style.left = `${x}px`; picker.style.top = `${y}px`;
 }
-function hidePicker(){ picker.style.display='none'; picker.setAttribute('aria-hidden','true'); }
+function hidePicker(){ const picker=document.getElementById('picker'); picker.style.display='none'; picker.setAttribute('aria-hidden','true'); }
 
 /* Click on + to open menu */
 overlay.addEventListener('click', (e)=>{
@@ -471,13 +416,13 @@ overlay.addEventListener('click', (e)=>{
 });
 document.addEventListener('click', (e)=>{
   const inSupplyUI = e.target.closest('#supplyMenu') || e.target.closest('#supplyBtn');
-  if(picker.contains(e.target) || inSupplyUI) return;
+  if(document.getElementById('picker').contains(e.target) || inSupplyUI) return;
   if(e.target.closest('.hose-end')) return;
   hidePicker(); hideSupplyMenu();
 });
 
 /* Picker nav/actions */
-picker.addEventListener('click', (e)=>{
+document.getElementById('picker').addEventListener('click', (e)=>{
   if(e.target.dataset.view==='addhose'){ pickHome.style.display='none'; pickAdd.style.display='block'; }
   if(e.target.dataset.view==='nozzle'){ pickHome.style.display='none'; pickNoz.style.display='block'; }
   if(e.target.dataset.view==='accessory'){ pickHome.style.display='none'; pickAcc.style.display='block'; }
@@ -548,7 +493,7 @@ supplyMenu.addEventListener('click', (e)=>{
   drawAll(); // stage will reserve space & draw graphic right under truck
 });
 
-/* Totals */
+/* ===== KPI totals ===== */
 function refreshTotals(){
   const vis = Object.values(lines).filter(l=>l.visible);
   let totalGPM = 0, maxPDP = 0;
@@ -564,6 +509,79 @@ function refreshTotals(){
   document.getElementById('GPM').textContent = vis.length? `${totalGPM} gpm` : '— gpm';
   document.getElementById('PDP').textContent = vis.length? `${maxPDP.toFixed(1)} psi` : '— psi';
 }
+
+/* ===== Per-line breakdown rows with inline controls ===== */
+function renderBreakdownRows(){
+  linesTable.innerHTML = '';
+  ['left','back','right'].forEach(key=>{
+    const L = lines[key];
+    // compute PDP and fragments for text (even if hidden; we still show rows)
+    const gpm = L.hasWye ? (L.nozLeft?.gpm||0) + (L.nozRight?.gpm||0) : (L.nozRight?.gpm||0);
+    const size = (L.itemsMain[0]?.size)||'1.75';
+    const len  = sumFt(L.itemsMain);
+    const per100 = FLper100(gpm, size);
+    const mainFL = FL(gpm, size, len);
+    let PDP;
+    if(L.hasWye){
+      const leftNeed = FL(L.nozLeft?.gpm||0, L.itemsLeft[0]?.size||'1.75', sumFt(L.itemsLeft)) + (L.nozLeft?.NP||0);
+      const rightNeed= FL(L.nozRight?.gpm||0, L.itemsRight[0]?.size||size, sumFt(L.itemsRight)) + (L.nozRight?.NP||0);
+      const branchMax = Math.max(leftNeed, rightNeed);
+      PDP = branchMax + mainFL + L.wyeLoss + (L.elevFt*PSI_PER_FT);
+    } else {
+      PDP = (L.nozRight?.NP||0) + mainFL + (L.elevFt*PSI_PER_FT);
+    }
+
+    const row = document.createElement('div');
+    row.className='lineRow';
+    row.innerHTML = `
+      <div class="title">${L.label}${L.visible? ' — showing':' — hidden'}</div>
+      <div class="break" id="break-${key}">
+        ${len}′ of ${size==='1.75'?'1¾″':(size==='2.5'?'2½″': '5″')}
+        @ ${gpm||0} gpm (${per100.toFixed(1)} psi/100′)
+        ${L.hasWye? ` + Wye ${L.wyeLoss} psi`:''}
+        + ${L.hasWye? 'max(branch NP+FL)': `Nozzle ${(L.nozRight?.NP||0)} psi`}
+        = <b>${PDP.toFixed(1)} psi PDP</b>
+      </div>
+      <div class="ctrls">
+        <label style="font-size:12px;color:#9fb0c8">Size</label>
+        <select data-key="${key}" data-field="size">
+          <option value="1.75" ${size==='1.75'?'selected':''}>1¾″</option>
+          <option value="2.5"  ${size==='2.5'?'selected':''}>2½″</option>
+          <option value="5"    ${size==='5'?'selected':''}>5″</option>
+        </select>
+        <label style="font-size:12px;color:#9fb0c8">Length</label>
+        <input type="number" min="0" step="50" value="${len}" data-key="${key}" data-field="length">
+      </div>
+    `;
+    linesTable.appendChild(row);
+  });
+
+  // Hook up change handlers
+  linesTable.querySelectorAll('select[data-field="size"]').forEach(sel=>{
+    sel.addEventListener('change', (e)=>{
+      const key = e.target.dataset.key;
+      const val = e.target.value;
+      const L = lines[key];
+      // Set main to a single segment with new size keeping length
+      const len = sumFt(L.itemsMain)||0;
+      L.itemsMain = [{size:val, lengthFt:len}];
+      drawAll();
+    });
+  });
+  linesTable.querySelectorAll('input[data-field="length"]').forEach(inp=>{
+    inp.addEventListener('input', (e)=>{
+      const key = e.target.dataset.key;
+      const ft = Math.max(0, parseInt(e.target.value||0,10));
+      const L = lines[key];
+      // Reset main to a single segment with new length keeping size
+      const size = L.itemsMain[0]?.size || '1.75';
+      L.itemsMain = [{size, lengthFt:ft}];
+      drawAll();
+    });
+  });
+}
+
+/* Init UI hooks for overlay clicks handled above */
 
 /* Init */
 drawAll();
