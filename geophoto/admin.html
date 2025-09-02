@@ -67,13 +67,8 @@
       transition: transform .06s ease, background .2s ease;
     }
     .btn:hover{ transform: translateY(-1px); }
-    .btn.secondary{
-      background:linear-gradient(180deg, #0f1a2e, #0e1829);
-    }
-    .btn.danger{
-      background:linear-gradient(180deg, #2a0f14, #1f0f12);
-      border-color: rgba(255,71,71,.25);
-    }
+    .btn.secondary{ background:linear-gradient(180deg, #0f1a2e, #0e1829); }
+    .btn.danger{ background:linear-gradient(180deg, #2a0f14, #1f0f12); border-color: rgba(255,71,71,.25); }
 
     .panel{
       background:linear-gradient(180deg, rgba(255,255,255,.02), transparent 26%),
@@ -253,13 +248,13 @@
   </div>
 
   <script type="module">
-  // --- Safety net: surface any runtime error so buttons aren't "silently broken"
+  // --- Surface any runtime error so UI isn't "silently" broken
   const errbar = document.getElementById('errbar');
   function showErr(m){ errbar.textContent = m; errbar.style.display='block'; }
   window.addEventListener('error', e => showErr('JS error: ' + (e.message || e.error)));
   window.addEventListener('unhandledrejection', e => showErr('Promise error: ' + (e.reason?.message || e.reason)));
 
-  // Lightweight UI helpers (work even if Firebase fails)
+  // Bind nav buttons ASAP (before any imports that could fail)
   const landing = document.getElementById('landing');
   const createPanel = document.getElementById('createPanel');
   const editPanel = document.getElementById('editPanel');
@@ -270,24 +265,22 @@
   const uiShow = el => { el.classList.remove('hidden'); el.style.display=''; };
   const uiHide = el => { el.classList.add('hidden'); el.style.display='none'; };
 
-  // Bind nav buttons ASAP (before any other code that might fail)
   document.getElementById('goCreate').addEventListener('click', ()=>{
     uiHide(landing); uiHide(editPanel); uiShow(createPanel);
     createStatus.textContent='New scenario';
   });
   document.getElementById('goEdit').addEventListener('click', ()=>{
     uiHide(landing); uiHide(createPanel); uiShow(editPanel);
-    // If Firebase fails later, the panel still opens and we show a friendly note:
     editStatus.textContent = 'Loading scenarios…';
+    if (window.loadForEdit) window.loadForEdit();   // call later-defined loader if available
   });
   document.getElementById('backFromEdit').addEventListener('click', ()=>{
     uiHide(editPanel); uiHide(createPanel); uiShow(landing);
     scenarioList.innerHTML=''; editStatus.textContent='Ready';
   });
 
-  // ===== Firebase bits (wrapped so a failure here won't kill the UI) =====
+  // ===== Firebase (wrapped so failure won’t kill the UI) =====
   try {
-    // Imports
     const [{ initializeApp }] = await Promise.all([ import("https://www.gstatic.com/firebasejs/10.12.4/firebase-app.js") ]);
     const [{ getDatabase, ref:dbRef, push, set, get, update }] = await Promise.all([ import("https://www.gstatic.com/firebasejs/10.12.4/firebase-database.js") ]);
     const [{ getStorage, ref:stRef, uploadString, getDownloadURL, deleteObject }] = await Promise.all([ import("https://www.gstatic.com/firebasejs/10.12.4/firebase-storage.js") ]);
@@ -311,12 +304,21 @@
     let authedUser = null;
     onAuthStateChanged(auth, (u)=>{ authedUser = u || null; });
 
+    // --- Friendly explicit error if Auth isn't set up yet
     async function ensureAuthed() {
       if (auth.currentUser) return auth.currentUser;
-      await signInAnonymously(auth);
-      return new Promise((resolve)=> {
-        const off = onAuthStateChanged(auth, (u)=>{ if (u) { off(); resolve(u); } });
-      });
+      try {
+        await signInAnonymously(auth);
+        return await new Promise((resolve) => {
+          const off = onAuthStateChanged(auth, (u) => { if (u) { off(); resolve(u); } });
+        });
+      } catch (e) {
+        const code = e?.code || '';
+        if (code === 'auth/configuration-not-found' || code === 'auth/operation-not-allowed') {
+          throw new Error('Anonymous Auth not set up yet. In Firebase Console: Authentication → Get started → enable Anonymous.');
+        }
+        throw e;
+      }
     }
 
     // DOM (rest)
@@ -444,7 +446,7 @@
     }
 
     async function uploadDataURLToStorage(dataURL, scenarioId){
-      await ensureAuthed();
+      await ensureAuthed(); // must be signed in (Anonymous allowed)
       const ts = Date.now();
       const path = `scenarios/${scenarioId}/${ts}.jpg`;
       const refObj = stRef(storage, path);
@@ -493,7 +495,8 @@
         renderThumbs();
         createStatus.textContent = `Saved photo #${localStops.length} (uploaded).`;
       }catch(e){
-        showErr(e?.message||String(e)); createStatus.textContent='Error: '+(e?.message||e);
+        showErr(e?.message||String(e));
+        createStatus.textContent='Error: '+(e?.message||e);
       }
     });
 
@@ -564,9 +567,8 @@
         });
       }catch(e){ editStatus.textContent='Error: '+(e?.message||e); showErr(e?.message||String(e)); }
     }
-
-    // Wire edit button to actually load
-    document.getElementById('goEdit').addEventListener('click', loadForEdit);
+    // expose for early click handler
+    window.loadForEdit = loadForEdit;
 
     // ----- Photo editor modal -----
     function openPhotoEditor(index){
@@ -582,12 +584,17 @@
       editorStatus.textContent = '';
       showModal(photoEditor);
     }
+    function getGPS(){ /* already defined above; reusing */ }
     closeEditor.addEventListener('click', ()=> hideModal(photoEditor));
 
     document.getElementById('useGPS').addEventListener('click', async ()=>{
       try{
         editorStatus.textContent = 'Getting current GPS…';
-        const gps = await getGPS();
+        const gps = await new Promise((resolve)=>navigator.geolocation.getCurrentPosition(
+          p=>resolve({lat:p.coords.latitude,lng:p.coords.longitude}),
+          _=>resolve({lat:null,lng:null}),
+          {enableHighAccuracy:true,timeout:10000}
+        ));
         if (gps.lat!=null) editorLat.value = Number(gps.lat).toFixed(6);
         if (gps.lng!=null) editorLng.value = Number(gps.lng).toFixed(6);
         editorStatus.textContent = 'GPS updated in editor (remember to Save Changes).';
@@ -634,6 +641,11 @@
         .catch(e=> showErr('Delete failed: ' + (e?.message||e)));
     }
     document.getElementById('deletePhoto').addEventListener('click', ()=>{ if(editingIndex>=0) deletePhotoAt(editingIndex); });
+
+    // Make the whole "Edit Existing" path work even if user clicked before modules finished
+    if (document.getElementById('editPanel').style.display !== 'none') {
+      loadForEdit();
+    }
 
   } catch (e) {
     // If Firebase modules fail to load, the UI still works and we show the error
