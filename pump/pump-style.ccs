@@ -4,11 +4,14 @@
   --ink:#eaf2ff;
   --muted:#9fb0c8;
   --edge:rgba(255,255,255,.14);
+
   --hose5:#ecd464;     /* 5" */
   --hose25:#6ecbff;    /* 2½" = BLUE */
   --hose175:#ff6b6b;   /* 1¾" */
+
   --bubble:#172134;
   --bubble-edge:rgba(255,255,255,.15);
+
   --grad1:#0c1320;
   --grad2:#0b0f14;
   --link:#9fd0ff;
@@ -18,6 +21,7 @@
 html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);font-family:system-ui,Segoe UI,Inter,Arial,sans-serif}
 a{color:var(--link);text-decoration:none}
 a:hover{text-decoration:underline}
+button{touch-action:manipulation}
 
 .app{display:flex;flex-direction:column;min-height:100vh}
 
@@ -39,7 +43,6 @@ a:hover{text-decoration:underline}
 .stage{position:relative;width:100%;min-height:520px}
 #engine{display:block;width:100%;height:auto;position:absolute;bottom:0;left:0}
 #overlay{position:absolute;inset:0;display:block;width:100%;height:100%}
-.hint{position:absolute;top:8px;left:10px;font-size:13px;fill:#f7e39a}
 
 /* Line buttons under truck */
 .linebar{
@@ -57,14 +60,27 @@ a:hover{text-decoration:underline}
 .lineinfo{position:absolute;top:10px;right:10px;z-index:4;background:var(--bubble);border:1px solid var(--bubble-edge);border-radius:12px;padding:8px 10px;font-size:13px;min-width:170px}
 .lineinfo b{color:#cfe4ff}
 
+/* End-of-hose "+" pins */
+.pin{
+  position:absolute;transform:translate(-50%,-50%);
+  width:34px;height:34px;border-radius:50%;
+  background:#11203a;border:1px solid var(--edge);color:#cfe4ff;
+  display:grid;place-items:center;font-weight:700;cursor:pointer;z-index:7;
+  box-shadow:0 8px 18px rgba(0,0,0,.35)
+}
+.pin:active{transform:translate(-50%,-50%) scale(.98)}
+
 /* FABs + Drawer */
 .side{position:fixed;left:10px;top:76px;display:flex;flex-direction:column;gap:10px;z-index:8}
 .fab{width:48px;height:48px;border-radius:14px;border:1px solid var(--edge);background:#0b1320;color:#cfe4ff;display:grid;place-items:center;cursor:pointer;box-shadow:0 4px 12px rgba(0,0,0,.25);font-size:16px}
 .fab:active{transform:translateY(1px)}
-.drawer{position:fixed;left:66px;top:76px;z-index:9;background:#0e1726;border:1px solid var(--edge);box-shadow:0 12px 30px rgba(0,0,0,.35);width:min(84vw,380px);max-width:380px;display:none;border-radius:12px}
+.drawer{position:fixed;left:10px;right:10px;top:76px;z-index:9;background:#0e1726;border:1px solid var(--edge);box-shadow:0 12px 30px rgba(0,0,0,.35);border-radius:12px;display:none;max-width:480px;margin:0 auto}
 .drawer.open{display:block}
 .drawer h3{margin:10px 12px 6px;font-size:14px;color:#cfe4ff}
 .drawer-note{width:100%;color:#cfe4ff;font-size:12px;margin-bottom:2px}
+.tabs{display:flex;gap:8px;padding:8px 12px;border-bottom:1px solid var(--edge)}
+.tab{background:#12203a;border:1px solid var(--edge);color:#eaf2ff;border-radius:10px;padding:8px 10px}
+.tab.active{outline:2px solid #3aa7ff}
 .row{display:flex;flex-wrap:wrap;gap:10px;padding:10px 12px}
 .row button{background:#12203a;border:1px solid var(--edge);color:#eaf2ff;border-radius:12px;padding:10px 12px;font-size:14px;cursor:pointer}
 .row h3{width:100%;margin:0 0 6px 0;color:#cfe4ff;font-size:13px}
@@ -73,7 +89,7 @@ a:hover{text-decoration:underline}
 .panel{padding:10px 12px;background:var(--panel);border-top:1px solid var(--edge)}
 .card{background:#0e1726;border:1px solid var(--edge);border-radius:14px;padding:12px;margin:10px 0}
 .grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
-label{font-size:13px;color:var(--muted);display:block;margin-bottom:4px}
+label{font-size:13px;color:#9fb0c8;display:block;margin-bottom:4px}
 input{background:#0b1320;color:#eaf2ff;border:1px solid var(--edge);border-radius:10px;padding:10px 12px;font-size:16px}
 .kpis{display:flex;gap:10px;flex-wrap:wrap}
 .kpi{background:#0b1320;border:1px solid var(--edge);border-radius:12px;padding:10px 12px;font-size:13px;color:#cfe4ff}
@@ -86,10 +102,6 @@ input{background:#0b1320;color:#eaf2ff;border:1px solid var(--edge);border-radiu
 .hose5{stroke:var(--hose5);stroke-width:12}
 .hose25{stroke:var(--hose25);stroke-width:9}
 .hose175{stroke:var(--hose175);stroke-width:6}
-.hoseAcc{stroke:#cfe4ff;stroke-dasharray:6 6}
-
-/* Bubbles */
-.bubble{position:absolute;background:var(--bubble);border:1px solid var(--bubble-edge);border-radius:12px;padding:6px 8px;font-size:12px;color:#cfe4ff;pointer-events:none}
 
 /* Footer */
 .brandfoot{border-top:1px solid var(--edge);background:linear-gradient(180deg,var(--grad2),#0a0e18);padding:10px 14px}
@@ -101,8 +113,6 @@ input{background:#0b1320;color:#eaf2ff;border:1px solid var(--edge);border-radiu
 @media (max-width: 480px){
   .brand-right{display:none}
   .scroll{height:60vh}
-  .drawer{left:10px;right:10px;width:auto;max-width:none}
-  .side{left:10px;top:70px}
   .linebtn{padding:14px 18px;font-size:17px}
   .row button{flex:1 1 48%}
   input{font-size:18px}
