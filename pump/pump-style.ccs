@@ -1,0 +1,63 @@
+body {
+  margin: 0;
+  font-family: Arial, sans-serif;
+  background: #111;
+  color: #fff;
+}
+
+header {
+  padding: 10px;
+  background: #222;
+  text-align: center;
+}
+
+.controls button {
+  margin: 5px;
+  padding: 10px 15px;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+#canvas {
+  width: 100%;
+  height: 600px;
+  background: #1c1c1c;
+  position: relative;
+  overflow: auto;
+}
+
+/* Hose styles */
+.hose {
+  padding: 10px;
+  margin: 10px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: bold;
+}
+
+.hose-175 {
+  background: crimson;
+  color: white;
+}
+
+.hose-25 {
+  background: #6ecbff; /* Blue 2½" line */
+  color: black;
+}
+
+/* Wye styles */
+.wye {
+  margin-top: 10px;
+  padding: 5px;
+  background: #333;
+  border-radius: 6px;
+}
+
+.wye button {
+  margin: 5px;
+  padding: 6px 10px;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+}
