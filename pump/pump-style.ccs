@@ -5,7 +5,7 @@
   --muted:#9fb0c8;
   --edge:rgba(255,255,255,.14);
   --hose5:#ecd464;
-  --hose25:#6ecbff;
+  --hose25:#6ecbff;   /* 2½" = BLUE */
   --hose175:#ff6b6b;
   --bubble:#172134;
   --bubble-edge:rgba(255,255,255,.15);
@@ -41,9 +41,19 @@ a:hover{text-decoration:underline}
 #overlay{position:absolute;inset:0;display:block;width:100%;height:100%}
 .hint{position:absolute;top:8px;left:10px;font-size:13px;fill:#f7e39a}
 
-/* Line buttons just under truck */
-.linebar{display:flex;justify-content:center;gap:10px;margin:12px 0}
-.linebtn{background:#0b1320;border:1px solid var(--edge);color:#eaf2ff;border-radius:12px;padding:12px 16px;font-size:15px;cursor:pointer;box-shadow:0 6px 16px rgba(0,0,0,.35)}
+/* ✅ Line buttons UNDER the truck, clickable */
+.linebar{
+  position:absolute;
+  left:0; right:0; bottom:8px;
+  display:flex;justify-content:center;gap:10px;z-index:6;
+  pointer-events:auto;            /* clicks ON */
+}
+.linebtn{
+  background:#0b1320;border:1px solid var(--edge);color:#eaf2ff;
+  border-radius:12px;padding:12px 16px;font-size:16px;cursor:pointer;
+  box-shadow:0 6px 16px rgba(0,0,0,.35)
+}
+.linebtn:active{transform:translateY(1px)}
 .linebtn.active{outline:2px solid #3aa7ff}
 
 /* Info bubble */
@@ -74,7 +84,7 @@ input{background:#0b1320;color:#eaf2ff;border:1px solid var(--edge);border-radiu
 .eq{margin-top:10px;font-size:13px;color:#cfe4ff}
 .note{font-size:13px;color:#cfe4ff}
 
-/* Hose classes */
+/* Hose classes (CSS side) */
 .hoseMain{stroke:var(--ink);stroke-linecap:round;stroke-linejoin:round;fill:none}
 .hose5{stroke:var(--hose5);stroke-width:12}
 .hose25{stroke:var(--hose25);stroke-width:9}
@@ -96,7 +106,7 @@ input{background:#0b1320;color:#eaf2ff;border:1px solid var(--edge);border-radiu
   .scroll{height:60vh}
   .drawer{left:10px;right:10px;width:auto;max-width:none}
   .side{left:10px;top:70px}
-  .linebtn{padding:12px 18px;font-size:16px}
+  .linebtn{padding:14px 18px;font-size:17px}
   .row button{flex:1 1 48%}
   input{font-size:18px}
 }
