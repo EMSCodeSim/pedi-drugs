@@ -7,10 +7,10 @@
   <meta name="theme-color" content="#0b0f14" />
 
   <!-- Primary CSS (same-folder) with cache-bust -->
-  <link rel="preload" as="style" href="pump-style.css?v=5">
-  <link rel="stylesheet" href="pump-style.css?v=5" id="pumpCSS">
+  <link rel="preload" as="style" href="pump-style.css?v=6">
+  <link rel="stylesheet" href="pump-style.css?v=6" id="pumpCSS">
 
-  <!-- Runtime CSS fallback (keeps page usable if the .css path fails) -->
+  <!-- Tiny runtime fallback so page is usable if CSS path is wrong -->
   <script>
     (function(){
       const ok = () => {
@@ -20,11 +20,11 @@
       function add(href){ return new Promise((res,rej)=>{ const l=document.createElement('link'); l.rel='stylesheet'; l.href=href; l.onload=()=>res(); l.onerror=rej; document.head.appendChild(l);}); }
       setTimeout(async ()=>{
         if (ok()) return;
-        for (const href of ['./pump-style.css?v=5','/pump/pump-style.css?v=5','/assets/css/pump-style.css?v=5']){
+        for (const href of ['./pump-style.css?v=6','/pump/pump-style.css?v=6','/assets/css/pump-style.css?v=6']){
           try { await add(href); if (ok()) return; } catch(e){}
         }
         const s=document.createElement('style');
-        s.textContent=':root{--bg:#0b0f14;--ink:#eaf2ff;--edge:rgba(255,255,255,.14)}html,body{margin:0;background:var(--bg);color:var(--ink);font-family:system-ui} .linebar{position:absolute;left:0;right:0;bottom:8px;display:flex;justify-content:center;gap:10px}.linebtn{background:#0b1320;border:1px solid var(--edge);color:#eaf2ff;border-radius:12px;padding:12px 16px} .hose5,.hose25,.hose175{fill:none;stroke-linecap:round;stroke-linejoin:round}.hose5{stroke:#ecd464;stroke-width:12}.hose25{stroke:#6ecbff;stroke-width:9}.hose175{stroke:#ff6b6b;stroke-width:6}';
+        s.textContent=':root{--bg:#0b0f14;--ink:#eaf2ff;--edge:rgba(255,255,255,.14)}html,body{margin:0;background:var(--bg);color:var(--ink);font-family:system-ui}.linebar{position:absolute;left:0;right:0;bottom:8px;display:flex;justify-content:center;gap:10px}.linebtn{background:#0b1320;border:1px solid var(--edge);color:#eaf2ff;border-radius:12px;padding:12px 16px}.hose5,.hose25,.hose175{fill:none;stroke-linecap:round;stroke-linejoin:round}.hose5{stroke:#ecd464;stroke-width:12}.hose25{stroke:#6ecbff;stroke-width:9}.hose175{stroke:#ff6b6b;stroke-width:6}';
         document.head.appendChild(s);
       },0);
     })();
@@ -58,8 +58,17 @@
 
     <!-- ===== Drawer (edits ACTIVE line only) ===== -->
     <aside class="drawer" id="drawer" aria-hidden="true">
-      <h3 id="drawerTitle">Hose</h3>
+      <h3 id="drawerTitle">Configure Line</h3>
 
+      <!-- Quick mode tabs -->
+      <div class="tabs" id="drawerTabs">
+        <button data-tab="hose" class="tab active">Hose</button>
+        <button data-tab="noz" class="tab">Nozzle</button>
+        <button data-tab="acc" class="tab">Accessories</button>
+        <button data-tab="split" class="tab">Split</button>
+      </div>
+
+      <!-- Hose choices -->
       <div class="row" id="hoseButtonsMain">
         <button data-hose='{"size":"5","lengthFt":100}'>5″ 100′</button>
         <button data-hose='{"size":"2.5","lengthFt":50}'>2½″ 50′</button>
@@ -68,7 +77,8 @@
         <button data-act="clearHose">Clear main hoses</button>
       </div>
 
-      <div class="row" id="hoseButtonsSplit" style="display:none;border-top:1px solid var(--edge);margin-top:6px;padding-top:12px">
+      <!-- Split / after-wye -->
+      <div class="row" id="hoseButtonsSplit" style="display:none">
         <div class="drawer-note">After Wye (active line):</div>
         <button data-side="L" data-hose='{"size":"2.5","lengthFt":50}'>Left 2½″ 50′</button>
         <button data-side="L" data-hose='{"size":"1.75","lengthFt":100}'>Left 1¾″ 100′</button>
@@ -79,6 +89,7 @@
         <button data-act="clearSplit">Clear after-wye</button>
       </div>
 
+      <!-- Accessories -->
       <div class="row" id="accButtons" style="display:none">
         <button data-acc='{"name":"Wye","loss":10}'>Add Wye</button>
         <button data-acc='{"name":"Appliance","loss":10}'>+10 Appliance</button>
@@ -87,6 +98,7 @@
         <button data-act="clearAcc">Clear accessories</button>
       </div>
 
+      <!-- Nozzles -->
       <div class="row" id="nozButtons" style="display:none">
         <div class="row" id="nozRowLeft"><h3>Left Branch Nozzle</h3></div>
         <div class="row" id="nozRowRight" style="border-top:1px solid var(--edge);padding-top:10px"><h3>Right/Single Nozzle</h3></div>
@@ -100,19 +112,14 @@
           <img id="engine" alt="ENGINE 181" src="https://fireopssim.com/pump/engine181.png" />
 
           <svg id="overlay" viewBox="0 0 390 800" preserveAspectRatio="none" aria-label="Diagram overlay">
-            <defs>
-              <marker id="arrow" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto">
-                <path d="M0,0 L6,3 L0,6 z" fill="#cfe4ff"></path>
-              </marker>
-            </defs>
             <g id="hoses"></g>
             <g id="branches"></g>
-            <text id="hint" x="12" y="24" class="hint">Tap a line below to deploy…</text>
           </svg>
 
+          <!-- Selected line info -->
           <div id="lineinfo" class="lineinfo"></div>
 
-          <!-- Line buttons directly under truck -->
+          <!-- ✅ Line buttons directly under truck, inside the stage -->
           <div class="linebar" id="linebar">
             <button class="linebtn" data-line="left">Line 1</button>
             <button class="linebtn" data-line="right">Line 2</button>
