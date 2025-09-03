@@ -136,7 +136,7 @@
         <h3 style="margin:0">Diagnostics</h3>
         <button class="btn secondary" id="backFromDiag">Back</button>
       </div>
-      <div class="tag">Runs connectivity checks and a tiny real upload to Cloud Storage.</div>
+      <div class="tag">Connectivity checks and a tiny real upload to Cloud Storage.</div>
       <div style="display:flex;gap:10px;margin-top:10px;flex-wrap:wrap">
         <button class="btn" id="runDiag"><span class="spinner"></span><span>Run Cloud Test</span></button>
         <div id="diagStatus" class="tag">Idle</div>
@@ -156,17 +156,20 @@
     </section>
   </main>
 
-  <script type="module">
-  // ---- Safety: define a stub so "Edit" never crashes even if init fails
-  window.loadForEdit = function(){ const s=document.getElementById('editStatus'); if(s) s.textContent='Firebase not initialized yet.'; };
+  <!-- Firebase compat (no modules; widest browser support) -->
+  <script src="https://www.gstatic.com/firebasejs/10.12.4/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.4/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.4/firebase-database-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.4/firebase-storage-compat.js"></script>
 
-  // ---- Error HUD
+  <script>
+  // --------- Error HUD ---------
   const errbar=document.getElementById('errbar');
   const showErr=m=>{errbar.textContent=m;errbar.style.display='block';};
-  window.addEventListener('unhandledrejection', e=>showErr('Promise error: ' + (e.reason?.message || e.reason)));
-  window.addEventListener('error', e=>showErr('JS error: ' + (e.message || e.error)));
+  window.addEventListener('error', e=>showErr('JS error: ' + (e.message||e.error)));
+  window.addEventListener('unhandledrejection', e=>showErr('Promise error: ' + (e.reason && e.reason.message || e.reason)));
 
-  // ---- Simple nav helpers
+  // --------- Basic UI helpers (wired immediately) ---------
   const landing=document.getElementById('landing');
   const createPanel=document.getElementById('createPanel');
   const editPanel=document.getElementById('editPanel');
@@ -177,13 +180,12 @@
   const saveSteps=document.getElementById('saveSteps');
   const diagStatus=document.getElementById('diagStatus');
   const diagLog=document.getElementById('diagLog');
-
   const uiShow=el=>{el.classList.remove('hidden'); el.style.display='';};
   const uiHide=el=>{el.classList.add('hidden'); el.style.display='none';};
 
-  const goCreate=()=>{ uiHide(landing); uiHide(editPanel); uiHide(diagPanel); uiShow(createPanel); };
-  const goEdit=()=>{ uiHide(landing); uiHide(createPanel); uiHide(diagPanel); uiShow(editPanel); window.loadForEdit(); };
-  const goDiag=()=>{ uiHide(landing); uiHide(createPanel); uiHide(editPanel); uiShow(diagPanel); };
+  function goCreate(){ uiHide(landing); uiHide(editPanel); uiHide(diagPanel); uiShow(createPanel); }
+  function goEdit(){ uiHide(landing); uiHide(createPanel); uiHide(diagPanel); uiShow(editPanel); window.loadForEdit && window.loadForEdit(); }
+  function goDiag(){ uiHide(landing); uiHide(createPanel); uiHide(editPanel); uiShow(diagPanel); }
 
   document.getElementById('goCreate').onclick=goCreate;
   document.getElementById('goEdit').onclick=goEdit;
@@ -191,19 +193,16 @@
   document.getElementById('landingCreate').onclick=goCreate;
   document.getElementById('landingEdit').onclick=goEdit;
   document.getElementById('landingDiag').onclick=goDiag;
-
   document.getElementById('backFromCreate').onclick=()=>{ uiHide(createPanel); uiHide(editPanel); uiHide(diagPanel); uiShow(landing); };
   document.getElementById('backFromEdit').onclick=()=>{ uiHide(editPanel); uiHide(createPanel); uiHide(diagPanel); uiShow(landing); scenarioList.innerHTML=''; editStatus.textContent='Ready'; };
   document.getElementById('backFromDiag').onclick=()=>{ uiHide(diagPanel); uiHide(createPanel); uiHide(editPanel); uiShow(landing); diagLog.textContent='—'; diagStatus.textContent='Idle'; };
 
-  // ---- Firebase (no App Check to avoid browser "process is not defined")
-  try{
-    const [{ initializeApp }] = await Promise.all([ import("https://www.gstatic.com/firebasejs/10.12.4/firebase-app.js") ]);
-    const [{ getDatabase, ref:dbRef, push, set, get, update }] = await Promise.all([ import("https://www.gstatic.com/firebasejs/10.12.4/firebase-database.js") ]);
-    const [{ getStorage, ref:stRef, uploadString, uploadBytesResumable, getDownloadURL, deleteObject }] =
-      await Promise.all([ import("https://www.gstatic.com/firebasejs/10.12.4/firebase-storage.js") ]);
-    const [{ getAuth, onAuthStateChanged, signInAnonymously }] = await Promise.all([ import("https://www.gstatic.com/firebasejs/10.12.4/firebase-auth.js") ]);
+  // Keep a harmless default so Edit never throws if Firebase fails to init
+  window.loadForEdit = function(){ editStatus.textContent='Firebase not initialized yet.'; };
 
+  // --------- After DOM ready: init Firebase + features ---------
+  document.addEventListener('DOMContentLoaded', function(){
+    // Firebase config
     const firebaseConfig = {
       apiKey:"AIzaSyDM6DpRSeZueVKRpbyJyDmhf8WY66KyCDk",
       authDomain:"dailyquiz-d5279.firebaseapp.com",
@@ -213,23 +212,30 @@
       appId:"1:94577748034:web:c032d3a1d72db1313de5db",
       measurementId:"G-19DVN7NNH7"
     };
-    const app = initializeApp(firebaseConfig);
-    const db  = getDatabase(app);
-    const storage = getStorage(app);
-    const auth = getAuth(app);
-    const BUCKET = app.options?.storageBucket || (firebaseConfig.projectId + ".appspot.com");
+
+    try{
+      firebase.initializeApp(firebaseConfig);
+    }catch(e){
+      showErr('Firebase init failed: ' + (e && e.message || e));
+      return; // keep UI but stop feature wiring
+    }
+
+    const db = firebase.database();
+    const storage = firebase.storage();
+    const auth = firebase.auth();
+    const BUCKET = firebaseConfig.storageBucket || (firebaseConfig.projectId + '.appspot.com');
 
     // ---- Auth (Anonymous)
-    onAuthStateChanged(auth,()=>{});
+    auth.onAuthStateChanged(function(){});
     async function ensureAuthed(){
       if (auth.currentUser) return auth.currentUser;
       try{
-        await signInAnonymously(auth);
-        return await new Promise(res=>{ const off=onAuthStateChanged(auth,u=>{ if(u){ off(); res(u);} });});
+        await auth.signInAnonymously();
+        return new Promise(function(resolve){ const off=auth.onAuthStateChanged(function(u){ if(u){ off(); resolve(u);} }); });
       }catch(e){ return null; }
     }
 
-    // ---- DOM inputs
+    // ---- DOM refs for Create flow
     const scenarioName=document.getElementById('scenarioName');
     const dispatchInfo=document.getElementById('dispatchInfo');
     const photoInput=document.getElementById('photoInput');
@@ -245,302 +251,279 @@
     let currentScenarioId=null;
     let localStops=[];
 
-    // ---- Helpers
-    const readFileAsDataURL=f=>new Promise((res,rej)=>{ const r=new FileReader(); r.onload=()=>res(r.result); r.onerror=rej; r.readAsDataURL(f); });
-    const loadImage=src=>new Promise((res,rej)=>{ const i=new Image(); i.onload=()=>res(i); i.onerror=rej; i.crossOrigin='anonymous'; i.src=src; });
-    function toCanvas(img,maxW=1920,maxH=1920){ const c=document.createElement('canvas'); const s=Math.min(maxW/img.width,maxH/img.height,1); c.width=Math.round(img.width*s); c.height=Math.round(img.height*s); c.getContext('2d').drawImage(img,0,0,c.width,c.height); return c; }
-    function encodeSmart(c){ const url=c.toDataURL('image/jpeg',0.85); return `data:image/jpeg;base64,${url.split(',')[1]}`; }
-    function dataURLFromStored(v){ return (typeof v==='string') ? v : (v?.data ? `data:image/${(v.format||'jpeg')};base64,${v.data}` : ''); }
-    function step(msg, cls=''){ saveSteps.className = `statusLine small ${cls}`.trim(); saveSteps.innerHTML = msg; }
+    // ---- Small helpers
+    function readFileAsDataURL(f){ return new Promise(function(res,rej){ const r=new FileReader(); r.onload=function(){res(r.result)}; r.onerror=rej; r.readAsDataURL(f); }); }
+    function loadImage(src){ return new Promise(function(res,rej){ const i=new Image(); i.onload=function(){res(i)}; i.onerror=rej; i.crossOrigin='anonymous'; i.src=src; }); }
+    function toCanvas(img,maxW, maxH){ maxW=maxW||1920; maxH=maxH||1920; const c=document.createElement('canvas'); const s=Math.min(maxW/img.width,maxH/img.height,1); c.width=Math.round(img.width*s); c.height=Math.round(img.height*s); c.getContext('2d').drawImage(img,0,0,c.width,c.height); return c; }
+    function encodeSmart(c){ const url=c.toDataURL('image/jpeg',0.85); return 'data:image/jpeg;base64,'+url.split(',')[1]; }
+    function dataURLFromStored(v){ return (typeof v==='string') ? v : (v && v.data ? 'data:image/'+(v.format||'jpeg')+';base64,'+v.data : ''); }
+    function step(msg, cls){ cls=cls||''; saveSteps.className=('statusLine small '+cls).trim(); saveSteps.innerHTML=msg; }
     function setSaving(isSaving,label){
-      savePhotoBtn.toggleAttribute('disabled', isSaving);
-      createNowBtn.toggleAttribute('disabled', isSaving);
-      document.getElementById('goEdit').toggleAttribute('disabled', isSaving);
-      document.getElementById('goDiag').toggleAttribute('disabled', isSaving);
-      savePhotoBtn.classList.toggle('saving', isSaving);
+      savePhotoBtn.disabled=isSaving; createNowBtn.disabled=isSaving;
+      document.getElementById('goEdit').disabled=isSaving; document.getElementById('goDiag').disabled=isSaving;
+      if(isSaving) savePhotoBtn.classList.add('saving'); else savePhotoBtn.classList.remove('saving');
       saveLabel.textContent = label || (isSaving ? 'Saving…' : 'Save Photo');
     }
-    const setDiagSaving = (is, label) => {
-      runDiagBtn.toggleAttribute('disabled', is);
-      runDiagBtn.classList.toggle('saving', is);
-      runDiagBtn.querySelector('span:last-child').textContent = label || (is ? 'Running…' : 'Run Cloud Test');
+    function withTimeout(promise, ms, code){
+      return Promise.race([
+        promise,
+        new Promise(function(_,_rej){ setTimeout(function(){ var e=new Error('Timed out after '+ms+'ms'); e.code=code||'timeout'; _rej(e); }, ms); })
+      ]);
     }
-
-    // Hard timeout helper
-    const withTimeout = (p, ms, code='timeout') => Promise.race([
-      p,
-      new Promise((_,rej)=>setTimeout(()=>{ const e=new Error(`Timed out after ${ms}ms`); e.code=code; rej(e); }, ms))
-    ]);
-
-    // GPS with fast fallback (3s)
-    const getGPS=()=>new Promise(resolve=>{
-      if (!navigator.geolocation) return resolve({lat:null,lng:null, note:'no-geolocation'});
-      let done=false;
-      const finish=(v)=>{ if(!done){ done=true; resolve(v);} };
-      navigator.geolocation.getCurrentPosition(
-        p=>finish({lat:p.coords.latitude,lng:p.coords.longitude}),
-        _=>finish({lat:null,lng:null, note:'denied-or-error'}),
-        {enableHighAccuracy:true,timeout:3000,maximumAge:0}
-      );
-      setTimeout(()=>finish({lat:null,lng:null, note:'timeout'}), 3000);
-    });
-
+    function getGPS(){
+      return new Promise(function(resolve){
+        if (!navigator.geolocation) return resolve({lat:null,lng:null, note:'no-geolocation'});
+        var done=false; function finish(v){ if(!done){ done=true; resolve(v);} }
+        navigator.geolocation.getCurrentPosition(
+          function(p){ finish({lat:p.coords.latitude,lng:p.coords.longitude}); },
+          function(){ finish({lat:null,lng:null, note:'denied-or-error'}); },
+          {enableHighAccuracy:true,timeout:3000,maximumAge:0}
+        );
+        setTimeout(function(){ finish({lat:null,lng:null, note:'timeout'}); }, 3000);
+      });
+    }
+    function explainError(e){
+      var code = (e && e.code) || '';
+      if ((code||'').indexOf('timeout')>=0) return 'Network/device took too long to respond.';
+      if (code.indexOf('auth/configuration-not-found')>=0 || code.indexOf('auth/operation-not-allowed')>=0) return 'Anonymous Auth not enabled.';
+      if (code.indexOf('storage/unauthorized')>=0 || code.indexOf('permission-denied')>=0) return 'Storage rules or App Check denied the write.';
+      if (code.indexOf('storage/quota-exceeded')>=0) return 'Bucket quota exceeded.';
+      return 'Unexpected error while saving photo.';
+    }
     function renderThumbs(){
       thumbs.innerHTML='';
-      localStops.forEach((s,i)=>{
-        const wrap=document.createElement('div'); wrap.className='thumbWrap';
-        const img=document.createElement('img'); img.className='thumb'; img.src=s.imageURL || dataURLFromStored(s.imageData) || ''; img.title=s.caption||`Stop ${i+1}`;
-        const del=document.createElement('button'); del.className='btn danger del'; del.textContent='Delete';
-        del.onclick=async()=>{ await deleteStopAt(i); };
+      localStops.forEach(function(s,i){
+        var wrap=document.createElement('div'); wrap.className='thumbWrap';
+        var img=document.createElement('img'); img.className='thumb'; img.src=s.imageURL || dataURLFromStored(s.imageData) || ''; img.title=s.caption||('Stop '+(i+1));
+        var del=document.createElement('button'); del.className='btn danger del'; del.textContent='Delete';
+        del.onclick=function(){ deleteStopAt(i); };
         wrap.appendChild(img); wrap.appendChild(del); thumbs.appendChild(wrap);
       });
     }
 
-    function explainError(e){
-      const code = e?.code || '';
-      const msg  = e?.message || String(e);
-      if ((code||'').includes('timeout')) return 'Network/device took too long to respond.';
-      if (code.includes('auth/configuration-not-found') || code.includes('auth/operation-not-allowed')) return 'Anonymous Auth not enabled.';
-      if (code.includes('storage/unauthorized') || code.includes('permission-denied')) return 'Storage rules or App Check denied the write.';
-      if (code.includes('storage/quota-exceeded')) return 'Bucket quota exceeded.';
-      return 'Unexpected error while saving photo.';
-    }
-
+    // ---- Create scenario record
     async function createScenarioRecord(){
-      const name=(scenarioName.value||'').trim();
+      var name=(scenarioName.value||'').trim();
       if(!name) throw new Error('Please enter a Scenario Name');
-      const dispatch=(dispatchInfo.value||'').trim();
-      const newRef = push(dbRef(db,'scenarios'));
-      currentScenarioId = newRef.key;
-      await set(newRef,{ id:currentScenarioId, title:name, dispatch:dispatch, createdAt:Date.now(), active:true, stops:[] });
+      var dispatch=(dispatchInfo.value||'').trim();
+      var newRef=db.ref('scenarios').push();
+      currentScenarioId=newRef.key;
+      await newRef.set({ id:currentScenarioId, title:name, dispatch:dispatch, createdAt:Date.now(), active:true, stops:[] });
       createStatus.textContent='Scenario created.';
       return currentScenarioId;
     }
 
-    document.getElementById('createNow').onclick = async ()=>{
+    document.getElementById('createNow').onclick = async function(){
       try{ setSaving(true,'Creating…'); await createScenarioRecord(); step('Scenario created. You can now add photos.','good'); }
-      catch(e){ step('Could not create scenario: ' + (e?.message||e),'bad'); showErr(e?.message||String(e)); }
+      catch(e){ step('Could not create scenario: ' + (e && e.message || e),'bad'); showErr(e && e.message || String(e)); }
       finally{ setSaving(false,'Create Scenario Now'); }
     };
 
-    document.getElementById('quickNew').onclick = async ()=>{
+    document.getElementById('quickNew').onclick = async function(){
       goCreate();
-      setTimeout(async()=>{
+      setTimeout(async function(){
         try{
-          if(!scenarioName.value) scenarioName.value = 'New Scenario';
+          if(!scenarioName.value) scenarioName.value='New Scenario';
           setSaving(true,'Creating…'); await createScenarioRecord(); step('Scenario created.','good');
-        }catch(e){ step('Could not create scenario: ' + (e?.message||e),'bad'); showErr(e?.message||String(e)); }
+        }catch(e){ step('Could not create scenario: ' + (e && e.message || e),'bad'); showErr(e && e.message || String(e)); }
         finally{ setSaving(false,'Create Scenario Now'); }
       },0);
     };
 
     // dataURL -> Blob
     function dataURLtoBlob(dataURL){
-      const [head, b64] = dataURL.split(',');
-      const mime = (head.match(/data:(.*?);base64/) || [,'application/octet-stream'])[1];
-      const bin = atob(b64);
-      const len = bin.length;
-      const buf = new Uint8Array(len);
-      for (let i=0;i<len;i++) buf[i] = bin.charCodeAt(i);
-      return new Blob([buf], { type: mime });
+      var parts=dataURL.split(',');
+      var head=parts[0], b64=parts[1];
+      var mime=(/data:(.*?);base64/.exec(head)||[, 'application/octet-stream'])[1];
+      var bin=atob(b64), len=bin.length, buf=new Uint8Array(len);
+      for(var i=0;i<len;i++) buf[i]=bin.charCodeAt(i);
+      return new Blob([buf], {type:mime});
     }
 
     // Resumable upload with progress + 45s timeout
     async function uploadToStorage(dataURL, scenarioId){
       await ensureAuthed();
-      const path = `scenarios/${scenarioId}/${Date.now()}.jpg`;
-      const refObj = stRef(storage, path);
-      const blob = dataURLtoBlob(dataURL);
-      const metadata = { contentType: 'image/jpeg', cacheControl: 'public,max-age=31536000,immutable' };
-      const task = uploadBytesResumable(refObj, blob, metadata);
+      var path='scenarios/'+scenarioId+'/'+Date.now()+'.jpg';
+      var refObj=storage.ref(path);
+      var blob=dataURLtoBlob(dataURL);
+      var metadata={ contentType:'image/jpeg', cacheControl:'public,max-age=31536000,immutable' };
+      var task=refObj.put(blob, metadata);
 
-      return await new Promise((resolve, reject)=>{
-        const killer = setTimeout(()=>{ try{ task.cancel(); }catch(_){} 
-          const e=new Error('Timed out while uploading'); e.code='save/timeout-upload'; reject(e);
-        }, 45000);
-
+      return await new Promise(function(resolve,reject){
+        var killer=setTimeout(function(){ try{ task.cancel(); }catch(_){} var e=new Error('Timed out while uploading'); e.code='save/timeout-upload'; reject(e); }, 45000);
         task.on('state_changed',
-          snap=>{
-            const pct=Math.round(100*snap.bytesTransferred/snap.totalBytes);
-            step(`Uploading to Cloud Storage… ${pct}%`);
+          function(snap){
+            var pct=Math.round(100*snap.bytesTransferred/snap.totalBytes);
+            step('Uploading to Cloud Storage… '+pct+'%');
           },
-          err=>{ clearTimeout(killer); reject(err); },
-          async()=>{
+          function(err){ clearTimeout(killer); reject(err); },
+          async function(){
             clearTimeout(killer);
             try{
-              const url = await withTimeout(getDownloadURL(refObj), 6000, 'save/timeout-url');
-              resolve({ url, path, gsUri:`gs://${BUCKET}/${path}` });
+              var url=await withTimeout(refObj.getDownloadURL(), 6000, 'save/timeout-url');
+              resolve({ url:url, path:path, gsUri:'gs://'+BUCKET+'/'+path });
             }catch(e){ reject(e); }
           }
         );
       });
     }
 
-    document.getElementById('finishAndReturn').onclick = ()=>{ uiHide(createPanel); uiShow(landing); };
+    document.getElementById('finishAndReturn').onclick=function(){ uiHide(createPanel); uiShow(landing); };
 
     async function deleteStopAt(i){
       if(i<0||i>=localStops.length) return;
       if(!confirm('Delete this photo?')) return;
-      const s=localStops[i];
+      var s=localStops[i];
       try{
-        if (s?.gsUri || s?.storagePath){
+        if (s && (s.gsUri || s.storagePath)){
           await ensureAuthed();
-          const refObj = s.gsUri ? stRef(storage,s.gsUri) : stRef(storage,s.storagePath);
-          await deleteObject(refObj);
+          var refObj = s.gsUri ? storage.refFromURL(s.gsUri) : storage.ref(s.storagePath);
+          await refObj.delete();
         }
       }catch(_){}
       localStops.splice(i,1);
-      await set(dbRef(db,`scenarios/${currentScenarioId}/stops`), localStops);
+      await db.ref('scenarios/'+currentScenarioId+'/stops').set(localStops);
       renderThumbs();
     }
 
-    // ---- Save photo (with progress + clear reason on failure)
-    document.getElementById('savePhoto').onclick = async ()=>{
-      // safety: stop spinner after 25s even if something weird happens
-      let killTimer = setTimeout(()=>setSaving(false), 25000);
-
+    // Save Photo
+    document.getElementById('savePhoto').onclick = async function(){
+      var killTimer=setTimeout(function(){ setSaving(false); }, 25000);
       setSaving(true);
       try{
         step('Checking selected file…');
-        const file=photoInput.files?.[0];
-        if(!file){ step('Please choose a photo first.', 'warn'); setSaving(false); clearTimeout(killTimer); return; }
+        var file=photoInput.files && photoInput.files[0];
+        if(!file){ step('Please choose a photo first.','warn'); setSaving(false); clearTimeout(killTimer); return; }
 
         if(!currentScenarioId){
           step('Creating scenario record…');
           try{ await createScenarioRecord(); }
-          catch(e){ step('Could not create scenario: ' + (e?.message||e), 'bad'); setSaving(false); clearTimeout(killTimer); return; }
+          catch(e){ step('Could not create scenario: ' + (e && e.message || e),'bad'); setSaving(false); clearTimeout(killTimer); return; }
         }
 
         step('Compressing photo…');
-        const raw=await readFileAsDataURL(file);
-        const img=await loadImage(raw);
-        const c=toCanvas(img);
-        const dataURL=encodeSmart(c);
+        var raw=await readFileAsDataURL(file);
+        var img=await loadImage(raw);
+        var c=toCanvas(img);
+        var dataURL=encodeSmart(c);
 
         step('Uploading to Cloud Storage…');
-        let cloud=null, cloudErr=null;
-        try{ cloud = await uploadToStorage(dataURL, currentScenarioId); }
-        catch(e){ cloudErr = e; }
+        var cloud=null, cloudErr=null;
+        try{ cloud=await uploadToStorage(dataURL, currentScenarioId); }catch(e){ cloudErr=e; }
 
         step('Saving metadata to database…');
-        const gps = await getGPS();
-        const r = Math.max(5, Math.min(1000, Math.round(parseInt(radius.value||'50',10))));
-        const stop = { caption:(caption.value||'').trim(), lat:gps.lat, lng:gps.lng, radiusMeters:r };
+        var gps=await getGPS();
+        var r=Math.max(5, Math.min(1000, Math.round(parseInt(radius.value||'50',10))));
+        var stop={ caption:(caption.value||'').trim(), lat:gps.lat, lng:gps.lng, radiusMeters:r };
 
         if (cloud){
           stop.imageURL=cloud.url; stop.storagePath=cloud.path; stop.gsUri=cloud.gsUri;
-          step('Photo uploaded to Cloud Storage and saved.', 'good');
+          step('Photo uploaded to Cloud Storage and saved.','good');
         } else {
-          const reason = cloudErr ? `${explainError(cloudErr)} <br><span class="small">(code: ${cloudErr.code || 'n/a'})</span>` : 'Unknown reason.';
-          stop.imageData={ format:'jpeg', data=dataURL.split(',')[1] };
-          step(`Saved photo inline. Cloud upload failed because: <br>${reason}`, 'warn');
+          var reason=cloudErr ? (explainError(cloudErr)+' <br><span class="small">(code: '+(cloudErr.code||'n/a')+')</span>') : 'Unknown reason.';
+          stop.imageData={ format:'jpeg', data:dataURL.split(',')[1] };
+          step('Saved photo inline. Cloud upload failed because: <br>'+reason,'warn');
         }
 
         localStops.push(stop);
-        await withTimeout(set(dbRef(db,`scenarios/${currentScenarioId}/stops`), localStops), 8000, 'save/timeout-db');
+        await withTimeout(db.ref('scenarios/'+currentScenarioId+'/stops').set(localStops), 8000, 'save/timeout-db');
 
         caption.value=''; radius.value=50; photoInput.value='';
         renderThumbs();
       }catch(e){
-        step('Save failed: ' + (e?.message||e), 'bad'); showErr(e?.message||String(e));
+        step('Save failed: '+(e && e.message || e),'bad'); showErr(e && e.message || String(e));
       }finally{
         clearTimeout(killTimer);
         setSaving(false);
       }
     };
 
-    // ---- Edit list
-    async function loadForEditImpl(){
+    // -------- Edit list ----------
+    window.loadForEdit = async function(){
       try{
         editStatus.textContent='Loading…';
-        const snap=await get(dbRef(db,'scenarios'));
+        var snap=await db.ref('scenarios').get();
         if(!snap.exists()){ scenarioList.innerHTML=''; editStatus.textContent='No scenarios found.'; return; }
-        const arr=Object.entries(snap.val()||{}).map(([id,s])=>({id,...s})).sort((a,b)=>(b.createdAt||0)-(a.createdAt||0));
-        editStatus.textContent=`${arr.length} scenario(s)`;
+        var obj=snap.val()||{};
+        var arr=Object.keys(obj).map(function(id){ return Object.assign({id:id}, obj[id]); }).sort(function(a,b){ return (b.createdAt||0)-(a.createdAt||0); });
+        editStatus.textContent=arr.length+' scenario(s)';
         scenarioList.innerHTML='';
-        arr.forEach(sc=>{
-          const row=document.createElement('div'); row.className='listItem';
-          const left=document.createElement('div');
-          left.innerHTML = `<div style="font-weight:800">${sc.title||'(untitled)'}</div>
-                            <div class="tag">Stops: ${Array.isArray(sc.stops)? sc.stops.length : 0} • ${new Date(sc.createdAt||Date.now()).toLocaleString()}</div>`;
-          const right=document.createElement('div');
-          const open=document.createElement('button'); open.className='btn'; open.textContent='Open';
-          open.onclick=async()=>{
+        arr.forEach(function(sc){
+          var row=document.createElement('div'); row.className='listItem';
+          var left=document.createElement('div');
+          left.innerHTML='<div style="font-weight:800">'+(sc.title||'(untitled)')+'</div>'+
+            '<div class="tag">Stops: '+(Array.isArray(sc.stops)? sc.stops.length : 0)+' • '+new Date(sc.createdAt||Date.now()).toLocaleString()+'</div>';
+          var right=document.createElement('div');
+          var open=document.createElement('button'); open.className='btn'; open.textContent='Open';
+          open.onclick=function(){
             currentScenarioId=sc.id; localStops=Array.isArray(sc.stops)? sc.stops:[]; scenarioName.value=sc.title||''; dispatchInfo.value=sc.dispatch||'';
             uiHide(landing); uiHide(editPanel); uiShow(createPanel); renderThumbs(); saveSteps.textContent='Editing existing scenario.';
           };
-          const toggle=document.createElement('button'); toggle.className='btn secondary'; toggle.style.marginLeft='8px'; toggle.textContent=sc.active?'Deactivate':'Activate';
-          toggle.onclick=()=>update(dbRef(db,`scenarios/${sc.id}`),{active:!sc.active});
-          const del=document.createElement('button'); del.className='btn danger'; del.style.marginLeft='8px'; del.textContent='Delete';
-          del.onclick=async()=>{ if(!confirm('Delete this scenario?')) return;
+          var toggle=document.createElement('button'); toggle.className='btn secondary'; toggle.style.marginLeft='8px'; toggle.textContent=sc.active?'Deactivate':'Activate';
+          toggle.onclick=function(){ db.ref('scenarios/'+sc.id).update({active:!sc.active}); };
+          var del=document.createElement('button'); del.className='btn danger'; del.style.marginLeft='8px'; del.textContent='Delete';
+          del.onclick=async function(){
+            if(!confirm('Delete this scenario?')) return;
             try{ await ensureAuthed(); }catch(_){}
-            if(Array.isArray(sc.stops)){ for(const s of sc.stops){ try{
-              const refObj = s?.gsUri ? stRef(storage,s.gsUri) : s?.storagePath ? stRef(storage,s.storagePath) : null; if(refObj) await deleteObject(refObj);
-            }catch(_){}} }
-            await set(dbRef(db,`scenarios/${sc.id}`), null); row.remove();
+            if(Array.isArray(sc.stops)){
+              for(var k=0;k<sc.stops.length;k++){
+                try{
+                  var s=sc.stops[k];
+                  var refObj = s && s.gsUri ? storage.refFromURL(s.gsUri) : (s && s.storagePath ? storage.ref(s.storagePath) : null);
+                  if(refObj) await refObj.delete();
+                }catch(_){}
+              }
+            }
+            await db.ref('scenarios/'+sc.id).set(null); row.remove();
           };
           right.appendChild(open); right.appendChild(toggle); right.appendChild(del);
           row.appendChild(left); row.appendChild(right); scenarioList.appendChild(row);
         });
-      }catch(e){ editStatus.textContent='Error: '+(e?.message||e); showErr(e?.message||String(e)); }
-    }
-    // replace stub
-    window.loadForEdit = loadForEditImpl;
+      }catch(e){ editStatus.textContent='Error: '+(e && e.message || e); showErr(e && e.message || String(e)); }
+    };
 
-    // ---------------- Diagnostics ----------------
-    function logDiag(line, cls=''){ diagLog.className = `statusLine small ${cls}`.trim(); diagLog.innerHTML = (diagLog.innerHTML==='—' ? '' : diagLog.innerHTML + '<br>') + line; }
+    // -------- Diagnostics ----------
+    function setDiagSaving(is,label){
+      var b=runDiagBtn; b.disabled=is; if(is) b.classList.add('saving'); else b.classList.remove('saving');
+      b.querySelector('span:last-child').textContent = label || (is ? 'Running…' : 'Run Cloud Test');
+    }
+    function logDiag(line, cls){ cls=cls||''; diagLog.className=('statusLine small '+cls).trim(); diagLog.innerHTML=(diagLog.innerHTML==='—'?'':diagLog.innerHTML+'<br>')+line; }
 
     async function runDiagnostics(){
-      setDiagSaving(true);
-      diagStatus.textContent='Running…';
-      diagLog.textContent='—';
+      setDiagSaving(true); diagStatus.textContent='Running…'; diagLog.textContent='—';
 
-      // 1) Reachability to firebasestorage.googleapis.com
+      // 1) Reachability
       try{
-        const r = await withTimeout(fetch('https://firebasestorage.googleapis.com/generate_204', {cache:'no-store'}), 6000, 'diag/timeout-generate204');
-        logDiag(`1) Reachability (generate_204): <b>OK</b>`, 'good');
-      }catch(e){
-        logDiag(`1) Reachability (generate_204): <b>FAILED</b> — ${e.code||e}`, 'bad');
-      }
+        await withTimeout(fetch('https://firebasestorage.googleapis.com/generate_204', {cache:'no-store'}), 6000, 'diag/timeout-generate204');
+        logDiag('1) Reachability (generate_204): <b>OK</b>','good');
+      }catch(e){ logDiag('1) Reachability (generate_204): <b>FAILED</b> — '+(e.code||e),'bad'); }
 
-      // 2) Reachability to your bucket endpoint
+      // 2) Bucket endpoint
       try{
-        const r = await withTimeout(fetch(`https://firebasestorage.googleapis.com/v0/b/${BUCKET}/o?maxResults=1`, {cache:'no-store'}), 8000, 'diag/timeout-bucket');
-        logDiag(`2) Bucket endpoint: <b>HTTP ${r.status}</b> (401/403 is OK for reachability)`, (r.ok||r.status===401||r.status===403)?'good':'warn');
-      }catch(e){
-        logDiag(`2) Bucket endpoint: <b>FAILED</b> — ${e.code||e}`, 'bad');
-      }
+        var r = await withTimeout(fetch('https://firebasestorage.googleapis.com/v0/b/'+BUCKET+'/o?maxResults=1', {cache:'no-store'}), 8000, 'diag/timeout-bucket');
+        logDiag('2) Bucket endpoint: <b>HTTP '+r.status+'</b> (401/403 is OK for reachability)', (r.ok||r.status===401||r.status===403)?'good':'warn');
+      }catch(e){ logDiag('2) Bucket endpoint: <b>FAILED</b> — '+(e.code||e),'bad'); }
 
-      // 3) Tiny real upload to scenarios/diagnostics/...
+      // 3) Tiny upload
       try{
         await ensureAuthed();
-        const ts = Date.now();
-        const png1x1 = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwoB9oPy2kAAAAAASUVORK5CYII=';
-        const scenarioId = 'diagnostics';
-        const path = `scenarios/${scenarioId}/diag-${ts}.png`;
-        const refObj = stRef(storage, path);
-        const blob = dataURLtoBlob(png1x1);
-        const task = uploadBytesResumable(refObj, blob, {contentType:'image/png'});
-        await withTimeout(new Promise((res,rej)=>{
-          const killer=setTimeout(()=>{ try{task.cancel();}catch(_){} const e=new Error('Timed out'); e.code='diag/timeout-upload'; rej(e); }, 15000);
-          task.on('state_changed', ()=>{}, e=>{clearTimeout(killer); rej(e);}, ()=>{clearTimeout(killer); res();});
-        }), 16000, 'diag/timeout-wrap');
-        const url = await withTimeout(getDownloadURL(refObj), 6000, 'diag/timeout-url');
-        logDiag(`3) Tiny upload: <b>SUCCESS</b> → <code class="inline">${path}</code>`, 'good');
-        // optional cleanup (ignore errors)
-        try{ await deleteObject(refObj); }catch(_){}
+        var ts=Date.now();
+        var png1x1='data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwoB9oPy2kAAAAAASUVORK5CYII=';
+        var refObj=storage.ref('scenarios/diagnostics/diag-'+ts+'.png');
+        var blob=dataURLtoBlob(png1x1);
+        await withTimeout(refObj.put(blob, {contentType:'image/png'}), 15000, 'diag/timeout-upload');
+        var url=await withTimeout(refObj.getDownloadURL(), 6000, 'diag/timeout-url');
+        logDiag('3) Tiny upload: <b>SUCCESS</b> → <code class="inline">scenarios/diagnostics/diag-'+ts+'.png</code>', 'good');
+        try{ await refObj.delete(); }catch(_){}
       }catch(e){
-        logDiag(`3) Tiny upload: <b>FAILED</b> — ${explainError(e)} <span class="small">(code: ${e.code||'n/a'})</span>`, 'bad');
+        logDiag('3) Tiny upload: <b>FAILED</b> — '+explainError(e)+' <span class="small">(code: '+(e.code||'n/a')+')</span>','bad');
       }
 
-      setDiagSaving(false);
-      diagStatus.textContent='Done';
+      setDiagSaving(false); diagStatus.textContent='Done';
     }
-    runDiagBtn.onclick = runDiagnostics;
+    runDiagBtn.onclick=runDiagnostics;
 
-  }catch(e){
-    showErr('Firebase init failed: '+(e?.message||e));
-  }
+  }); // DOMContentLoaded
   </script>
 </body>
 </html>
