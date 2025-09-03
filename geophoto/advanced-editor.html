@@ -8,26 +8,27 @@
 <style>
 :root{
   --bg:#0b0f14;--bg2:#0e1421;--card:#0f1624;--edge:rgba(255,255,255,.10);
-  --text:#eaf2ff;--muted:#93a0b5;--blue:#0a84ff;--red:#ff3b30;
+  --text:#eaf2ff;--muted:#93a0b5;--blue:#0a84ff;
 }
 *{box-sizing:border-box}
 html,body{margin:0;height:100%;color:var(--text);font-family:system-ui,-apple-system,Segoe UI,Roboto,Inter,Arial,sans-serif;background:
   radial-gradient(1400px 700px at 15% -15%, rgba(10,132,255,.28), transparent 60%),
   radial-gradient(1200px 600px at 110% 0%, rgba(255,59,48,.22), transparent 60%),
   linear-gradient(165deg, var(--bg2), var(--bg) 55%)}
-a{color:inherit}
 
 .topbar{position:sticky;top:0;z-index:40;background:rgba(12,15,22,.78);backdrop-filter:blur(6px) saturate(120%);border-bottom:1px solid rgba(255,255,255,.08)}
-.topnav{max-width:1200px;margin:0 auto;padding:10px 16px;display:flex;gap:12px;align-items:center}
+.topnav{max-width:1300px;margin:0 auto;padding:10px 16px;display:flex;gap:12px;align-items:center}
 .brand{font-weight:900}
 .spacer{flex:1}
 .btn{appearance:none;border:1px solid rgba(255,255,255,.16);background:linear-gradient(180deg,#142238,#0f1930);color:#fff;border-radius:12px;padding:9px 12px;font-weight:800;cursor:pointer}
 .btn[disabled]{opacity:.6;cursor:not-allowed}
 
-main{max-width:1200px;margin:16px auto 40px;padding:0 16px}
-.app{display:grid;grid-template-columns:320px 1fr 420px;gap:12px;align-items:start}
+main{max-width:1300px;margin:16px auto 40px;padding:0 16px}
+.app{display:grid;grid-template-columns:360px 1fr;gap:12px;align-items:start}
+.app.toolsCollapsed{grid-template-columns:0 1fr}
+.app.toolsCollapsed #tools{display:none}
 .col{background:var(--card);border:1px solid var(--edge);border-radius:16px;padding:12px;min-height:140px}
-.col.side{overflow:auto;max-height:calc(100vh - 160px)}
+#tools{overflow:auto;max-height:calc(100vh - 160px)}
 .hidden{display:none!important}
 
 label{display:block;margin:8px 0 6px 2px;font-size:12px;color:var(--muted)}
@@ -36,23 +37,21 @@ textarea{min-height:80px}
 .row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
 .pill{display:inline-flex;gap:8px;align-items:center;padding:6px 10px;border-radius:999px;border:1px solid rgba(255,255,255,.14);color:var(--muted)}
 
-.thumb{width:58px;height:58px;border-radius:8px;border:1px solid rgba(255,255,255,.14);object-fit:cover;background:#0a1a2a;cursor:pointer}
+.thumb{width:72px;height:72px;border-radius:8px;border:1px solid rgba(255,255,255,.14);object-fit:cover;background:#0a1a2a;cursor:pointer}
 .thumb.active{outline:3px solid #2dd4bf}
+#thumbRow{display:flex;gap:8px;overflow:auto;padding:8px;border:1px solid rgba(255,255,255,.12);border-radius:10px;background:#0a1a2a}
 
 .canvasWrap{position:relative;border:1px solid rgba(255,255,255,.12);border-radius:12px;overflow:hidden;background:#061621}
 #c{width:100%;height:calc(100vh - 280px);display:block}
 
-.sectionTitle{font-weight:900;margin:4px 0}
-.divider{height:1px;background:rgba(255,255,255,.08);margin:10px 0}
+.sectionTitle{font-weight:900;margin:6px 0}
+.divider{height:1px;background:rgba(255,255,255,.08);margin:12px 0}
 .small{font-size:12px;opacity:.85}
 #errbar{position:fixed;left:10px;bottom:10px;background:#2b0d0d;color:#ffd7d7;border:1px solid #7a2b2b;border-radius:12px;padding:8px 12px;display:none;z-index:9999}
 
-/* Collapsible edit drawer + full-canvas mode */
-#editDrawer summary{cursor:pointer;list-style:none;padding:8px 10px;border:1px solid rgba(255,255,255,.14);border-radius:10px;background:#0c1528;font-weight:800}
-#editDrawer[open] summary{background:#0e1a30}
-.app.canvasOnly{grid-template-columns:1fr}
-.app.canvasOnly .side{display:none}
-#expandHint{font-size:12px;color:var(--muted)}
+/* collapsible drawer */
+#drawer summary{cursor:pointer;list-style:none;padding:8px 10px;border:1px solid rgba(255,255,255,.14);border-radius:10px;background:#0c1528;font-weight:800}
+#drawer[open] summary{background:#0e1a30}
 </style>
 </head>
 <body>
@@ -62,83 +61,41 @@ textarea{min-height:80px}
   <div class="topnav">
     <div class="brand">FireOps SIM — Advanced Editor</div>
     <div class="spacer"></div>
-    <button id="toggleCanvas" class="btn">Expand Canvas</button>
+    <button id="toggleTools" class="btn">Hide Tools</button>
   </div>
 </div>
 
 <main>
   <div class="app" id="app">
-    <!-- LEFT: Scenario & meta -->
-    <div class="col side" id="leftCol">
-      <div class="row" style="justify-content:space-between">
-        <div class="pill" id="statusPill">Loading…</div>
-        <button class="btn" id="refreshBtn">Refresh</button>
-      </div>
-
-      <label>Scenario</label>
-      <select id="scenarioSel"><option value="">Select scenario…</option></select>
-
-      <div class="divider"></div>
-      <div class="sectionTitle">Scenario Dispatch</div>
-      <label>Dispatch Text</label>
-      <textarea id="scenarioDispatch" placeholder="Engine 1 to…"></textarea>
-      <div class="row">
-        <label class="pill"><input type="checkbox" id="scenarioDispatchTTS" /> Read via TTS</label>
-        <button class="btn" id="saveScenarioMeta">Save Scenario</button>
-      </div>
-      <div id="scenarioMetaMsg" class="pill small" style="margin-top:6px">Ready</div>
-
-      <div class="divider"></div>
-      <div class="sectionTitle">Photos / Slides</div>
-      <div class="row" id="stopList"></div>
-
-      <div class="divider"></div>
-      <div class="sectionTitle">Selected stop meta</div>
-      <label>Title</label><input class="input" id="stopTitle" />
-      <label>Caption</label><textarea id="stopCaption"></textarea>
-      <div class="row">
-        <div style="flex:1"><label>Latitude</label><input class="input" id="stopLat" /></div>
-        <div style="flex:1"><label>Longitude</label><input class="input" id="stopLng" /></div>
-      </div>
-      <label>Radius (meters)</label><input class="input" id="stopRadius" value="50" />
-      <div class="row" style="margin-top:6px">
-        <button class="btn" id="useGPS">Use my location</button>
-        <button class="btn" id="saveMeta">Save Meta</button>
-      </div>
-      <div id="metaMsg" class="pill small" style="margin-top:6px">Ready</div>
-
-      <div class="divider"></div>
-      <div class="row">
-        <input id="replaceFile" type="file" accept="image/*" />
-        <button class="btn" id="replaceApply">Replace Image (local preview)</button>
-        <button class="btn" id="saveImage">Save Image to Cloud</button>
-      </div>
-      <div class="row" style="margin-top:6px">
-        <button class="btn" id="addTextSlide">+ Add Text Slide</button>
-        <button class="btn" id="exportPNG">Export PNG</button>
-        <button class="btn" id="deleteStop" style="background:#2a0f14;border-color:#7a2b2b">Delete</button>
-      </div>
-    </div>
-
-    <!-- CENTER: Canvas -->
-    <div class="col">
-      <div class="row" style="margin-bottom:8px">
-        <button class="btn" id="fit">Fit</button>
-        <button class="btn" id="zoomIn">Zoom +</button>
-        <button class="btn" id="zoomOut">Zoom −</button>
-        <button class="btn" id="rotateL">Rotate ⟲</button>
-        <button class="btn" id="rotateR">Rotate ⟳</button>
-        <span class="pill" id="canvasInfo">Canvas</span>
-        <span id="expandHint" class="spacer">Tip: “Expand Canvas” to hide the side menus.</span>
-      </div>
-      <div class="canvasWrap"><canvas id="c"></canvas></div>
-    </div>
-
-    <!-- RIGHT: Collapsible edit drawer -->
-    <div class="col side" id="rightCol">
-      <details id="editDrawer" open>
+    <!-- LEFT: all tools (collapsible) -->
+    <aside class="col" id="tools">
+      <details id="drawer" open>
         <summary>Editing Tools (collapse/expand)</summary>
         <div style="margin-top:10px">
+          <div class="sectionTitle">Scenario</div>
+          <label>Choose scenario</label>
+          <select id="scenarioSel"><option value="">Select scenario…</option></select>
+          <div class="row" style="margin-top:6px">
+            <button class="btn" id="refreshBtn">Refresh</button>
+            <span id="statusPill" class="pill">Loading…</span>
+          </div>
+
+          <div class="divider"></div>
+          <div class="sectionTitle">Stop meta</div>
+          <label>Title</label><input class="input" id="stopTitle" />
+          <label>Caption</label><textarea id="stopCaption"></textarea>
+          <div class="row">
+            <div style="flex:1"><label>Latitude</label><input class="input" id="stopLat" /></div>
+            <div style="flex:1"><label>Longitude</label><input class="input" id="stopLng" /></div>
+          </div>
+          <label>Radius (meters)</label><input class="input" id="stopRadius" value="50" />
+          <div class="row" style="margin-top:6px">
+            <button class="btn" id="useGPS">Use my location</button>
+            <button class="btn" id="saveMeta">Save Meta</button>
+          </div>
+          <div id="metaMsg" class="pill small" style="margin-top:6px">Ready</div>
+
+          <div class="divider"></div>
           <div class="sectionTitle">Overlays</div>
           <div class="row" style="gap:6px; flex-wrap:nowrap; overflow:auto">
             <button class="btn" data-cat="fire">🔥 Fire</button>
@@ -161,7 +118,7 @@ textarea{min-height:80px}
           <input id="brushSize" type="range" min="24" max="320" step="4" value="120" />
 
           <div class="divider"></div>
-          <div class="sectionTitle">Text Boxes (on photo)</div>
+          <div class="sectionTitle">Text on Photo</div>
           <div class="row"><button class="btn" id="addTextbox">+ Add Text Box</button></div>
           <label>Selected Text</label><textarea id="tbContent" placeholder="Type notes…"></textarea>
           <label>Font Size</label><input id="tbFont" type="range" min="12" max="72" step="1" value="24" />
@@ -172,17 +129,41 @@ textarea{min-height:80px}
           </div>
 
           <div class="divider"></div>
-          <div class="sectionTitle">Transform Selected</div>
+          <div class="sectionTitle">Selected Overlay</div>
           <div class="row">
             <button class="btn" id="flipSelH">Flip H</button>
             <button class="btn" id="flipSelV">Flip V</button>
             <button class="btn" id="bringFront">Bring Front</button>
             <button class="btn" id="sendBack">Send Back</button>
-            <button class="btn" id="deleteObj" style="background:#2a0f14;border-color:#7a2b2b">Delete Overlay</button>
+            <button class="btn" id="deleteObj" style="background:#2a0f14;border-color:#7a2b2b">Delete</button>
+          </div>
+
+          <div class="divider"></div>
+          <div class="sectionTitle">Export / Save</div>
+          <div class="row">
+            <button class="btn" id="exportPNG">Export PNG/JPEG</button>
+            <button class="btn" id="saveImage">Save Image to Cloud</button>
           </div>
         </div>
       </details>
-    </div>
+    </aside>
+
+    <!-- RIGHT: viewer -->
+    <section class="col">
+      <div class="sectionTitle">Photos in Scenario (click to load in viewer)</div>
+      <div id="thumbRow"></div>
+
+      <div class="row" style="margin:10px 0">
+        <button class="btn" id="fit">Fit</button>
+        <button class="btn" id="zoomIn">Zoom +</button>
+        <button class="btn" id="zoomOut">Zoom −</button>
+        <button class="btn" id="rotateL">Rotate ⟲</button>
+        <button class="btn" id="rotateR">Rotate ⟳</button>
+        <span class="pill" id="canvasInfo">Canvas</span>
+      </div>
+
+      <div class="canvasWrap"><canvas id="c"></canvas></div>
+    </section>
   </div>
 </main>
 
@@ -190,21 +171,20 @@ textarea{min-height:80px}
 <script src="https://cdnjs.cloudflare.com/ajax/libs/fabric.js/5.3.0/fabric.min.js" crossorigin="anonymous"></script>
 <!-- Firebase (modules) -->
 <script type="module">
-/* ---------- Helpers ---------- */
+/* ---------- tiny helpers ---------- */
 const $ = (id)=>document.getElementById(id);
-const ERR = (msg)=>{ const b=$('errbar'); b.textContent = msg; b.style.display='block'; };
+const ERR = (m)=>{ const b=$('errbar'); b.textContent=m; b.style.display='block'; };
 
-/* ---------- UI Basics ---------- */
-const appGrid = $('app');
-$('toggleCanvas').onclick = ()=>{
-  const on = !appGrid.classList.contains('canvasOnly');
-  appGrid.classList.toggle('canvasOnly', on);
-  $('toggleCanvas').textContent = on ? 'Show Editor' : 'Expand Canvas';
-  // Refit canvas when toggling
+/* ---------- collapse tools ---------- */
+$('toggleTools').onclick = ()=>{
+  const app = $('app');
+  const on  = !app.classList.contains('toolsCollapsed');
+  app.classList.toggle('toolsCollapsed', on);
+  $('toggleTools').textContent = on ? 'Show Tools' : 'Hide Tools';
   fitCanvas();
 };
 
-/* ---------- Firebase (project: dailyquiz-d5279) ---------- */
+/* ---------- Firebase config ---------- */
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-app.js";
 import { getDatabase, ref as dbRef, get, set, onValue } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-database.js";
 import { getStorage, ref as stRef, uploadString, getDownloadURL } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-storage.js";
@@ -215,45 +195,35 @@ const firebaseConfig = {
   authDomain:"dailyquiz-d5279.firebaseapp.com",
   databaseURL:"https://dailyquiz-d5279-default-rtdb.firebaseio.com",
   projectId:"dailyquiz-d5279",
-  storageBucket:"dailyquiz-d5279.firebasestorage.app",   // <-- new bucket host
+  storageBucket:"dailyquiz-d5279.firebasestorage.app",   // NEW host/bucket
   appId:"1:94577748034:web:c032d3a1d72db1313de5db",
   measurementId:"G-19DVN7NNH7"
 };
 const appFB = initializeApp(firebaseConfig);
 const db = getDatabase(appFB);
-// Use explicit gs:// URL to be crystal-clear which bucket we hit
 const storage = getStorage(appFB, "gs://dailyquiz-d5279.firebasestorage.app");
 const auth = getAuth(appFB);
 
-// Anonymous auth (required by your Storage rules)
 async function ensureAuthed(){
   if (auth.currentUser) return auth.currentUser;
   await signInAnonymously(auth);
-  await new Promise(res=> onAuthStateChanged(auth, u=> u && res(), { once:true }));
+  await new Promise(res => onAuthStateChanged(auth, u=>u && res(), { once:true }));
   return auth.currentUser;
 }
+ensureAuthed().catch(()=>{});
 
-/* ---------- Canvas setup ---------- */
+/* ---------- Canvas ---------- */
 const f = new fabric.Canvas('c', { backgroundColor:'#061621', preserveObjectStacking:true });
-let baseImage = null;
+let baseImage=null;
 function fitCanvas(){
-  const reserved = 220; // topbar + margins
-  const targetH = Math.max(420, window.innerHeight - reserved);
+  const targetH = Math.max(420, window.innerHeight - 280);
   $('c').style.height = targetH + 'px';
   f.setHeight(targetH);
-  const mid = document.querySelector('.app:not(.canvasOnly) .col:nth-child(2)') || document.querySelector('.col:nth-child(2)');
-  const w = (mid?.clientWidth || 900) - 24;
+  const viewer = $('c').closest('.col');
+  const w = (viewer?.clientWidth || 900) - 24;
   f.setWidth(w);
   if (baseImage && baseImage.type==='rect'){
     baseImage.set({ left:0, top:0, width:f.getWidth(), height:f.getHeight() });
-    const t = f.getObjects('textbox').find(o=>o.isBaseText);
-    if (t){
-      t.set({
-        width: Math.floor(f.getWidth()*0.8),
-        left: Math.floor(f.getWidth()*0.1),
-        top:  Math.floor(f.getHeight()*0.2)
-      });
-    }
   }
   f.calcOffset(); f.requestRenderAll();
 }
@@ -297,8 +267,8 @@ function toDataURLFromStored(v){
   return `data:image/${fmt};base64,${v.data}`;
 }
 
-/* ---------- Scenario & stop data ---------- */
-const ROOT = 'scenarios';
+/* ---------- Data ---------- */
+const ROOT='scenarios';
 let scenarios=[], current=null, stopIndex=-1;
 
 function coerceStops(sc){
@@ -313,9 +283,9 @@ function setStops(sc, stops){
   else if (Array.isArray(sc?.images)) sc.images = stops;
   else sc.stops = stops;
 }
+function status(msg){ $('statusPill').textContent=msg; }
 
-function status(msg){ $('statusPill').textContent = msg; }
-function populateList(){
+function populateScenarios(){
   const sel=$('scenarioSel'); sel.innerHTML='<option value="">Select scenario…</option>';
   scenarios.forEach(sc=>{
     const o=document.createElement('option');
@@ -324,111 +294,79 @@ function populateList(){
   });
 }
 async function loadScenarios(){
-  try{
-    const snap = await get(dbRef(db, ROOT));
-    const obj = snap.exists() ? (snap.val()||{}) : {};
-    scenarios = Object.entries(obj).map(([id,s])=>({ id, _raw:s, _stops:coerceStops(s), ...s }))
-                .sort((a,b)=>(b.createdAt||0)-(a.createdAt||0));
-    populateList();
-    status(`${scenarios.length} scenario(s) loaded`);
-  }catch(e){ status('Error: '+(e.message||e)); ERR(e.message||e); }
+  const snap = await get(dbRef(db, ROOT));
+  const obj = snap.exists() ? (snap.val()||{}) : {};
+  scenarios = Object.entries(obj).map(([id,s])=>({ id, _raw:s, _stops:coerceStops(s), ...s }))
+              .sort((a,b)=>(b.createdAt||0)-(a.createdAt||0));
+  populateScenarios();
+  status(`${scenarios.length} scenario(s)`);
 }
 onValue(dbRef(db, ROOT), snap=>{
   const v=snap.val()||{};
   scenarios = Object.entries(v).map(([id,s])=>({ id, _raw:s, _stops:coerceStops(s), ...s }))
               .sort((a,b)=>(b.createdAt||0)-(a.createdAt||0));
-  populateList();
+  populateScenarios();
   if (current){
-    const fresh = scenarios.find(x=>x.id===current.id);
+    const fresh=scenarios.find(x=>x.id===current.id);
     if (fresh){ current=fresh; renderThumbs(); }
   }
-  status(`${scenarios.length} scenario(s) loaded`);
 });
 await loadScenarios();
-$('refreshBtn').onclick = loadScenarios;
+$('refreshBtn').onclick=loadScenarios;
 
 function renderThumbs(){
-  const wrap = $('stopList'); wrap.innerHTML='';
-  if (!current || !current._stops?.length){ wrap.innerHTML='<div class="pill small">No photos/slides</div>'; return; }
+  const row=$('thumbRow'); row.innerHTML='';
+  if (!current || !current._stops?.length){ row.innerHTML='<div class="pill small">No photos/slides</div>'; return; }
   current._stops.forEach((s,i)=>{
     const img=document.createElement('img'); img.className='thumb'+(i===stopIndex?' active':'');
-    const src = (s?.type==='text') ? textThumb(s?.text||s?.title||'') : toDataURLFromStored(s.imageURL || s.imageData);
-    img.src = src; img.title = (s.title||`Stop ${i+1}`) + (s?.type==='text'?' (Text slide)':'');
+    const src=(s?.type==='text')? textThumb(s?.text||s?.title||'') : toDataURLFromStored(s.imageURL||s.imageData);
+    img.src=src; img.alt=s.title||('Stop '+(i+1));
     img.onerror=()=>{ img.src = textThumb(s?.title||''); };
-    img.onclick = ()=>loadStop(i);
-    wrap.appendChild(img);
+    img.onclick=()=>loadStop(i);              /* <— CLICK THUMB TO VIEW/EDIT */
+    row.appendChild(img);
   });
 }
 function textThumb(text){
   const t=(text||'TEXT').split('\n')[0].slice(0,18);
-  const svg = `<svg xmlns='http://www.w3.org/2000/svg' width='80' height='80'>
+  const svg = `<svg xmlns='http://www.w3.org/2000/svg' width='120' height='120'>
     <rect width='100%' height='100%' fill='#000'/>
-    <rect x='6' y='6' width='68' height='20' rx='6' fill='#0a84ff'/>
-    <text x='40' y='21' fill='#001' font-size='12' text-anchor='middle' font-weight='700'>TEXT</text>
-    <text x='40' y='50' fill='#fff' font-size='10' text-anchor='middle'>${t.replace(/&/g,'&amp;')}</text>
+    <rect x='10' y='10' width='100' height='26' rx='8' fill='#0a84ff'/>
+    <text x='60' y='28' fill='#001' font-size='16' text-anchor='middle' font-weight='700'>TEXT</text>
+    <text x='60' y='78' fill='#fff' font-size='12' text-anchor='middle'>${t.replace(/&/g,'&amp;')}</text>
   </svg>`;
-  return "data:image/svg+xml;utf8," + encodeURIComponent(svg);
+  return "data:image/svg+xml;utf8,"+encodeURIComponent(svg);
 }
 
 $('scenarioSel').onchange = async ()=>{
-  const id = $('scenarioSel').value;
-  current = scenarios.find(s=>s.id===id) || null;
+  const id=$('scenarioSel').value;
+  current=scenarios.find(s=>s.id===id)||null;
   stopIndex=-1;
   renderThumbs();
-  applyScenarioMetaUI();
   f.clear(); baseImage=null; fitCanvas();
-};
-
-function applyScenarioMetaUI(){
-  if (!current){ $('scenarioDispatch').value=''; $('scenarioDispatchTTS').checked=false; return; }
-  const raw=current._raw || {};
-  $('scenarioDispatch').value = raw.dispatchText || '';
-  $('scenarioDispatchTTS').checked = !!raw.dispatchTTS;
-}
-$('saveScenarioMeta').onclick = async ()=>{
-  try{
-    if(!current) throw new Error('Select a scenario first.');
-    const updated = Object.assign({}, current._raw, {
-      dispatchText: $('scenarioDispatch').value.trim(),
-      dispatchTTS: !!$('scenarioDispatchTTS').checked
-    });
-    await set(dbRef(db, `${ROOT}/${current.id}`), updated);
-    current._raw = updated;
-    $('scenarioMetaMsg').textContent = 'Scenario saved.';
-  }catch(e){ $('scenarioMetaMsg').textContent = 'Error: '+(e.message||e); }
-};
-
-$('addTextSlide').onclick = async ()=>{
-  try{
-    if(!current) throw new Error('Select a scenario first.');
-    const next = current._stops.slice();
-    next.push({ type:'text', title:'Text Slide', text:'New slide text', fontSize:34, manual:true, tts:true, lat:null, lng:null, radiusMeters:50, overlays:[] });
-    const updated = Object.assign({}, current._raw); setStops(updated, next);
-    await set(dbRef(db, `${ROOT}/${current.id}`), updated);
-    current._raw=updated; current._stops=next;
-    renderThumbs(); stopIndex=next.length-1; await loadStop(stopIndex);
-    $('scenarioMetaMsg').textContent='Text slide added.';
-  }catch(e){ $('scenarioMetaMsg').textContent='Error: '+(e.message||e); }
+  if (current && current._stops.length){ await loadStop(0); } // auto open first
 };
 
 async function loadStop(i){
   if (!current) return;
   const s=current._stops[i]; if(!s) return;
   stopIndex=i;
+  Array.from($('thumbRow').children).forEach((n,idx)=> n.classList.toggle('active', idx===i));
+
   $('stopTitle').value = s.title||'';
   $('stopCaption').value = s.caption||'';
   $('stopLat').value = s.lat??'';
   $('stopLng').value = s.lng??'';
   $('stopRadius').value = (s.radiusMeters ?? s.radius ?? 50);
-  Array.from($('stopList').children).forEach((n,idx)=>n.classList.toggle('active', idx===i));
+
   f.clear(); baseImage=null;
   if (s.type==='text'){ setBaseAsTextSlide(s.text||'', s.fontSize||34); }
   else {
     const src = toDataURLFromStored(s.imageURL || s.imageData);
-    if (!src){ $('metaMsg').textContent='No image in this stop.'; return; }
+    if (!src) { $('metaMsg').textContent='No image in this stop.'; return; }
     await setBaseFromURL(src);
   }
-  // Rehydrate overlays
+
+  // overlays
   if (Array.isArray(s.overlays)){
     for (const ov of s.overlays){
       if (ov?.kind==='text'){
@@ -453,7 +391,7 @@ async function loadStop(i){
   }
 }
 
-/* Save meta (plus overlays) */
+/* ---------- Meta save ---------- */
 function serializeOverlays(){
   const out=[];
   f.getObjects().forEach(o=>{
@@ -475,7 +413,6 @@ function serializeOverlays(){
   });
   return out;
 }
-
 $('useGPS').onclick = ()=>{
   navigator.geolocation.getCurrentPosition(p=>{
     $('stopLat').value = p.coords.latitude.toFixed(6);
@@ -483,16 +420,12 @@ $('useGPS').onclick = ()=>{
     $('metaMsg').textContent='GPS captured.';
   }, e=>{ $('metaMsg').textContent='GPS error: '+e.message; }, { enableHighAccuracy:true, timeout:10000 });
 };
-
 $('saveMeta').onclick = async ()=>{
   try{
     if(!current || stopIndex<0) throw new Error('Select a stop first.');
     const s = Object.assign({}, current._stops[stopIndex]);
     s.title = $('stopTitle').value.trim();
     s.caption = $('stopCaption').value.trim();
-    if (s.type==='text'){
-      // Keep current text slide (use canvas buttons to preview), no extra fields here
-    }
     const lat = $('stopLat').value.trim()==='' ? null : parseFloat($('stopLat').value);
     const lng = $('stopLng').value.trim()==='' ? null : parseFloat($('stopLng').value);
     s.lat = lat; s.lng = lng;
@@ -505,21 +438,12 @@ $('saveMeta').onclick = async ()=>{
     current._raw = updated; current._stops = next;
     renderThumbs();
     $('metaMsg').textContent='Meta saved.';
-  }catch(e){ $('metaMsg').textContent = String(e.message||e); }
+  }catch(e){ $('metaMsg').textContent=String(e.message||e); }
 };
 
-/* Replace preview (local only) */
-function readAsDataURL(f){ return new Promise((res,rej)=>{ const r=new FileReader(); r.onload=()=>res(r.result); r.onerror=rej; r.readAsDataURL(f); }); }
-$('replaceApply').onclick = async ()=>{
-  const fsel = $('replaceFile').files?.[0];
-  if(!fsel){ $('metaMsg').textContent='Choose a file first.'; return; }
-  const data = await readAsDataURL(fsel);
-  await setBaseFromURL(data);
-};
-
-/* Export + Save to Cloud */
+/* ---------- Export / Save to Cloud ---------- */
 function encodeCanvas(){
-  const MAX = 9_000_000;
+  const MAX = 9_000_000; // ~9MB base64
   let url = f.toDataURL({ format:'png', quality:1, multiplier:1 });
   let b64 = url.split(',')[1]||'';
   const bytes = (s)=>Math.floor((s.length*3)/4);
@@ -550,7 +474,6 @@ $('saveImage').onclick = async ()=>{
     if(!current || stopIndex<0) throw new Error('Select a stop first.');
     const dataURL = encodeCanvas();
     const { url, path, gsUri } = await uploadEditedToStorage(dataURL, current.id, stopIndex);
-    // Persist URL + overlays; drop inline data if present
     const s = Object.assign({}, current._stops[stopIndex]);
     s.imageURL = url; s.storagePath = path; s.gsUri = gsUri; s.imageData = null;
     s.overlays = serializeOverlays();
@@ -563,20 +486,20 @@ $('saveImage').onclick = async ()=>{
   }catch(e){ $('metaMsg').textContent='Save failed: '+(e.message||e); }
 };
 
-/* Canvas utilities */
-$('fit').onclick = ()=>{ if (baseImage && baseImage.type==='image'){ setBaseFromURL(baseImage.getSrc ? baseImage.getSrc() : baseImage._originalElement?.src || '') } else if (baseImage && baseImage.type==='rect'){ const t=f.getObjects('textbox').find(o=>o.isBaseText); setBaseAsTextSlide(t?t.text:'', t?t.fontSize:34); } };
+/* ---------- Canvas utilities ---------- */
+$('fit').onclick  = ()=>{ if (baseImage && baseImage.type==='image'){ setBaseFromURL(baseImage.getSrc ? baseImage.getSrc() : baseImage._originalElement?.src || '') } else if (baseImage && baseImage.type==='rect'){ const t=f.getObjects('textbox').find(o=>o.isBaseText); setBaseAsTextSlide(t?t.text:'', t?t.fontSize:34); } };
 $('zoomIn').onclick = ()=> f.setZoom(f.getZoom()*1.1);
-$('zoomOut').onclick = ()=> f.setZoom(f.getZoom()/1.1);
+$('zoomOut').onclick= ()=> f.setZoom(f.getZoom()/1.1);
 $('rotateL').onclick = ()=>{ if(baseImage && baseImage.rotate){ baseImage.rotate((baseImage.angle||0)-90); f.requestRenderAll(); } };
 $('rotateR').onclick = ()=>{ if(baseImage && baseImage.rotate){ baseImage.rotate((baseImage.angle||0)+90); f.requestRenderAll(); } };
 
-/* Text boxes on photo */
+/* ---------- Text tools ---------- */
 function selTB(){ const o=f.getActiveObject(); return (o && o.type==='textbox' && !o.isBaseText) ? o : null; }
 $('addTextbox').onclick = ()=>{
   const tb = new fabric.Textbox('Double-click to edit', {
     left: Math.max(10, (f.getWidth()*0.5)-120),
     top:  Math.max(10, (f.getHeight()*0.5)-30),
-    width: 240, fontSize: 24, fill:'#fff', backgroundColor:'rgba(0,0,0,0.6)', padding:8,
+    width: 260, fontSize: 24, fill:'#fff', backgroundColor:'rgba(0,0,0,0.6)', padding:8,
     cornerStyle:'circle', transparentCorners:false, editable:true
   });
   f.add(tb); f.setActiveObject(tb); $('tbContent').value=tb.text;
@@ -590,17 +513,15 @@ $('tbDelete').onclick = ()=>{ const tb=selTB(); if(tb){ f.remove(tb); f.discardA
 f.on('selection:created', syncTB); f.on('selection:updated', syncTB);
 function syncTB(){ const tb=selTB(); if(tb){ $('tbContent').value=tb.text||''; $('tbFont').value=tb.fontSize||24; const m=tb.backgroundColor||'rgba(0,0,0,0.6)'; const op=(m.match(/rgba?\([^,]+,[^,]+,[^,]+,([\d.]+)\)/)||[])[1]; $('tbBgOpacity').value=op?parseFloat(op):0.6; } }
 
-/* Overlays (thumb shelf) */
+/* ---------- Overlays + brush ---------- */
 const OVERLAY_BASE='https://fireopssim.com/geophoto/overlays/';
 const FOLDER={ fire:'fire', smoke:'smoke', people:'people', cars:'cars', hazard:'hazard' };
 const EXT=['png','webp','jpg','jpeg'];
 async function listOverlays(cat){
-  // Try manifest first
   try{
     const r = await fetch(`${OVERLAY_BASE}manifest.json`, { cache:'no-store' });
     if (r.ok){ const j = await r.json(); if (Array.isArray(j[FOLDER[cat]])) return j[FOLDER[cat]]; }
   }catch{}
-  // Fallback: HEAD probing a simple seq
   const prefix = {fire:'fire', smoke:'smoke', people:'person', cars:'car', hazard:'hazard'}[cat]||'img';
   const found=[]; let miss=0;
   for(let i=1;i<=60 && miss<5;i++){
@@ -635,12 +556,11 @@ function addOverlay(src){
     f.add(img); f.setActiveObject(img); f.requestRenderAll();
   }, { crossOrigin:'anonymous' });
 }
-Array.from(document.querySelectorAll('#rightCol [data-cat]')).forEach(b=>{
+Array.from(document.querySelectorAll('#tools [data-cat]')).forEach(b=>{
   b.addEventListener('click', ()=> renderShelf(b.dataset.cat));
 });
 renderShelf('fire');
 
-/* Simple stamp/erase brush (images) */
 let brushMode='off', pointerDown=false, lastStamp=null;
 const brushSize=$('brushSize'), brushSizeReadout=$('brushSizeReadout');
 brushSize.oninput=()=> brushSizeReadout.textContent=(parseInt(brushSize.value,10)||120)+' px';
@@ -679,26 +599,12 @@ f.on('mouse:down', (e)=>{ pointerDown=true; const p=f.getPointer(e.e); if(brushM
 f.on('mouse:move', (e)=>{ if(!pointerDown) return; const p=f.getPointer(e.e); if(brushMode==='fire') stampAt(p,'fire'); else if(brushMode==='smoke') stampAt(p,'smoke'); else if(brushMode==='erase') eraseStampsAt(p); });
 f.on('mouse:up', ()=>{ pointerDown=false; });
 
-/* Transform / order / delete selected overlay */
+/* order / delete selected overlay */
 $('bringFront').onclick = ()=>{ const o=f.getActiveObject(); if(o && o!==baseImage){ o.bringToFront(); f.requestRenderAll(); } };
 $('sendBack').onclick  = ()=>{ const o=f.getActiveObject(); if(o && o!==baseImage){ o.sendToBack(); if(baseImage) baseImage.sendToBack(); f.requestRenderAll(); } };
 $('deleteObj').onclick = ()=>{ const o=f.getActiveObject(); if(o && o!==baseImage){ f.remove(o); f.discardActiveObject(); f.requestRenderAll(); } };
 $('flipSelH').onclick  = ()=>{ const o=f.getActiveObject(); if(o && o!==baseImage){ o.set('flipX', !o.flipX); f.requestRenderAll(); } };
 $('flipSelV').onclick  = ()=>{ const o=f.getActiveObject(); if(o && o!==baseImage){ o.set('flipY', !o.flipY); f.requestRenderAll(); } };
-
-/* Delete stop (list + DB only; does not delete the cloud file here) */
-$('deleteStop').onclick = async ()=>{
-  if(!current || stopIndex<0) return;
-  if(!confirm('Delete this photo/slide from the scenario?')) return;
-  const next=current._stops.slice(); next.splice(stopIndex,1);
-  const updated=Object.assign({}, current._raw); setStops(updated,next);
-  await set(dbRef(db, `${ROOT}/${current.id}`), updated);
-  current._stops=next; stopIndex=-1; f.clear(); baseImage=null; renderThumbs();
-  $('metaMsg').textContent='Photo/slide deleted.';
-};
-
-/* Save selected text slide preview without DB write */
-$('exportPNG'); // (handler above)
 </script>
 </body>
 </html>
