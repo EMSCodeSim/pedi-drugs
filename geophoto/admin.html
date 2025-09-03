@@ -20,7 +20,7 @@
         linear-gradient(165deg, var(--bg2), var(--bg) 55%);
     }
     .topbar{position:sticky;top:0;z-index:20;background:rgba(12,15,22,.75);backdrop-filter:saturate(180%) blur(8px);border-bottom:1px solid var(--edge2)}
-    .wrap{max-width:1050px;margin:0 auto;padding:14px 16px;display:flex;align-items:center;gap:12px}
+    .wrap{max-width:1100px;margin:0 auto;padding:14px 16px;display:flex;align-items:center;gap:12px}
     .logo{display:flex;align-items:center;gap:12px;font-weight:800;font-size:18px}
     .badge{width:34px;height:34px;border-radius:9px;background:linear-gradient(135deg,#0a84ff,#54a6ff);display:grid;place-items:center;color:#fff;font-weight:900}
     .spacer{flex:1}
@@ -43,7 +43,7 @@
     }
     .hidden{display:none}
     .grid{display:grid;gap:14px}
-    @media(min-width:860px){ .grid{grid-template-columns:1.2fr .8fr} }
+    @media(min-width:900px){ .grid{grid-template-columns:1.25fr .75fr} }
     label{font-weight:700}
     .input,textarea{width:100%;padding:10px 12px;border-radius:12px;background:#0c1322;color:#eaf2ff;border:1px solid var(--edge2)}
     textarea{min-height:86px}
@@ -59,6 +59,7 @@
     .statusLine.warn{border-color:rgba(234,179,8,.35);background:rgba(234,179,8,.08)}
     .statusLine.bad{border-color:rgba(239,68,68,.35);background:rgba(239,68,68,.10)}
     .small{font-size:12px;opacity:.85}
+    code.inline{background:#0d1424;border:1px solid var(--edge2);padding:2px 6px;border-radius:6px}
   </style>
 </head>
 <body>
@@ -68,8 +69,9 @@
     <div class="wrap">
       <div class="logo"><div class="badge">F</div><div>FireOps SIM — Admin</div></div>
       <div class="spacer"></div>
-      <button class="btn" id="goCreate">Create Scenario</button>
-      <button class="btn secondary" id="goEdit">Edit Existing</button>
+      <button class="btn" id="goCreate">Create</button>
+      <button class="btn secondary" id="goEdit">Edit</button>
+      <button class="btn secondary" id="goDiag">Diagnostics</button>
     </div>
   </div>
 
@@ -128,54 +130,73 @@
       <div id="scenarioList" style="margin-top:8px"></div>
     </section>
 
+    <!-- Diagnostics -->
+    <section class="panel hidden" id="diagPanel">
+      <div style="display:flex;align-items:center;justify-content:space-between">
+        <h3 style="margin:0">Diagnostics</h3>
+        <button class="btn secondary" id="backFromDiag">Back</button>
+      </div>
+      <div class="tag">Runs connectivity checks and a tiny real upload to Cloud Storage.</div>
+      <div style="display:flex;gap:10px;margin-top:10px;flex-wrap:wrap">
+        <button class="btn" id="runDiag"><span class="spinner"></span><span>Run Cloud Test</span></button>
+        <div id="diagStatus" class="tag">Idle</div>
+      </div>
+      <div id="diagLog" class="statusLine small" style="margin-top:8px">—</div>
+    </section>
+
     <!-- Landing -->
     <section class="panel" id="landing">
       <h3 style="margin:0 0 6px 0">Manage Scenarios</h3>
       <div class="tag">Choose an action:</div>
       <div style="display:flex;gap:10px;margin-top:10px">
-        <button class="btn" id="landingCreate">Create Scenario</button>
-        <button class="btn secondary" id="landingEdit">Edit Existing</button>
+        <button class="btn" id="landingCreate">Create</button>
+        <button class="btn secondary" id="landingEdit">Edit</button>
+        <button class="btn secondary" id="landingDiag">Diagnostics</button>
       </div>
     </section>
   </main>
 
   <script type="module">
-  // Ensure "Edit Existing" never throws even if Firebase fails to init
-  window.loadForEdit = function(){
-    const el = document.getElementById('editStatus');
-    if (el) el.textContent = 'Firebase not initialized yet.';
-  };
+  // ---- Safety: define a stub so "Edit" never crashes even if init fails
+  window.loadForEdit = function(){ const s=document.getElementById('editStatus'); if(s) s.textContent='Firebase not initialized yet.'; };
 
-  // Error HUD
+  // ---- Error HUD
   const errbar=document.getElementById('errbar');
   const showErr=m=>{errbar.textContent=m;errbar.style.display='block';};
   window.addEventListener('unhandledrejection', e=>showErr('Promise error: ' + (e.reason?.message || e.reason)));
   window.addEventListener('error', e=>showErr('JS error: ' + (e.message || e.error)));
 
-  // Nav
+  // ---- Simple nav helpers
   const landing=document.getElementById('landing');
   const createPanel=document.getElementById('createPanel');
   const editPanel=document.getElementById('editPanel');
+  const diagPanel=document.getElementById('diagPanel');
   const scenarioList=document.getElementById('scenarioList');
   const editStatus=document.getElementById('editStatus');
   const createStatus=document.getElementById('createStatus');
   const saveSteps=document.getElementById('saveSteps');
+  const diagStatus=document.getElementById('diagStatus');
+  const diagLog=document.getElementById('diagLog');
 
   const uiShow=el=>{el.classList.remove('hidden'); el.style.display='';};
   const uiHide=el=>{el.classList.add('hidden'); el.style.display='none';};
 
-  const goCreate=()=>{ uiHide(landing); uiHide(editPanel); uiShow(createPanel); };
-  const goEdit=()=>{ uiHide(landing); uiHide(createPanel); uiShow(editPanel); window.loadForEdit(); };
+  const goCreate=()=>{ uiHide(landing); uiHide(editPanel); uiHide(diagPanel); uiShow(createPanel); };
+  const goEdit=()=>{ uiHide(landing); uiHide(createPanel); uiHide(diagPanel); uiShow(editPanel); window.loadForEdit(); };
+  const goDiag=()=>{ uiHide(landing); uiHide(createPanel); uiHide(editPanel); uiShow(diagPanel); };
 
   document.getElementById('goCreate').onclick=goCreate;
   document.getElementById('goEdit').onclick=goEdit;
+  document.getElementById('goDiag').onclick=goDiag;
   document.getElementById('landingCreate').onclick=goCreate;
   document.getElementById('landingEdit').onclick=goEdit;
+  document.getElementById('landingDiag').onclick=goDiag;
 
-  document.getElementById('backFromCreate').onclick=()=>{ uiHide(createPanel); uiHide(editPanel); uiShow(landing); };
-  document.getElementById('backFromEdit').onclick=()=>{ uiHide(editPanel); uiHide(createPanel); uiShow(landing); scenarioList.innerHTML=''; editStatus.textContent='Ready'; };
+  document.getElementById('backFromCreate').onclick=()=>{ uiHide(createPanel); uiHide(editPanel); uiHide(diagPanel); uiShow(landing); };
+  document.getElementById('backFromEdit').onclick=()=>{ uiHide(editPanel); uiHide(createPanel); uiHide(diagPanel); uiShow(landing); scenarioList.innerHTML=''; editStatus.textContent='Ready'; };
+  document.getElementById('backFromDiag').onclick=()=>{ uiHide(diagPanel); uiHide(createPanel); uiHide(editPanel); uiShow(landing); diagLog.textContent='—'; diagStatus.textContent='Idle'; };
 
-  // Firebase (no App Check to avoid browser "process is not defined")
+  // ---- Firebase (no App Check to avoid browser "process is not defined")
   try{
     const [{ initializeApp }] = await Promise.all([ import("https://www.gstatic.com/firebasejs/10.12.4/firebase-app.js") ]);
     const [{ getDatabase, ref:dbRef, push, set, get, update }] = await Promise.all([ import("https://www.gstatic.com/firebasejs/10.12.4/firebase-database.js") ]);
@@ -198,19 +219,17 @@
     const auth = getAuth(app);
     const BUCKET = app.options?.storageBucket || (firebaseConfig.projectId + ".appspot.com");
 
-    // Auth (Anonymous)
+    // ---- Auth (Anonymous)
     onAuthStateChanged(auth,()=>{});
     async function ensureAuthed(){
       if (auth.currentUser) return auth.currentUser;
       try{
         await signInAnonymously(auth);
-        return await new Promise(res=>{
-          const off=onAuthStateChanged(auth,u=>{ if(u){ off(); res(u);} });
-        });
+        return await new Promise(res=>{ const off=onAuthStateChanged(auth,u=>{ if(u){ off(); res(u);} });});
       }catch(e){ return null; }
     }
 
-    // DOM
+    // ---- DOM inputs
     const scenarioName=document.getElementById('scenarioName');
     const dispatchInfo=document.getElementById('dispatchInfo');
     const photoInput=document.getElementById('photoInput');
@@ -220,12 +239,13 @@
     const createNowBtn=document.getElementById('createNow');
     const savePhotoBtn=document.getElementById('savePhoto');
     const saveLabel=document.getElementById('saveLabel');
+    const runDiagBtn=document.getElementById('runDiag');
 
-    // State
+    // ---- State
     let currentScenarioId=null;
     let localStops=[];
 
-    // Helpers
+    // ---- Helpers
     const readFileAsDataURL=f=>new Promise((res,rej)=>{ const r=new FileReader(); r.onload=()=>res(r.result); r.onerror=rej; r.readAsDataURL(f); });
     const loadImage=src=>new Promise((res,rej)=>{ const i=new Image(); i.onload=()=>res(i); i.onerror=rej; i.crossOrigin='anonymous'; i.src=src; });
     function toCanvas(img,maxW=1920,maxH=1920){ const c=document.createElement('canvas'); const s=Math.min(maxW/img.width,maxH/img.height,1); c.width=Math.round(img.width*s); c.height=Math.round(img.height*s); c.getContext('2d').drawImage(img,0,0,c.width,c.height); return c; }
@@ -236,11 +256,17 @@
       savePhotoBtn.toggleAttribute('disabled', isSaving);
       createNowBtn.toggleAttribute('disabled', isSaving);
       document.getElementById('goEdit').toggleAttribute('disabled', isSaving);
+      document.getElementById('goDiag').toggleAttribute('disabled', isSaving);
       savePhotoBtn.classList.toggle('saving', isSaving);
       saveLabel.textContent = label || (isSaving ? 'Saving…' : 'Save Photo');
     }
+    const setDiagSaving = (is, label) => {
+      runDiagBtn.toggleAttribute('disabled', is);
+      runDiagBtn.classList.toggle('saving', is);
+      runDiagBtn.querySelector('span:last-child').textContent = label || (is ? 'Running…' : 'Run Cloud Test');
+    }
 
-    // Hard timeout helper for any promise
+    // Hard timeout helper
     const withTimeout = (p, ms, code='timeout') => Promise.race([
       p,
       new Promise((_,rej)=>setTimeout(()=>{ const e=new Error(`Timed out after ${ms}ms`); e.code=code; rej(e); }, ms))
@@ -263,9 +289,7 @@
       thumbs.innerHTML='';
       localStops.forEach((s,i)=>{
         const wrap=document.createElement('div'); wrap.className='thumbWrap';
-        const img=document.createElement('img'); img.className='thumb';
-        img.src=s.imageURL || dataURLFromStored(s.imageData) || '';
-        img.title=s.caption||`Stop ${i+1}`;
+        const img=document.createElement('img'); img.className='thumb'; img.src=s.imageURL || dataURLFromStored(s.imageData) || ''; img.title=s.caption||`Stop ${i+1}`;
         const del=document.createElement('button'); del.className='btn danger del'; del.textContent='Delete';
         del.onclick=async()=>{ await deleteStopAt(i); };
         wrap.appendChild(img); wrap.appendChild(del); thumbs.appendChild(wrap);
@@ -352,6 +376,25 @@
       });
     }
 
+    document.getElementById('finishAndReturn').onclick = ()=>{ uiHide(createPanel); uiShow(landing); };
+
+    async function deleteStopAt(i){
+      if(i<0||i>=localStops.length) return;
+      if(!confirm('Delete this photo?')) return;
+      const s=localStops[i];
+      try{
+        if (s?.gsUri || s?.storagePath){
+          await ensureAuthed();
+          const refObj = s.gsUri ? stRef(storage,s.gsUri) : stRef(storage,s.storagePath);
+          await deleteObject(refObj);
+        }
+      }catch(_){}
+      localStops.splice(i,1);
+      await set(dbRef(db,`scenarios/${currentScenarioId}/stops`), localStops);
+      renderThumbs();
+    }
+
+    // ---- Save photo (with progress + clear reason on failure)
     document.getElementById('savePhoto').onclick = async ()=>{
       // safety: stop spinner after 25s even if something weird happens
       let killTimer = setTimeout(()=>setSaving(false), 25000);
@@ -389,7 +432,7 @@
           step('Photo uploaded to Cloud Storage and saved.', 'good');
         } else {
           const reason = cloudErr ? `${explainError(cloudErr)} <br><span class="small">(code: ${cloudErr.code || 'n/a'})</span>` : 'Unknown reason.';
-          stop.imageData={ format:'jpeg', data:dataURL.split(',')[1] };
+          stop.imageData={ format:'jpeg', data=dataURL.split(',')[1] };
           step(`Saved photo inline. Cloud upload failed because: <br>${reason}`, 'warn');
         }
 
@@ -406,24 +449,7 @@
       }
     };
 
-    document.getElementById('finishAndReturn').onclick = ()=>{ uiHide(createPanel); uiShow(landing); };
-
-    async function deleteStopAt(i){
-      if(i<0||i>=localStops.length) return;
-      if(!confirm('Delete this photo?')) return;
-      const s=localStops[i];
-      try{
-        if (s?.gsUri || s?.storagePath){
-          await ensureAuthed();
-          const refObj = s.gsUri ? stRef(storage,s.gsUri) : stRef(storage,s.storagePath);
-          await deleteObject(refObj);
-        }
-      }catch(_){}
-      localStops.splice(i,1);
-      await set(dbRef(db,`scenarios/${currentScenarioId}/stops`), localStops);
-      renderThumbs();
-    }
-
+    // ---- Edit list
     async function loadForEditImpl(){
       try{
         editStatus.textContent='Loading…';
@@ -460,6 +486,57 @@
     }
     // replace stub
     window.loadForEdit = loadForEditImpl;
+
+    // ---------------- Diagnostics ----------------
+    function logDiag(line, cls=''){ diagLog.className = `statusLine small ${cls}`.trim(); diagLog.innerHTML = (diagLog.innerHTML==='—' ? '' : diagLog.innerHTML + '<br>') + line; }
+
+    async function runDiagnostics(){
+      setDiagSaving(true);
+      diagStatus.textContent='Running…';
+      diagLog.textContent='—';
+
+      // 1) Reachability to firebasestorage.googleapis.com
+      try{
+        const r = await withTimeout(fetch('https://firebasestorage.googleapis.com/generate_204', {cache:'no-store'}), 6000, 'diag/timeout-generate204');
+        logDiag(`1) Reachability (generate_204): <b>OK</b>`, 'good');
+      }catch(e){
+        logDiag(`1) Reachability (generate_204): <b>FAILED</b> — ${e.code||e}`, 'bad');
+      }
+
+      // 2) Reachability to your bucket endpoint
+      try{
+        const r = await withTimeout(fetch(`https://firebasestorage.googleapis.com/v0/b/${BUCKET}/o?maxResults=1`, {cache:'no-store'}), 8000, 'diag/timeout-bucket');
+        logDiag(`2) Bucket endpoint: <b>HTTP ${r.status}</b> (401/403 is OK for reachability)`, (r.ok||r.status===401||r.status===403)?'good':'warn');
+      }catch(e){
+        logDiag(`2) Bucket endpoint: <b>FAILED</b> — ${e.code||e}`, 'bad');
+      }
+
+      // 3) Tiny real upload to scenarios/diagnostics/...
+      try{
+        await ensureAuthed();
+        const ts = Date.now();
+        const png1x1 = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwoB9oPy2kAAAAAASUVORK5CYII=';
+        const scenarioId = 'diagnostics';
+        const path = `scenarios/${scenarioId}/diag-${ts}.png`;
+        const refObj = stRef(storage, path);
+        const blob = dataURLtoBlob(png1x1);
+        const task = uploadBytesResumable(refObj, blob, {contentType:'image/png'});
+        await withTimeout(new Promise((res,rej)=>{
+          const killer=setTimeout(()=>{ try{task.cancel();}catch(_){} const e=new Error('Timed out'); e.code='diag/timeout-upload'; rej(e); }, 15000);
+          task.on('state_changed', ()=>{}, e=>{clearTimeout(killer); rej(e);}, ()=>{clearTimeout(killer); res();});
+        }), 16000, 'diag/timeout-wrap');
+        const url = await withTimeout(getDownloadURL(refObj), 6000, 'diag/timeout-url');
+        logDiag(`3) Tiny upload: <b>SUCCESS</b> → <code class="inline">${path}</code>`, 'good');
+        // optional cleanup (ignore errors)
+        try{ await deleteObject(refObj); }catch(_){}
+      }catch(e){
+        logDiag(`3) Tiny upload: <b>FAILED</b> — ${explainError(e)} <span class="small">(code: ${e.code||'n/a'})</span>`, 'bad');
+      }
+
+      setDiagSaving(false);
+      diagStatus.textContent='Done';
+    }
+    runDiagBtn.onclick = runDiagnostics;
 
   }catch(e){
     showErr('Firebase init failed: '+(e?.message||e));
