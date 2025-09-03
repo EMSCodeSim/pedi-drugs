@@ -91,7 +91,6 @@
       </div>
 
       <div id="saveSteps" class="statusLine small">Waiting to save…</div>
-      <div id="appcheckStatus" class="statusLine small">App Check: not checked yet</div>
 
       <div class="thumbs" id="thumbs" style="margin-top:10px"></div>
     </section>
@@ -121,6 +120,9 @@
   </main>
 
   <script type="module">
+  // ---------- Safety: define a stub so "Edit Existing" never crashes ----------
+  window.loadForEdit = function(){ document.getElementById('editStatus').textContent = 'Firebase not initialized yet.'; };
+
   // ---- Error HUD
   const errbar=document.getElementById('errbar');
   const showErr=m=>{errbar.textContent=m;errbar.style.display='block';};
@@ -135,13 +137,12 @@
   const editStatus=document.getElementById('editStatus');
   const createStatus=document.getElementById('createStatus');
   const saveSteps=document.getElementById('saveSteps');
-  const appcheckStatus=document.getElementById('appcheckStatus');
 
   const uiShow=el=>{el.classList.remove('hidden'); el.style.display='';};
   const uiHide=el=>{el.classList.add('hidden'); el.style.display='none';};
 
   const goCreate=()=>{ uiHide(landing); uiHide(editPanel); uiShow(createPanel); };
-  const goEdit=()=>{ uiHide(landing); uiHide(createPanel); uiShow(editPanel); loadForEdit(); };
+  const goEdit=()=>{ uiHide(landing); uiHide(createPanel); uiShow(editPanel); window.loadForEdit(); };
 
   document.getElementById('goCreate').onclick=goCreate;
   document.getElementById('goEdit').onclick=goEdit;
@@ -151,10 +152,9 @@
   document.getElementById('backFromCreate').onclick=()=>{ uiHide(createPanel); uiHide(editPanel); uiShow(landing); };
   document.getElementById('backFromEdit').onclick=()=>{ uiHide(editPanel); uiHide(createPanel); uiShow(landing); scenarioList.innerHTML=''; editStatus.textContent='Ready'; };
 
-  // ---- Firebase (with App Check debug for dev)
+  // ---- Firebase (no App Check here to avoid "process is not defined")
   try{
     const [{ initializeApp }] = await Promise.all([ import("https://www.gstatic.com/firebasejs/10.12.4/firebase-app.js") ]);
-    const [{ initializeAppCheck, ReCaptchaV3Provider, getToken: getAC }] = await Promise.all([ import("https://www.gstatic.com/firebasejs/10.12.4/firebase-app-check.js") ]);
     const [{ getDatabase, ref:dbRef, push, set, get, update }] = await Promise.all([ import("https://www.gstatic.com/firebasejs/10.12.4/firebase-database.js") ]);
     const [{ getStorage, ref:stRef, uploadString, getDownloadURL, deleteObject }] = await Promise.all([ import("https://www.gstatic.com/firebasejs/10.12.4/firebase-storage.js") ]);
     const [{ getAuth, onAuthStateChanged, signInAnonymously }] = await Promise.all([ import("https://www.gstatic.com/firebasejs/10.12.4/firebase-auth.js") ]);
@@ -168,33 +168,7 @@
       appId:"1:94577748034:web:c032d3a1d72db1313de5db",
       measurementId:"G-19DVN7NNH7"
     };
-
-    // DEV ONLY: enable App Check debug tokens so enforcement doesn't block you
-    self.FIREBASE_APPCHECK_DEBUG_TOKEN = true;
-
     const app = initializeApp(firebaseConfig);
-    // If you have a reCAPTCHA v3 site key, put it here; with debug token, any string works while testing
-    const appCheck = initializeAppCheck(app, {
-      provider: new ReCaptchaV3Provider("debug-site-key"),
-      isTokenAutoRefreshEnabled: true
-    });
-
-    // show App Check status
-    try {
-      const tok = await getAC(appCheck, /*forceRefresh*/ false);
-      if (tok?.token) {
-        appcheckStatus.textContent = "App Check: token OK (debug)";
-        appcheckStatus.className = "statusLine small good";
-        // console.log("App Check debug token:", tok.token);
-      } else {
-        appcheckStatus.textContent = "App Check: no token (enforcement OFF or not required)";
-        appcheckStatus.className = "statusLine small";
-      }
-    } catch {
-      appcheckStatus.textContent = "App Check: no token (enforcement likely OFF)";
-      appcheckStatus.className = "statusLine small";
-    }
-
     const db  = getDatabase(app);
     const storage = getStorage(app);
     const auth = getAuth(app);
@@ -209,7 +183,7 @@
         return await new Promise(res=>{ const off=onAuthStateChanged(auth,u=>{ if(u){ off(); res(u);} });});
       }catch(e){
         if (e?.code==='auth/configuration-not-found' || e?.code==='auth/operation-not-allowed'){
-          return null; // We'll still allow inline save and explain why cloud failed.
+          return null; // allow inline save and explain why cloud failed.
         }
         throw e;
       }
@@ -260,7 +234,7 @@
         return 'Anonymous Auth is not enabled; Storage requires a signed-in user.';
       }
       if (code.includes('storage/unauthorized') || code.includes('permission-denied')) {
-        return 'Storage rules or App Check denied the write. (If App Check is enforced, use the debug token or add a real reCAPTCHA v3 key.)';
+        return 'Storage rules or App Check denied the write. (If App Check is enforced, disable it or add a site key.)';
       }
       if (msg.toLowerCase().includes('app check')) {
         return 'App Check is enforced and this page is not sending a valid token.';
@@ -390,7 +364,7 @@
     }
 
     // ---- Edit list
-    async function loadForEdit(){
+    async function loadForEditImpl(){
       try{
         editStatus.textContent='Loading…';
         const snap=await get(dbRef(db,'scenarios'));
@@ -407,7 +381,7 @@
           const open=document.createElement('button'); open.className='btn'; open.textContent='Open';
           open.onclick=async()=>{
             currentScenarioId=sc.id; localStops=Array.isArray(sc.stops)? sc.stops:[]; scenarioName.value=sc.title||''; dispatchInfo.value=sc.dispatch||'';
-            uiHide(landing); uiHide(editPanel); uiShow(createPanel); renderThumbs(); step('Editing existing scenario.', '');
+            uiHide(landing); uiHide(editPanel); uiShow(createPanel); renderThumbs(); saveSteps.textContent='Editing existing scenario.';
           };
           const toggle=document.createElement('button'); toggle.className='btn secondary'; toggle.style.marginLeft='8px'; toggle.textContent=sc.active?'Deactivate':'Activate';
           toggle.onclick=()=>update(dbRef(db,`scenarios/${sc.id}`),{active:!sc.active});
@@ -424,10 +398,12 @@
         });
       }catch(e){ editStatus.textContent='Error: '+(e?.message||e); showErr(e?.message||String(e)); }
     }
-    window.loadForEdit = loadForEdit;
+    // replace the stub with the real function
+    window.loadForEdit = loadForEditImpl;
 
   }catch(e){
     showErr('Firebase init failed: '+(e?.message||e));
+    // keep the stubbed window.loadForEdit so the button doesn't crash
   }
   </script>
 </body>
