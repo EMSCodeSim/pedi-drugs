@@ -187,7 +187,10 @@ $('toggleTools').onclick = ()=>{
 /* ---------- Firebase config ---------- */
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-app.js";
 import { getDatabase, ref as dbRef, get, set, onValue } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-database.js";
-import { getStorage, ref as stRef, uploadString, getDownloadURL } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-storage.js";
+import {
+  getStorage, ref as stRef, uploadString, getDownloadURL,
+  getBlob   // <- we will download images via SDK
+} from "https://www.gstatic.com/firebasejs/10.12.4/firebase-storage.js";
 import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-auth.js";
 
 const firebaseConfig = {
@@ -195,12 +198,13 @@ const firebaseConfig = {
   authDomain:"dailyquiz-d5279.firebaseapp.com",
   databaseURL:"https://dailyquiz-d5279-default-rtdb.firebaseio.com",
   projectId:"dailyquiz-d5279",
-  storageBucket:"dailyquiz-d5279.firebasestorage.app",   // new bucket host
+  storageBucket:"dailyquiz-d5279.firebasestorage.app",
   appId:"1:94577748034:web:c032d3a1d72db1313de5db",
   measurementId:"G-19DVN7NNH7"
 };
 const appFB = initializeApp(firebaseConfig);
 const db = getDatabase(appFB);
+// Point SDK at your bucket explicitly
 const storage = getStorage(appFB, "gs://dailyquiz-d5279.firebasestorage.app");
 const auth = getAuth(appFB);
 
@@ -229,24 +233,66 @@ function fitCanvas(){
 }
 fitCanvas(); addEventListener('resize', fitCanvas);
 
-/* --- CORS-safe image loader: fetch URL -> data URL for Fabric --- */
-async function fetchAsDataURL(u){
-  const r = await fetch(u, { mode:'cors', credentials:'omit', cache:'no-store' });
-  if (!r.ok) throw new Error('HTTP '+r.status);
-  const b = await r.blob();
-  return await new Promise((res, rej)=>{
+/* --- Turn Blob -> data: URL for Fabric --- */
+function blobToDataURL(blob){
+  return new Promise((res, rej)=>{
     const fr = new FileReader();
     fr.onload = ()=>res(fr.result);
     fr.onerror = rej;
-    fr.readAsDataURL(b);
+    fr.readAsDataURL(blob);
   });
 }
 
-/* Use this for ALL base image loads */
-async function setBaseFromURL(src){
-  const isData = /^data:/i.test(src);
-  const url = isData ? src : await fetchAsDataURL(src);
+/* --- Load base image from multiple source types, preferring SDK --- */
+async function loadBaseFromStopSource(stop){
+  // Prefer gsUri or storagePath -> SDK (App Check/auth aware, no CORS)
+  try{
+    if (stop.gsUri){
+      await ensureAuthed();
+      const ref = stRef(storage, stop.gsUri);
+      const blob = await getBlob(ref);
+      const url  = await blobToDataURL(blob);
+      return url;
+    }
+    if (stop.storagePath){
+      await ensureAuthed();
+      const ref = stRef(storage, stop.storagePath);
+      const blob = await getBlob(ref);
+      const url  = await blobToDataURL(blob);
+      return url;
+    }
+    if (typeof stop.imageURL === 'string' && stop.imageURL){
+      // Try SDK ref-from-URL first
+      await ensureAuthed();
+      let urlData = null;
+      try{
+        const ref = stRef(storage, stop.imageURL);
+        const blob = await getBlob(ref);
+        urlData = await blobToDataURL(blob);
+        return urlData;
+      }catch(_){
+        // Fallback to network fetch (should rarely be needed)
+        const r = await fetch(stop.imageURL, { mode:'cors', credentials:'omit', cache:'no-store' });
+        const b = await r.blob();
+        urlData = await blobToDataURL(b);
+        return urlData;
+      }
+    }
+  }catch(e){
+    throw new Error('Download failed: '+(e.message||e));
+  }
 
+  // Legacy inline data
+  if (stop.imageData?.data){
+    const fmt = stop.imageData.format==='jpeg' ? 'jpeg' : 'png';
+    return `data:image/${fmt};base64,${stop.imageData.data}`;
+  }
+
+  throw new Error('No image source on this stop.');
+}
+
+/* Use this to set the background image on the canvas */
+async function setBaseFromDataURL(url){
   return new Promise((resolve,reject)=>{
     fabric.Image.fromURL(
       url,
@@ -282,12 +328,6 @@ function setBaseAsTextSlide(text, fontSize){
   tb.isBaseText=true;
   f.add(rect); f.add(tb); rect.moveTo(0); f.requestRenderAll();
   $('canvasInfo').textContent='Text slide';
-}
-function toDataURLFromStored(v){
-  if (typeof v==='string') return v;                 // may be https URL
-  if (!v || !v.data) return '';
-  const fmt = v.format==='jpeg' ? 'jpeg' : 'png';
-  return `data:image/${fmt};base64,${v.data}`;
 }
 
 /* ---------- Data ---------- */
@@ -342,8 +382,12 @@ function renderThumbs(){
   if (!current || !current._stops?.length){ row.innerHTML='<div class="pill small">No photos/slides</div>'; return; }
   current._stops.forEach((s,i)=>{
     const img=document.createElement('img'); img.className='thumb'+(i===stopIndex?' active':'');
-    const src=(s?.type==='text')? textThumb(s?.text||s?.title||'') : toDataURLFromStored(s.imageURL||s.imageData);
-    img.src=src; img.alt=s.title||('Stop '+(i+1));
+    const src=(s?.type==='text')? textThumb(s?.text||s?.title||'') :
+              (typeof s.imageURL==='string' && s.imageURL ? s.imageURL :
+               s.imageData?.data ? `data:image/${s.imageData.format==='jpeg'?'jpeg':'png'};base64,${s.imageData.data}` :
+               '');
+    img.src=src || textThumb(s?.title||'');
+    img.alt=s.title||('Stop '+(i+1));
     img.onerror=()=>{ img.src = textThumb(s?.title||''); };
     img.onclick=()=>loadStop(i);              /* click to view/edit */
     row.appendChild(img);
@@ -384,9 +428,13 @@ async function loadStop(i){
   f.clear(); baseImage=null;
   if (s.type==='text'){ setBaseAsTextSlide(s.text||'', s.fontSize||34); }
   else {
-    const src = toDataURLFromStored(s.imageURL || s.imageData);   // may be https or data:
-    if (!src) { $('metaMsg').textContent='No image in this stop.'; return; }
-    await setBaseFromURL(src);                                     // <- now CORS-safe
+    try{
+      const dataURL = await loadBaseFromStopSource(s);   // <— SDK download first
+      await setBaseFromDataURL(dataURL);
+    }catch(e){
+      $('metaMsg').textContent='Image load failed: '+(e.message||e);
+      return;
+    }
   }
 
   // overlays
@@ -510,7 +558,15 @@ $('saveImage').onclick = async ()=>{
 };
 
 /* ---------- Canvas utilities ---------- */
-$('fit').onclick  = ()=>{ if (baseImage && baseImage.type==='image'){ const src=baseImage.getSrc ? baseImage.getSrc() : baseImage._originalElement?.src || ''; if(src) setBaseFromURL(src); } else if (baseImage && baseImage.type==='rect'){ const t=f.getObjects('textbox').find(o=>o.isBaseText); setBaseAsTextSlide(t?t.text:'', t?t.fontSize:34); } };
+$('fit').onclick  = ()=>{
+  if (baseImage && baseImage.type==='image'){
+    const src = baseImage.getSrc ? baseImage.getSrc() : (baseImage._originalElement?.src || '');
+    if (src) setBaseFromDataURL(src);
+  } else if (baseImage && baseImage.type==='rect'){
+    const t=f.getObjects('textbox').find(o=>o.isBaseText);
+    setBaseAsTextSlide(t?t.text:'', t?t.fontSize:34);
+  }
+};
 $('zoomIn').onclick = ()=> f.setZoom(f.getZoom()*1.1);
 $('zoomOut').onclick= ()=> f.setZoom(f.getZoom()/1.1);
 $('rotateL').onclick = ()=>{ if(baseImage && baseImage.rotate){ baseImage.rotate((baseImage.angle||0)-90); f.requestRenderAll(); } };
@@ -533,8 +589,6 @@ $('tbApply').onclick = ()=>{
   f.requestRenderAll();
 };
 $('tbDelete').onclick = ()=>{ const tb=selTB(); if(tb){ f.remove(tb); f.discardActiveObject(); f.requestRenderAll(); } };
-f.on('selection:created', syncTB); f.on('selection:updated', syncTB);
-function syncTB(){ const tb=selTB(); if(tb){ $('tbContent').value=tb.text||''; $('tbFont').value=tb.fontSize||24; const m=tb.backgroundColor||'rgba(0,0,0,0.6)'; const op=(m.match(/rgba?\([^,]+,[^,]+,[^,]+,([\d.]+)\)/)||[])[1]; $('tbBgOpacity').value=op?parseFloat(op):0.6; } }
 
 /* ---------- Overlays + brush ---------- */
 const OVERLAY_BASE='https://fireopssim.com/geophoto/overlays/';
