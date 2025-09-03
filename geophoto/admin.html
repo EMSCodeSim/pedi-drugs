@@ -6,29 +6,51 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <meta name="theme-color" content="#0b0f14" />
   <style>
-    :root{ --bg:#0b0f14; --bg2:#0d121c; --panel:#0f1624; --text:#eaf2ff; --muted:#94a3b8; --edge:rgba(255,255,255,.08); --edge2:rgba(255,255,255,.14); --accent:#0a84ff; --danger:#ef4444 }
+    :root{
+      --bg:#0b0f14; --bg2:#0d121c; --panel:#0f1624; --text:#eaf2ff; --muted:#94a3b8;
+      --edge:rgba(255,255,255,.08); --edge2:rgba(255,255,255,.14); --accent:#0a84ff; --danger:#ef4444
+    }
     *{box-sizing:border-box}
-    html,body{margin:0;height:100%;color:var(--text);font-family:system-ui,-apple-system,Segoe UI,Roboto,Inter,Arial,sans-serif;background:
-      radial-gradient(1400px 700px at 15% -15%, rgba(10,132,255,.28), transparent 60%),
-      radial-gradient(1200px 600px at 110% 0%, rgba(255,59,48,.22), transparent 60%),
-      linear-gradient(165deg, var(--bg2), var(--bg) 55%)}
+    html,body{
+      margin:0;height:100%;color:var(--text);
+      font-family:system-ui,-apple-system,Segoe UI,Roboto,Inter,Arial,sans-serif;
+      background:
+        radial-gradient(1400px 700px at 15% -15%, rgba(10,132,255,.28), transparent 60%),
+        radial-gradient(1200px 600px at 110% 0%, rgba(255,59,48,.22), transparent 60%),
+        linear-gradient(165deg, var(--bg2), var(--bg) 55%);
+    }
     .topbar{position:sticky;top:0;z-index:20;background:rgba(12,15,22,.75);backdrop-filter:saturate(180%) blur(8px);border-bottom:1px solid var(--edge2)}
     .wrap{max-width:1050px;margin:0 auto;padding:14px 16px;display:flex;align-items:center;gap:12px}
     .logo{display:flex;align-items:center;gap:12px;font-weight:800;font-size:18px}
     .badge{width:34px;height:34px;border-radius:9px;background:linear-gradient(135deg,#0a84ff,#54a6ff);display:grid;place-items:center;color:#fff;font-weight:900}
     .spacer{flex:1}
-    .btn{appearance:none;border:1px solid var(--edge2);background:linear-gradient(180deg,#122036,#0f1a2e);color:#fff;border-radius:12px;padding:10px 14px;font-weight:700;cursor:pointer;display:inline-flex;align-items:center;gap:8px}
-    .btn.secondary{background:linear-gradient(180deg,#0f1a2e,#0e1829)} .btn.danger{background:linear-gradient(180deg,#2a0f14,#1f0f12);border-color:rgba(255,71,71,.25)}
+    .btn{
+      appearance:none;border:1px solid var(--edge2);
+      background:linear-gradient(180deg,#122036,#0f1a2e);
+      color:#fff;border-radius:12px;padding:10px 14px;font-weight:700;cursor:pointer;
+      display:inline-flex;align-items:center;gap:8px
+    }
+    .btn.secondary{background:linear-gradient(180deg,#0f1a2e,#0e1829)}
+    .btn.danger{background:linear-gradient(180deg,#2a0f14,#1f0f12);border-color:rgba(255,71,71,.25)}
     .btn[disabled]{opacity:.6; cursor:not-allowed}
     .spinner{width:14px;height:14px;border:2px solid rgba(255,255,255,.25);border-top-color:#fff;border-radius:50%;display:none;animation:spin 1s linear infinite}
     .btn.saving .spinner{display:inline-block}
     @keyframes spin{to{transform:rotate(360deg)}}
-    .panel{background:linear-gradient(180deg,rgba(255,255,255,.02),transparent 26%), linear-gradient(180deg,#0e1524,#0e131e);border:1px solid var(--edge);border-radius:18px;box-shadow:0 10px 40px rgba(0,0,0,.25);padding:16px;margin:16px}
-    .hidden{display:none} .grid{display:grid;gap:14px} @media(min-width:860px){ .grid{grid-template-columns:1.2fr .8fr} }
-    label{font-weight:700} .input,textarea{width:100%;padding:10px 12px;border-radius:12px;background:#0c1322;color:#eaf2ff;border:1px solid var(--edge2)} textarea{min-height:86px}
+
+    .panel{
+      background:linear-gradient(180deg,rgba(255,255,255,.02),transparent 26%), linear-gradient(180deg,#0e1524,#0e131e);
+      border:1px solid var(--edge);border-radius:18px;box-shadow:0 10px 40px rgba(0,0,0,.25);padding:16px;margin:16px
+    }
+    .hidden{display:none}
+    .grid{display:grid;gap:14px}
+    @media(min-width:860px){ .grid{grid-template-columns:1.2fr .8fr} }
+    label{font-weight:700}
+    .input,textarea{width:100%;padding:10px 12px;border-radius:12px;background:#0c1322;color:#eaf2ff;border:1px solid var(--edge2)}
+    textarea{min-height:86px}
     .thumbs{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:12px}
     .thumbWrap{position:relative;border:1px solid var(--edge2);border-radius:12px;overflow:hidden;background:#0e1624}
-    .thumb{width:100%} .del{position:absolute;right:8px;bottom:8px}
+    .thumb{width:100%}
+    .del{position:absolute;right:8px;bottom:8px}
     .tag{color:var(--muted);font-size:12px}
     .listItem{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 10px;border-radius:12px;border:1px solid var(--edge)}
     #errbar{position:fixed;left:10px;bottom:10px;background:#2b0d0d;color:#ffd7d7;border:1px solid #7a2b2b;border-radius:12px;padding:8px 12px;display:none;z-index:9999}
@@ -52,6 +74,7 @@
   </div>
 
   <main class="grid">
+    <!-- Create -->
     <section class="panel hidden" id="createPanel">
       <div style="display:flex;align-items:center;justify-content:space-between">
         <h3 style="margin:0">Create Scenario</h3>
@@ -89,10 +112,10 @@
       </div>
 
       <div id="saveSteps" class="statusLine small">Waiting to save…</div>
-
       <div class="thumbs" id="thumbs" style="margin-top:10px"></div>
     </section>
 
+    <!-- Edit -->
     <section class="panel hidden" id="editPanel">
       <div style="display:flex;align-items:center;justify-content:space-between">
         <h3 style="margin:0">Edit Existing</h3>
@@ -105,6 +128,7 @@
       <div id="scenarioList" style="margin-top:8px"></div>
     </section>
 
+    <!-- Landing -->
     <section class="panel" id="landing">
       <h3 style="margin:0 0 6px 0">Manage Scenarios</h3>
       <div class="tag">Choose an action:</div>
@@ -116,8 +140,11 @@
   </main>
 
   <script type="module">
-  // Safety: default stub so "Edit Existing" never throws even if init fails
-  window.loadForEdit = function(){ document.getElementById('editStatus').textContent = 'Firebase not initialized yet.'; };
+  // Ensure "Edit Existing" never throws even if Firebase fails to init
+  window.loadForEdit = function(){
+    const el = document.getElementById('editStatus');
+    if (el) el.textContent = 'Firebase not initialized yet.';
+  };
 
   // Error HUD
   const errbar=document.getElementById('errbar');
@@ -133,22 +160,27 @@
   const editStatus=document.getElementById('editStatus');
   const createStatus=document.getElementById('createStatus');
   const saveSteps=document.getElementById('saveSteps');
+
   const uiShow=el=>{el.classList.remove('hidden'); el.style.display='';};
   const uiHide=el=>{el.classList.add('hidden'); el.style.display='none';};
+
   const goCreate=()=>{ uiHide(landing); uiHide(editPanel); uiShow(createPanel); };
   const goEdit=()=>{ uiHide(landing); uiHide(createPanel); uiShow(editPanel); window.loadForEdit(); };
+
   document.getElementById('goCreate').onclick=goCreate;
   document.getElementById('goEdit').onclick=goEdit;
   document.getElementById('landingCreate').onclick=goCreate;
   document.getElementById('landingEdit').onclick=goEdit;
+
   document.getElementById('backFromCreate').onclick=()=>{ uiHide(createPanel); uiHide(editPanel); uiShow(landing); };
   document.getElementById('backFromEdit').onclick=()=>{ uiHide(editPanel); uiHide(createPanel); uiShow(landing); scenarioList.innerHTML=''; editStatus.textContent='Ready'; };
 
-  // Firebase (no App Check here to avoid process polyfill issues)
+  // Firebase (no App Check to avoid browser "process is not defined")
   try{
     const [{ initializeApp }] = await Promise.all([ import("https://www.gstatic.com/firebasejs/10.12.4/firebase-app.js") ]);
     const [{ getDatabase, ref:dbRef, push, set, get, update }] = await Promise.all([ import("https://www.gstatic.com/firebasejs/10.12.4/firebase-database.js") ]);
-    const [{ getStorage, ref:stRef, uploadString, getDownloadURL, deleteObject }] = await Promise.all([ import("https://www.gstatic.com/firebasejs/10.12.4/firebase-storage.js") ]);
+    const [{ getStorage, ref:stRef, uploadString, uploadBytesResumable, getDownloadURL, deleteObject }] =
+      await Promise.all([ import("https://www.gstatic.com/firebasejs/10.12.4/firebase-storage.js") ]);
     const [{ getAuth, onAuthStateChanged, signInAnonymously }] = await Promise.all([ import("https://www.gstatic.com/firebasejs/10.12.4/firebase-auth.js") ]);
 
     const firebaseConfig = {
@@ -166,12 +198,15 @@
     const auth = getAuth(app);
     const BUCKET = app.options?.storageBucket || (firebaseConfig.projectId + ".appspot.com");
 
+    // Auth (Anonymous)
     onAuthStateChanged(auth,()=>{});
     async function ensureAuthed(){
       if (auth.currentUser) return auth.currentUser;
       try{
         await signInAnonymously(auth);
-        return await new Promise(res=>{ const off=onAuthStateChanged(auth,u=>{ if(u){ off(); res(u);} });});
+        return await new Promise(res=>{
+          const off=onAuthStateChanged(auth,u=>{ if(u){ off(); res(u);} });
+        });
       }catch(e){ return null; }
     }
 
@@ -185,8 +220,6 @@
     const createNowBtn=document.getElementById('createNow');
     const savePhotoBtn=document.getElementById('savePhoto');
     const saveLabel=document.getElementById('saveLabel');
-    const doneBtn=document.getElementById('finishAndReturn');
-    const quickNewBtn=document.getElementById('quickNew');
 
     // State
     let currentScenarioId=null;
@@ -206,7 +239,8 @@
       savePhotoBtn.classList.toggle('saving', isSaving);
       saveLabel.textContent = label || (isSaving ? 'Saving…' : 'Save Photo');
     }
-    // Hard timeout helper
+
+    // Hard timeout helper for any promise
     const withTimeout = (p, ms, code='timeout') => Promise.race([
       p,
       new Promise((_,rej)=>setTimeout(()=>{ const e=new Error(`Timed out after ${ms}ms`); e.code=code; rej(e); }, ms))
@@ -229,7 +263,9 @@
       thumbs.innerHTML='';
       localStops.forEach((s,i)=>{
         const wrap=document.createElement('div'); wrap.className='thumbWrap';
-        const img=document.createElement('img'); img.className='thumb'; img.src=s.imageURL || dataURLFromStored(s.imageData) || ''; img.title=s.caption||`Stop ${i+1}`;
+        const img=document.createElement('img'); img.className='thumb';
+        img.src=s.imageURL || dataURLFromStored(s.imageData) || '';
+        img.title=s.caption||`Stop ${i+1}`;
         const del=document.createElement('button'); del.className='btn danger del'; del.textContent='Delete';
         del.onclick=async()=>{ await deleteStopAt(i); };
         wrap.appendChild(img); wrap.appendChild(del); thumbs.appendChild(wrap);
@@ -239,9 +275,9 @@
     function explainError(e){
       const code = e?.code || '';
       const msg  = e?.message || String(e);
+      if ((code||'').includes('timeout')) return 'Network/device took too long to respond.';
       if (code.includes('auth/configuration-not-found') || code.includes('auth/operation-not-allowed')) return 'Anonymous Auth not enabled.';
       if (code.includes('storage/unauthorized') || code.includes('permission-denied')) return 'Storage rules or App Check denied the write.';
-      if ((code||'').includes('timeout')) return 'Network/device took too long to respond.';
       if (code.includes('storage/quota-exceeded')) return 'Bucket quota exceeded.';
       return 'Unexpected error while saving photo.';
     }
@@ -274,17 +310,50 @@
       },0);
     };
 
+    // dataURL -> Blob
+    function dataURLtoBlob(dataURL){
+      const [head, b64] = dataURL.split(',');
+      const mime = (head.match(/data:(.*?);base64/) || [,'application/octet-stream'])[1];
+      const bin = atob(b64);
+      const len = bin.length;
+      const buf = new Uint8Array(len);
+      for (let i=0;i<len;i++) buf[i] = bin.charCodeAt(i);
+      return new Blob([buf], { type: mime });
+    }
+
+    // Resumable upload with progress + 45s timeout
     async function uploadToStorage(dataURL, scenarioId){
       await ensureAuthed();
       const path = `scenarios/${scenarioId}/${Date.now()}.jpg`;
       const refObj = stRef(storage, path);
-      await withTimeout(uploadString(refObj, dataURL, 'data_url'), 12000, 'save/timeout-upload');
-      const url = await withTimeout(getDownloadURL(refObj), 6000, 'save/timeout-url');
-      return { url, path, gsUri:`gs://${BUCKET}/${path}` };
+      const blob = dataURLtoBlob(dataURL);
+      const metadata = { contentType: 'image/jpeg', cacheControl: 'public,max-age=31536000,immutable' };
+      const task = uploadBytesResumable(refObj, blob, metadata);
+
+      return await new Promise((resolve, reject)=>{
+        const killer = setTimeout(()=>{ try{ task.cancel(); }catch(_){} 
+          const e=new Error('Timed out while uploading'); e.code='save/timeout-upload'; reject(e);
+        }, 45000);
+
+        task.on('state_changed',
+          snap=>{
+            const pct=Math.round(100*snap.bytesTransferred/snap.totalBytes);
+            step(`Uploading to Cloud Storage… ${pct}%`);
+          },
+          err=>{ clearTimeout(killer); reject(err); },
+          async()=>{
+            clearTimeout(killer);
+            try{
+              const url = await withTimeout(getDownloadURL(refObj), 6000, 'save/timeout-url');
+              resolve({ url, path, gsUri:`gs://${BUCKET}/${path}` });
+            }catch(e){ reject(e); }
+          }
+        );
+      });
     }
 
     document.getElementById('savePhoto').onclick = async ()=>{
-      // safety: kill spinner after 25s no matter what
+      // safety: stop spinner after 25s even if something weird happens
       let killTimer = setTimeout(()=>setSaving(false), 25000);
 
       setSaving(true);
@@ -325,12 +394,7 @@
         }
 
         localStops.push(stop);
-        try{
-          await withTimeout(set(dbRef(db,`scenarios/${currentScenarioId}/stops`), localStops), 8000, 'save/timeout-db');
-        }catch(e){
-          step('Saved image, but database write timed out/failed. You may need to retry. <br><span class="small">Reason: '+(e?.code||e)+'</span>','bad');
-          throw e;
-        }
+        await withTimeout(set(dbRef(db,`scenarios/${currentScenarioId}/stops`), localStops), 8000, 'save/timeout-db');
 
         caption.value=''; radius.value=50; photoInput.value='';
         renderThumbs();
@@ -394,6 +458,7 @@
         });
       }catch(e){ editStatus.textContent='Error: '+(e?.message||e); showErr(e?.message||String(e)); }
     }
+    // replace stub
     window.loadForEdit = loadForEditImpl;
 
   }catch(e){
