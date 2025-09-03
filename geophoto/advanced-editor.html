@@ -175,12 +175,12 @@ textarea{min-height:80px}
 const $ = (id)=>document.getElementById(id);
 const ERR = (m)=>{ const b=$('errbar'); b.textContent=m; b.style.display='block'; };
 
-/* ---------- collapse tools ---------- */
+/* collapse tools */
 $('toggleTools').onclick = ()=>{
   const app = $('app');
-  const on  = !app.classList.contains('toolsCollapsed');
-  app.classList.toggle('toolsCollapsed', on);
-  $('toggleTools').textContent = on ? 'Show Tools' : 'Hide Tools';
+  const collapse = !app.classList.contains('toolsCollapsed');
+  app.classList.toggle('toolsCollapsed', collapse);
+  $('toggleTools').textContent = collapse ? 'Show Tools' : 'Hide Tools';
   fitCanvas();
 };
 
@@ -195,7 +195,7 @@ const firebaseConfig = {
   authDomain:"dailyquiz-d5279.firebaseapp.com",
   databaseURL:"https://dailyquiz-d5279-default-rtdb.firebaseio.com",
   projectId:"dailyquiz-d5279",
-  storageBucket:"dailyquiz-d5279.firebasestorage.app",   // NEW host/bucket
+  storageBucket:"dailyquiz-d5279.firebasestorage.app",   // new bucket host
   appId:"1:94577748034:web:c032d3a1d72db1313de5db",
   measurementId:"G-19DVN7NNH7"
 };
@@ -229,21 +229,44 @@ function fitCanvas(){
 }
 fitCanvas(); addEventListener('resize', fitCanvas);
 
-function setBaseFromURL(url){
-  return new Promise((resolve,reject)=>{
-    fabric.Image.fromURL(url, img=>{
-      if(!img){ reject(new Error('Image load failed')); return; }
-      if (baseImage) f.remove(baseImage);
-      baseImage = img; baseImage.selectable=false; baseImage.evented=false; baseImage.set('erasable', false);
-      const cw=f.getWidth(), ch=f.getHeight();
-      const s=Math.min(cw/img.width, ch/img.height);
-      img.scale(s); img.set({ left:(cw-img.width*s)/2, top:(ch-img.height*s)/2, crossOrigin:'anonymous' });
-      f.add(img); img.moveTo(0); f.requestRenderAll();
-      $('canvasInfo').textContent=`Image ${Math.round(img.width)}×${Math.round(img.height)}`;
-      resolve();
-    }, { crossOrigin:'anonymous' });
+/* --- CORS-safe image loader: fetch URL -> data URL for Fabric --- */
+async function fetchAsDataURL(u){
+  const r = await fetch(u, { mode:'cors', credentials:'omit', cache:'no-store' });
+  if (!r.ok) throw new Error('HTTP '+r.status);
+  const b = await r.blob();
+  return await new Promise((res, rej)=>{
+    const fr = new FileReader();
+    fr.onload = ()=>res(fr.result);
+    fr.onerror = rej;
+    fr.readAsDataURL(b);
   });
 }
+
+/* Use this for ALL base image loads */
+async function setBaseFromURL(src){
+  const isData = /^data:/i.test(src);
+  const url = isData ? src : await fetchAsDataURL(src);
+
+  return new Promise((resolve,reject)=>{
+    fabric.Image.fromURL(
+      url,
+      img=>{
+        if(!img){ reject(new Error('Image load failed')); return; }
+        if (baseImage) f.remove(baseImage);
+        baseImage = img; baseImage.selectable=false; baseImage.evented=false; baseImage.set('erasable', false);
+
+        const cw=f.getWidth(), ch=f.getHeight();
+        const s=Math.min(cw/img.width, ch/img.height);
+        img.scale(s); img.set({ left:(cw-img.width*s)/2, top:(ch-img.height*s)/2 });
+
+        f.add(img); img.moveTo(0); f.requestRenderAll();
+        $('canvasInfo').textContent=`Image ${Math.round(img.width)}×${Math.round(img.height)}`;
+        resolve();
+      }
+    );
+  });
+}
+
 function setBaseAsTextSlide(text, fontSize){
   f.clear();
   const rect = new fabric.Rect({ left:0, top:0, width:f.getWidth(), height:f.getHeight(), fill:'#000', selectable:false, evented:false, erasable:false });
@@ -261,7 +284,7 @@ function setBaseAsTextSlide(text, fontSize){
   $('canvasInfo').textContent='Text slide';
 }
 function toDataURLFromStored(v){
-  if (typeof v==='string') return v;
+  if (typeof v==='string') return v;                 // may be https URL
   if (!v || !v.data) return '';
   const fmt = v.format==='jpeg' ? 'jpeg' : 'png';
   return `data:image/${fmt};base64,${v.data}`;
@@ -322,7 +345,7 @@ function renderThumbs(){
     const src=(s?.type==='text')? textThumb(s?.text||s?.title||'') : toDataURLFromStored(s.imageURL||s.imageData);
     img.src=src; img.alt=s.title||('Stop '+(i+1));
     img.onerror=()=>{ img.src = textThumb(s?.title||''); };
-    img.onclick=()=>loadStop(i);              /* <— CLICK THUMB TO VIEW/EDIT */
+    img.onclick=()=>loadStop(i);              /* click to view/edit */
     row.appendChild(img);
   });
 }
@@ -361,9 +384,9 @@ async function loadStop(i){
   f.clear(); baseImage=null;
   if (s.type==='text'){ setBaseAsTextSlide(s.text||'', s.fontSize||34); }
   else {
-    const src = toDataURLFromStored(s.imageURL || s.imageData);
+    const src = toDataURLFromStored(s.imageURL || s.imageData);   // may be https or data:
     if (!src) { $('metaMsg').textContent='No image in this stop.'; return; }
-    await setBaseFromURL(src);
+    await setBaseFromURL(src);                                     // <- now CORS-safe
   }
 
   // overlays
@@ -487,7 +510,7 @@ $('saveImage').onclick = async ()=>{
 };
 
 /* ---------- Canvas utilities ---------- */
-$('fit').onclick  = ()=>{ if (baseImage && baseImage.type==='image'){ setBaseFromURL(baseImage.getSrc ? baseImage.getSrc() : baseImage._originalElement?.src || '') } else if (baseImage && baseImage.type==='rect'){ const t=f.getObjects('textbox').find(o=>o.isBaseText); setBaseAsTextSlide(t?t.text:'', t?t.fontSize:34); } };
+$('fit').onclick  = ()=>{ if (baseImage && baseImage.type==='image'){ const src=baseImage.getSrc ? baseImage.getSrc() : baseImage._originalElement?.src || ''; if(src) setBaseFromURL(src); } else if (baseImage && baseImage.type==='rect'){ const t=f.getObjects('textbox').find(o=>o.isBaseText); setBaseAsTextSlide(t?t.text:'', t?t.fontSize:34); } };
 $('zoomIn').onclick = ()=> f.setZoom(f.getZoom()*1.1);
 $('zoomOut').onclick= ()=> f.setZoom(f.getZoom()/1.1);
 $('rotateL').onclick = ()=>{ if(baseImage && baseImage.rotate){ baseImage.rotate((baseImage.angle||0)-90); f.requestRenderAll(); } };
