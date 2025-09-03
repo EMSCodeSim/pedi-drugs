@@ -7,7 +7,8 @@
   <meta name="theme-color" content="#0b0f14" />
   <style>
     :root{ --bg:#0b0f14; --bg2:#0d121c; --panel:#0f1624; --text:#eaf2ff; --muted:#94a3b8; --edge:rgba(255,255,255,.08); --edge2:rgba(255,255,255,.14); --accent:#0a84ff; --danger:#ef4444 }
-    *{box-sizing:border-box} html,body{margin:0;height:100%;color:var(--text);font-family:system-ui,-apple-system,Segoe UI,Roboto,Inter,Arial,sans-serif;background:
+    *{box-sizing:border-box}
+    html,body{margin:0;height:100%;color:var(--text);font-family:system-ui,-apple-system,Segoe UI,Roboto,Inter,Arial,sans-serif;background:
       radial-gradient(1400px 700px at 15% -15%, rgba(10,132,255,.28), transparent 60%),
       radial-gradient(1200px 600px at 110% 0%, rgba(255,59,48,.22), transparent 60%),
       linear-gradient(165deg, var(--bg2), var(--bg) 55%)}
@@ -16,16 +17,28 @@
     .logo{display:flex;align-items:center;gap:12px;font-weight:800;font-size:18px}
     .badge{width:34px;height:34px;border-radius:9px;background:linear-gradient(135deg,#0a84ff,#54a6ff);display:grid;place-items:center;color:#fff;font-weight:900}
     .spacer{flex:1}
-    .btn{appearance:none;border:1px solid var(--edge2);background:linear-gradient(180deg,#122036,#0f1a2e);color:#fff;border-radius:12px;padding:10px 14px;font-weight:700;cursor:pointer}
+    .btn{appearance:none;border:1px solid var(--edge2);background:linear-gradient(180deg,#122036,#0f1a2e);color:#fff;border-radius:12px;padding:10px 14px;font-weight:700;cursor:pointer;display:inline-flex;align-items:center;gap:8px}
     .btn.secondary{background:linear-gradient(180deg,#0f1a2e,#0e1829)} .btn.danger{background:linear-gradient(180deg,#2a0f14,#1f0f12);border-color:rgba(255,71,71,.25)}
+    .btn[disabled]{opacity:.6; cursor:not-allowed}
+    .spinner{width:14px;height:14px;border:2px solid rgba(255,255,255,.25);border-top-color:#fff;border-radius:50%;display:none;animation:spin 1s linear infinite}
+    .btn.saving .spinner{display:inline-block}
+    @keyframes spin{to{transform:rotate(360deg)}}
+
     .panel{background:linear-gradient(180deg,rgba(255,255,255,.02),transparent 26%), linear-gradient(180deg,#0e1524,#0e131e);border:1px solid var(--edge);border-radius:18px;box-shadow:0 10px 40px rgba(0,0,0,.25);padding:16px;margin:16px}
     .hidden{display:none} .grid{display:grid;gap:14px} @media(min-width:860px){ .grid{grid-template-columns:1.2fr .8fr} }
     label{font-weight:700} .input,textarea{width:100%;padding:10px 12px;border-radius:12px;background:#0c1322;color:#eaf2ff;border:1px solid var(--edge2)} textarea{min-height:86px}
     .thumbs{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:12px}
     .thumbWrap{position:relative;border:1px solid var(--edge2);border-radius:12px;overflow:hidden;background:#0e1624}
-    .thumb{width:100%} .del{position:absolute;right:8px;bottom:8px} .tag{color:var(--muted);font-size:12px}
+    .thumb{width:100%} .del{position:absolute;right:8px;bottom:8px}
+    .tag{color:var(--muted);font-size:12px}
     .listItem{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 10px;border-radius:12px;border:1px solid var(--edge)}
     #errbar{position:fixed;left:10px;bottom:10px;background:#2b0d0d;color:#ffd7d7;border:1px solid #7a2b2b;border-radius:12px;padding:8px 12px;display:none;z-index:9999}
+    .statusLine{margin-top:6px;padding:8px 10px;border-radius:10px;font-size:13px;background:rgba(255,255,255,.04);border:1px solid var(--edge2)}
+    .statusLine.good{border-color:rgba(16,185,129,.35);background:rgba(16,185,129,.08)}
+    .statusLine.warn{border-color:rgba(234,179,8,.35);background:rgba(234,179,8,.08)}
+    .statusLine.bad{border-color:rgba(239,68,68,.35);background:rgba(239,68,68,.10)}
+    .small{font-size:12px;opacity:.85}
+    details summary{cursor:pointer}
   </style>
 </head>
 <body>
@@ -35,7 +48,6 @@
     <div class="wrap">
       <div class="logo"><div class="badge">F</div><div>FireOps SIM — Admin</div></div>
       <div class="spacer"></div>
-      <!-- Top-level actions restored -->
       <button class="btn" id="goCreate">Create Scenario</button>
       <button class="btn secondary" id="goEdit">Edit Existing</button>
     </div>
@@ -48,7 +60,8 @@
         <h3 style="margin:0">Create Scenario</h3>
         <button class="btn secondary" id="backFromCreate">Back</button>
       </div>
-      <div class="tag" id="createTip">Fill in the basics, then create now or add photos later.</div>
+
+      <div class="tag">Fill in the basics, then click <b>Create Scenario Now</b> or just start saving photos—the scenario will be created automatically.</div>
 
       <div style="margin-top:10px">
         <label>Scenario Name</label>
@@ -59,10 +72,9 @@
         <textarea id="dispatchInfo" placeholder="Engine 1, Engine 2, Medic 1 to..."></textarea>
       </div>
 
-      <!-- NEW: create immediately (no photo required) -->
-      <div style="margin-top:12px;display:flex;gap:10px;flex-wrap:wrap">
-        <button class="btn" id="createNow">Create Scenario Now</button>
-        <span class="tag" id="createStatus">Ready</span>
+      <div style="margin-top:12px;display:flex;gap:10px;flex-wrap:wrap;align-items:center">
+        <button class="btn" id="createNow"><span class="spinner"></span><span>Create Scenario Now</span></button>
+        <div id="createStatus" class="tag">Ready</div>
       </div>
 
       <hr style="border-color:rgba(255,255,255,.08)">
@@ -74,10 +86,15 @@
         <div><label>Caption (optional)</label><input class="input" id="caption" placeholder="e.g., Alpha side"></div>
         <div><label>Radius (meters)</label><input class="input" id="radius" type="number" min="5" max="1000" value="50"></div>
       </div>
-      <div style="margin-top:10px;display:flex;gap:10px;flex-wrap:wrap">
-        <button class="btn" id="savePhoto">Save Photo</button>
+      <div style="margin-top:10px;display:flex;gap:10px;flex-wrap:wrap;align-items:center">
+        <!-- Save Photo button shows spinner and step-by-step messages -->
+        <button class="btn" id="savePhoto"><span class="spinner" id="saveSpin"></span><span id="saveLabel">Save Photo</span></button>
         <button class="btn secondary" id="finishAndReturn">Done</button>
       </div>
+
+      <!-- Live status messages for Save Photo -->
+      <div id="saveSteps" class="statusLine small">Waiting to save…</div>
+
       <div class="thumbs" id="thumbs" style="margin-top:10px"></div>
     </section>
 
@@ -86,7 +103,6 @@
       <div style="display:flex;align-items:center;justify-content:space-between">
         <h3 style="margin:0">Edit Existing</h3>
         <div style="display:flex;gap:8px">
-          <!-- Quick new from Edit list too -->
           <button class="btn" id="quickNew">➕ New Scenario</button>
           <button class="btn secondary" id="backFromEdit">Back</button>
         </div>
@@ -108,7 +124,10 @@
 
   <script type="module">
   // ---- Error HUD
-  const errbar=document.getElementById('errbar'); const showErr=m=>{errbar.textContent=m;errbar.style.display='block';};
+  const errbar=document.getElementById('errbar');
+  const showErr=m=>{errbar.textContent=m;errbar.style.display='block';};
+  window.addEventListener('unhandledrejection', e=>showErr('Promise error: ' + (e.reason?.message || e.reason)));
+  window.addEventListener('error', e=>showErr('JS error: ' + (e.message || e.error)));
 
   // ---- Simple nav helpers
   const landing=document.getElementById('landing');
@@ -117,11 +136,11 @@
   const scenarioList=document.getElementById('scenarioList');
   const editStatus=document.getElementById('editStatus');
   const createStatus=document.getElementById('createStatus');
+  const saveSteps=document.getElementById('saveSteps');
 
   const uiShow=el=>{el.classList.remove('hidden'); el.style.display='';};
   const uiHide=el=>{el.classList.add('hidden'); el.style.display='none';};
 
-  // Top bar + landing buttons
   const goCreate=()=>{ uiHide(landing); uiHide(editPanel); uiShow(createPanel); };
   const goEdit=()=>{ uiHide(landing); uiHide(createPanel); uiShow(editPanel); loadForEdit(); };
 
@@ -164,8 +183,7 @@
         return await new Promise(res=>{ const off=onAuthStateChanged(auth,u=>{ if(u){ off(); res(u);} });});
       }catch(e){
         if (e?.code==='auth/configuration-not-found' || e?.code==='auth/operation-not-allowed'){
-          createStatus.textContent='Anonymous Auth not enabled (saving will still create DB rows; cloud upload needs Auth).';
-          return null;
+          return null; // We'll still allow inline save and explain why cloud failed.
         }
         throw e;
       }
@@ -181,6 +199,8 @@
 
     const createNowBtn=document.getElementById('createNow');
     const savePhotoBtn=document.getElementById('savePhoto');
+    const saveSpin=document.getElementById('saveSpin');
+    const saveLabel=document.getElementById('saveLabel');
     const doneBtn=document.getElementById('finishAndReturn');
     const quickNewBtn=document.getElementById('quickNew');
 
@@ -207,10 +227,39 @@
       });
     }
 
+    // ---- Friendly error explainer
+    function explainError(e){
+      const code = e?.code || '';
+      const msg  = e?.message || String(e);
+      if (code.includes('auth/configuration-not-found') || code.includes('auth/operation-not-allowed')) {
+        return 'Anonymous Auth is not enabled; Storage requires a signed-in user.';
+      }
+      if (code.includes('storage/unauthorized') || code.includes('permission-denied')) {
+        return 'Storage rules denied the write. Check Storage rules or App Check enforcement.';
+      }
+      if (msg.toLowerCase().includes('app check')) {
+        return 'App Check is enforced and this page is not sending a valid token.';
+      }
+      if (code.includes('storage/quota-exceeded')) { return 'Bucket quota exceeded.'; }
+      if (code.includes('storage/canceled')) { return 'Upload canceled.'; }
+      if (code.includes('storage/retry-limit-exceeded')) { return 'Network unstable; retry limit exceeded.'; }
+      return 'Unexpected error saving photo.';
+    }
+
+    // ---- UI: saving state toggles
+    function setSaving(isSaving, label){
+      savePhotoBtn.toggleAttribute('disabled', isSaving);
+      createNowBtn.toggleAttribute('disabled', isSaving);
+      document.getElementById('goEdit').toggleAttribute('disabled', isSaving);
+      savePhotoBtn.classList.toggle('saving', isSaving);
+      saveLabel.textContent = label || (isSaving ? 'Saving…' : 'Save Photo');
+    }
+    function step(msg, cls=''){ saveSteps.className = `statusLine small ${cls}`.trim(); saveSteps.innerHTML = msg; }
+
     // ---- Create: DB record immediately
     async function createScenarioRecord(){
       const name=(scenarioName.value||'').trim();
-      if(!name){ alert('Please enter a Scenario Name'); return; }
+      if(!name){ throw new Error('Please enter a Scenario Name'); }
       const dispatch=(dispatchInfo.value||'').trim();
       const newRef = push(dbRef(db,'scenarios'));
       currentScenarioId = newRef.key;
@@ -221,12 +270,25 @@
 
     createNowBtn.onclick = async ()=>{
       try{
+        setSaving(true,'Creating…');
         await createScenarioRecord();
-      }catch(e){ showErr(e?.message||String(e)); }
+        step('Scenario created. You can now add photos.', 'good');
+      }catch(e){
+        step('Could not create scenario: ' + (e?.message||e), 'bad'); showErr(e?.message||String(e));
+      }finally{ setSaving(false,'Create Scenario Now'); }
     };
+
     quickNewBtn.onclick = async ()=>{
       goCreate();
-      setTimeout(async()=>{ if(!scenarioName.value) scenarioName.value = 'New Scenario'; await createScenarioRecord(); },0);
+      setTimeout(async()=>{
+        try{
+          if(!scenarioName.value) scenarioName.value = 'New Scenario';
+          setSaving(true,'Creating…');
+          await createScenarioRecord();
+          step('Scenario created.', 'good');
+        }catch(e){ step('Could not create scenario: ' + (e?.message||e), 'bad'); showErr(e?.message||String(e)); }
+        finally{ setSaving(false,'Create Scenario Now'); }
+      },0);
     };
 
     // ---- Upload helper
@@ -239,36 +301,59 @@
       return { url, path, gsUri:`gs://${BUCKET}/${path}` };
     }
 
-    // ---- Save photo
+    // ---- Save photo (with progress + clear reason on failure)
     savePhotoBtn.onclick = async ()=>{
+      setSaving(true);
       try{
+        step('Checking selected file…');
         const file=photoInput.files?.[0];
-        if(!file){ alert('Choose a photo first'); return; }
-        if(!currentScenarioId){ await createScenarioRecord(); }
+        if(!file){ step('Please choose a photo first.', 'warn'); setSaving(false); return; }
 
+        if(!currentScenarioId){
+          step('Creating scenario record…');
+          try{ await createScenarioRecord(); }
+          catch(e){ step('Could not create scenario: ' + (e?.message||e), 'bad'); setSaving(false); return; }
+        }
+
+        step('Compressing photo for upload…');
         const raw=await readFileAsDataURL(file);
         const img=await loadImage(raw);
-        const c=toCanvas(img); const dataURL=encodeSmart(c);
+        const c=toCanvas(img);
+        const dataURL=encodeSmart(c);
 
-        let cloud=null;
+        step('Uploading to Cloud Storage…');
+        let cloud=null, cloudErr=null;
         try{ cloud = await uploadToStorage(dataURL, currentScenarioId); }
-        catch(e){ createStatus.textContent='Cloud upload blocked (Auth/AppCheck?). Saved inline.'; }
+        catch(e){ cloudErr = e; }
 
+        step('Saving metadata to database…');
         const gps = await getGPS();
         const r = Math.max(5, Math.min(1000, Math.round(parseInt(radius.value||'50',10))));
         const stop = { caption:(caption.value||'').trim(), lat:gps.lat, lng:gps.lng, radiusMeters:r };
-        if (cloud){ stop.imageURL=cloud.url; stop.storagePath=cloud.path; stop.gsUri=cloud.gsUri; }
-        else { stop.imageData={ format:'jpeg', data:dataURL.split(',')[1] }; }
+
+        if (cloud){
+          stop.imageURL=cloud.url; stop.storagePath=cloud.path; stop.gsUri=cloud.gsUri;
+          step('Photo uploaded to Cloud Storage and saved.', 'good');
+        } else {
+          // Fall back to inline save, but explain why cloud failed
+          const reason = cloudErr ? `${explainError(cloudErr)} <br><span class="small">(Firebase code: ${cloudErr.code || 'n/a'})</span>` : 'Unknown reason.';
+          stop.imageData={ format:'jpeg', data:dataURL.split(',')[1] };
+          step(`Saved photo inline. Cloud upload failed because: <br>${reason}`, 'warn');
+        }
 
         localStops.push(stop);
         await set(dbRef(db,`scenarios/${currentScenarioId}/stops`), localStops);
 
         caption.value=''; radius.value=50; photoInput.value='';
         renderThumbs();
-        createStatus.textContent = cloud ? `Photo #${localStops.length} uploaded.` : `Photo #${localStops.length} saved inline.`;
-      }catch(e){ showErr(e?.message||String(e)); }
+      }catch(e){
+        step('Save failed: ' + (e?.message||e), 'bad'); showErr(e?.message||String(e));
+      }finally{
+        setSaving(false);
+      }
     };
 
+    // ---- Finish
     doneBtn.onclick = ()=>{ uiHide(createPanel); uiShow(landing); };
 
     // ---- Delete stop
@@ -306,7 +391,7 @@
           const open=document.createElement('button'); open.className='btn'; open.textContent='Open';
           open.onclick=async()=>{
             currentScenarioId=sc.id; localStops=Array.isArray(sc.stops)? sc.stops:[]; scenarioName.value=sc.title||''; dispatchInfo.value=sc.dispatch||'';
-            uiHide(landing); uiHide(editPanel); uiShow(createPanel); renderThumbs(); createStatus.textContent=`Editing: ${sc.title||'(untitled)'}`;
+            uiHide(landing); uiHide(editPanel); uiShow(createPanel); renderThumbs(); step('Editing existing scenario.', '');
           };
           const toggle=document.createElement('button'); toggle.className='btn secondary'; toggle.style.marginLeft='8px'; toggle.textContent=sc.active?'Deactivate':'Activate';
           toggle.onclick=()=>update(dbRef(db,`scenarios/${sc.id}`),{active:!sc.active});
