@@ -38,7 +38,6 @@
     .statusLine.warn{border-color:rgba(234,179,8,.35);background:rgba(234,179,8,.08)}
     .statusLine.bad{border-color:rgba(239,68,68,.35);background:rgba(239,68,68,.10)}
     .small{font-size:12px;opacity:.85}
-    details summary{cursor:pointer}
   </style>
 </head>
 <body>
@@ -87,13 +86,12 @@
         <div><label>Radius (meters)</label><input class="input" id="radius" type="number" min="5" max="1000" value="50"></div>
       </div>
       <div style="margin-top:10px;display:flex;gap:10px;flex-wrap:wrap;align-items:center">
-        <!-- Save Photo button shows spinner and step-by-step messages -->
         <button class="btn" id="savePhoto"><span class="spinner" id="saveSpin"></span><span id="saveLabel">Save Photo</span></button>
         <button class="btn secondary" id="finishAndReturn">Done</button>
       </div>
 
-      <!-- Live status messages for Save Photo -->
       <div id="saveSteps" class="statusLine small">Waiting to save…</div>
+      <div id="appcheckStatus" class="statusLine small">App Check: not checked yet</div>
 
       <div class="thumbs" id="thumbs" style="margin-top:10px"></div>
     </section>
@@ -137,6 +135,7 @@
   const editStatus=document.getElementById('editStatus');
   const createStatus=document.getElementById('createStatus');
   const saveSteps=document.getElementById('saveSteps');
+  const appcheckStatus=document.getElementById('appcheckStatus');
 
   const uiShow=el=>{el.classList.remove('hidden'); el.style.display='';};
   const uiHide=el=>{el.classList.add('hidden'); el.style.display='none';};
@@ -152,9 +151,10 @@
   document.getElementById('backFromCreate').onclick=()=>{ uiHide(createPanel); uiHide(editPanel); uiShow(landing); };
   document.getElementById('backFromEdit').onclick=()=>{ uiHide(editPanel); uiHide(createPanel); uiShow(landing); scenarioList.innerHTML=''; editStatus.textContent='Ready'; };
 
-  // ---- Firebase (wrapped so UI still works if it fails)
+  // ---- Firebase (with App Check debug for dev)
   try{
     const [{ initializeApp }] = await Promise.all([ import("https://www.gstatic.com/firebasejs/10.12.4/firebase-app.js") ]);
+    const [{ initializeAppCheck, ReCaptchaV3Provider, getToken: getAC }] = await Promise.all([ import("https://www.gstatic.com/firebasejs/10.12.4/firebase-app-check.js") ]);
     const [{ getDatabase, ref:dbRef, push, set, get, update }] = await Promise.all([ import("https://www.gstatic.com/firebasejs/10.12.4/firebase-database.js") ]);
     const [{ getStorage, ref:stRef, uploadString, getDownloadURL, deleteObject }] = await Promise.all([ import("https://www.gstatic.com/firebasejs/10.12.4/firebase-storage.js") ]);
     const [{ getAuth, onAuthStateChanged, signInAnonymously }] = await Promise.all([ import("https://www.gstatic.com/firebasejs/10.12.4/firebase-auth.js") ]);
@@ -168,7 +168,33 @@
       appId:"1:94577748034:web:c032d3a1d72db1313de5db",
       measurementId:"G-19DVN7NNH7"
     };
+
+    // DEV ONLY: enable App Check debug tokens so enforcement doesn't block you
+    self.FIREBASE_APPCHECK_DEBUG_TOKEN = true;
+
     const app = initializeApp(firebaseConfig);
+    // If you have a reCAPTCHA v3 site key, put it here; with debug token, any string works while testing
+    const appCheck = initializeAppCheck(app, {
+      provider: new ReCaptchaV3Provider("debug-site-key"),
+      isTokenAutoRefreshEnabled: true
+    });
+
+    // show App Check status
+    try {
+      const tok = await getAC(appCheck, /*forceRefresh*/ false);
+      if (tok?.token) {
+        appcheckStatus.textContent = "App Check: token OK (debug)";
+        appcheckStatus.className = "statusLine small good";
+        // console.log("App Check debug token:", tok.token);
+      } else {
+        appcheckStatus.textContent = "App Check: no token (enforcement OFF or not required)";
+        appcheckStatus.className = "statusLine small";
+      }
+    } catch {
+      appcheckStatus.textContent = "App Check: no token (enforcement likely OFF)";
+      appcheckStatus.className = "statusLine small";
+    }
+
     const db  = getDatabase(app);
     const storage = getStorage(app);
     const auth = getAuth(app);
@@ -199,7 +225,6 @@
 
     const createNowBtn=document.getElementById('createNow');
     const savePhotoBtn=document.getElementById('savePhoto');
-    const saveSpin=document.getElementById('saveSpin');
     const saveLabel=document.getElementById('saveLabel');
     const doneBtn=document.getElementById('finishAndReturn');
     const quickNewBtn=document.getElementById('quickNew');
@@ -235,19 +260,18 @@
         return 'Anonymous Auth is not enabled; Storage requires a signed-in user.';
       }
       if (code.includes('storage/unauthorized') || code.includes('permission-denied')) {
-        return 'Storage rules denied the write. Check Storage rules or App Check enforcement.';
+        return 'Storage rules or App Check denied the write. (If App Check is enforced, use the debug token or add a real reCAPTCHA v3 key.)';
       }
       if (msg.toLowerCase().includes('app check')) {
         return 'App Check is enforced and this page is not sending a valid token.';
       }
-      if (code.includes('storage/quota-exceeded')) { return 'Bucket quota exceeded.'; }
-      if (code.includes('storage/canceled')) { return 'Upload canceled.'; }
-      if (code.includes('storage/retry-limit-exceeded')) { return 'Network unstable; retry limit exceeded.'; }
+      if (code.includes('storage/quota-exceeded')) return 'Bucket quota exceeded.';
+      if (code.includes('storage/canceled')) return 'Upload canceled.';
+      if (code.includes('storage/retry-limit-exceeded')) return 'Network unstable; retry limit exceeded.';
       return 'Unexpected error saving photo.';
     }
 
-    // ---- UI: saving state toggles
-    function setSaving(isSaving, label){
+    function setSaving(isSaving,label){
       savePhotoBtn.toggleAttribute('disabled', isSaving);
       createNowBtn.toggleAttribute('disabled', isSaving);
       document.getElementById('goEdit').toggleAttribute('disabled', isSaving);
@@ -268,32 +292,26 @@
       return currentScenarioId;
     }
 
-    createNowBtn.onclick = async ()=>{
-      try{
-        setSaving(true,'Creating…');
-        await createScenarioRecord();
-        step('Scenario created. You can now add photos.', 'good');
-      }catch(e){
-        step('Could not create scenario: ' + (e?.message||e), 'bad'); showErr(e?.message||String(e));
-      }finally{ setSaving(false,'Create Scenario Now'); }
+    document.getElementById('createNow').onclick = async ()=>{
+      try{ setSaving(true,'Creating…'); await createScenarioRecord(); step('Scenario created. You can now add photos.','good'); }
+      catch(e){ step('Could not create scenario: ' + (e?.message||e),'bad'); showErr(e?.message||String(e)); }
+      finally{ setSaving(false,'Create Scenario Now'); }
     };
 
-    quickNewBtn.onclick = async ()=>{
+    document.getElementById('quickNew').onclick = async ()=>{
       goCreate();
       setTimeout(async()=>{
         try{
           if(!scenarioName.value) scenarioName.value = 'New Scenario';
-          setSaving(true,'Creating…');
-          await createScenarioRecord();
-          step('Scenario created.', 'good');
-        }catch(e){ step('Could not create scenario: ' + (e?.message||e), 'bad'); showErr(e?.message||String(e)); }
+          setSaving(true,'Creating…'); await createScenarioRecord(); step('Scenario created.','good');
+        }catch(e){ step('Could not create scenario: ' + (e?.message||e),'bad'); showErr(e?.message||String(e)); }
         finally{ setSaving(false,'Create Scenario Now'); }
       },0);
     };
 
     // ---- Upload helper
     async function uploadToStorage(dataURL, scenarioId){
-      await ensureAuthed(); // no-op if not enabled
+      await ensureAuthed(); // signed-in (Anonymous OK)
       const path = `scenarios/${scenarioId}/${Date.now()}.jpg`;
       const refObj = stRef(storage, path);
       await uploadString(refObj, dataURL, 'data_url');
@@ -302,7 +320,7 @@
     }
 
     // ---- Save photo (with progress + clear reason on failure)
-    savePhotoBtn.onclick = async ()=>{
+    document.getElementById('savePhoto').onclick = async ()=>{
       setSaving(true);
       try{
         step('Checking selected file…');
@@ -335,7 +353,6 @@
           stop.imageURL=cloud.url; stop.storagePath=cloud.path; stop.gsUri=cloud.gsUri;
           step('Photo uploaded to Cloud Storage and saved.', 'good');
         } else {
-          // Fall back to inline save, but explain why cloud failed
           const reason = cloudErr ? `${explainError(cloudErr)} <br><span class="small">(Firebase code: ${cloudErr.code || 'n/a'})</span>` : 'Unknown reason.';
           stop.imageData={ format:'jpeg', data:dataURL.split(',')[1] };
           step(`Saved photo inline. Cloud upload failed because: <br>${reason}`, 'warn');
@@ -353,8 +370,7 @@
       }
     };
 
-    // ---- Finish
-    doneBtn.onclick = ()=>{ uiHide(createPanel); uiShow(landing); };
+    document.getElementById('finishAndReturn').onclick = ()=>{ uiHide(createPanel); uiShow(landing); };
 
     // ---- Delete stop
     async function deleteStopAt(i){
