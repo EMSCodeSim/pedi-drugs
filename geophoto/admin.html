@@ -156,7 +156,7 @@
     </section>
   </main>
 
-  <!-- Boot script: wires buttons immediately, independent of Firebase -->
+  <!-- Boot script (buttons always work) -->
   <script>
     (function boot(){
       const errbar=document.getElementById('errbar');
@@ -174,7 +174,6 @@
       function goEdit(){ uiHide(landing); uiHide(createPanel); uiHide(diagPanel); uiShow(editPanel); (window.loadForEdit||function(){ editStatus.textContent='Firebase not initialized yet.'; })(); }
       function goDiag(){ uiHide(landing); uiHide(createPanel); uiHide(editPanel); uiShow(diagPanel); }
 
-      // Attach handlers safely
       const bind=(id,fn)=>{ const el=document.getElementById(id); if(el) el.addEventListener('click',fn,{passive:true}); };
       bind('goCreate',goCreate); bind('landingCreate',goCreate);
       bind('goEdit',goEdit);     bind('landingEdit',goEdit);
@@ -183,50 +182,43 @@
       bind('backFromEdit',()=>{ uiHide(editPanel); uiHide(createPanel); uiHide(diagPanel); uiShow(landing); editStatus.textContent='Ready'; });
       bind('backFromDiag',()=>{ uiHide(diagPanel); uiHide(createPanel); uiHide(editPanel); uiShow(landing); const s=document.getElementById('diagStatus'); const l=document.getElementById('diagLog'); if(s) s.textContent='Idle'; if(l) l.textContent='—'; });
 
-      // Make errors visible if anything else breaks later
       window.addEventListener('error', e=>showErr('JS error: '+(e.message||e.error)));
       window.addEventListener('unhandledrejection', e=>showErr('Promise error: '+(e.reason&&e.reason.message||e.reason)));
       window.__adminBootOk = true;
     })();
   </script>
 
-  <!-- Firebase compat (widest support) -->
+  <!-- Firebase compat -->
   <script src="https://www.gstatic.com/firebasejs/10.12.4/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.4/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.4/firebase-database-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.4/firebase-storage-compat.js"></script>
 
-  <!-- App script: all features, wrapped so booted buttons still work if this fails -->
+  <!-- App script -->
   <script>
   (function app(){
-    /*** ---------- CONFIG ---------- ***/
     const FUNCTION_UPLOAD_URL = 'https://us-central1-dailyquiz-d5279.cloudfunctions.net/uploadScenarioImage';
 
     const errbar=document.getElementById('errbar');
     const showErr=m=>{ try{errbar.textContent=m;errbar.style.display='block';}catch(_){} };
 
-    // DOM refs shared across features
     const saveSteps=document.getElementById('saveSteps');
     const createStatus=document.getElementById('createStatus');
     const scenarioList=document.getElementById('scenarioList');
-
-    // Helpers safe to call even if not all DOM exists
     function step(msg, cls){ if(!saveSteps) return; cls=cls||''; saveSteps.className=('statusLine small '+cls).trim(); saveSteps.innerHTML=msg; }
 
-    // Stop if Firebase libs failed to load
     if (typeof firebase === 'undefined' || !firebase.initializeApp) {
       showErr('Firebase SDK not loaded');
       window.loadForEdit = function(){ const el=document.getElementById('editStatus'); if(el) el.textContent='Firebase not loaded.'; };
       return;
     }
 
-    // Init Firebase
     const firebaseConfig = {
       apiKey:"AIzaSyDM6DpRSeZueVKRpbyJyDmhf8WY66KyCDk",
       authDomain:"dailyquiz-d5279.firebaseapp.com",
       databaseURL:"https://dailyquiz-d5279-default-rtdb.firebaseio.com",
       projectId:"dailyquiz-d5279",
-      storageBucket:"dailyquiz-d5279.appspot.com",
+      storageBucket:"dailyquiz-d5279.firebasestorage.app",   /* <<<< UPDATED */
       appId:"1:94577748034:web:c032d3a1d72db1313de5db",
       measurementId:"G-19DVN7NNH7"
     };
@@ -237,9 +229,8 @@
     const db = firebase.database();
     const storage = firebase.storage();
     const auth = firebase.auth();
-    const BUCKET = firebaseConfig.storageBucket || (firebaseConfig.projectId + '.appspot.com');
+    const BUCKET = firebaseConfig.storageBucket || (firebaseConfig.projectId + '.firebasestorage.app');
 
-    /*** ---------- AUTH ---------- ***/
     auth.onAuthStateChanged(function(){});
     async function ensureAuthed(){
       if (auth.currentUser) return auth.currentUser;
@@ -249,7 +240,6 @@
       }catch(e){ return null; }
     }
 
-    /*** ---------- DOM for Create flow ---------- ***/
     const scenarioName=document.getElementById('scenarioName');
     const dispatchInfo=document.getElementById('dispatchInfo');
     const photoInput=document.getElementById('photoInput');
@@ -329,7 +319,6 @@
       return currentScenarioId;
     }
 
-    // Buttons (feature handlers)
     if (document.getElementById('createNow')) {
       document.getElementById('createNow').addEventListener('click', async function(){
         try{ setSaving(true,'Creating…'); await createScenarioRecord(); step('Scenario created. You can now add photos.','good'); }
@@ -339,7 +328,6 @@
     }
     if (document.getElementById('quickNew')) {
       document.getElementById('quickNew').addEventListener('click', async function(){
-        // Boot script already navigates; just fill and create
         setTimeout(async function(){
           try{
             if(scenarioName && !scenarioName.value) scenarioName.value='New Scenario';
@@ -350,7 +338,6 @@
       });
     }
 
-    // Uploaders
     function dataURLtoBlob(dataURL){
       var parts=dataURL.split(','), head=parts[0], b64=parts[1];
       var mime=(/data:(.*?);base64/.exec(head)||[, 'application/octet-stream'])[1];
@@ -442,8 +429,8 @@
             step('Photo saved'+(cloud.via==='function'?' via server':'')+' and metadata written.','good');
           } else {
             var reason=cloudErr ? (explainError(cloudErr)+' <br><span class="small">(code: '+(cloudErr.code||'n/a')+')</span>') : 'Unknown reason.';
-            stop.imageData={ format:'jpeg', data:dataURL.split(',')[1] };
-            step('Saved photo inline. Cloud upload failed because: <br>'+reason,'warn');
+            stop.imageData={ format:'jpeg', data=dataURL.split(',')[1] };
+            step('Saved photo inline. <b>Queued for server upload</b>.<br>Reason: '+reason,'warn');
           }
 
           localStops.push(stop);
@@ -483,7 +470,6 @@
       renderThumbs();
     }
 
-    // Edit list
     window.loadForEdit = async function(){
       try{
         const editStatus=document.getElementById('editStatus');
@@ -534,7 +520,6 @@
       }
     };
 
-    // Diagnostics
     function setDiagSaving(is,label){
       var b=runDiagBtn; if(!b) return;
       b.disabled=is; b.classList.toggle('saving', !!is);
