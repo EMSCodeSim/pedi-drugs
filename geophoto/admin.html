@@ -23,7 +23,6 @@
     .spinner{width:14px;height:14px;border:2px solid rgba(255,255,255,.25);border-top-color:#fff;border-radius:50%;display:none;animation:spin 1s linear infinite}
     .btn.saving .spinner{display:inline-block}
     @keyframes spin{to{transform:rotate(360deg)}}
-
     .panel{background:linear-gradient(180deg,rgba(255,255,255,.02),transparent 26%), linear-gradient(180deg,#0e1524,#0e131e);border:1px solid var(--edge);border-radius:18px;box-shadow:0 10px 40px rgba(0,0,0,.25);padding:16px;margin:16px}
     .hidden{display:none} .grid{display:grid;gap:14px} @media(min-width:860px){ .grid{grid-template-columns:1.2fr .8fr} }
     label{font-weight:700} .input,textarea{width:100%;padding:10px 12px;border-radius:12px;background:#0c1322;color:#eaf2ff;border:1px solid var(--edge2)} textarea{min-height:86px}
@@ -53,14 +52,13 @@
   </div>
 
   <main class="grid">
-    <!-- Create panel -->
     <section class="panel hidden" id="createPanel">
       <div style="display:flex;align-items:center;justify-content:space-between">
         <h3 style="margin:0">Create Scenario</h3>
         <button class="btn secondary" id="backFromCreate">Back</button>
       </div>
 
-      <div class="tag">Fill in the basics, then click <b>Create Scenario Now</b> or just start saving photos—the scenario will be created automatically.</div>
+      <div class="tag">Enter name/dispatch, then create now or just save a photo (we’ll create the scenario for you).</div>
 
       <div style="margin-top:10px">
         <label>Scenario Name</label>
@@ -95,7 +93,6 @@
       <div class="thumbs" id="thumbs" style="margin-top:10px"></div>
     </section>
 
-    <!-- Edit panel -->
     <section class="panel hidden" id="editPanel">
       <div style="display:flex;align-items:center;justify-content:space-between">
         <h3 style="margin:0">Edit Existing</h3>
@@ -108,7 +105,6 @@
       <div id="scenarioList" style="margin-top:8px"></div>
     </section>
 
-    <!-- Landing -->
     <section class="panel" id="landing">
       <h3 style="margin:0 0 6px 0">Manage Scenarios</h3>
       <div class="tag">Choose an action:</div>
@@ -120,16 +116,16 @@
   </main>
 
   <script type="module">
-  // ---------- Safety: define a stub so "Edit Existing" never crashes ----------
+  // Safety: default stub so "Edit Existing" never throws even if init fails
   window.loadForEdit = function(){ document.getElementById('editStatus').textContent = 'Firebase not initialized yet.'; };
 
-  // ---- Error HUD
+  // Error HUD
   const errbar=document.getElementById('errbar');
   const showErr=m=>{errbar.textContent=m;errbar.style.display='block';};
   window.addEventListener('unhandledrejection', e=>showErr('Promise error: ' + (e.reason?.message || e.reason)));
   window.addEventListener('error', e=>showErr('JS error: ' + (e.message || e.error)));
 
-  // ---- Simple nav helpers
+  // Nav
   const landing=document.getElementById('landing');
   const createPanel=document.getElementById('createPanel');
   const editPanel=document.getElementById('editPanel');
@@ -137,22 +133,18 @@
   const editStatus=document.getElementById('editStatus');
   const createStatus=document.getElementById('createStatus');
   const saveSteps=document.getElementById('saveSteps');
-
   const uiShow=el=>{el.classList.remove('hidden'); el.style.display='';};
   const uiHide=el=>{el.classList.add('hidden'); el.style.display='none';};
-
   const goCreate=()=>{ uiHide(landing); uiHide(editPanel); uiShow(createPanel); };
   const goEdit=()=>{ uiHide(landing); uiHide(createPanel); uiShow(editPanel); window.loadForEdit(); };
-
   document.getElementById('goCreate').onclick=goCreate;
   document.getElementById('goEdit').onclick=goEdit;
   document.getElementById('landingCreate').onclick=goCreate;
   document.getElementById('landingEdit').onclick=goEdit;
-
   document.getElementById('backFromCreate').onclick=()=>{ uiHide(createPanel); uiHide(editPanel); uiShow(landing); };
   document.getElementById('backFromEdit').onclick=()=>{ uiHide(editPanel); uiHide(createPanel); uiShow(landing); scenarioList.innerHTML=''; editStatus.textContent='Ready'; };
 
-  // ---- Firebase (no App Check here to avoid "process is not defined")
+  // Firebase (no App Check here to avoid process polyfill issues)
   try{
     const [{ initializeApp }] = await Promise.all([ import("https://www.gstatic.com/firebasejs/10.12.4/firebase-app.js") ]);
     const [{ getDatabase, ref:dbRef, push, set, get, update }] = await Promise.all([ import("https://www.gstatic.com/firebasejs/10.12.4/firebase-database.js") ]);
@@ -174,36 +166,29 @@
     const auth = getAuth(app);
     const BUCKET = app.options?.storageBucket || (firebaseConfig.projectId + ".appspot.com");
 
-    // ---- Auth (Anonymous)
     onAuthStateChanged(auth,()=>{});
     async function ensureAuthed(){
       if (auth.currentUser) return auth.currentUser;
       try{
         await signInAnonymously(auth);
         return await new Promise(res=>{ const off=onAuthStateChanged(auth,u=>{ if(u){ off(); res(u);} });});
-      }catch(e){
-        if (e?.code==='auth/configuration-not-found' || e?.code==='auth/operation-not-allowed'){
-          return null; // allow inline save and explain why cloud failed.
-        }
-        throw e;
-      }
+      }catch(e){ return null; }
     }
 
-    // ---- DOM inputs
+    // DOM
     const scenarioName=document.getElementById('scenarioName');
     const dispatchInfo=document.getElementById('dispatchInfo');
     const photoInput=document.getElementById('photoInput');
     const caption=document.getElementById('caption');
     const radius=document.getElementById('radius');
     const thumbs=document.getElementById('thumbs');
-
     const createNowBtn=document.getElementById('createNow');
     const savePhotoBtn=document.getElementById('savePhoto');
     const saveLabel=document.getElementById('saveLabel');
     const doneBtn=document.getElementById('finishAndReturn');
     const quickNewBtn=document.getElementById('quickNew');
 
-    // ---- State
+    // State
     let currentScenarioId=null;
     let localStops=[];
 
@@ -213,7 +198,32 @@
     function toCanvas(img,maxW=1920,maxH=1920){ const c=document.createElement('canvas'); const s=Math.min(maxW/img.width,maxH/img.height,1); c.width=Math.round(img.width*s); c.height=Math.round(img.height*s); c.getContext('2d').drawImage(img,0,0,c.width,c.height); return c; }
     function encodeSmart(c){ const url=c.toDataURL('image/jpeg',0.85); return `data:image/jpeg;base64,${url.split(',')[1]}`; }
     function dataURLFromStored(v){ return (typeof v==='string') ? v : (v?.data ? `data:image/${(v.format||'jpeg')};base64,${v.data}` : ''); }
-    const getGPS=()=>new Promise(res=>navigator.geolocation.getCurrentPosition(p=>res({lat:p.coords.latitude,lng:p.coords.longitude}), _=>res({lat:null,lng:null}), {enableHighAccuracy:true,timeout:15000}));
+    function step(msg, cls=''){ saveSteps.className = `statusLine small ${cls}`.trim(); saveSteps.innerHTML = msg; }
+    function setSaving(isSaving,label){
+      savePhotoBtn.toggleAttribute('disabled', isSaving);
+      createNowBtn.toggleAttribute('disabled', isSaving);
+      document.getElementById('goEdit').toggleAttribute('disabled', isSaving);
+      savePhotoBtn.classList.toggle('saving', isSaving);
+      saveLabel.textContent = label || (isSaving ? 'Saving…' : 'Save Photo');
+    }
+    // Hard timeout helper
+    const withTimeout = (p, ms, code='timeout') => Promise.race([
+      p,
+      new Promise((_,rej)=>setTimeout(()=>{ const e=new Error(`Timed out after ${ms}ms`); e.code=code; rej(e); }, ms))
+    ]);
+
+    // GPS with fast fallback (3s)
+    const getGPS=()=>new Promise(resolve=>{
+      if (!navigator.geolocation) return resolve({lat:null,lng:null, note:'no-geolocation'});
+      let done=false;
+      const finish=(v)=>{ if(!done){ done=true; resolve(v);} };
+      navigator.geolocation.getCurrentPosition(
+        p=>finish({lat:p.coords.latitude,lng:p.coords.longitude}),
+        _=>finish({lat:null,lng:null, note:'denied-or-error'}),
+        {enableHighAccuracy:true,timeout:3000,maximumAge:0}
+      );
+      setTimeout(()=>finish({lat:null,lng:null, note:'timeout'}), 3000);
+    });
 
     function renderThumbs(){
       thumbs.innerHTML='';
@@ -226,38 +236,19 @@
       });
     }
 
-    // ---- Friendly error explainer
     function explainError(e){
       const code = e?.code || '';
       const msg  = e?.message || String(e);
-      if (code.includes('auth/configuration-not-found') || code.includes('auth/operation-not-allowed')) {
-        return 'Anonymous Auth is not enabled; Storage requires a signed-in user.';
-      }
-      if (code.includes('storage/unauthorized') || code.includes('permission-denied')) {
-        return 'Storage rules or App Check denied the write. (If App Check is enforced, disable it or add a site key.)';
-      }
-      if (msg.toLowerCase().includes('app check')) {
-        return 'App Check is enforced and this page is not sending a valid token.';
-      }
+      if (code.includes('auth/configuration-not-found') || code.includes('auth/operation-not-allowed')) return 'Anonymous Auth not enabled.';
+      if (code.includes('storage/unauthorized') || code.includes('permission-denied')) return 'Storage rules or App Check denied the write.';
+      if ((code||'').includes('timeout')) return 'Network/device took too long to respond.';
       if (code.includes('storage/quota-exceeded')) return 'Bucket quota exceeded.';
-      if (code.includes('storage/canceled')) return 'Upload canceled.';
-      if (code.includes('storage/retry-limit-exceeded')) return 'Network unstable; retry limit exceeded.';
-      return 'Unexpected error saving photo.';
+      return 'Unexpected error while saving photo.';
     }
 
-    function setSaving(isSaving,label){
-      savePhotoBtn.toggleAttribute('disabled', isSaving);
-      createNowBtn.toggleAttribute('disabled', isSaving);
-      document.getElementById('goEdit').toggleAttribute('disabled', isSaving);
-      savePhotoBtn.classList.toggle('saving', isSaving);
-      saveLabel.textContent = label || (isSaving ? 'Saving…' : 'Save Photo');
-    }
-    function step(msg, cls=''){ saveSteps.className = `statusLine small ${cls}`.trim(); saveSteps.innerHTML = msg; }
-
-    // ---- Create: DB record immediately
     async function createScenarioRecord(){
       const name=(scenarioName.value||'').trim();
-      if(!name){ throw new Error('Please enter a Scenario Name'); }
+      if(!name) throw new Error('Please enter a Scenario Name');
       const dispatch=(dispatchInfo.value||'').trim();
       const newRef = push(dbRef(db,'scenarios'));
       currentScenarioId = newRef.key;
@@ -283,31 +274,32 @@
       },0);
     };
 
-    // ---- Upload helper
     async function uploadToStorage(dataURL, scenarioId){
-      await ensureAuthed(); // signed-in (Anonymous OK)
+      await ensureAuthed();
       const path = `scenarios/${scenarioId}/${Date.now()}.jpg`;
       const refObj = stRef(storage, path);
-      await uploadString(refObj, dataURL, 'data_url');
-      const url = await getDownloadURL(refObj);
+      await withTimeout(uploadString(refObj, dataURL, 'data_url'), 12000, 'save/timeout-upload');
+      const url = await withTimeout(getDownloadURL(refObj), 6000, 'save/timeout-url');
       return { url, path, gsUri:`gs://${BUCKET}/${path}` };
     }
 
-    // ---- Save photo (with progress + clear reason on failure)
     document.getElementById('savePhoto').onclick = async ()=>{
+      // safety: kill spinner after 25s no matter what
+      let killTimer = setTimeout(()=>setSaving(false), 25000);
+
       setSaving(true);
       try{
         step('Checking selected file…');
         const file=photoInput.files?.[0];
-        if(!file){ step('Please choose a photo first.', 'warn'); setSaving(false); return; }
+        if(!file){ step('Please choose a photo first.', 'warn'); setSaving(false); clearTimeout(killTimer); return; }
 
         if(!currentScenarioId){
           step('Creating scenario record…');
           try{ await createScenarioRecord(); }
-          catch(e){ step('Could not create scenario: ' + (e?.message||e), 'bad'); setSaving(false); return; }
+          catch(e){ step('Could not create scenario: ' + (e?.message||e), 'bad'); setSaving(false); clearTimeout(killTimer); return; }
         }
 
-        step('Compressing photo for upload…');
+        step('Compressing photo…');
         const raw=await readFileAsDataURL(file);
         const img=await loadImage(raw);
         const c=toCanvas(img);
@@ -327,26 +319,31 @@
           stop.imageURL=cloud.url; stop.storagePath=cloud.path; stop.gsUri=cloud.gsUri;
           step('Photo uploaded to Cloud Storage and saved.', 'good');
         } else {
-          const reason = cloudErr ? `${explainError(cloudErr)} <br><span class="small">(Firebase code: ${cloudErr.code || 'n/a'})</span>` : 'Unknown reason.';
+          const reason = cloudErr ? `${explainError(cloudErr)} <br><span class="small">(code: ${cloudErr.code || 'n/a'})</span>` : 'Unknown reason.';
           stop.imageData={ format:'jpeg', data:dataURL.split(',')[1] };
           step(`Saved photo inline. Cloud upload failed because: <br>${reason}`, 'warn');
         }
 
         localStops.push(stop);
-        await set(dbRef(db,`scenarios/${currentScenarioId}/stops`), localStops);
+        try{
+          await withTimeout(set(dbRef(db,`scenarios/${currentScenarioId}/stops`), localStops), 8000, 'save/timeout-db');
+        }catch(e){
+          step('Saved image, but database write timed out/failed. You may need to retry. <br><span class="small">Reason: '+(e?.code||e)+'</span>','bad');
+          throw e;
+        }
 
         caption.value=''; radius.value=50; photoInput.value='';
         renderThumbs();
       }catch(e){
         step('Save failed: ' + (e?.message||e), 'bad'); showErr(e?.message||String(e));
       }finally{
+        clearTimeout(killTimer);
         setSaving(false);
       }
     };
 
     document.getElementById('finishAndReturn').onclick = ()=>{ uiHide(createPanel); uiShow(landing); };
 
-    // ---- Delete stop
     async function deleteStopAt(i){
       if(i<0||i>=localStops.length) return;
       if(!confirm('Delete this photo?')) return;
@@ -363,7 +360,6 @@
       renderThumbs();
     }
 
-    // ---- Edit list
     async function loadForEditImpl(){
       try{
         editStatus.textContent='Loading…';
@@ -398,12 +394,10 @@
         });
       }catch(e){ editStatus.textContent='Error: '+(e?.message||e); showErr(e?.message||String(e)); }
     }
-    // replace the stub with the real function
     window.loadForEdit = loadForEditImpl;
 
   }catch(e){
     showErr('Firebase init failed: '+(e?.message||e));
-    // keep the stubbed window.loadForEdit so the button doesn't crash
   }
   </script>
 </body>
