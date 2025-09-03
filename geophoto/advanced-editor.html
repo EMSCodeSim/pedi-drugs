@@ -52,10 +52,19 @@ textarea{min-height:80px}
 /* collapsible drawer */
 #drawer summary{cursor:pointer;list-style:none;padding:8px 10px;border:1px solid rgba(255,255,255,.14);border-radius:10px;background:#0c1528;font-weight:800}
 #drawer[open] summary{background:#0e1a30}
+
+/* loading overlay */
+#loader{
+  position:fixed; inset:0; display:none; place-items:center; z-index:99;
+  background:rgba(6,12,20,.55); backdrop-filter:blur(2px)
+}
+.spinner{width:42px;height:42px;border-radius:999px;border:4px solid rgba(255,255,255,.25);border-top-color:#fff;animation:spin 1s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
 </style>
 </head>
 <body>
 <div id="errbar"></div>
+<div id="loader"><div class="spinner"></div></div>
 
 <div class="topbar">
   <div class="topnav">
@@ -157,8 +166,8 @@ textarea{min-height:80px}
         <button class="btn" id="fit">Fit</button>
         <button class="btn" id="zoomIn">Zoom +</button>
         <button class="btn" id="zoomOut">Zoom −</button>
-        <button class="btn" id="rotateL">Rotate ⟲</button>
-        <button class="btn" id="rotateR">Rotate ⟳</button>
+        <button class="btn" id="rotateL">Rotate ⟳</button>
+        <button class="btn" id="rotateR">Rotate ⟲</button>
         <span class="pill" id="canvasInfo">Canvas</span>
       </div>
 
@@ -171,9 +180,11 @@ textarea{min-height:80px}
 <script src="https://cdnjs.cloudflare.com/ajax/libs/fabric.js/5.3.0/fabric.min.js" crossorigin="anonymous"></script>
 <!-- Firebase (modules) -->
 <script type="module">
-/* ---------- tiny helpers ---------- */
+/* ---------- helpers ---------- */
 const $ = (id)=>document.getElementById(id);
-const ERR = (m)=>{ const b=$('errbar'); b.textContent=m; b.style.display='block'; };
+const showErr = (m)=>{ const b=$('errbar'); b.textContent=m; b.style.display='block'; };
+const hideErr = ()=>{ $('errbar').style.display='none'; };
+const showLoad = (on)=>{ $('loader').style.display = on ? 'grid' : 'none'; };
 
 /* collapse tools */
 $('toggleTools').onclick = ()=>{
@@ -188,8 +199,7 @@ $('toggleTools').onclick = ()=>{
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-app.js";
 import { getDatabase, ref as dbRef, get, set, onValue } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-database.js";
 import {
-  getStorage, ref as stRef, uploadString, getDownloadURL,
-  getBlob   // <- we will download images via SDK
+  getStorage, ref as stRef, uploadString, getDownloadURL, getBlob
 } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-storage.js";
 import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-auth.js";
 
@@ -204,10 +214,8 @@ const firebaseConfig = {
 };
 const appFB = initializeApp(firebaseConfig);
 const db = getDatabase(appFB);
-// Point SDK at your bucket explicitly
 const storage = getStorage(appFB, "gs://dailyquiz-d5279.firebasestorage.app");
 const auth = getAuth(appFB);
-
 async function ensureAuthed(){
   if (auth.currentUser) return auth.currentUser;
   await signInAnonymously(auth);
@@ -233,101 +241,136 @@ function fitCanvas(){
 }
 fitCanvas(); addEventListener('resize', fitCanvas);
 
-/* --- Turn Blob -> data: URL for Fabric --- */
-function blobToDataURL(blob){
-  return new Promise((res, rej)=>{
-    const fr = new FileReader();
-    fr.onload = ()=>res(fr.result);
-    fr.onerror = rej;
-    fr.readAsDataURL(blob);
+function blobToObjectURL(blob){
+  return URL.createObjectURL(blob);
+}
+function revokeURL(u){ try{ URL.revokeObjectURL(u); }catch{} }
+
+/* ---------- Smart path fixer (thumbnail -> original) ---------- */
+function candidateOriginals(pathOrUrl){
+  const out = new Set();
+  if (!pathOrUrl) return [];
+  let s = pathOrUrl;
+
+  // Decode %2F so we can regex cleanly
+  try{ s = decodeURIComponent(s); }catch{}
+
+  // Strip query string
+  const [base, qs] = s.split('?');
+
+  const variants = new Set();
+  variants.add(base);
+
+  // Replace '/thumbs/' folder
+  variants.add(base.replace(/\/thumbs\//i,'/'));
+  // Remove 'thumb_' prefix
+  variants.add(base.replace(/\/thumb_([^/]+)/i, '/$1'));
+  // Remove suffixes like -thumb, _thumb, -small, _small, -preview, _min, -tiny
+  variants.add(base.replace(/([-_])(thumb|small|preview|min|tiny)(\.[a-z0-9]+)$/i, '$3'));
+
+  // Also try removing any double extensions like .jpg.jpg
+  variants.forEach(v=>{
+    variants.add(v.replace(/(\.[a-z0-9]+)\1$/i, '$1'));
   });
+
+  // Put back original querystring for https URLs
+  for (const v of variants){
+    if (/^https?:\/\//i.test(s) && qs) out.add(v + '?' + qs);
+    out.add(v);
+  }
+  return Array.from(out).filter(Boolean);
 }
 
-/* --- Load base image from multiple source types, preferring SDK --- */
-async function loadBaseFromStopSource(stop){
-  // Prefer gsUri or storagePath -> SDK (App Check/auth aware, no CORS)
-  try{
-    if (stop.gsUri){
-      await ensureAuthed();
-      const ref = stRef(storage, stop.gsUri);
-      const blob = await getBlob(ref);
-      const url  = await blobToDataURL(blob);
-      return url;
-    }
-    if (stop.storagePath){
-      await ensureAuthed();
-      const ref = stRef(storage, stop.storagePath);
-      const blob = await getBlob(ref);
-      const url  = await blobToDataURL(blob);
-      return url;
-    }
-    if (typeof stop.imageURL === 'string' && stop.imageURL){
-      // Try SDK ref-from-URL first
-      await ensureAuthed();
-      let urlData = null;
-      try{
-        const ref = stRef(storage, stop.imageURL);
-        const blob = await getBlob(ref);
-        urlData = await blobToDataURL(blob);
-        return urlData;
-      }catch(_){
-        // Fallback to network fetch (should rarely be needed)
-        const r = await fetch(stop.imageURL, { mode:'cors', credentials:'omit', cache:'no-store' });
-        const b = await r.blob();
-        urlData = await blobToDataURL(b);
-        return urlData;
-      }
-    }
-  }catch(e){
-    throw new Error('Download failed: '+(e.message||e));
+/* ---------- Image load pipeline (SDK-first, with fallbacks) ---------- */
+async function getBlobFromRefString(refStr){
+  await ensureAuthed();
+  const ref = stRef(storage, refStr);
+  return await getBlob(ref);
+}
+
+async function loadBlobForStop(stop){
+  // Highest confidence: gsUri or storagePath
+  if (stop.gsUri){
+    return await getBlobFromRefString(stop.gsUri);
+  }
+  if (stop.storagePath){
+    return await getBlobFromRefString(stop.storagePath);
   }
 
-  // Legacy inline data
+  // Next: imageURL (could be a download URL or a path accidentally set)
+  if (typeof stop.imageURL === 'string' && stop.imageURL){
+    // Try SDK using the URL (works for Firebase download URLs)
+    try{
+      return await getBlobFromRefString(stop.imageURL);
+    }catch(_e){}
+    // Fallback: fetch over network (public object)
+    const r = await fetch(stop.imageURL, { mode:'cors', credentials:'omit', cache:'no-store' });
+    if (!r.ok) throw new Error('HTTP '+r.status);
+    return await r.blob();
+  }
+
+  // Legacy inline
   if (stop.imageData?.data){
     const fmt = stop.imageData.format==='jpeg' ? 'jpeg' : 'png';
-    return `data:image/${fmt};base64,${stop.imageData.data}`;
+    return await (await fetch(`data:image/${fmt};base64,${stop.imageData.data}`)).blob();
   }
-
   throw new Error('No image source on this stop.');
 }
 
-/* Use this to set the background image on the canvas */
-async function setBaseFromDataURL(url){
+async function setBaseFromBlob(blob){
   return new Promise((resolve,reject)=>{
-    fabric.Image.fromURL(
-      url,
-      img=>{
-        if(!img){ reject(new Error('Image load failed')); return; }
-        if (baseImage) f.remove(baseImage);
-        baseImage = img; baseImage.selectable=false; baseImage.evented=false; baseImage.set('erasable', false);
+    const u = blobToObjectURL(blob);
+    fabric.Image.fromURL(u, img=>{
+      revokeURL(u);
+      if(!img){ reject(new Error('Image decode failed')); return; }
+      if (baseImage) f.remove(baseImage);
+      baseImage = img; baseImage.selectable=false; baseImage.evented=false; baseImage.set('erasable', false);
 
-        const cw=f.getWidth(), ch=f.getHeight();
-        const s=Math.min(cw/img.width, ch/img.height);
-        img.scale(s); img.set({ left:(cw-img.width*s)/2, top:(ch-img.height*s)/2 });
+      const cw=f.getWidth(), ch=f.getHeight();
+      const s=Math.min(cw/img.width, ch/img.height);
+      img.scale(s); img.set({ left:(cw-img.width*s)/2, top:(ch-img.height*s)/2 });
 
-        f.add(img); img.moveTo(0); f.requestRenderAll();
-        $('canvasInfo').textContent=`Image ${Math.round(img.width)}×${Math.round(img.height)}`;
-        resolve();
-      }
-    );
+      f.add(img); img.moveTo(0); f.requestRenderAll();
+      $('canvasInfo').textContent=`Image ${Math.round(img.width)}×${Math.round(img.height)} | shown ${Math.round(img.width*s)}×${Math.round(img.height*s)}`;
+      resolve({ naturalW: img.width, naturalH: img.height });
+    }, { crossOrigin:'anonymous' });
   });
 }
 
-function setBaseAsTextSlide(text, fontSize){
-  f.clear();
-  const rect = new fabric.Rect({ left:0, top:0, width:f.getWidth(), height:f.getHeight(), fill:'#000', selectable:false, evented:false, erasable:false });
-  baseImage = rect;
-  const tb = new fabric.Textbox(text||'', {
-    width: Math.floor(f.getWidth()*0.8),
-    left: Math.floor(f.getWidth()*0.1),
-    top:  Math.floor(f.getHeight()*0.2),
-    fontSize: fontSize||34, fill:'#fff', textAlign:'center',
-    fontFamily:'system-ui,-apple-system,Segoe UI,Roboto,Inter,Arial,sans-serif',
-    selectable:false, evented:false, erasable:false
-  });
-  tb.isBaseText=true;
-  f.add(rect); f.add(tb); rect.moveTo(0); f.requestRenderAll();
-  $('canvasInfo').textContent='Text slide';
+/* Try to upgrade from a likely thumbnail to the original */
+async function tryUpgradeIfTiny(stop, initialBlob, dims){
+  const minGood = 400; // anything smaller likely a thumb
+  if ((dims.naturalW >= minGood) || (dims.naturalH >= minGood)) return true;
+
+  // Generate candidate originals from any known string
+  const seeds = [stop.storagePath, stop.gsUri, stop.imageURL].filter(Boolean);
+  for (const seed of seeds){
+    const candidates = candidateOriginals(seed).slice(0, 6);
+    for (const cand of candidates){
+      try{
+        const blob = await getBlobFromRefString(cand);
+        const res = await setBaseFromBlob(blob);
+        if (res.naturalW >= minGood || res.naturalH >= minGood){
+          // persist better source for next time
+          if (!stop.storagePath && !/^gs:\/\//.test(cand)) stop.storagePath = cand;
+          if (!stop.gsUri && /^gs:\/\//.test(cand)) stop.gsUri = cand;
+          await persistStopSource(stop);
+          return true;
+        }
+      }catch(_e){}
+    }
+  }
+  return false;
+}
+
+async function persistStopSource(stop){
+  if (!current || stopIndex<0) return;
+  const next = current._stops.slice();
+  next[stopIndex] = stop;
+  const updated = Object.assign({}, current._raw);
+  setStops(updated, next);
+  await set(dbRef(db, `${ROOT}/${current.id}`), updated);
+  current._raw = updated; current._stops = next;
 }
 
 /* ---------- Data ---------- */
@@ -414,6 +457,7 @@ $('scenarioSel').onchange = async ()=>{
 };
 
 async function loadStop(i){
+  hideErr();
   if (!current) return;
   const s=current._stops[i]; if(!s) return;
   stopIndex=i;
@@ -426,15 +470,24 @@ async function loadStop(i){
   $('stopRadius').value = (s.radiusMeters ?? s.radius ?? 50);
 
   f.clear(); baseImage=null;
-  if (s.type==='text'){ setBaseAsTextSlide(s.text||'', s.fontSize||34); }
-  else {
-    try{
-      const dataURL = await loadBaseFromStopSource(s);   // <— SDK download first
-      await setBaseFromDataURL(dataURL);
-    }catch(e){
-      $('metaMsg').textContent='Image load failed: '+(e.message||e);
-      return;
+  if (s.type==='text'){ setBaseAsTextSlide(s.text||'', s.fontSize||34); return; }
+
+  try{
+    showLoad(true);
+    // 1) Load the blob (SDK first)
+    const blob = await loadBlobForStop(s);
+    // 2) Draw it
+    const dims = await setBaseFromBlob(blob);
+
+    // 3) If it looks like a thumbnail, try to upgrade by guessing original path
+    const ok = await tryUpgradeIfTiny(s, blob, dims);
+    if (!ok && (dims.naturalW < 400 || dims.naturalH < 400)){
+      showErr('Loaded a small thumbnail. If you have an original, the editor tried to find it but could not.');
     }
+  }catch(e){
+    showErr('Image load failed: '+(e.message||e));
+  }finally{
+    showLoad(false);
   }
 
   // overlays
@@ -560,8 +613,10 @@ $('saveImage').onclick = async ()=>{
 /* ---------- Canvas utilities ---------- */
 $('fit').onclick  = ()=>{
   if (baseImage && baseImage.type==='image'){
-    const src = baseImage.getSrc ? baseImage.getSrc() : (baseImage._originalElement?.src || '');
-    if (src) setBaseFromDataURL(src);
+    // re-center & re-fit
+    const cw=f.getWidth(), ch=f.getHeight(), s=Math.min(cw/baseImage.width, ch/baseImage.height);
+    baseImage.scale(s); baseImage.set({ left:(cw-baseImage.width*s)/2, top:(ch-baseImage.height*s)/2 });
+    f.requestRenderAll();
   } else if (baseImage && baseImage.type==='rect'){
     const t=f.getObjects('textbox').find(o=>o.isBaseText);
     setBaseAsTextSlide(t?t.text:'', t?t.fontSize:34);
@@ -569,8 +624,8 @@ $('fit').onclick  = ()=>{
 };
 $('zoomIn').onclick = ()=> f.setZoom(f.getZoom()*1.1);
 $('zoomOut').onclick= ()=> f.setZoom(f.getZoom()/1.1);
-$('rotateL').onclick = ()=>{ if(baseImage && baseImage.rotate){ baseImage.rotate((baseImage.angle||0)-90); f.requestRenderAll(); } };
-$('rotateR').onclick = ()=>{ if(baseImage && baseImage.rotate){ baseImage.rotate((baseImage.angle||0)+90); f.requestRenderAll(); } };
+$('rotateL').onclick = ()=>{ if(baseImage && baseImage.rotate){ baseImage.rotate((baseImage.angle||0)+90); f.requestRenderAll(); } };
+$('rotateR').onclick = ()=>{ if(baseImage && baseImage.rotate){ baseImage.rotate((baseImage.angle||0)-90); f.requestRenderAll(); } };
 
 /* ---------- Text tools ---------- */
 function selTB(){ const o=f.getActiveObject(); return (o && o.type==='textbox' && !o.isBaseText) ? o : null; }
