@@ -1,105 +1,84 @@
-// Cloud Function: uploadScenarioImage
-// Accepts {scenarioId, fileName?, dataURL? or base64?, contentType?}
-// Writes to default bucket at scenarios/{scenarioId}/{fileName}
-// Returns {ok, url, path, gsUri}
+// Moves inline base64 photos under /scenarios/*/stops[*].imageData
+// to Cloud Storage and writes back {imageURL, storagePath, gsUri},
+// then removes imageData. Triggers whenever a scenario changes.
 
-const { onRequest } = require('firebase-functions/v2/https');
+const { onValueWritten } = require('firebase-functions/v2/database');
 const logger = require('firebase-functions/logger');
 const admin = require('firebase-admin');
 const crypto = require('crypto');
-const cors = require('cors')({ origin: true });
 
-const STORAGE_BUCKET =
-  process.env.STORAGE_BUCKET || 'dailyquiz-d5279.appspot.com';
+const DEFAULT_BUCKET = 'dailyquiz-d5279.appspot.com';
 
 try {
-  admin.initializeApp({ storageBucket: STORAGE_BUCKET });
-} catch (e) {
-  // ignore double init
+  admin.initializeApp({ storageBucket: DEFAULT_BUCKET });
+} catch (_) {}
+
+function tokenURL(bucketName, path, token) {
+  return `https://firebasestorage.googleapis.com/v0/b/${bucketName}/o/${encodeURIComponent(path)}?alt=media&token=${token}`;
 }
 
-function parseBody(req) {
-  const { scenarioId, fileName, dataURL, base64, contentType } = req.body || {};
-  if (!scenarioId) throw new Error('Missing scenarioId');
+async function uploadBase64ToStorage(bucket, scenarioId, idx, imageData) {
+  const fmt = (imageData.format || 'jpeg').toLowerCase();
+  const contentType = fmt === 'png' ? 'image/png' : 'image/jpeg';
+  const ext = fmt === 'png' ? 'png' : 'jpg';
 
-  let b64 = base64;
-  let ctype = contentType || 'image/jpeg';
+  const path = `scenarios/${scenarioId}/${Date.now()}-${idx}.${ext}`;
+  const file = bucket.file(path);
 
-  if (!b64 && dataURL) {
-    const parts = String(dataURL).split(',');
-    if (parts.length < 2) throw new Error('Bad dataURL');
-    const head = parts[0];
-    b64 = parts[1];
-    const m = /data:(.*?);base64/.exec(head);
-    if (m && m[1]) ctype = m[1];
-  }
-  if (!b64) throw new Error('Missing image data');
+  const buffer = Buffer.from(imageData.data, 'base64');
+  const token = crypto.randomUUID();
 
-  const name = fileName || `${Date.now()}.jpg`;
-  return { scenarioId, name, b64, ctype };
+  await file.save(buffer, {
+    contentType,
+    resumable: false,
+    public: false,
+    metadata: {
+      cacheControl: 'public,max-age=31536000,immutable',
+      metadata: { firebaseStorageDownloadTokens: token }
+    }
+  });
+
+  return {
+    path,
+    gsUri: `gs://${bucket.name}/${path}`,
+    url: tokenURL(bucket.name, path, token)
+  };
 }
 
-exports.uploadScenarioImage = onRequest(
-  {
-    region: 'us-central1',
-    cors: true, // still handling with cors() to set headers explicitly
-    maxInstances: 5,
-    timeoutSeconds: 60,
-  },
-  async (req, res) => {
-    // CORS + preflight
-    return cors(req, res, async () => {
-      if (req.method === 'OPTIONS') {
-        res.set('Access-Control-Allow-Methods', 'POST, OPTIONS');
-        res.set(
-          'Access-Control-Allow-Headers',
-          'Content-Type, Authorization, X-Requested-With'
-        );
-        res.set('Access-Control-Max-Age', '3600');
-        return res.status(204).send('');
-      }
-      if (req.method !== 'POST') {
-        return res.status(405).json({ ok: false, error: 'Use POST' });
-      }
+// Triggers on any change to a scenario.
+exports.flushInlinePhotos = onValueWritten(
+  { ref: '/scenarios/{scenarioId}', region: 'us-central1', timeoutSeconds: 120, memory: '256MiB' },
+  async (event) => {
+    const scenarioId = event.params.scenarioId;
+    const after = event.data.after.val() || {};
+
+    const stops = Array.isArray(after.stops) ? after.stops : [];
+    if (!stops.length) return;
+
+    const bucket = admin.storage().bucket();
+    const updates = {};
+    let migrated = 0;
+
+    for (let i = 0; i < stops.length; i++) {
+      const s = stops[i];
+      if (!s || !s.imageData || s.storagePath || s.gsUri || s.imageURL) continue;
 
       try {
-        const { scenarioId, name, b64, ctype } = parseBody(req);
-
-        const buffer = Buffer.from(b64, 'base64');
-        const bucket = admin.storage().bucket(); // default bucket
-        const path = `scenarios/${scenarioId}/${name}`;
-        const file = bucket.file(path);
-
-        // Provide public download token so the URL works anonymously
-        const token = crypto.randomUUID();
-
-        await file.save(buffer, {
-          contentType: ctype,
-          resumable: false,
-          public: false,
-          metadata: {
-            cacheControl: 'public,max-age=31536000,immutable',
-            metadata: { firebaseStorageDownloadTokens: token },
-          },
-        });
-
-        const url = `https://firebasestorage.googleapis.com/v0/b/${bucket.name}/o/${encodeURIComponent(
-          path
-        )}?alt=media&token=${token}`;
-
-        logger.info('Uploaded', { path, bytes: buffer.length });
-        return res.json({
-          ok: true,
-          url,
-          path,
-          gsUri: `gs://${bucket.name}/${path}`,
-        });
+        const res = await uploadBase64ToStorage(bucket, scenarioId, i, s.imageData);
+        updates[`stops/${i}/imageURL`] = res.url;
+        updates[`stops/${i}/storagePath`] = res.path;
+        updates[`stops/${i}/gsUri`] = res.gsUri;
+        updates[`stops/${i}/imageData`] = null; // drop inline payload after migration
+        migrated++;
       } catch (err) {
-        logger.error('Upload failed', err);
-        return res
-          .status(400)
-          .json({ ok: false, error: err.message || String(err) });
+        // Keep inline data so we can retry on the next write.
+        logger.error(`Failed migrating stop ${i} for ${scenarioId}:`, err);
       }
-    });
+    }
+
+    if (Object.keys(updates).length) {
+      await event.data.after.ref.update(updates);
+      logger.info(`Migrated ${migrated} inline photo(s) for scenario ${scenarioId}`);
+    }
   }
 );
