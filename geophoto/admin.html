@@ -56,7 +56,7 @@ textarea{min-height:80px}
 <div class="topbar">
   <div class="topnav">
     <div class="brand">FireOps SIM — Admin</div>
-    <span class="version">v2025-09-04a</span>
+    <span class="version">compat-build</span>
     <div class="spacer"></div>
     <button id="showCreate" class="btn">Create Scenario</button>
     <button id="showEdit" class="btn">Edit Scenario</button>
@@ -190,21 +190,26 @@ textarea{min-height:80px}
   </div>
 </div>
 
-<script type="module">
+<!-- Firebase v9 compat (broadest Safari/iPhone support) -->
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-storage-compat.js"></script>
+
+<script>
 /* ---------- iOS safety & polyfills ---------- */
 window.onerror = function(m,src,lin,col,err){ var b=document.getElementById('errbar'); if(b){ b.textContent='Script error: '+(err&&err.message?err.message:m); b.style.display='block'; } document.getElementById('loader').style.display='none'; };
 window.onunhandledrejection = function(e){ var b=document.getElementById('errbar'); if(b){ b.textContent='Unhandled: '+(e && e.reason && e.reason.message ? e.reason.message : String(e && e.reason ? e.reason : e)); b.style.display='block'; } document.getElementById('loader').style.display='none'; };
 if (!HTMLCanvasElement.prototype.toBlob) {
   HTMLCanvasElement.prototype.toBlob = function (cb, type, quality) {
-    var bin = atob(this.toDataURL(type, quality).split(',')[1]);
+    var bin = atob(this.toDataURL(type, quality).split(',')[1]||'');
     var len = bin.length, u8 = new Uint8Array(len);
     for (var i=0;i<len;i++) u8[i] = bin.charCodeAt(i);
     cb(new Blob([u8], { type: type || 'image/png' }));
   };
 }
-if (!Object.entries) { Object.entries = function(obj){ var keys = Object.keys(obj); var out=[]; for (var i=0;i<keys.length;i++){ out.push([keys[i], obj[keys[i]]]); } return out; }; }
+if (!Object.entries) { Object.entries = function(obj){ var keys = Object.keys(obj||{}); var out=[]; for (var i=0;i<keys.length;i++){ out.push([keys[i], obj[keys[i]]]); } return out; }; }
 
-/* ---------- UI helpers ---------- */
 function $(id){ return document.getElementById(id); }
 function show(id,on){ var el=$(id); if(el) el.style.display = on ? '' : 'none'; }
 function ok(m){ var b=$('okbar'); if(!b) return; b.textContent=m; b.style.display='block'; setTimeout(function(){ b.style.display='none'; }, 2600); }
@@ -215,36 +220,33 @@ function loading(on){ var l=$('loader'); if(l) l.style.display = on ? 'grid' : '
 $('showCreate').onclick = function(){ show('createPane',true); show('editPane',false); };
 $('showEdit').onclick = function(){ show('createPane',false); show('editPane',true); };
 
-/* ---------- Firebase (modular SDK) ---------- */
-import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-app.js";
-import { getDatabase, ref as dbRef, set, push, get, onValue, remove } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-database.js";
-import { getStorage, ref as stRef, uploadBytesResumable, uploadBytes, getDownloadURL, deleteObject } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-storage.js";
-import { getAuth, signInAnonymously, onAuthStateChanged, setPersistence, browserLocalPersistence, browserSessionPersistence, inMemoryPersistence } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-auth.js";
-
-/* Firebase config */
+/* ---------- Firebase (compat) ---------- */
 var firebaseConfig = {
   apiKey:"AIzaSyDM6DpRSeZueVKRpbyJyDmhf8WY66KyCDk",
   authDomain:"dailyquiz-d5279.firebaseapp.com",
   databaseURL:"https://dailyquiz-d5279-default-rtdb.firebaseio.com",
   projectId:"dailyquiz-d5279",
-  storageBucket:"dailyquiz-d5279.firebasestorage.app",
+  storageBucket:"dailyquiz-d5279.firebasestorage.app", /* will be normalized */
   appId:"1:94577748034:web:c032d3a1d72db1313de5db",
   measurementId:"G-19DVN7NNH7"
 };
-var appFB = initializeApp(firebaseConfig);
-/* Always write to the real bucket */
-var FORCE_BUCKET = "dailyquiz-d5279.appspot.com";
-var storage = getStorage(appFB, "gs://"+FORCE_BUCKET);
-var db = getDatabase(appFB);
-var auth = getAuth(appFB);
+/* ✅ Force correct bucket for writes */
+firebaseConfig.storageBucket = (firebaseConfig.storageBucket || (firebaseConfig.projectId + ".appspot.com")).replace(".firebasestorage.app", ".appspot.com");
+firebase.initializeApp(firebaseConfig);
 
-/* ---------- Auth ---------- */
+var auth = firebase.auth();
+var db   = firebase.database();
+var storage = firebase.storage(); // uses normalized bucket above
+
+/* ---------- Auth (fallbacks for iOS private mode) ---------- */
 async function initAuth(){
-  try{ await setPersistence(auth, browserLocalPersistence); }
-  catch(e1){ try{ await setPersistence(auth, browserSessionPersistence); }
-  catch(e2){ await setPersistence(auth, inMemoryPersistence); } }
-  if (!auth.currentUser) await signInAnonymously(auth);
-  await new Promise(function(res){ onAuthStateChanged(auth, function(u){ if(u) res(); }); });
+  try { await auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL); }
+  catch(e1){
+    try { await auth.setPersistence(firebase.auth.Auth.Persistence.SESSION); }
+    catch(e2){ await auth.setPersistence(firebase.auth.Auth.Persistence.NONE); }
+  }
+  if (!auth.currentUser) await auth.signInAnonymously();
+  return new Promise(function(res){ var unsub = auth.onAuthStateChanged(function(u){ if(u){ unsub(); res(u); } }); });
 }
 async function ensureAuthed(){ if (!auth.currentUser) await initAuth(); return auth.currentUser; }
 
@@ -278,7 +280,7 @@ function populateEditList(){
 }
 async function safeLoadScenarios(){
   try{
-    var snap = await get(dbRef(db, ROOT));
+    var snap = await db.ref(ROOT).get();
     var obj = snap.exists() ? (snap.val()||{}) : {};
     var arr = [];
     var entries = Object.entries(obj);
@@ -297,7 +299,22 @@ async function safeLoadScenarios(){
   }
 }
 
-/* ---------- Image helpers (iOS-safe) ---------- */
+/* live subscribe to keep list fresh */
+db.ref(ROOT).on('value', function(snap){
+  var obj=snap.val()||{};
+  var arr=[];
+  var entries = Object.entries(obj);
+  for (var i=0;i<entries.length;i++){
+    var id = entries[i][0], s = entries[i][1];
+    arr.push({ id:id, _raw:s, _stops:coerceStops(s), title:s && s.title, description:s && s.description, createdAt:s && s.createdAt, active:(s && (s.active!==false)) });
+  }
+  arr.sort(function(a,b){ return (b.createdAt||0)-(a.createdAt||0); });
+  scenarios = arr;
+  populateEditList();
+  var cur = $('eSelect').value; if (cur) renderScenario(cur);
+});
+
+/* ---------- Image helpers ---------- */
 var ORIG_MAX_EDGE = 1600, THUMB_MAX_EDGE = 480, JPEG_QUALITY = 0.82, MAX_PIXELS = 4000000;
 
 function loadImageURL(url){
@@ -372,7 +389,7 @@ function softCoords(timeoutMs){
       function(){ finish(null); },
       { enableHighAccuracy:true, maximumAge:60000, timeout:timeoutMs }
     );
-    setTimeout(function(){ finish(null); }, timeoutMs+100);
+    setTimeout(function(){ finish(null); }, timeoutMs+150);
   });
 }
 
@@ -435,20 +452,7 @@ function renderPending(scope){
   enablePendingButtons(scope);
 }
 
-/* ---------- Cloud Function fallback ---------- */
-var FUNCTION_UPLOAD_URL = 'https://us-central1-dailyquiz-d5279.cloudfunctions.net/uploadScenarioImage';
-async function uploadViaFunction(dataURL, scenarioId, fileName){
-  var resp = await fetch(FUNCTION_UPLOAD_URL, {
-    method:'POST', headers:{ 'Content-Type':'application/json' },
-    body: JSON.stringify({ scenarioId:scenarioId, fileName:fileName, dataURL:dataURL })
-  });
-  if (!resp.ok){ var txt = await resp.text(); var e = new Error('Function HTTP '+resp.status+' '+txt); e.code='save/function-http'; throw e; }
-  var json = await resp.json();
-  if (!json.ok){ var e2 = new Error('Function error: '+(json.error||'unknown')); e2.code='save/function-error'; throw e2; }
-  return { url: json.url, path: json.path, gsUri: json.gsUri, via:'function' };
-}
-
-/* ---------- Upload helpers ---------- */
+/* ---------- Upload helpers (compat) ---------- */
 function extFromType(t){
   if (!t) return '.jpg';
   var lt = String(t).toLowerCase();
@@ -463,28 +467,21 @@ async function autoCreateIfNeeded(){
   await ensureAuthed();
   var title = ($('cTitle') && $('cTitle').value ? $('cTitle').value.trim() : '') || '(untitled)';
   var desc  = ($('cDesc') && $('cDesc').value ? $('cDesc').value.trim() : '') || '';
-  var id = (push(dbRef(db, ROOT))).key;
-  try{
-    await set(dbRef(db, ROOT + '/' + id), { id:id, title:title, description:desc, createdAt:Date.now(), active:true, stops: [] });
-    createdId = id;
-    ok('Scenario created');
-    await safeLoadScenarios();
-    $('showEdit').click();
-    $('eSelect').value = id; $('eTitle').value = title; $('eDesc').value = desc;
-    renderScenario(id);
-    return id;
-  }catch(e){
-    err('Create failed (DB rules?): '+(e && (e.code||e.message) ? (e.code||e.message) : e));
-    throw e;
-  }
+  var ref = db.ref(ROOT).push();
+  var id = ref.key;
+  await db.ref(ROOT+'/'+id).set({ id:id, title:title, description:desc, createdAt:Date.now(), active:true, stops: [] });
+  createdId = id;
+  ok('Scenario created');
+  await safeLoadScenarios();
+  $('showEdit').click();
+  $('eSelect').value = id; $('eTitle').value = title; $('eDesc').value = desc;
+  renderScenario(id);
+  return id;
 }
-function uploadWithTimeout(fullRef, blob, metadata, onProgress){
+function uploadWithProgress(storageRef, blob, metadata, onProgress){
   return new Promise(function(resolve,reject){
-    var task = uploadBytesResumable(fullRef, blob, metadata);
-    var killer = setTimeout(function(){
-      try{ task.cancel(); }catch(e){}
-      var er = new Error('Timed out while uploading'); er.code='save/timeout-upload'; reject(er);
-    }, 45000);
+    var task = storageRef.put(blob, metadata);
+    var killer = setTimeout(function(){ try{ task.cancel(); }catch(e){} reject(new Error('Timed out while uploading')); }, 45000);
     task.on('state_changed',
       function(s){ if (onProgress){ onProgress(Math.round((s.bytesTransferred/s.totalBytes)*100)); } },
       function(e){ clearTimeout(killer); reject(e); },
@@ -523,30 +520,38 @@ async function saveOnePending(scope, idx, cardEl){
     var ts = Date.now();
     var basePath = 'scenarios/'+scenarioId+'/'+ts;
     var ext = usedOriginal ? extFromType(p.file.type) : '.jpg';
-    var fullRef  = stRef(storage, basePath+ext);
-    var thumbRef = stRef(storage, 'scenarios/'+scenarioId+'/thumbs/'+ts+'.jpg');
+    var fullRef  = storage.ref(basePath+ext);
+    var thumbRef = storage.ref('scenarios/'+scenarioId+'/thumbs/'+ts+'.jpg');
     var metaFull = { contentType: (usedOriginal && p.file.type) ? p.file.type : 'image/jpeg', cacheControl:'public,max-age=31536000,immutable' };
     var metaThmb = { contentType:'image/jpeg', cacheControl:'public,max-age=31536000,immutable' };
 
     status.textContent='Uploading 0%…';
-    var cloud=null;
     try{
-      await uploadWithTimeout(fullRef, fullBlob, metaFull, function(pct){ status.textContent='Uploading '+pct+'%…'; });
-      if (thumbBlob){ try{ await uploadBytes(thumbRef, thumbBlob, metaThmb); }catch(e3){} }
-      var imageURL = await getDownloadURL(fullRef);
-      var thumbURL = imageURL;
-      if (thumbBlob){ try{ thumbURL = await getDownloadURL(thumbRef); }catch(e4){} }
-      cloud = { url:imageURL, thumbURL:thumbURL, path:fullRef.fullPath, gsUri:'gs://'+FORCE_BUCKET+'/'+fullRef.fullPath, via:'storage' };
-    }catch(e1){
-      status.textContent = 'Direct failed. Trying server…';
-      try{
-        var fileName = ts+'.jpg';
-        var res = await uploadViaFunction(dataURL, scenarioId, fileName);
-        cloud = { url:res.url, thumbURL:res.url, path:res.path, gsUri:res.gsUri, via:'function' };
-      }catch(e2){
-        cloud = null; // inline fallback
-      }
+      await uploadWithProgress(fullRef, fullBlob, metaFull, function(pct){ status.textContent='Uploading '+pct+'%…'; });
+      if (thumbBlob){ try{ await thumbRef.put(thumbBlob, metaThmb); }catch(e3){} }
+    }catch(eUp){
+      // last-resort inline store in DB (still shows in app)
+      var stopInline = {
+        type:'photo', title:p.title||'', caption:p.caption||'',
+        lat: coords && coords.lat!=null ? coords.lat : null,
+        lng: coords && coords.lng!=null ? coords.lng : null,
+        radiusMeters:50, width:width, height:height,
+        imageData: { format:'jpeg', data: (dataURL||'').split(',')[1] || '' }, overlays:[]
+      };
+      var snap = await db.ref(ROOT+'/'+scenarioId).get();
+      var sc = snap.exists()? snap.val(): {};
+      var stops = coerceStops(sc); stops.push(stopInline); setStops(sc, stops);
+      await db.ref(ROOT+'/'+scenarioId).set(sc);
+      status.textContent='Saved inline ✓';
+      ok('Photo saved inline (Storage blocked)');
+      list.splice(idx,1); renderPending(scope); enablePendingButtons(scope);
+      await safeLoadScenarios(); if ($('eSelect')){ $('eSelect').value = scenarioId; renderScenario(scenarioId); }
+      return;
     }
+
+    var imageURL = await fullRef.getDownloadURL();
+    var thumbURL = imageURL;
+    try{ if (thumbBlob) thumbURL = await thumbRef.getDownloadURL(); }catch(e4){}
 
     var stop = {
       type:'photo',
@@ -555,33 +560,26 @@ async function saveOnePending(scope, idx, cardEl){
       lat: coords && coords.lat!=null ? coords.lat : null,
       lng: coords && coords.lng!=null ? coords.lng : null,
       radiusMeters:50,
-      width: width, height: height, overlays:[]
+      width: width, height: height, overlays:[],
+      imageURL: imageURL, thumbURL: thumbURL,
+      storagePath: fullRef.fullPath, thumbPath: (thumbBlob? thumbRef.fullPath : null),
+      gsUri: 'gs://'+firebase.app().options.storageBucket+'/'+fullRef.fullPath
     };
-    if (cloud){
-      stop.imageURL   = cloud.url;
-      stop.thumbURL   = cloud.thumbURL || cloud.url;
-      stop.storagePath= cloud.path;
-      stop.gsUri      = cloud.gsUri;
-    }else{
-      stop.imageData  = { format:'jpeg', data: (dataURL||'').split(',')[1] || '' };
-    }
 
     status.textContent='Saving to DB…';
-    var snap = await get(dbRef(db, ROOT+'/'+scenarioId));
-    var sc = snap.val() || {};
-    var stops = coerceStops(sc);
-    stops.push(stop);
-    setStops(sc, stops);
-    await set(dbRef(db, ROOT+'/'+scenarioId), sc);
+    var snap2 = await db.ref(ROOT+'/'+scenarioId).get();
+    var sc2 = snap2.exists()? snap2.val(): {};
+    var stops2 = coerceStops(sc2); stops2.push(stop); setStops(sc2, stops2);
+    await db.ref(ROOT+'/'+scenarioId).set(sc2);
 
-    status.textContent = cloud ? 'Saved ✓' : 'Saved inline ✓';
-    ok(cloud ? 'Photo saved to cloud' : 'Photo saved (inline backup)');
+    status.textContent='Saved ✓';
+    ok('Photo saved to cloud');
 
     var uploads = $(scope+'Uploads');
     if (uploads){
       var img = document.createElement('img');
       img.className='thumb';
-      img.src = cloud ? (stop.thumbURL || stop.imageURL) : ('data:image/jpeg;base64,'+stop.imageData.data);
+      img.src = stop.thumbURL || stop.imageURL;
       uploads.prepend(img);
     }
 
@@ -593,11 +591,10 @@ async function saveOnePending(scope, idx, cardEl){
     if ($('eSelect')){ $('eSelect').value = scenarioId; renderScenario(scenarioId); }
 
   }catch(ex){
-    var code = ex && ex.code ? ex.code : '';
     var msg  = ex && ex.message ? ex.message : String(ex);
     if ((msg||'').match(/app.?check/i)) err('Blocked by App Check enforcement. Add App Check or disable enforcement.');
-    else if (code.indexOf('unauthorized')>=0 || /PERMISSION_DENIED/i.test(msg)) err('Permission denied saving photo. Check Storage/DB rules.');
-    else err('Save failed: ' + (code || msg));
+    else if (/PERMISSION_DENIED|unauthorized|storage\/unauthorized/i.test(msg)) err('Permission denied saving photo. Check Storage/DB rules.');
+    else err('Save failed: ' + msg);
     status.textContent='Failed';
   }
 }
@@ -645,15 +642,16 @@ function renderScenario(id){
         try{
           loading(true);
           await ensureAuthed();
-          var snap = await get(dbRef(db, ROOT+'/'+id));
-          var sc = snap.val(); var arr = coerceStops(sc);
+          var snap = await db.ref(ROOT+'/'+id).get();
+          var sc = snap.exists()? snap.val() : null; if (!sc) return;
+          var arr = coerceStops(sc);
           var removed = arr.splice(idx,1)[0]; setStops(sc, arr);
-          await set(dbRef(db, ROOT+'/'+id), sc);
+          await db.ref(ROOT+'/'+id).set(sc);
+          /* best-effort storage cleanup */
           var paths = [];
           if (removed && removed.storagePath) paths.push(removed.storagePath);
           if (removed && removed.thumbPath)   paths.push(removed.thumbPath);
-          if (removed && removed.gsUri)       paths.push(removed.gsUri);
-          for (var j=0;j<paths.length;j++){ try{ await deleteObject(stRef(storage, paths[j])); }catch(e){} }
+          for (var j=0;j<paths.length;j++){ try{ await storage.ref(paths[j]).delete(); }catch(e){} }
           ok('Stop deleted');
           await safeLoadScenarios(); $('eSelect').value=id; renderScenario(id);
         }catch(e){ err('Delete failed: '+(e.message||e)); }
@@ -666,12 +664,13 @@ function renderScenario(id){
         try{
           loading(true);
           await ensureAuthed();
-          var snap = await get(dbRef(db, ROOT+'/'+id));
-          var sc = snap.val(); var arr = coerceStops(sc);
+          var snap = await db.ref(ROOT+'/'+id).get();
+          var sc = snap.exists()? snap.val() : null; if (!sc) return;
+          var arr = coerceStops(sc);
           if (!arr[idx]) return;
           arr[idx].lat = coords.lat; arr[idx].lng = coords.lng; arr[idx].locAccuracy = coords.accuracy || null;
           setStops(sc, arr);
-          await set(dbRef(db, ROOT+'/'+id), sc);
+          await db.ref(ROOT+'/'+id).set(sc);
           ok('GPS saved');
           await safeLoadScenarios(); $('eSelect').value=id; renderScenario(id);
         }catch(e){ err('Save GPS failed: '+(e.message||e)); }
@@ -709,8 +708,9 @@ $('pmSave').onclick = async function(){
   try{
     loading(true);
     await ensureAuthed();
-    var snap = await get(dbRef(db, ROOT+'/'+scenarioId));
-    var sc = snap.val(); var arr = coerceStops(sc);
+    var snap = await db.ref(ROOT+'/'+scenarioId).get();
+    var sc = snap.exists()? snap.val() : null; if (!sc) return;
+    var arr = coerceStops(sc);
     var st = arr[index]; if (!st) throw new Error('Photo not found');
     st.title = ($('pmTitle').value||'').trim();
     st.caption = ($('pmCaption').value||'').trim();
@@ -719,14 +719,13 @@ $('pmSave').onclick = async function(){
     st.lng = lng==='' ? null : Number(lng);
     var rad = parseInt(($('pmRadius').value||'50'),10); if (!(rad>0)) rad = 50; st.radiusMeters = rad;
     setStops(sc, arr);
-    await set(dbRef(db, ROOT+'/'+scenarioId), sc);
+    await db.ref(ROOT+'/'+scenarioId).set(sc);
     ok('Photo saved');
     $('photoModal').style.display='none';
     await safeLoadScenarios(); $('eSelect').value=scenarioId; renderScenario(scenarioId);
   }catch(e){
-    var msg = e && (e.code||e.message) ? (e.code||e.message) : e;
-    if (String(msg).indexOf('PERMISSION_DENIED')>=0) { err('Save photo failed: DB rules block writes to "/scenarios".'); }
-    else { err('Save photo failed: '+msg); }
+    if (String(e).indexOf('PERMISSION_DENIED')>=0) { err('Save photo failed: DB rules block writes to "/scenarios".'); }
+    else { err('Save photo failed: '+(e.message||e)); }
   }finally{ loading(false); }
 };
 
@@ -738,8 +737,9 @@ $('createBtn').onclick = async function(){
     var title = ($('cTitle').value||'').trim() || '(untitled)';
     var desc  = ($('cDesc').value||'').trim() || '';
     $('createBtn').disabled = true; $('createStatus').textContent='Creating…';
-    var id = (push(dbRef(db, ROOT))).key;
-    await set(dbRef(db, ROOT+'/'+id), { id:id, title:title, description:desc, createdAt:Date.now(), active:true, stops: [] });
+    var ref = db.ref(ROOT).push();
+    var id = ref.key;
+    await db.ref(ROOT+'/'+id).set({ id:id, title:title, description:desc, createdAt:Date.now(), active:true, stops: [] });
     createdId = id;
     $('createStatus').textContent='Created ✓';
     ok('Scenario created');
@@ -748,9 +748,8 @@ $('createBtn').onclick = async function(){
     $('eSelect').value = id; $('eTitle').value = title; $('eDesc').value = desc;
     renderScenario(id);
   }catch(e){
-    var msg = e && (e.code||e.message) ? (e.code||e.message) : e;
-    if (String(msg).indexOf('PERMISSION_DENIED')>=0) err('Create failed: DB rules block writes to "/scenarios".');
-    else err('Create failed: ' + msg);
+    if (String(e).indexOf('PERMISSION_DENIED')>=0) err('Create failed: DB rules block writes to "/scenarios".');
+    else err('Create failed: ' + (e.message||e));
   }finally{
     $('createBtn').disabled = false; loading(false);
   }
@@ -764,17 +763,16 @@ $('saveMeta').onclick = async function(){
     await ensureAuthed();
     var id=$('eSelect').value; if(!id) return;
     loading(true);
-    var snap = await get(dbRef(db, ROOT+'/'+id));
-    var sc = snap.val()||{};
+    var snap = await db.ref(ROOT+'/'+id).get();
+    var sc = snap.exists()? snap.val(): {};
     sc.title = ($('eTitle').value||'').trim()||'(untitled)';
     sc.description = ($('eDesc').value||'').trim()||'';
-    await set(dbRef(db, ROOT+'/'+id), sc);
+    await db.ref(ROOT+'/'+id).set(sc);
     ok('Scenario saved');
     await safeLoadScenarios(); $('eSelect').value=id; renderScenario(id);
   }catch(e){
-    var msg = e && (e.code||e.message) ? (e.code||e.message) : e;
-    if (String(msg).indexOf('PERMISSION_DENIED')>=0) err('Save failed: DB rules block writes to "/scenarios".');
-    else err('Save failed: '+msg);
+    if (String(e).indexOf('PERMISSION_DENIED')>=0) err('Save failed: DB rules block writes to "/scenarios".');
+    else err('Save failed: '+(e.message||e));
   }finally{ loading(false); }
 };
 
@@ -794,11 +792,10 @@ $('deleteScenario').onclick = async function(){
       var st = stops[j];
       if (st && st.storagePath) paths.push(st.storagePath);
       if (st && st.thumbPath)   paths.push(st.thumbPath);
-      if (st && st.gsUri)       paths.push(st.gsUri);
     }
-    for (var k=0;k<paths.length;k++){ try{ await deleteObject(stRef(storage, paths[k])); }catch(e){} }
+    for (var k=0;k<paths.length;k++){ try{ await storage.ref(paths[k]).delete(); }catch(e){} }
 
-    await remove(dbRef(db, ROOT+'/'+id));
+    await db.ref(ROOT+'/'+id).remove();
     ok('Scenario deleted');
 
     await safeLoadScenarios();
@@ -835,30 +832,17 @@ $('eClear').onclick = function(){
 };
 
 /* ---------- Init ---------- */
-async function init(){
+(async function init(){
   try{
     loading(true);
     await ensureAuthed();
-    onValue(dbRef(db, ROOT), function(snap){
-      var obj=snap.val()||{};
-      var arr=[]; var entries = Object.entries(obj);
-      for (var i=0;i<entries.length;i++){
-        var id = entries[i][0], s = entries[i][1];
-        arr.push({ id:id, _raw:s, _stops:coerceStops(s), title:s && s.title, description:s && s.description, createdAt:s && s.createdAt, active:(s && (s.active!==false)) });
-      }
-      arr.sort(function(a,b){ return (b.createdAt||0)-(a.createdAt||0); });
-      scenarios = arr;
-      populateEditList();
-      var cur = $('eSelect').value; if (cur) renderScenario(cur);
-    });
     await safeLoadScenarios();
   }catch(e){
     err('Startup failed: '+(e && e.message ? e.message : e));
   }finally{
     loading(false);
   }
-}
-document.addEventListener('DOMContentLoaded', init);
+})();
 </script>
 </body>
 </html>
