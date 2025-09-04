@@ -52,7 +52,9 @@
     position:absolute; background:#0b1320;border:1px solid var(--bubble-edge);border-radius:12px;
     min-width:300px;padding:8px; z-index:50; box-shadow:0 18px 40px rgba(0,0,0,.55); display:none;
   }
-  .picker h3{font-size:12px;color:#cfe4ff;margin:4px 8px 8px}
+  .picker h3{font-size:12px;color:#cfe4ff;margin:4px 8px 4px}
+  .pickSummary{font-size:12px;color:#cfe4ff;margin:0 8px 8px}
+  .pickSummary .tag{display:inline-block;background:#0b1a29;border:1px solid #1f3a57;border-radius:999px;padding:3px 8px;margin:2px 4px}
   .section-title{font-size:11px;color:#9fb0c8;margin:4px 8px 6px}
   .picker-actions{display:flex;gap:6px;flex-wrap:wrap;padding:6px 8px 10px}
   .pick-small{font-size:12px;padding:8px 10px;border-radius:10px;background:#0b1a29;border:1px solid #1f3a57;cursor:pointer}
@@ -64,13 +66,14 @@
   .row input, .row select{background:#0b1320;color:#eaf2ff;border:1px solid var(--edge);border-radius:10px;padding:8px 10px;font-size:14px}
 
   .dropdown{
-    position:absolute; z-index:40; display:none; pointer-events:auto;
+    position:absolute; z-index:60; display:none; pointer-events:auto;
     background:#0b1320;border:1px solid var(--edge);border-radius:10px;box-shadow:0 12px 28px rgba(0,0,0,.45);overflow:hidden;
   }
   .dropdown button{
     display:block;width:100%;text-align:left;background:none;border:0;color:#eaf2ff;padding:10px 12px;font-size:14px;cursor:pointer
   }
   .dropdown button:hover{background:#0e2337}
+  .dropdown .row{padding:10px}
 
   .panel{padding:10px 12px;background:var(--panel)}
   .card{background:#0e1726;border:1px solid var(--edge);border-radius:14px;padding:12px;margin:10px 0}
@@ -82,8 +85,21 @@
   .lineRow{display:flex;flex-wrap:wrap;gap:8px;align-items:flex-start;background:#0b1320;border:1px solid var(--edge);border-radius:12px;padding:10px}
   .lineRow .title{font-weight:700;margin-right:8px}
   .lineRow .break{font-size:12px;color:#cfe4ff;min-width:260px}
+  .builtTags{margin:6px 0}
+  .builtTags .tag{display:inline-block;background:#0b1a29;border:1px solid #1f3a57;border-radius:999px;padding:4px 8px;margin:2px 4px;font-size:11px}
 
-  .lbl{font-size:10px;fill:#0b0f14}
+  .editorMenu{display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-top:6px}
+  .editorBtn{background:#0b1a29;border:1px solid #1f3a57;border-radius:10px;padding:8px 10px;font-size:12px;cursor:pointer;white-space:nowrap}
+  .editorBtn:hover{background:#0e2337}
+  .addBtn{background:#153a1d;border-color:#275b31}
+  .deployBtn{background:#0b1320}
+  .mono{font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,"Liberation Mono","Courier New",monospace}
+
+  /* Phone: keep the editor in ONE LINE with horizontal scroll */
+  @media (max-width:520px){
+    .editorMenu{flex-wrap:nowrap;overflow-x:auto;-webkit-overflow-scrolling:touch}
+    .editorMenu>*{flex:0 0 auto}
+  }
 
   /* Visual math breakdown */
   details.math{background:#0b1a29;border:1px solid #1f3a57;border-radius:12px;padding:8px 10px;margin-top:8px}
@@ -97,12 +113,8 @@
   .barWrap{background:#0b1320;border:1px solid #1f3a57;border-radius:10px;padding:8px;margin:6px 0}
   .barTitle{font-size:12px;color:#9fb0c8;margin-bottom:6px}
   .ppEq{font-size:14px;color:#eaf2ff;margin-top:6px;font-weight:700}
-  .ctrls{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:10px}
-  .ctrls select,.ctrls input{background:#0b1320;color:#eaf2ff;border:1px solid var(--edge);border-radius:10px;padding:8px 10px;font-size:13px}
-  .ctrls .miniBtn{background:#0b1a29;border:1px solid #1f3a57;border-radius:10px;padding:8px 10px;font-size:12px;cursor:pointer}
-  .ctrls .miniBtn:hover{background:#0e2337}
-  .tag{display:inline-block;background:#0b1a29;border:1px solid #1f3a57;border-radius:999px;padding:4px 8px;margin:2px 4px;font-size:11px}
-  .mono{font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,"Liberation Mono","Courier New",monospace}
+
+  .lbl{font-size:10px;fill:#0b0f14}
 </style>
 </head>
 <body>
@@ -110,7 +122,7 @@
 
   <header>
     <div class="title">FireOps SIM — Visual Pump Builder</div>
-    <div class="sub">Build lines from the editor below. Deploy to show on the rig and reveal the math. (+ bubbles on the rig still work.)</div>
+    <div class="sub">Build your own lines from the editor. Deploy to show on the rig and reveal the math. (+ bubbles on the rig work and now show length, gpm, and nozzle.)</div>
   </header>
 
   <section class="wrapper">
@@ -136,16 +148,17 @@
         </div>
       </div>
 
-      <!-- + Picker (still available on rig) -->
+      <!-- + Picker -->
       <div id="picker" class="picker" role="dialog" aria-modal="true" aria-hidden="true">
         <h3 id="pickerTitle">Hose</h3>
+        <div id="pickSum" class="pickSummary"></div>
         <div id="pickHome">
           <div class="picker-grid">
             <div class="pick" data-view="addhose">➕ Add Hose</div>
             <div class="pick" data-view="nozzle">🧩 Change Nozzle</div>
             <div class="pick" data-view="accessory">⚙️ Add/Remove Wye</div>
             <div class="pick" data-view="elevation">⛰️ Elevation</div>
-            <div class="pick" data-view="setup">🛠️ Change Setup</div>
+            <div class="pick" data-view="setup">🛠️ Quick Setup</div>
           </div>
         </div>
 
@@ -157,12 +170,7 @@
 
         <div id="pickNoz" style="display:none">
           <div class="section-title">Set nozzle for this side</div>
-          <div class="picker-grid">
-            <div class="pick" data-noz="chiefXD">ChiefXD 50 psi 185 gpm</div>
-            <div class="pick" data-noz="smooth185">Smooth 185 @50</div>
-            <div class="pick" data-noz="fog150_75">Fog 150 @75</div>
-            <div class="pick" data-noz="sb265">SB 1 1/8″ 265 @50</div>
-          </div>
+          <div class="picker-grid" id="nozGrid"></div>
           <div class="picker-actions"><button class="pick-small" data-back>⬅ Back</button></div>
         </div>
 
@@ -188,7 +196,7 @@
         </div>
 
         <div id="pickSetup" style="display:none">
-          <div class="section-title">Change main setup</div>
+          <div class="section-title">Quick setup (creates/overwrites main)</div>
           <div class="row">
             <label>Size</label>
             <select id="setupSize">
@@ -203,12 +211,7 @@
           </div>
           <div class="row">
             <label>Nozzle</label>
-            <select id="setupNoz">
-              <option value="chiefXD">ChiefXD 50/185</option>
-              <option value="smooth185">Smooth 185 @50</option>
-              <option value="fog150_75">Fog 150 @75</option>
-              <option value="sb265">SB 1 1/8″ 265 @50</option>
-            </select>
+            <select id="setupNoz"></select>
           </div>
           <div class="picker-actions">
             <button class="pick-small" id="setupApply">Apply</button>
@@ -232,6 +235,9 @@
 
 </div>
 
+<!-- global tiny dropdown for the editor buttons -->
+<div id="menuPop" class="dropdown" aria-hidden="true"></div>
+
 <script>
 /* ===== Constants ===== */
 const TRUCK_W = 390, TRUCK_H = 260;
@@ -243,29 +249,33 @@ const PSI_PER_FT = 0.434;
 
 const COEFF = { "1.75":15.5, "2.5":2, "5":0.08 };
 const NOZ = {
-  chiefXD:   {name:'ChiefXD', gpm:185, NP:50},
-  smooth185: {name:'Smooth 185', gpm:185, NP:50},
-  fog150_75: {name:'Fog 150', gpm:150, NP:75},
-  sb265:     {name:'SB 1 1/8″', gpm:265, NP:50}
+  chiefXD:   {id:'chiefXD',   name:'ChiefXD',   gpm:185, NP:50},
+  smooth185: {id:'smooth185', name:'Smooth 185',gpm:185, NP:50},
+  fog150_75: {id:'fog150_75', name:'Fog 150',   gpm:150, NP:75},
+  sb265:     {id:'sb265',     name:'SB 1 1/8″', gpm:265, NP:50}
 };
+const NOZ_LIST = Object.values(NOZ);
 const COLORS = {"1.75":"#ff6b6b","2.5":"#6ecbff","5":"#ecd464"};
 
 /* ===== State ===== */
-function emptyHose(label, size, len, noz){
+function emptyHose(label){
   return {
     label,
-    itemsMain:[{size, lengthFt:len}],
+    // Start with NO premade line
+    itemsMain:[],
     hasWye:false, wyeLoss:10,
     itemsLeft:[], itemsRight:[],
-    nozLeft:noz, nozRight:noz,
+    nozLeft:NOZ.chiefXD, nozRight:NOZ.chiefXD, // default choice (user can change)
     elevFt:0,
-    visible:false
+    visible:false,
+    // builder selections
+    build:{ size:'1.75', len:50 }
   };
 }
 const lines = {
-  left:  emptyHose('Line 1','1.75',200, NOZ.chiefXD),
-  back:  emptyHose('Line 2','1.75',200, NOZ.chiefXD),
-  right: emptyHose('Line 3','2.5', 250, NOZ.sb265)
+  left:  emptyHose('Line 1'),
+  back:  emptyHose('Line 2'),
+  right: emptyHose('Line 3')
 };
 let plusContext = { key:null, where:'main' };
 let currentSupply = 'none';
@@ -283,8 +293,10 @@ const topInfo   = document.getElementById('topInfo');
 const picker    = document.getElementById('picker');
 const pickerTitle = document.getElementById('pickerTitle');
 const pickHome  = document.getElementById('pickHome');
+const pickSum   = document.getElementById('pickSum');
 const pickAdd   = document.getElementById('pickAdd');
 const pickNoz   = document.getElementById('pickNoz');
+const nozGrid   = document.getElementById('nozGrid');
 const pickAcc   = document.getElementById('pickAcc');
 const pickElev  = document.getElementById('pickElev');
 const pickSetup = document.getElementById('pickSetup');
@@ -298,12 +310,13 @@ const linesTable= document.getElementById('linesTable');
 const supplyBtn = document.getElementById('supplyBtn');
 const supplyMenu= document.getElementById('supplyMenu');
 const linebar   = document.getElementById('linebar');
+const menuPop   = document.getElementById('menuPop');
 
 /* ===== Helpers ===== */
 function clsFor(size){ return size==='5'?'hose5':(size==='2.5'?'hose25':'hose175'); }
-function sumFt(items){ return items.reduce((s,h)=>s + (h.lengthFt||0), 0); }
+function sumFt(items){ return (items||[]).reduce((s,h)=>s + (h.lengthFt||0), 0); }
 function FL(gpm, size, ft){ const C=COEFF[size]||0, Q=gpm/100; return C*(Q*Q)*(ft/100); }
-function FL_total(gpm, segments){ return (segments||[]).reduce((acc,seg)=> acc + FL(gpm, seg.size, seg.lengthFt||0), 0); } // FIX: sums mixed sizes
+function FL_total(gpm, segments){ return (segments||[]).reduce((acc,seg)=> acc + FL(gpm, seg.size, seg.lengthFt||0), 0); } // mixed-size safe
 function clearGroup(g){ while(g.firstChild) g.removeChild(g.firstChild); }
 function supplyHeight(){ return currentSupply==='drafting'?150: currentSupply==='pressurized'?150: currentSupply==='relay'?170: 0; }
 function sizeLabel(sz){ return sz==='2.5'?'2½″':(sz==='1.75'?'1¾″':sz+'"'); }
@@ -426,12 +439,9 @@ function drawAll(){
     drawSegmentedPath(G_hoses, base, L.itemsMain, clsFor);
     addTip(key,'main',geom.endX,geom.endY);
 
-    // Nozzle info label(s)
-    if(L.hasWye){
-      addLabel(`Nozzles ${L.nozLeft.gpm}/${L.nozRight.gpm} gpm @ ${L.nozRight.NP} psi`, geom.endX, geom.endY-6, labelDyForLine(key)-10);
-    }else{
-      addLabel(`${L.nozRight.name} ${L.nozRight.NP} psi ${L.nozRight.gpm} gpm`, geom.endX, geom.endY-6, labelDyForLine(key)-10);
-    }
+    // Nozzle info label + length/gpm as requested
+    const flowGpm = L.hasWye ? (L.nozLeft.gpm + L.nozRight.gpm) : L.nozRight.gpm;
+    addLabel(`${mainFt}′ @ ${flowGpm} gpm — ${L.hasWye?'Nozzles':'Nozzle'} ${L.nozRight.NP} psi`, geom.endX, geom.endY-6, labelDyForLine(key)-10);
 
     // Wye branches
     if(L.hasWye){
@@ -442,7 +452,7 @@ function drawAll(){
         drawSegmentedPath(G_branches, pathL, L.itemsLeft, clsFor);
         addTip(key,'L',gL.endX,gL.endY);
         const mid = pathL.getTotalLength()/2, pt = pathL.getPointAtLength(mid);
-        addLabel(`${sumFt(L.itemsLeft)}′ ${L.itemsLeft[0]?.size==='2.5'?'2½″':'1¾″'} ${L.nozLeft.gpm} gpm`, pt.x, pt.y, labelDyForLine(key)-8);
+        addLabel(`${sumFt(L.itemsLeft)}′ @ ${L.nozLeft.gpm} gpm`, pt.x, pt.y, labelDyForLine(key)-8);
       } else {
         addTip(key,'L',geom.endX-20,geom.endY-20);
       }
@@ -454,7 +464,7 @@ function drawAll(){
         drawSegmentedPath(G_branches, pathR, L.itemsRight, clsFor);
         addTip(key,'R',gR.endX,gR.endY);
         const mid = pathR.getTotalLength()/2, pt = pathR.getPointAtLength(mid);
-        addLabel(`${sumFt(L.itemsRight)}′ ${L.itemsRight[0]?.size==='2.5'?'2½″':'1¾″'} ${L.nozRight.gpm} gpm`, pt.x, pt.y, labelDyForLine(key)-8);
+        addLabel(`${sumFt(L.itemsRight)}′ @ ${L.nozRight.gpm} gpm`, pt.x, pt.y, labelDyForLine(key)-8);
       } else {
         addTip(key,'R',geom.endX+20,geom.endY-20);
       }
@@ -499,17 +509,16 @@ function drawSupply(viewH){
   }
 }
 
-/* Totals (use per-segment FL) */
+/* Totals */
 function refreshTotals(){
   const vis = Object.values(lines).filter(l=>l.visible);
   let totalGPM = 0, maxPDP = 0;
   vis.forEach(L=>{
     const gpm = L.hasWye ? (L.nozLeft?.gpm||0) + (L.nozRight?.gpm||0) : (L.nozRight?.gpm||0);
-    const mainFL = FL_total(gpm, L.itemsMain); // <-- FIX: accounts for mixed sizes
+    const mainFL = FL_total(gpm, L.itemsMain); // mixed-size safe
     const leftNeed = L.hasWye ? FL_total(L.nozLeft?.gpm||0, L.itemsLeft) + (L.nozLeft?.NP||0) : 0;
-    const rightNeed= FL_total(L.nozRight?.gpm||0, L.itemsRight.length?L.itemsRight:L.itemsMain.slice(-1)) + (L.nozRight?.NP||0);
-    // Note: for no-wye, rightNeed == NP only; above we add FL from branch only if exists and has wye
-    const branchMax = L.hasWye ? Math.max(leftNeed, rightNeed) : (L.nozRight?.NP||0);
+    const rightNeed= L.hasWye ? FL_total(L.nozRight?.gpm||0, L.itemsRight) + (L.nozRight?.NP||0) : (L.nozRight?.NP||0);
+    const branchMax = L.hasWye ? Math.max(leftNeed, rightNeed) : rightNeed;
     const PDP = branchMax + mainFL + (L.hasWye ? L.wyeLoss:0) + (L.elevFt * PSI_PER_FT);
     totalGPM += gpm; maxPDP = Math.max(maxPDP, PDP);
   });
@@ -569,7 +578,7 @@ function eqStringsWye(L){
   return { aEq, bEq, final };
 }
 
-/* Horizontal hose bar with NP pill at the end (always) */
+/* Horizontal hose bar with NP pill at the end */
 function drawHoseBar(container, sections, gpm, npPsi, nozzleText){
   const totalLen = sumFt(sections);
   container.innerHTML = '';
@@ -592,7 +601,6 @@ function drawHoseBar(container, sections, gpm, npPsi, nozzleText){
 
   const innerW = W - 16 - NP_W;
 
-  // Title above bar (include nozzle)
   if(nozzleText){
     const t = document.createElementNS(svgNS,'text');
     t.setAttribute('x', 8);
@@ -603,7 +611,6 @@ function drawHoseBar(container, sections, gpm, npPsi, nozzleText){
     svg.appendChild(t);
   }
 
-  // Track
   const track = document.createElementNS(svgNS,'rect');
   track.setAttribute('x', 8); track.setAttribute('y', 20);
   track.setAttribute('width', innerW); track.setAttribute('height', 20);
@@ -612,7 +619,6 @@ function drawHoseBar(container, sections, gpm, npPsi, nozzleText){
   track.setAttribute('rx', 6); track.setAttribute('ry', 6);
   svg.appendChild(track);
 
-  // Sections
   let x = 8;
   sections.forEach(seg=>{
     const segW = (seg.lengthFt/totalLen) * innerW;
@@ -638,7 +644,6 @@ function drawHoseBar(container, sections, gpm, npPsi, nozzleText){
     x += segW;
   });
 
-  // NP pill
   const pill = document.createElementNS(svgNS,'rect');
   pill.setAttribute('x', innerW + 8 + 6);
   pill.setAttribute('y', 20);
@@ -662,9 +667,8 @@ function drawHoseBar(container, sections, gpm, npPsi, nozzleText){
   container.appendChild(svg);
 }
 
-/* ===== Render line editor & math =====
-   - Start state: ONLY editor (no math).
-   - After Deploy: show horizontal + math breakdown + editor.
+/* ===== Render line editor =====
+   Start state: ONLY editor (no math). After Deploy: show horizontal + math below.
 */
 function renderLinesPanel(){
   linesTable.innerHTML = '';
@@ -673,88 +677,45 @@ function renderLinesPanel(){
     const row = document.createElement('div');
     row.className='lineRow';
 
-    // --- Editor controls (always shown) ---
-    const segSummary = L.itemsMain.map(s=>`${s.lengthFt}′ ${sizeLabel(s.size)}`).join(' + ');
-    const editorHTML = `
+    // BUILT SUMMARY (above menu)
+    const segSummary = L.itemsMain.length
+      ? L.itemsMain.map(s=>`<span class="tag">${s.lengthFt}′ ${sizeLabel(s.size)}</span>`).join('')
+      : '<i>No segments yet. Use the buttons below to add.</i>';
+    const totalFt = sumFt(L.itemsMain);
+    const flowGpm = L.hasWye ? (L.nozLeft.gpm + L.nozRight.gpm) : L.nozRight.gpm;
+    const builtHeader = `
       <div class="title">${L.label} — ${L.visible?'DEPLOYED':'not deployed'}</div>
-      <div class="break" style="flex:1 1 100%">
-        <div><b>Main segments:</b> ${segSummary? segSummary : '<i>none yet</i>'}</div>
-        <div class="ctrls" style="margin-top:6px">
-          <strong>Add segment:</strong>
-          <select data-key="${key}" data-edit="addSize">
-            <option value="1.75">1¾″</option>
-            <option value="2.5">2½″</option>
-          </select>
-          <select data-key="${key}" data-edit="addLen">
-            ${[50,100,150,200,250,300].map(v=>`<option value="${v}">${v}′</option>`).join('')}
-          </select>
-          <button class="miniBtn" data-key="${key}" data-edit="addSeg">Add</button>
-          <button class="miniBtn" data-key="${key}" data-edit="clearSegs">Clear</button>
-
-          <span style="width:1px;height:18px;background:#1f3a57;margin:0 6px"></span>
-
-          <strong>Nozzle:</strong>
-          <select data-key="${key}" data-edit="noz">
-            ${Object.entries(NOZ).map(([id,n])=>`<option value="${id}" ${L.nozRight===n?'selected':''}>${n.name} ${n.NP}psi/${n.gpm}</option>`).join('')}
-          </select>
-
-          <span style="width:1px;height:18px;background:#1f3a57;margin:0 6px"></span>
-
-          <strong>Accessory:</strong>
-          ${L.hasWye ? `<button class="miniBtn" data-key="${key}" data-edit="removeWye">Remove Wye</button>` :
-                        `<button class="miniBtn" data-key="${key}" data-edit="addWye">Add Wye (+10)</button>`}
-
-          ${L.hasWye ? `
-            <strong>A:</strong>
-            <select data-key="${key}" data-ctx="L" data-edit="bsize">
-              <option value="1.75" ${L.itemsLeft[0]?.size!=='2.5'?'selected':''}>1¾″</option>
-              <option value="2.5"  ${L.itemsLeft[0]?.size==='2.5'?'selected':''}>2½″</option>
-            </select>
-            <select data-key="${key}" data-ctx="L" data-edit="blen">
-              ${[0,50,100,150,200,250,300].map(v=>`<option value="${v}" ${sumFt(L.itemsLeft)===v?'selected':''}>${v}′</option>`).join('')}
-            </select>
-
-            <strong>B:</strong>
-            <select data-key="${key}" data-ctx="R" data-edit="bsize">
-              <option value="1.75" ${L.itemsRight[0]?.size!=='2.5'?'selected':''}>1¾″</option>
-              <option value="2.5"  ${L.itemsRight[0]?.size==='2.5'?'selected':''}>2½″</option>
-            </select>
-            <select data-key="${key}" data-ctx="R" data-edit="blen">
-              ${[0,50,100,150,200,250,300].map(v=>`<option value="${v}" ${sumFt(L.itemsRight)===v?'selected':''}>${v}′</option>`).join('')}
-            </select>
-          `:''}
-
-          <span style="width:1px;height:18px;background:#1f3a57;margin:0 6px"></span>
-
-          <strong>Elevation (ft):</strong>
-          <input type="number" step="1" value="${L.elevFt||0}" style="width:90px" data-key="${key}" data-edit="elevInput" />
-          <button class="miniBtn" data-key="${key}" data-edit="saveElev">Apply</button>
-
-          <span style="width:1px;height:18px;background:#1f3a57;margin:0 6px"></span>
-
-          ${L.visible
-            ? `<button class="miniBtn" data-key="${key}" data-edit="retract">Retract</button>`
-            : `<button class="miniBtn" data-key="${key}" data-edit="deploy">Deploy</button>`}
-        </div>
+      <div class="builtTags">${segSummary}</div>
+      <div class="mono" style="font-size:12px;color:#cfe4ff">
+        Total: ${totalFt}′ @ ${flowGpm} gpm • Nozzle: ${L.nozRight.name} ${L.nozRight.NP} psi / ${L.nozRight.gpm} gpm • Elev: ${L.elevFt||0}′
       </div>
     `;
 
-    // If not deployed: ONLY show editor (no math)
-    if(!L.visible){
-      row.innerHTML = editorHTML;
-      linesTable.appendChild(row);
-      return;
-    }
+    // EDITOR MENU (buttons in one line on phone)
+    const menuHTML = `
+      <div class="editorMenu">
+        <button class="editorBtn" data-key="${key}" data-menu="size">Size: ${sizeLabel(L.build.size)} ▾</button>
+        <button class="editorBtn" data-key="${key}" data-menu="len">Length: ${L.build.len}′ ▾</button>
+        <button class="editorBtn" data-key="${key}" data-menu="noz">Nozzle: ${L.nozRight.name} ▾</button>
+        <button class="editorBtn" data-key="${key}" data-menu="elev">Elevation: ${L.elevFt||0}′ ▾</button>
+        <button class="editorBtn addBtn" data-key="${key}" data-menu="add">Add segment</button>
+        ${L.visible
+          ? `<button class="editorBtn deployBtn" data-key="${key}" data-menu="retract">Retract</button>`
+          : `<button class="editorBtn deployBtn" data-key="${key}" data-menu="deploy">Deploy</button>`}
+      </div>
+    `;
 
-    // --- Deployed: editor + horizontal + math ---
-    const b = breakdown(L);
-    const gpmMain = L.hasWye ? (L.nozLeft?.gpm||0)+(L.nozRight?.gpm||0) : (L.nozRight?.gpm||0);
-    const mainTitle = L.hasWye
-      ? `Main line ${b.mainLen}′ @ ${b.flow} gpm — nozzle(s) 185/185 gpm ${L.nozRight.NP} psi`
-      : `Main line ${b.mainLen}′ @ ${b.flow} gpm — nozzle ${L.nozRight.gpm} gpm ${L.nozRight.NP} psi`;
+    // Assemble row head
+    row.innerHTML = builtHeader + menuHTML;
+    linesTable.appendChild(row);
 
-    row.innerHTML = editorHTML + `
-      <div class="break" style="flex:1 1 100%">
+    // If deployed: show visual math BELOW
+    if(L.visible){
+      const b = breakdown(L);
+      const gpmMain = L.hasWye ? (L.nozLeft?.gpm||0)+(L.nozRight?.gpm||0) : (L.nozRight?.gpm||0);
+      const mathWrap = document.createElement('div');
+      mathWrap.className = 'break';
+      mathWrap.innerHTML = `
         <details class="math" open>
           <summary>Line math</summary>
           <div class="hoseviz">
@@ -763,15 +724,11 @@ function renderLinesPanel(){
               <span class="legSwatch sw25"></span> 2½″
               <span class="legSwatch sw5"></span> 5″
             </div>
-
-            <!-- Main bar -->
             <div class="barWrap">
-              <div class="barTitle">${mainTitle}</div>
+              <div class="barTitle">Main ${b.mainLen}′ @ ${b.flow} gpm — nozzle ${L.nozRight.gpm} gpm ${L.nozRight.NP} psi</div>
               <div class="hosebar" id="viz_main_${key}"></div>
               ${L.hasWye ? `` : `<div class="ppEq" id="eq_main_${key}"></div>`}
             </div>
-
-            <!-- Branch bars when wye -->
             ${L.hasWye ? `
               <div class="barWrap">
                 <div class="barTitle">Branch A ${b.lLen||0}′ @ ${L.nozLeft.gpm} gpm — nozzle ${L.nozLeft.gpm} gpm ${L.nozLeft.NP} psi</div>
@@ -787,124 +744,115 @@ function renderLinesPanel(){
             `: ``}
           </div>
         </details>
-      </div>
-    `;
-    linesTable.appendChild(row);
+      `;
+      row.appendChild(mathWrap);
 
-    // Render bars
-    const mainCont = document.getElementById(`viz_main_${key}`);
-    if(mainCont){
-      const mainSecs = splitIntoSections(L.itemsMain);
-      const nozzleText = L.hasWye
-        ? `Main ${sumFt(L.itemsMain)}′ @ ${gpmMain} gpm — nozzles ${L.nozLeft.gpm}/${L.nozRight.gpm} @ ${L.nozRight.NP} psi`
-        : `Main ${sumFt(L.itemsMain)}′ @ ${gpmMain} gpm — nozzle ${L.nozRight.gpm} @ ${L.nozRight.NP} psi`;
-      drawHoseBar(mainCont, mainSecs, gpmMain, (L.nozRight?.NP||0), nozzleText); // NP pill always shown
-    }
-    if(!L.hasWye){
-      const eq = document.getElementById(`eq_main_${key}`);
-      if(eq) eq.textContent = eqStringNoWye(L);
-    } else {
-      const lCont = document.getElementById(`viz_L_${key}`);
-      const rCont = document.getElementById(`viz_R_${key}`);
-      if(lCont) drawHoseBar(lCont, splitIntoSections(L.itemsLeft), L.nozLeft?.gpm||0, L.nozLeft?.NP||0,
-        `Branch A ${sumFt(L.itemsLeft)||0}′ @ ${L.nozLeft.gpm} gpm — nozzle ${L.nozLeft.gpm} @ ${L.nozLeft.NP} psi`);
-      if(rCont) drawHoseBar(rCont, splitIntoSections(L.itemsRight), L.nozRight?.gpm||0, L.nozRight?.NP||0,
-        `Branch B ${sumFt(L.itemsRight)||0}′ @ ${L.nozRight.gpm} gpm — nozzle ${L.nozRight.gpm} @ ${L.nozRight.NP} psi`);
-      const {aEq, bEq, final} = eqStringsWye(L);
-      const aDiv = document.getElementById(`eq_L_${key}`);
-      const bDiv = document.getElementById(`eq_R_${key}`);
-      const fDiv = document.getElementById(`eq_final_${key}`);
-      if(aDiv) aDiv.textContent = aEq;
-      if(bDiv) bDiv.textContent = bEq;
-      if(fDiv) fDiv.textContent = final;
+      // Render horizontal bars + equations
+      const mainCont = document.getElementById(`viz_main_${key}`);
+      if(mainCont){
+        drawHoseBar(mainCont, splitIntoSections(L.itemsMain), gpmMain, (L.nozRight?.NP||0),
+          `Main ${sumFt(L.itemsMain)}′ @ ${gpmMain} gpm — nozzle ${L.nozRight.gpm} @ ${L.nozRight.NP} psi`);
+      }
+      if(!L.hasWye){
+        const eq = document.getElementById(`eq_main_${key}`);
+        if(eq) eq.textContent = eqStringNoWye(L);
+      } else {
+        const lCont = document.getElementById(`viz_L_${key}`);
+        const rCont = document.getElementById(`viz_R_${key}`);
+        if(lCont) drawHoseBar(lCont, splitIntoSections(L.itemsLeft), L.nozLeft?.gpm||0, L.nozLeft?.NP||0,
+          `Branch A ${sumFt(L.itemsLeft)||0}′ @ ${L.nozLeft.gpm} gpm — nozzle ${L.nozLeft.gpm} @ ${L.nozLeft.NP} psi`);
+        if(rCont) drawHoseBar(rCont, splitIntoSections(L.itemsRight), L.nozRight?.gpm||0, L.nozRight?.NP||0,
+          `Branch B ${sumFt(L.itemsRight)||0}′ @ ${L.nozRight.gpm} gpm — nozzle ${L.nozRight.gpm} @ ${L.nozRight.NP} psi`);
+        const {aEq, bEq, final} = eqStringsWye(L);
+        const aDiv = document.getElementById(`eq_L_${key}`);
+        const bDiv = document.getElementById(`eq_R_${key}`);
+        const fDiv = document.getElementById(`eq_final_${key}`);
+        if(aDiv) aDiv.textContent = aEq;
+        if(bDiv) bDiv.textContent = bEq;
+        if(fDiv) fDiv.textContent = final;
+      }
     }
   });
 
-  // === Editor handlers (works before or after deploy) ===
-  // Add main segment (enforce same-or-smaller rule)
-  linesTable.querySelectorAll('[data-edit="addSeg"]').forEach(btn=>{
-    btn.addEventListener('click', e=>{
-      const key=e.target.dataset.key; const L=lines[key];
-      const sizeSel = linesTable.querySelector(`[data-key="${key}"][data-edit="addSize"]`);
-      const lenSel  = linesTable.querySelector(`[data-key="${key}"][data-edit="addLen"]`);
-      const size = sizeSel.value; const len = parseInt(lenSel.value,10);
-      const lastSize = L.itemsMain[L.itemsMain.length-1]?.size || '1.75';
-      // Rule: cannot upsize after a smaller section (e.g., 1¾″ → 2½″ blocked)
-      if(lastSize==='1.75' && size==='2.5'){ alert('Cannot increase from 1¾″ to 2½″ later in the line. Add 2½″ first, then 1¾″.'); return; }
-      L.itemsMain.push({size,lengthFt:len});
-      drawAll();
-    });
-  });
-  // Clear segments (reset to none)
-  linesTable.querySelectorAll('[data-edit="clearSegs"]').forEach(btn=>{
-    btn.addEventListener('click', e=>{
-      const key=e.target.dataset.key; const L=lines[key];
-      L.itemsMain = [];
-      drawAll();
-    });
-  });
-  // Nozzle change
-  linesTable.querySelectorAll('[data-edit="noz"]').forEach(sel=>{
-    sel.addEventListener('change', e=>{
-      const key=e.target.dataset.key; const L=lines[key];
-      const noz = NOZ[e.target.value];
-      L.nozLeft = L.nozRight = noz;
-      drawAll();
-    });
-  });
-  // Wye add/remove
-  linesTable.querySelectorAll('[data-edit="addWye"]').forEach(btn=>{
-    btn.addEventListener('click', e=>{
-      const key=e.target.dataset.key; const L=lines[key]; L.hasWye = true; drawAll();
-    });
-  });
-  linesTable.querySelectorAll('[data-edit="removeWye"]').forEach(btn=>{
-    btn.addEventListener('click', e=>{
-      const key=e.target.dataset.key; const L=lines[key]; L.hasWye = false; L.itemsLeft=[]; L.itemsRight=[]; drawAll();
-    });
-  });
-  // Branch editors
-  linesTable.querySelectorAll('[data-edit="bsize"],[data-edit="blen"]').forEach(sel=>{
-    sel.addEventListener('change', e=>{
-      const key=e.target.dataset.key; const L=lines[key];
-      const ctx=e.target.dataset.ctx; // 'L' or 'R'
-      const sizeSel = linesTable.querySelector(`[data-key="${key}"][data-ctx="${ctx}"][data-edit="bsize"]`);
-      const lenSel  = linesTable.querySelector(`[data-key="${key}"][data-ctx="${ctx}"][data-edit="blen"]`);
-      let size=sizeSel.value, len=parseInt(lenSel.value,10);
-      const lastMain = L.itemsMain[L.itemsMain.length-1]?.size || '1.75';
-      if(lastMain==='1.75' && size==='2.5'){ size='1.75'; sizeSel.value='1.75'; } // enforce
-      if(len<=0){ if(ctx==='L') L.itemsLeft=[]; else L.itemsRight=[]; }
-      else { if(ctx==='L') L.itemsLeft=[{size,lengthFt:len}]; else L.itemsRight=[{size,lengthFt:len}]; }
-      drawAll();
-    });
-  });
-  // Elevation
-  linesTable.querySelectorAll('[data-edit="saveElev"]').forEach(btn=>{
-    btn.addEventListener('click', e=>{
-      const key=e.target.dataset.key; const L=lines[key];
-      const inp = linesTable.querySelector(`[data-key="${key}"][data-edit="elevInput"]`);
-      L.elevFt = Number(inp.value||0);
-      drawAll();
-    });
-  });
-  // Deploy / Retract
-  linesTable.querySelectorAll('[data-edit="deploy"]').forEach(btn=>{
-    btn.addEventListener('click', e=>{
-      const key=e.target.dataset.key; const L=lines[key];
-      // Require at least 1 segment + nozzle
-      if(!L.itemsMain.length){ alert('Add at least one main segment before deploying.'); return; }
-      L.visible = true; toggleLineBtn(key,true); drawAll();
-    });
-  });
-  linesTable.querySelectorAll('[data-edit="retract"]').forEach(btn=>{
-    btn.addEventListener('click', e=>{
-      const key=e.target.dataset.key; const L=lines[key];
-      L.visible = false; toggleLineBtn(key,false); drawAll();
+  // === Editor button handlers ===
+  linesTable.querySelectorAll('[data-menu]').forEach(btn=>{
+    btn.addEventListener('click', (e)=>{
+      const key = e.currentTarget.dataset.key;
+      const type = e.currentTarget.dataset.menu;
+      if(type==='add'){ onAddSeg(key); return; }
+      if(type==='deploy'){ onDeploy(key); return; }
+      if(type==='retract'){ onRetract(key); return; }
+      openMenuForButton(e.currentTarget, key, type);
     });
   });
 }
 
-/* Top bar buttons toggle deploy/retract as well */
+function onAddSeg(key){
+  const L=lines[key];
+  const lastSize = L.itemsMain[L.itemsMain.length-1]?.size;
+  // enforce: cannot upsize after smaller (1¾ → 2½)
+  if(lastSize==='1.75' && L.build.size==='2.5'){ alert('Cannot increase from 1¾″ to 2½″ later in the line. Add 2½″ first, then 1¾″.'); return; }
+  L.itemsMain.push({size:L.build.size, lengthFt:L.build.len});
+  drawAll();
+}
+function onDeploy(key){
+  const L=lines[key];
+  if(!L.itemsMain.length){ alert('Add at least one main segment before deploying.'); return; }
+  L.visible=true; toggleLineBtn(key,true); drawAll();
+}
+function onRetract(key){
+  const L=lines[key]; L.visible=false; toggleLineBtn(key,false); drawAll();
+}
+
+/* Global tiny dropdown for editor buttons */
+function openMenuForButton(btn, key, type){
+  const L = lines[key];
+  menuPop.innerHTML = '';
+  // Populate options
+  if(type==='size'){
+    ['1.75','2.5'].forEach(sz=>{
+      const b=document.createElement('button');
+      b.textContent = `${sizeLabel(sz)}`;
+      b.addEventListener('click',()=>{ L.build.size = sz; closeMenu(); drawAll(); });
+      menuPop.appendChild(b);
+    });
+  } else if(type==='len'){
+    [50,100,150,200,250,300,350,400].forEach(n=>{
+      const b=document.createElement('button');
+      b.textContent = `${n}′`;
+      b.addEventListener('click',()=>{ L.build.len = n; closeMenu(); drawAll(); });
+      menuPop.appendChild(b);
+    });
+  } else if(type==='noz'){
+    NOZ_LIST.forEach(n=>{
+      const b=document.createElement('button');
+      b.textContent = `${n.name} • ${n.NP} psi / ${n.gpm} gpm`;
+      b.addEventListener('click',()=>{ L.nozLeft=L.nozRight=n; closeMenu(); drawAll(); });
+      menuPop.appendChild(b);
+    });
+  } else if(type==='elev'){
+    const wrap = document.createElement('div'); wrap.className='row';
+    wrap.innerHTML = `<input type="number" id="elevTmp" style="width:120px" value="${L.elevFt||0}"> <small>feet (×0.434 psi/ft)</small>`;
+    menuPop.appendChild(wrap);
+    const save = document.createElement('button'); save.textContent='Save';
+    save.addEventListener('click',()=>{ const v = Number(menuPop.querySelector('#elevTmp').value||0); L.elevFt=v; closeMenu(); drawAll(); });
+    menuPop.appendChild(save);
+  }
+
+  // Position and show
+  const r = btn.getBoundingClientRect();
+  menuPop.style.left = `${r.left}px`;
+  menuPop.style.top  = `${r.bottom + 6}px`;
+  menuPop.style.display='block';
+  menuPop.setAttribute('aria-hidden','false');
+
+  // Click outside to close
+  const off = (ev)=>{ if(!menuPop.contains(ev.target) && ev.target!==btn){ closeMenu(); document.removeEventListener('click',off); } };
+  setTimeout(()=>document.addEventListener('click',off),0);
+}
+function closeMenu(){ menuPop.style.display='none'; menuPop.setAttribute('aria-hidden','true'); }
+
+/* Top line buttons toggle deploy/retract as well */
 function toggleLineBtn(key,on){
   const btn = document.querySelector(`.linebtn[data-line="${key}"]`);
   if(btn){ btn.classList.toggle('active', on); }
@@ -912,8 +860,10 @@ function toggleLineBtn(key,on){
 document.querySelectorAll('.linebtn').forEach(b=>{
   b.addEventListener('click', ()=>{
     const key=b.dataset.line;
-    lines[key].visible = !lines[key].visible;
-    b.classList.toggle('active', lines[key].visible);
+    const L=lines[key];
+    if(!L.visible && !L.itemsMain.length){ alert('Build a line in the editor first, then Deploy.'); return; }
+    L.visible = !L.visible;
+    b.classList.toggle('active', L.visible);
     drawAll();
   });
 });
@@ -955,16 +905,31 @@ document.addEventListener('click', (e)=>{
   const inSupply = supplyMenu.contains(e.target) || e.target===supplyBtn;
   if(inPick || inSupply) return;
   if(e.target.closest('.hose-end')) return;
-  hidePicker(); hideSupplyMenu();
+  hidePicker(); hideSupplyMenu(); closeMenu();
 });
+
 function showPicker(key, where, cx, cy){
   plusContext = { key, where };
   const L = lines[key];
   pickerTitle.textContent = where==='main' ? `${L.label} — Main` : `${L.label} — ${where==='L'?'Left':'Right'}`;
 
+  // Summary inside the + menu (hose length, gpm, nozzle)
+  const totalFt = sumFt(L.itemsMain);
+  const gpm = L.hasWye ? (L.nozLeft.gpm + L.nozRight.gpm) : L.nozRight.gpm;
+  pickSum.innerHTML = `
+    <span class="tag">Main: ${totalFt}′</span>
+    <span class="tag">Flow: ${gpm} gpm</span>
+    <span class="tag">Nozzle: ${L.nozRight.name} ${L.nozRight.NP} psi / ${L.nozRight.gpm} gpm</span>
+    <span class="tag">Elev: ${L.elevFt||0}′</span>
+  `;
+
   setupSize.value = L.itemsMain[0]?.size || '1.75';
   setupLen.value  = String(sumFt(L.itemsMain) || 200);
-  setupNoz.value  = Object.entries(NOZ).find(([id,n])=>n===L.nozRight)?.[0] || 'chiefXD';
+  // setup nozzle list
+  setupNoz.innerHTML = NOZ_LIST.map(n=>`<option value="${n.id}" ${L.nozRight.id===n.id?'selected':''}>${n.name} ${n.NP}/${n.gpm}</option>`).join('');
+
+  // Nozzle grid in picker
+  nozGrid.innerHTML = NOZ_LIST.map(n=>`<div class="pick" data-noz="${n.id}">${n.name} • ${n.NP} psi / ${n.gpm} gpm</div>`).join('');
 
   const currentSize = currentSegmentSize(L, where);
   addBtns.innerHTML = '';
@@ -980,7 +945,7 @@ function showPicker(key, where, cx, cy){
   showPane('pickHome');
 
   const stg = stage.getBoundingClientRect();
-  const pw = 320, ph = 270;
+  const pw = 340, ph = 300;
   let x = cx - stg.left + 8, y = cy - stg.top - ph - 8;
   if(y < 8) y = cy - stg.top + 8;
   x = Math.max(8, Math.min(x, stg.width - pw - 8));
@@ -996,6 +961,23 @@ function currentSegmentSize(L, where){
 }
 
 /* Picker actions */
+picker.addEventListener('click', (e)=>{
+  const view = e.target.closest('.pick')?.dataset.view;
+  if(view==='addhose') showPane('pickAdd');
+  if(view==='nozzle')  showPane('pickNoz');
+  if(view==='accessory') showPane('pickAcc');
+  if(view==='elevation') showPane('pickElev');
+  if(view==='setup')   showPane('pickSetup');
+  if(e.target.hasAttribute('data-back')) showPane('pickHome');
+
+  const nozId = e.target.closest('.pick')?.dataset.noz;
+  if(nozId){
+    const L=lines[plusContext.key];
+    if(plusContext.where==='L'){ L.nozLeft = NOZ[nozId]; } else { L.nozRight = NOZ[nozId]; }
+    if(!L.visible){ L.visible=true; toggleLineBtn(plusContext.key,true); }
+    hidePicker(); drawAll();
+  }
+});
 document.getElementById('setupApply').addEventListener('click', ()=>{
   const key=plusContext.key; const L=lines[key];
   const size=setupSize.value; const len=parseInt(setupLen.value,10); const noz=NOZ[setupNoz.value];
@@ -1013,13 +995,6 @@ document.getElementById('pickAdd').addEventListener('click', (e)=>{
   if(plusContext.where==='L'){ L.itemsLeft.push({size,lengthFt:len}); }
   else if(plusContext.where==='R'){ L.itemsRight.push({size,lengthFt:len}); }
   else { L.itemsMain.push({size,lengthFt:len}); }
-  if(!L.visible){ L.visible=true; toggleLineBtn(plusContext.key,true); }
-  hidePicker(); drawAll();
-});
-document.getElementById('pickNoz').addEventListener('click', (e)=>{
-  const id = e.target.closest('.pick')?.dataset.noz; if(!id) return;
-  const L = lines[plusContext.key];
-  if(plusContext.where==='L'){ L.nozLeft = NOZ[id]; } else { L.nozRight = NOZ[id]; }
   if(!L.visible){ L.visible=true; toggleLineBtn(plusContext.key,true); }
   hidePicker(); drawAll();
 });
