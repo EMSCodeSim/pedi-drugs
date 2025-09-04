@@ -47,7 +47,7 @@
   .plus-circle{fill:#fff;stroke:#111;stroke-width:1.5;filter:drop-shadow(0 2px 4px rgba(0,0,0,.45))}
   .plus-sign{stroke:#111;stroke-width:3;stroke-linecap:round}
 
-  /* phone-friendly simple editor */
+  /* phone-friendly math panel */
   .panel{padding:10px 12px;background:var(--panel)}
   .card{background:#0e1726;border:1px solid var(--edge);border-radius:14px;padding:12px;margin:10px 0}
   .kpis{display:flex;gap:10px;flex-wrap:wrap}
@@ -56,28 +56,11 @@
   .linesTable{margin-top:8px;border-top:1px solid var(--edge);padding-top:8px;display:grid;gap:10px}
 
   .lineRow{background:#0b1320;border:1px solid var(--edge);border-radius:12px;padding:10px}
-  .lineHeader{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:8px;font-size:12px;color:#cfe4ff}
+  .lineHeader{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:2px;font-size:12px;color:#cfe4ff}
   .lineHeader .title{font-weight:700;color:#eaf2ff}
   .lineHeader .tag{display:inline-block;background:#0b1a29;border:1px solid #1f3a57;border-radius:999px;padding:4px 8px;margin:2px 4px;font-size:11px}
 
-  .editorGrid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}
-  .edBtn{
-    background:#0b1a29;border:1px solid #1f3a57;border-radius:10px;color:#eaf2ff;
-    padding:10px 12px;font-size:13px;cursor:pointer;text-align:center;white-space:nowrap
-  }
-  .edPrimary{background:#153a1d;border-color:#275b31}
-  @media (max-width:540px){ .editorGrid{grid-template-columns:repeat(3,minmax(0,1fr))} }
-
-  .dropdown{
-    position:absolute; z-index:60; display:none; pointer-events:auto;
-    background:#0b1320;border:1px solid var(--edge);border-radius:10px;box-shadow:0 12px 28px rgba(0,0,0,.45);overflow:hidden;min-width:210px
-  }
-  .dropdown button{display:block;width:100%;text-align:left;background:none;border:0;color:#eaf2ff;padding:10px 12px;font-size:14px;cursor:pointer}
-  .dropdown button:hover{background:#0e2337}
-  .dropdown .row{padding:10px}
-  .mono{font-family:ui-monospace,Menlo,Consolas,monospace}
-
-  /* Visual math breakdown */
+  /* visual math */
   details.math{background:#0b1a29;border:1px solid #1f3a57;border-radius:12px;padding:8px 10px;margin-top:8px}
   details.math summary{cursor:pointer;color:#cfe4ff;font-weight:700}
   .hoseviz{margin-top:8px}
@@ -89,6 +72,20 @@
   .ppEq{font-size:14px;color:#eaf2ff;margin-top:6px;font-weight:700}
 
   .lbl{font-size:10px;fill:#0b0f14}
+
+  /* Compact in-place picker (restored "buttons-first" logic) */
+  .picker{
+    position:absolute; background:#0b1320;border:1px solid var(--bubble-edge);border-radius:12px;
+    min-width:320px;padding:8px; z-index:50; box-shadow:0 18px 40px rgba(0,0,0,.55); display:none;
+  }
+  .picker h3{font-size:12px;color:#cfe4ff;margin:4px 8px 4px}
+  .pickSummary{font-size:12px;color:#cfe4ff;margin:0 8px 8px}
+  .pickSummary .tag{display:inline-block;background:#0b1a29;border:1px solid #1f3a57;border-radius:999px;padding:3px 8px;margin:2px 4px}
+  .row{display:flex;gap:8px;align-items:center;padding:6px 8px;flex-wrap:wrap}
+  .pill{background:#0b1a29;border:1px solid #1f3a57;border-radius:10px;color:#eaf2ff;padding:8px 10px;font-size:13px;cursor:pointer}
+  .pill:hover{background:#0e2337}
+  .row input, .row select{background:#0b1320;color:#eaf2ff;border:1px solid var(--edge);border-radius:10px;padding:8px 10px;font-size:14px}
+  .mini{font-size:11px;color:#9fb0c8}
 </style>
 </head>
 <body>
@@ -96,7 +93,7 @@
 
   <header>
     <div class="title">FireOps SIM — Visual Pump Builder</div>
-    <div class="sub">Two-row phone editor. Tap a line button to auto-prefill defaults; Deploy to show the rig and reveal math.</div>
+    <div class="sub">Build lines on the rig (+ bubbles). Line panel shows the visual math only.</div>
   </header>
 
   <section class="wrapper">
@@ -114,72 +111,51 @@
         <button class="linebtn" data-line="back">Line 2</button>
         <button class="linebtn" data-line="right">Line 3</button>
         <button class="supplybtn" id="supplyBtn">Supply ▾</button>
-        <div id="supplyMenu" class="dropdown" role="menu" aria-hidden="true">
-          <button data-supply="drafting">Drafting</button>
-          <button data-supply="pressurized">Pressurized</button>
-          <button data-supply="relay">Relay</button>
-          <button data-supply="none">Clear</button>
+        <div id="supplyMenu" class="picker" role="menu" aria-hidden="true" style="min-width:160px">
+          <div class="row" style="padding:6px 8px 0"><span class="mini">Supply</span></div>
+          <div class="row">
+            <button class="pill" data-supply="drafting">Drafting</button>
+            <button class="pill" data-supply="pressurized">Pressurized</button>
+            <button class="pill" data-supply="relay">Relay</button>
+            <button class="pill" data-supply="none">Clear</button>
+          </div>
         </div>
       </div>
 
-      <!-- + Picker (rig bubbles) -->
+      <!-- Restored buttons-first editor -->
       <div id="picker" class="picker" role="dialog" aria-modal="true" aria-hidden="true">
         <h3 id="pickerTitle">Line</h3>
         <div id="pickSum" class="pickSummary"></div>
-        <div id="pickHome">
-          <div class="picker-grid">
-            <div class="pick" data-view="addhose">➕ Add Hose</div>
-            <div class="pick" data-view="nozzle">🧩 Change Nozzle</div>
-            <div class="pick" data-view="accessory">⚙️ Add/Remove Wye</div>
-            <div class="pick" data-view="elevation">⛰️ Elevation</div>
-            <div class="pick" data-view="setup">🛠️ Quick Setup</div>
-          </div>
+
+        <!-- Quick add buttons shown by default (no extra menu layer) -->
+        <div class="row"><span class="mini">Quick add (same or smaller):</span></div>
+        <div class="row" id="addBtns"></div>
+
+        <div class="row" style="margin-top:2px"><span class="mini">Nozzle</span></div>
+        <div class="row">
+          <select id="nozSelect"></select>
+          <button class="pill" id="swapSides" title="If wye, swap left/right nozzles">Swap LR</button>
         </div>
-        <div id="pickAdd" style="display:none">
-          <div class="section-title">Add hose (same or smaller)</div>
-          <div class="picker-actions" id="addBtns"></div>
-          <div class="picker-actions"><button class="pick-small" data-back>⬅ Back</button></div>
+
+        <div class="row" style="margin-top:2px"><span class="mini">Appliance</span></div>
+        <div class="row">
+          <button class="pill" id="toggleWye">Add Wye (+10)</button>
+          <button class="pill" id="clearBranches">Clear Branches</button>
         </div>
-        <div id="pickNoz" style="display:none">
-          <div class="section-title">Set nozzle for this side</div>
-          <div class="picker-grid" id="nozGrid"></div>
-          <div class="picker-actions"><button class="pick-small" data-back>⬅ Back</button></div>
+
+        <div class="row" style="margin-top:2px"><span class="mini">Elevation (± ft)</span></div>
+        <div class="row">
+          <input id="elevInput" type="number" step="1" value="0" style="width:120px">
+          <button class="pill" id="saveElev">Save</button>
         </div>
-        <div id="pickAcc" style="display:none">
-          <div class="section-title">Wye</div>
-          <div class="picker-actions">
-            <button class="pick-small" data-acc="wye">Add Wye (+10)</button>
-            <button class="pick-small" data-acc="removeWye">Remove Wye</button>
-          </div>
-          <div class="picker-actions"><button class="pick-small" data-back>⬅ Back</button></div>
-        </div>
-        <div id="pickElev" style="display:none">
-          <div class="section-title">Elevation (feet, ±)</div>
-          <div class="row"><input id="elevInput" type="number" step="1" value="0"><small>× 0.434 psi/ft</small></div>
-          <div class="picker-actions">
-            <button class="pick-small" data-save-elev>Save</button>
-            <button class="pick-small" data-back>Cancel</button>
-          </div>
-        </div>
-        <div id="pickSetup" style="display:none">
-          <div class="section-title">Quick setup (creates/overwrites main)</div>
-          <div class="row">
-            <label>Size</label>
-            <select id="setupSize"><option value="1.75">1¾″</option><option value="2.5">2½″</option></select>
-            <label>Length</label>
-            <select id="setupLen"><option>50</option><option>100</option><option>150</option><option>200</option><option>250</option><option>300</option></select>
-          </div>
-          <div class="row"><label>Nozzle</label><select id="setupNoz"></select></div>
-          <div class="picker-actions">
-            <button class="pick-small" id="setupApply">Apply</button>
-            <button class="pick-small" data-back>Cancel</button>
-          </div>
-        </div>
+
+        <div class="row" style="margin-top:2px"><span class="mini">Main (replace):</span></div>
+        <div class="row" id="quickMain"></div>
       </div>
     </div>
   </section>
 
-  <!-- KPIs + SIMPLE TWO-ROW EDITOR -->
+  <!-- KPIs + (read-only) line math panel -->
   <section class="panel">
     <div class="card">
       <div class="kpis">
@@ -192,9 +168,6 @@
 
 </div>
 
-<!-- global dropdown used by the editor buttons -->
-<div id="menuPop" class="dropdown" aria-hidden="true"></div>
-
 <script>
 /* ===== Constants ===== */
 const TRUCK_W = 390, TRUCK_H = 260;
@@ -206,10 +179,10 @@ const PSI_PER_FT = 0.434;
 
 const COEFF = { "1.75":15.5, "2.5":2, "5":0.08 };
 const NOZ = {
-  chiefXD:   {id:'chiefXD',   name:'ChiefXD',   gpm:185, NP:50},
-  chief265:  {id:'chief265',  name:'ChiefXD 265', gpm:265, NP:50}, // for requested default on Line 3
-  fog150_75: {id:'fog150_75', name:'Fog 150',   gpm:150, NP:75},
-  sb265:     {id:'sb265',     name:'SB 1 1/8″', gpm:265, NP:50}
+  chiefXD:   {id:'chiefXD',   name:'ChiefXD',     gpm:185, NP:50},
+  chief265:  {id:'chief265',  name:'ChiefXD 265', gpm:265, NP:50}, // default for Line 3
+  fog150_75: {id:'fog150_75', name:'Fog 150',     gpm:150, NP:75},
+  sb265:     {id:'sb265',     name:'SB 1 1/8″',   gpm:265, NP:50}
 };
 const NOZ_LIST = Object.values(NOZ);
 const COLORS = {"1.75":"#ff6b6b","2.5":"#6ecbff","5":"#ecd464"};
@@ -221,11 +194,11 @@ function emptyHose(label){
     itemsMain:[], hasWye:false, wyeLoss:10,
     itemsLeft:[], itemsRight:[],
     nozLeft:NOZ.chiefXD, nozRight:NOZ.chiefXD,
-    elevFt:0, visible:false,
-    build:{ size:'1.75', len:200 } // default chooser
+    elevFt:0, visible:false
   };
 }
 const lines = { left:emptyHose('Line 1'), back:emptyHose('Line 2'), right:emptyHose('Line 3') };
+
 let plusContext = { key:null, where:'main' };
 let currentSupply = 'none';
 
@@ -238,31 +211,28 @@ const G_branches= document.getElementById('branches');
 const G_labels  = document.getElementById('labels');
 const G_tips    = document.getElementById('tips');
 const topInfo   = document.getElementById('topInfo');
+const linesTable= document.getElementById('linesTable');
+
 const picker    = document.getElementById('picker');
 const pickerTitle = document.getElementById('pickerTitle');
-const pickHome  = document.getElementById('pickHome');
 const pickSum   = document.getElementById('pickSum');
-const pickAdd   = document.getElementById('pickAdd');
-const pickNoz   = document.getElementById('pickNoz');
-const nozGrid   = document.getElementById('nozGrid');
-const pickAcc   = document.getElementById('pickAcc');
-const pickElev  = document.getElementById('pickElev');
-const pickSetup = document.getElementById('pickSetup');
-const elevInput = document.getElementById('elevInput');
 const addBtns   = document.getElementById('addBtns');
-const setupSize = document.getElementById('setupSize');
-const setupLen  = document.getElementById('setupLen');
-const setupNoz  = document.getElementById('setupNoz');
-const linesTable= document.getElementById('linesTable');
+const nozSelect = document.getElementById('nozSelect');
+const swapSides = document.getElementById('swapSides');
+const toggleWye = document.getElementById('toggleWye');
+const clearBranches = document.getElementById('clearBranches');
+const elevInput = document.getElementById('elevInput');
+const saveElev  = document.getElementById('saveElev');
+const quickMain = document.getElementById('quickMain');
+
 const supplyBtn = document.getElementById('supplyBtn');
 const supplyMenu= document.getElementById('supplyMenu');
-const menuPop   = document.getElementById('menuPop');
 
 /* ===== Helpers ===== */
 function clsFor(size){ return size==='5'?'hose5':(size==='2.5'?'hose25':'hose175'); }
 function sumFt(items){ return (items||[]).reduce((s,h)=>s + (h.lengthFt||0), 0); }
 function FL(gpm, size, ft){ const C=COEFF[size]||0, Q=gpm/100; return C*(Q*Q)*(ft/100); }
-function FL_total(gpm, segments){ return (segments||[]).reduce((acc,seg)=> acc + FL(gpm, seg.size, seg.lengthFt||0), 0); } // mixed-size safe
+function FL_total(gpm, segments){ return (segments||[]).reduce((acc,seg)=> acc + FL(gpm, seg.size, seg.lengthFt||0), 0); }
 function clearGroup(g){ while(g.firstChild) g.removeChild(g.firstChild); }
 function supplyHeight(){ return currentSupply==='drafting'?150: currentSupply==='pressurized'?150: currentSupply==='relay'?170: 0; }
 function sizeLabel(sz){ return sz==='2.5'?'2½″':(sz==='1.75'?'1¾″':sz+'"'); }
@@ -302,7 +272,7 @@ function mainCurve(dir, totalPx, viewH){
   const ey = Math.max(10, sy - totalPx);
   const cx = (sx+ex)/2 + (dir===-1?-CURVE_PULL:dir===1?CURVE_PULL:0);
   const cy = sy - (sy-ey)*0.48;
-  return { d:`M ${sx},${sy} Q ${cx},${cy} ${ex},${ey}`, startX:sx, startY:sy, endX:ex, endY:ey };
+  return { d:`M ${sx},${sy} Q ${cx},${cy} ${ex},${ey}`, endX:ex, endY:ey };
 }
 function straightBranch(side, startX, startY, totalPx){
   const dir = side==='L'?-1:1;
@@ -335,7 +305,7 @@ function drawSegmentedPath(group, basePath, segs, sizeToClass){
   });
 }
 
-/* rig labels (show length + gpm + nozzle NP) */
+/* rig labels (show hose length + gpm + nozzle NP) */
 function addLabel(text, x, y, dy=0){
   const g = document.createElementNS('http://www.w3.org/2000/svg','g');
   const pad = 4;
@@ -351,7 +321,7 @@ function addLabel(text, x, y, dy=0){
 }
 function labelDyForLine(key){ return key==='left' ? -10 : key==='back' ? -22 : -34; }
 
-/* ===== Draw ===== */
+/* ===== Draw everything ===== */
 function drawAll(){
   const viewH = Math.ceil(computeNeededHeightPx());
   overlay.setAttribute('viewBox', `0 0 ${TRUCK_W} ${viewH}`);
@@ -523,14 +493,13 @@ function drawHoseBar(container, sections, gpm, npPsi, nozzleText){
   container.appendChild(svg);
 }
 
-/* ===== SIMPLE TWO-ROW EDITOR ===== */
+/* ===== Read-only line panel (math only) ===== */
 function renderLinesPanel(){
   linesTable.innerHTML='';
   ['left','back','right'].forEach(key=>{
     const L = lines[key];
     const row = document.createElement('div'); row.className='lineRow';
 
-    // single text row showing current line
     const segs = L.itemsMain.length ? L.itemsMain.map(s=>`${s.lengthFt}′ ${sizeLabel(s.size)}`).join(' + ') : 'empty';
     const flow = L.hasWye ? (L.nozLeft.gpm + L.nozRight.gpm) : L.nozRight.gpm;
     const head = document.createElement('div'); head.className='lineHeader'; head.innerHTML = `
@@ -542,23 +511,8 @@ function renderLinesPanel(){
       <span class="tag">${L.visible? 'DEPLOYED':'not deployed'}</span>
     `;
     row.appendChild(head);
-
-    // two rows of buttons with dropdowns
-    const grid = document.createElement('div'); grid.className='editorGrid';
-    grid.innerHTML = `
-      <button class="edBtn" data-key="${key}" data-menu="size">Size ▾</button>
-      <button class="edBtn" data-key="${key}" data-menu="len">Length ▾</button>
-      <button class="edBtn" data-key="${key}" data-menu="noz">Nozzle ▾</button>
-      <button class="edBtn" data-key="${key}" data-menu="app">Appliance ▾</button>
-      <button class="edBtn" data-key="${key}" data-menu="elev">Elevation ▾</button>
-      ${L.visible
-        ? `<button class="edBtn edPrimary" data-key="${key}" data-menu="retract">Retract</button>`
-        : `<button class="edBtn edPrimary" data-key="${key}" data-menu="deploy">Deploy</button>`}
-    `;
-    row.appendChild(grid);
     linesTable.appendChild(row);
 
-    // math (only when deployed) – unchanged
     if(L.visible){
       const b = breakdown(L);
       const gpmMain = L.hasWye ? (L.nozLeft?.gpm||0)+(L.nozRight?.gpm||0) : (L.nozRight?.gpm||0);
@@ -612,107 +566,14 @@ function renderLinesPanel(){
       }
     }
   });
-
-  // button handlers (all dropdown driven)
-  linesTable.querySelectorAll('[data-menu]').forEach(btn=>{
-    btn.addEventListener('click', (e)=>{
-      const key = e.currentTarget.dataset.key;
-      const type = e.currentTarget.dataset.menu;
-      if(type==='deploy'){ onDeploy(key); return; }
-      if(type==='retract'){ onRetract(key); return; }
-      openMenuForButton(e.currentTarget, key, type);
-    });
-  });
 }
 
-/* Defaults when hitting line button first (visual editor) */
-function applyDefaultsForKey(key){
-  const L = lines[key];
-  if(key==='left' || key==='back'){
-    L.itemsMain=[{size:'1.75', lengthFt:200}];
-    L.nozLeft=L.nozRight=NOZ.chiefXD;
-    L.build.size='1.75'; L.build.len=200;
-  } else { // right
-    L.itemsMain=[{size:'2.5', lengthFt:250}];
-    L.nozLeft=L.nozRight=NOZ.chief265;
-    L.build.size='2.5'; L.build.len=250;
-  }
+/* ===== + bubbles (restored to open full editor with buttons) ===== */
+function allowedAddOptions(curr){
+  return (curr==='2.5')
+    ? [{len:50,size:'2.5'},{len:50,size:'1.75'},{len:100,size:'1.75'}]
+    : [{len:50,size:'1.75'},{len:100,size:'1.75'}];
 }
-
-/* editor dropdowns */
-function openMenuForButton(btn, key, type){
-  const L = lines[key];
-  menuPop.innerHTML='';
-  if(type==='size'){
-    ['1.75','2.5'].forEach(sz=>{
-      const b=document.createElement('button'); b.textContent=`${sizeLabel(sz)}`;
-      b.addEventListener('click',()=>{ L.build.size=sz; if(L.itemsMain.length===1){ L.itemsMain[0].size=sz; } closeMenu(); drawAll(); });
-      menuPop.appendChild(b);
-    });
-  } else if(type==='len'){
-    [50,100,150,200,250,300,350,400].forEach(n=>{
-      const b=document.createElement('button'); b.textContent=`${n}′ (set main)`;
-      b.addEventListener('click',()=>{ L.itemsMain=[{size:L.build.size, lengthFt:n}]; L.build.len=n; closeMenu(); drawAll(); });
-      menuPop.appendChild(b);
-    });
-  } else if(type==='noz'){
-    NOZ_LIST.forEach(n=>{
-      const b=document.createElement('button'); b.textContent=`${n.name} • ${n.NP} psi / ${n.gpm} gpm`;
-      b.addEventListener('click',()=>{ L.nozLeft=L.nozRight=n; closeMenu(); drawAll(); });
-      menuPop.appendChild(b);
-    });
-  } else if(type==='app'){
-    [['None',false],['Wye (+10)',true]].forEach(([label,val])=>{
-      const b=document.createElement('button'); b.textContent=label;
-      b.addEventListener('click',()=>{ L.hasWye=val; if(!val){L.itemsLeft=[];L.itemsRight=[];} closeMenu(); drawAll(); });
-      menuPop.appendChild(b);
-    });
-  } else if(type==='elev'){
-    [-50,-25,0,25,50].forEach(v=>{
-      const b=document.createElement('button'); b.textContent=`${v}′ (${v*0.434|0} psi)`;
-      b.addEventListener('click',()=>{ L.elevFt=v; closeMenu(); drawAll(); });
-      menuPop.appendChild(b);
-    });
-    const cust=document.createElement('button'); cust.textContent='Custom…';
-    cust.addEventListener('click',()=>{
-      const v = prompt('Elevation in feet (±):', String(L.elevFt||0));
-      if(v!==null){ L.elevFt = Number(v)||0; } closeMenu(); drawAll();
-    });
-    menuPop.appendChild(cust);
-  }
-
-  const r = btn.getBoundingClientRect(), container = document.body.getBoundingClientRect();
-  menuPop.style.left = `${r.left - container.left}px`;
-  menuPop.style.top  = `${r.bottom - container.top + 6}px`;
-  menuPop.style.display='block';
-  menuPop.setAttribute('aria-hidden','false');
-
-  const off=(ev)=>{ if(!menuPop.contains(ev.target) && ev.target!==btn){ closeMenu(); document.removeEventListener('click',off); } };
-  setTimeout(()=>document.addEventListener('click',off),0);
-}
-function closeMenu(){ menuPop.style.display='none'; menuPop.setAttribute('aria-hidden','true'); }
-
-/* Deploy/Retract */
-function onDeploy(key){
-  const L = lines[key];
-  if(!L.itemsMain.length){ applyDefaultsForKey(key); }
-  L.visible=true; toggleLineBtn(key,true); drawAll();
-}
-function onRetract(key){ const L=lines[key]; L.visible=false; toggleLineBtn(key,false); drawAll(); }
-
-/* Top buttons: click = toggle; first click pre-fills defaults */
-function toggleLineBtn(key,on){ const btn=document.querySelector(`.linebtn[data-line="${key}"]`); if(btn){ btn.classList.toggle('active', on); } }
-document.querySelectorAll('.linebtn').forEach(b=>{
-  b.addEventListener('click', ()=>{
-    const key=b.dataset.line; const L=lines[key];
-    if(!L.itemsMain.length){ applyDefaultsForKey(key); }         // prefill defaults
-    L.visible = !L.visible; b.classList.toggle('active', L.visible);
-    drawAll();                                                    // numbers in rig mirror editor
-  });
-});
-
-/* ===== Rig + menu ===== */
-function allowedAddOptions(curr){ return (curr==='2.5') ? [{len:50,size:'2.5'},{len:50,size:'1.75'},{len:100,size:'1.75'}] : [{len:50,size:'1.75'},{len:100,size:'1.75'}]; }
 function addTip(key, where, x, y){
   const g = document.createElementNS('http://www.w3.org/2000/svg','g');
   g.setAttribute('class','hose-end'); g.setAttribute('data-line',key); g.setAttribute('data-where',where);
@@ -722,6 +583,7 @@ function addTip(key, where, x, y){
   const h = document.createElementNS('http://www.w3.org/2000/svg','line'); h.setAttribute('class','plus-sign'); h.setAttribute('x1',x-6); h.setAttribute('y1',y); h.setAttribute('x2',x+6); h.setAttribute('y2',y);
   g.appendChild(hit); g.appendChild(c); g.appendChild(v); g.appendChild(h); G_tips.appendChild(g);
 }
+
 overlay.addEventListener('click', (e)=>{
   const tip = e.target.closest('.hose-end'); if(!tip) return;
   const key = tip.getAttribute('data-line'); const where = tip.getAttribute('data-where');
@@ -736,7 +598,7 @@ document.addEventListener('click', (e)=>{
   const inSupply = supplyMenu.contains(e.target) || e.target===supplyBtn;
   if(inPick || inSupply) return;
   if(e.target.closest('.hose-end')) return;
-  hidePicker(); hideSupplyMenu(); closeMenu();
+  hidePicker(); hideSupplyMenu();
 });
 
 function showPicker(key, where, cx, cy){
@@ -744,94 +606,111 @@ function showPicker(key, where, cx, cy){
   const L = lines[key];
   pickerTitle.textContent = where==='main' ? `${L.label} — Main` : `${L.label} — ${where==='L'?'Left':'Right'}`;
 
-  // show current hose length + flow + nozzle in +menu header
+  // summary
   const totalFt = sumFt(L.itemsMain);
   const gpm = L.hasWye ? (L.nozLeft.gpm + L.nozRight.gpm) : L.nozRight.gpm;
   pickSum.innerHTML = `
     <span class="tag">Main: ${totalFt}′</span>
     <span class="tag">Flow: ${gpm} gpm</span>
-    <span class="tag">Nozzle: ${L.nozRight.name} ${L.nozRight.NP}/${L.nozRight.gpm}</span>
+    <span class="tag">Nozzle: ${where==='L'?L.nozLeft.name:L.nozRight.name} ${(where==='L'?L.nozLeft.NP:L.nozRight.NP)}/${(where==='L'?L.nozLeft.gpm:L.nozRight.gpm)}</span>
     <span class="tag">Elev: ${L.elevFt||0}′</span>
   `;
 
-  setupSize.value = L.itemsMain[0]?.size || '1.75';
-  setupLen.value  = String(sumFt(L.itemsMain) || 200);
-  setupNoz.innerHTML = NOZ_LIST.map(n=>`<option value="${n.id}" ${L.nozRight.id===n.id?'selected':''}>${n.name} ${n.NP}/${n.gpm}</option>`).join('');
-  nozGrid.innerHTML = NOZ_LIST.map(n=>`<div class="pick" data-noz="${n.id}">${n.name} • ${n.NP} psi / ${n.gpm} gpm</div>`).join('');
-
+  // quick add buttons
   const currentSize = currentSegmentSize(L, where);
-  addBtns.innerHTML=''; allowedAddOptions(currentSize).forEach(o=>{
-    const b=document.createElement('button'); b.className='pick-small'; b.textContent=`+${o.len}′ ${o.size==='2.5'?'2½″':'1¾″'}`;
-    b.dataset.addlen=o.len; b.dataset.size=o.size; addBtns.appendChild(b);
+  addBtns.innerHTML='';
+  allowedAddOptions(currentSize).forEach(o=>{
+    const b=document.createElement('button'); b.className='pill'; b.textContent=`+${o.len}′ ${o.size==='2.5'?'2½″':'1¾″'}`;
+    b.addEventListener('click',()=>{ addSegmentFromPicker(L, where, o.size, o.len); });
+    addBtns.appendChild(b);
   });
 
-  picker.style.display='block'; picker.setAttribute('aria-hidden','false'); showPane('pickHome');
+  // nozzle select for this side
+  nozSelect.innerHTML = NOZ_LIST.map(n=>`<option value="${n.id}" ${((where==='L'?L.nozLeft:L.nozRight).id===n.id)?'selected':''}>${n.name} ${n.NP}/${n.gpm}</option>`).join('');
+  nozSelect.onchange = ()=>{ const n = NOZ[nozSelect.value]; if(where==='L'){ L.nozLeft=n; } else { L.nozRight=n; } if(!L.visible){ L.visible=true; toggleLineBtn(key,true); } drawAll(); };
 
-  const stg = stage.getBoundingClientRect(); const pw=340, ph=300;
+  // wye controls
+  toggleWye.textContent = L.hasWye ? 'Remove Wye' : 'Add Wye (+10)';
+  toggleWye.onclick = ()=>{ L.hasWye = !L.hasWye; if(!L.hasWye){L.itemsLeft=[];L.itemsRight=[];} if(!L.visible){ L.visible=true; toggleLineBtn(key,true);} drawAll(); showPicker(key, where, cx, cy); };
+  clearBranches.onclick = ()=>{ L.itemsLeft=[]; L.itemsRight=[]; drawAll(); showPicker(key, where, cx, cy); };
+  swapSides.onclick = ()=>{ const t=L.nozLeft; L.nozLeft=L.nozRight; L.nozRight=t; drawAll(); showPicker(key, where, cx, cy); };
+
+  // elevation
+  elevInput.value = String(L.elevFt||0);
+  saveElev.onclick = ()=>{ L.elevFt = Number(elevInput.value||0); if(!L.visible){ L.visible=true; toggleLineBtn(key,true);} hidePicker(); drawAll(); };
+
+  // quick replace main
+  quickMain.innerHTML='';
+  [50,100,150,200,250,300].forEach(n=>{
+    const b=document.createElement('button'); b.className='pill'; b.textContent=`Set main ${n}′`;
+    b.addEventListener('click',()=>{ L.itemsMain=[{size:(L.itemsMain[0]?.size||currentSize), lengthFt:n}]; if(!L.visible){ L.visible=true; toggleLineBtn(key,true);} hidePicker(); drawAll(); });
+    quickMain.appendChild(b);
+  });
+
+  // position + show
+  picker.style.display='block'; picker.setAttribute('aria-hidden','false');
+  const stg = stage.getBoundingClientRect(); const pw=340, ph=320;
   let x = cx - stg.left + 8, y = cy - stg.top - ph - 8; if(y<8) y = cy - stg.top + 8;
   x = Math.max(8, Math.min(x, stg.width - pw - 8)); y = Math.max(8, Math.min(y, stg.height - ph - 8));
   picker.style.left = `${x}px`; picker.style.top = `${y}px`;
 }
 function hidePicker(){ picker.style.display='none'; picker.setAttribute('aria-hidden','true'); }
-function showPane(id){ ['pickHome','pickAdd','pickNoz','pickAcc','pickElev','pickSetup'].forEach(pid=>{ document.getElementById(pid).style.display=(pid===id)?'block':'none'; }); }
 function currentSegmentSize(L, where){
   if(where==='L')  return L.itemsLeft[0]?.size || '1.75';
   if(where==='R')  return L.itemsRight[0]?.size || L.itemsMain[0]?.size || '1.75';
   return L.itemsMain[L.itemsMain.length-1]?.size || '1.75';
 }
-
-/* picker actions */
-picker.addEventListener('click', (e)=>{
-  const view = e.target.closest('.pick')?.dataset.view;
-  if(view==='addhose') showPane('pickAdd');
-  if(view==='nozzle')  showPane('pickNoz');
-  if(view==='accessory') showPane('pickAcc');
-  if(view==='elevation') showPane('pickElev');
-  if(view==='setup')   showPane('pickSetup');
-  if(e.target.hasAttribute('data-back')) showPane('pickHome');
-
-  const nozId = e.target.closest('.pick')?.dataset.noz;
-  if(nozId){ const L=lines[plusContext.key]; if(plusContext.where==='L'){ L.nozLeft=NOZ[nozId]; } else { L.nozRight=NOZ[nozId]; } if(!L.visible){ L.visible=true; toggleLineBtn(plusContext.key,true); } hidePicker(); drawAll(); }
-});
-document.getElementById('setupApply').addEventListener('click', ()=>{
-  const key=plusContext.key; const L=lines[key];
-  const size=setupSize.value; const len=parseInt(setupLen.value,10); const noz=NOZ[setupNoz.value];
-  L.itemsMain=[{size,lengthFt:len}]; L.nozLeft=L.nozRight=noz; L.build.size=size; L.build.len=len;
-  if(!L.visible){ L.visible=true; toggleLineBtn(key,true); }
-  hidePicker(); drawAll();
-});
-document.getElementById('pickAdd').addEventListener('click', (e)=>{
-  const btn = e.target.closest('[data-addlen]'); if(!btn) return;
-  const len = parseInt(btn.dataset.addlen,10), size = btn.dataset.size, L = lines[plusContext.key];
-  const curr = currentSegmentSize(L, plusContext.where); if(curr==='1.75' && size==='2.5'){ hidePicker(); return; }
-  if(plusContext.where==='L'){ L.itemsLeft.push({size,lengthFt:len}); }
-  else if(plusContext.where==='R'){ L.itemsRight.push({size,lengthFt:len}); }
+function addSegmentFromPicker(L, where, size, len){
+  const curr = currentSegmentSize(L, where);
+  if(curr==='1.75' && size==='2.5'){ hidePicker(); return; } // cannot step up later
+  if(where==='L'){ L.itemsLeft.push({size,lengthFt:len}); }
+  else if(where==='R'){ L.itemsRight.push({size,lengthFt:len}); }
   else { L.itemsMain.push({size,lengthFt:len}); }
   if(!L.visible){ L.visible=true; toggleLineBtn(plusContext.key,true); }
   hidePicker(); drawAll();
-});
-document.getElementById('pickAcc').addEventListener('click', (e)=>{
-  const acc = e.target.closest('button')?.dataset.acc; if(!acc) return;
-  const L = lines[plusContext.key];
-  if(acc==='wye'){ L.hasWye = true; } if(acc==='removeWye'){ L.hasWye=false; L.itemsLeft=[]; L.itemsRight=[]; }
-  if(!L.visible){ L.visible=true; toggleLineBtn(plusContext.key,true); }
-  hidePicker(); drawAll();
-});
-document.getElementById('pickElev').addEventListener('click', (e)=>{
-  if(!e.target.hasAttribute('data-save-elev')) return;
-  const L=lines[plusContext.key]; L.elevFt = Number(elevInput.value||0);
-  if(!L.visible){ L.visible=true; toggleLineBtn(plusContext.key,true); }
-  hidePicker(); drawAll();
-});
+}
 
-/* Supply dropdown */
+/* Supply menu */
 function showSupplyMenu(){
-  const rect = supplyBtn.getBoundingClientRect(); const lbRect = document.getElementById('linebar').getBoundingClientRect();
-  supplyMenu.style.left = (rect.left - lbRect.left) + 'px'; supplyMenu.style.top  = (rect.bottom - lbRect.top + 6) + 'px';
-  supplyMenu.style.display='block'; supplyMenu.setAttribute('aria-hidden','false');
+  const rect = supplyBtn.getBoundingClientRect();
+  const lbRect = document.getElementById('linebar').getBoundingClientRect();
+  supplyMenu.style.left = (rect.left - lbRect.left) + 'px';
+  supplyMenu.style.top  = (rect.bottom - lbRect.top + 6) + 'px';
+  supplyMenu.style.display='block';
+  supplyMenu.setAttribute('aria-hidden','false');
 }
 function hideSupplyMenu(){ supplyMenu.style.display='none'; supplyMenu.setAttribute('aria-hidden','true'); }
 supplyBtn.addEventListener('click', ()=>{ if(supplyMenu.style.display==='block') hideSupplyMenu(); else showSupplyMenu(); });
+supplyMenu.addEventListener('click',(e)=>{
+  const val = e.target.dataset.supply; if(!val) return;
+  currentSupply = val; hideSupplyMenu(); drawAll();
+});
+
+/* Defaults when hitting a line button first */
+function applyDefaultsForKey(key){
+  const L = lines[key];
+  if(key==='left' || key==='back'){           // Line 1 & 2
+    L.itemsMain=[{size:'1.75', lengthFt:200}];
+    L.nozLeft=L.nozRight=NOZ.chiefXD;         // 185 gpm @ 50 psi
+  } else {                                     // Line 3
+    L.itemsMain=[{size:'2.5', lengthFt:250}];
+    L.nozLeft=L.nozRight=NOZ.chief265;        // 265 gpm @ 50 psi
+  }
+}
+
+/* Top line buttons: toggle deploy; first click seeds defaults */
+function toggleLineBtn(key,on){
+  const btn=document.querySelector(`.linebtn[data-line="${key}"]`);
+  if(btn){ btn.classList.toggle('active', on); }
+}
+document.querySelectorAll('.linebtn').forEach(b=>{
+  b.addEventListener('click', ()=>{
+    const key=b.dataset.line; const L=lines[key];
+    if(!L.itemsMain.length){ applyDefaultsForKey(key); }
+    L.visible = !L.visible; b.classList.toggle('active', L.visible);
+    drawAll(); // numbers mirror panel
+  });
+});
 
 /* Boot */
 drawAll();
