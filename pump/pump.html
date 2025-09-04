@@ -13,8 +13,7 @@
     --bubble:#172134; --bubble-edge:rgba(255,255,255,.15);
     --btn:#0b1320; --btnEdge:#20324f;
   }
-  *{box-sizing:border-box}
-  html,body{margin:0;background:var(--bg);color:var(--ink);font-family:system-ui,Segoe UI,Inter,Arial,sans-serif}
+  *{box-sizing:border-box} html,body{margin:0;background:var(--bg);color:var(--ink);font-family:system-ui,Segoe UI,Inter,Arial,sans-serif}
   .app{display:flex;flex-direction:column;min-height:100vh}
 
   header{position:sticky;top:0;z-index:100;padding:10px 14px;background:linear-gradient(180deg,#0c1320,#0b0f14);border-bottom:1px solid var(--edge)}
@@ -48,33 +47,7 @@
   .plus-circle{fill:#fff;stroke:#111;stroke-width:1.5;filter:drop-shadow(0 2px 4px rgba(0,0,0,.45))}
   .plus-sign{stroke:#111;stroke-width:3;stroke-linecap:round}
 
-  .picker{
-    position:absolute; background:#0b1320;border:1px solid var(--bubble-edge);border-radius:12px;
-    min-width:320px;padding:8px; z-index:50; box-shadow:0 18px 40px rgba(0,0,0,.55); display:none;
-  }
-  .picker h3{font-size:12px;color:#cfe4ff;margin:4px 8px 4px}
-  .pickSummary{font-size:12px;color:#cfe4ff;margin:0 8px 8px}
-  .pickSummary .tag{display:inline-block;background:#0b1a29;border:1px solid #1f3a57;border-radius:999px;padding:3px 8px;margin:2px 4px}
-  .section-title{font-size:11px;color:#9fb0c8;margin:4px 8px 6px}
-  .picker-actions{display:flex;gap:6px;flex-wrap:wrap;padding:6px 8px 10px}
-  .pick-small{font-size:12px;padding:8px 10px;border-radius:10px;background:#0b1a29;border:1px solid #1f3a57;cursor:pointer}
-  .pick-small:hover{background:#0e2337}
-  .picker-grid{display:grid;grid-template-columns:1fr 1fr;gap:6px;padding:4px 6px 8px}
-  .pick{display:flex;align-items:center;gap:8px;background:#0b1a29;border:1px solid #1f3a57;border-radius:10px;padding:10px;cursor:pointer}
-  .pick:hover{background:#0e2337}
-  .row{display:flex;gap:8px;align-items:center;padding:6px 8px}
-  .row input, .row select{background:#0b1320;color:#eaf2ff;border:1px solid var(--edge);border-radius:10px;padding:8px 10px;font-size:14px}
-
-  .dropdown{
-    position:absolute; z-index:60; display:none; pointer-events:auto;
-    background:#0b1320;border:1px solid var(--edge);border-radius:10px;box-shadow:0 12px 28px rgba(0,0,0,.45);overflow:hidden;
-  }
-  .dropdown button{
-    display:block;width:100%;text-align:left;background:none;border:0;color:#eaf2ff;padding:10px 12px;font-size:14px;cursor:pointer
-  }
-  .dropdown button:hover{background:#0e2337}
-  .dropdown .row{padding:10px}
-
+  /* phone-friendly simple editor */
   .panel{padding:10px 12px;background:var(--panel)}
   .card{background:#0e1726;border:1px solid var(--edge);border-radius:14px;padding:12px;margin:10px 0}
   .kpis{display:flex;gap:10px;flex-wrap:wrap}
@@ -82,28 +55,27 @@
   .kpi b{font-size:18px}
   .linesTable{margin-top:8px;border-top:1px solid var(--edge);padding-top:8px;display:grid;gap:10px}
 
-  .lineRow{display:flex;flex-wrap:wrap;gap:8px;align-items:flex-start;background:#0b1320;border:1px solid var(--edge);border-radius:12px;padding:10px}
-  .lineRow .title{font-weight:700;margin-right:8px}
-  .builtTags{margin:6px 0}
-  .builtTags .tag{display:inline-block;background:#0b1a29;border:1px solid #1f3a57;border-radius:999px;padding:4px 8px;margin:2px 4px;font-size:11px}
-  .miniNote{font-size:12px;color:#cfe4ff}
+  .lineRow{background:#0b1320;border:1px solid var(--edge);border-radius:12px;padding:10px}
+  .lineHeader{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:8px;font-size:12px;color:#cfe4ff}
+  .lineHeader .title{font-weight:700;color:#eaf2ff}
+  .lineHeader .tag{display:inline-block;background:#0b1a29;border:1px solid #1f3a57;border-radius:999px;padding:4px 8px;margin:2px 4px;font-size:11px}
 
-  /* SIMPLER PHONE-FRIENDLY EDITOR */
-  .editorSimple{display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-top:6px}
-  .editorSimple label{font-size:11px;color:#9fb0c8}
-  .editorSimple select,.editorSimple input{
+  .editorGrid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}
+  .edBtn{
     background:#0b1a29;border:1px solid #1f3a57;border-radius:10px;color:#eaf2ff;
-    padding:8px 10px;font-size:13px;min-width:90px
+    padding:10px 12px;font-size:13px;cursor:pointer;text-align:center;white-space:nowrap
   }
-  .editorSimple .actionBtn{
-    background:#0b1320;border:1px solid #20324f;border-radius:10px;color:#eaf2ff;
-    padding:8px 12px;font-size:13px;cursor:pointer;white-space:nowrap
+  .edPrimary{background:#153a1d;border-color:#275b31}
+  @media (max-width:540px){ .editorGrid{grid-template-columns:repeat(3,minmax(0,1fr))} }
+
+  .dropdown{
+    position:absolute; z-index:60; display:none; pointer-events:auto;
+    background:#0b1320;border:1px solid var(--edge);border-radius:10px;box-shadow:0 12px 28px rgba(0,0,0,.45);overflow:hidden;min-width:210px
   }
-  .editorSimple .addBtn{background:#153a1d;border-color:#275b31}
-  @media (max-width:520px){
-    .editorSimple{flex-wrap:nowrap;overflow-x:auto;-webkit-overflow-scrolling:touch}
-    .editorSimple>*{flex:0 0 auto}
-  }
+  .dropdown button{display:block;width:100%;text-align:left;background:none;border:0;color:#eaf2ff;padding:10px 12px;font-size:14px;cursor:pointer}
+  .dropdown button:hover{background:#0e2337}
+  .dropdown .row{padding:10px}
+  .mono{font-family:ui-monospace,Menlo,Consolas,monospace}
 
   /* Visual math breakdown */
   details.math{background:#0b1a29;border:1px solid #1f3a57;border-radius:12px;padding:8px 10px;margin-top:8px}
@@ -111,9 +83,7 @@
   .hoseviz{margin-top:8px}
   .hoseLegend{display:flex;gap:10px;align-items:center;font-size:11px;color:#cfe4ff;margin:4px 0 8px}
   .legSwatch{width:14px;height:8px;border-radius:3px;display:inline-block;border:1px solid rgba(0,0,0,.35)}
-  .sw175{background:var(--hose175)}
-  .sw25{background:var(--hose25)}
-  .sw5{background:var(--hose5)}
+  .sw175{background:var(--hose175)} .sw25{background:var(--hose25)} .sw5{background:var(--hose5)}
   .barWrap{background:#0b1320;border:1px solid #1f3a57;border-radius:10px;padding:8px;margin:6px 0}
   .barTitle{font-size:12px;color:#9fb0c8;margin-bottom:6px}
   .ppEq{font-size:14px;color:#eaf2ff;margin-top:6px;font-weight:700}
@@ -126,7 +96,7 @@
 
   <header>
     <div class="title">FireOps SIM — Visual Pump Builder</div>
-    <div class="sub">Phone-friendly editor. Build your own line, then Deploy to show on the rig and reveal the math. (+ bubbles show length, gpm, and nozzle.)</div>
+    <div class="sub">Two-row phone editor. Tap a line button to auto-prefill defaults; Deploy to show the rig and reveal math.</div>
   </header>
 
   <section class="wrapper">
@@ -152,11 +122,10 @@
         </div>
       </div>
 
-      <!-- Visual + menu (kept from before, now shows length/gpm/nozzle) -->
+      <!-- + Picker (rig bubbles) -->
       <div id="picker" class="picker" role="dialog" aria-modal="true" aria-hidden="true">
         <h3 id="pickerTitle">Line</h3>
         <div id="pickSum" class="pickSummary"></div>
-
         <div id="pickHome">
           <div class="picker-grid">
             <div class="pick" data-view="addhose">➕ Add Hose</div>
@@ -166,19 +135,16 @@
             <div class="pick" data-view="setup">🛠️ Quick Setup</div>
           </div>
         </div>
-
         <div id="pickAdd" style="display:none">
           <div class="section-title">Add hose (same or smaller)</div>
           <div class="picker-actions" id="addBtns"></div>
           <div class="picker-actions"><button class="pick-small" data-back>⬅ Back</button></div>
         </div>
-
         <div id="pickNoz" style="display:none">
           <div class="section-title">Set nozzle for this side</div>
           <div class="picker-grid" id="nozGrid"></div>
           <div class="picker-actions"><button class="pick-small" data-back>⬅ Back</button></div>
         </div>
-
         <div id="pickAcc" style="display:none">
           <div class="section-title">Wye</div>
           <div class="picker-actions">
@@ -187,37 +153,23 @@
           </div>
           <div class="picker-actions"><button class="pick-small" data-back>⬅ Back</button></div>
         </div>
-
         <div id="pickElev" style="display:none">
           <div class="section-title">Elevation (feet, ±)</div>
-          <div class="row">
-            <input id="elevInput" type="number" step="1" value="0">
-            <small>× 0.434 psi/ft</small>
-          </div>
+          <div class="row"><input id="elevInput" type="number" step="1" value="0"><small>× 0.434 psi/ft</small></div>
           <div class="picker-actions">
             <button class="pick-small" data-save-elev>Save</button>
             <button class="pick-small" data-back>Cancel</button>
           </div>
         </div>
-
         <div id="pickSetup" style="display:none">
           <div class="section-title">Quick setup (creates/overwrites main)</div>
           <div class="row">
             <label>Size</label>
-            <select id="setupSize">
-              <option value="1.75">1¾″</option>
-              <option value="2.5">2½″</option>
-            </select>
+            <select id="setupSize"><option value="1.75">1¾″</option><option value="2.5">2½″</option></select>
             <label>Length</label>
-            <select id="setupLen">
-              <option>50</option><option>100</option><option>150</option>
-              <option>200</option><option>250</option><option>300</option>
-            </select>
+            <select id="setupLen"><option>50</option><option>100</option><option>150</option><option>200</option><option>250</option><option>300</option></select>
           </div>
-          <div class="row">
-            <label>Nozzle</label>
-            <select id="setupNoz"></select>
-          </div>
+          <div class="row"><label>Nozzle</label><select id="setupNoz"></select></div>
           <div class="picker-actions">
             <button class="pick-small" id="setupApply">Apply</button>
             <button class="pick-small" data-back>Cancel</button>
@@ -227,7 +179,7 @@
     </div>
   </section>
 
-  <!-- KPIs + SIMPLE line editor -->
+  <!-- KPIs + SIMPLE TWO-ROW EDITOR -->
   <section class="panel">
     <div class="card">
       <div class="kpis">
@@ -239,6 +191,9 @@
   </section>
 
 </div>
+
+<!-- global dropdown used by the editor buttons -->
+<div id="menuPop" class="dropdown" aria-hidden="true"></div>
 
 <script>
 /* ===== Constants ===== */
@@ -252,7 +207,7 @@ const PSI_PER_FT = 0.434;
 const COEFF = { "1.75":15.5, "2.5":2, "5":0.08 };
 const NOZ = {
   chiefXD:   {id:'chiefXD',   name:'ChiefXD',   gpm:185, NP:50},
-  smooth185: {id:'smooth185', name:'Smooth 185',gpm:185, NP:50},
+  chief265:  {id:'chief265',  name:'ChiefXD 265', gpm:265, NP:50}, // for requested default on Line 3
   fog150_75: {id:'fog150_75', name:'Fog 150',   gpm:150, NP:75},
   sb265:     {id:'sb265',     name:'SB 1 1/8″', gpm:265, NP:50}
 };
@@ -263,21 +218,14 @@ const COLORS = {"1.75":"#ff6b6b","2.5":"#6ecbff","5":"#ecd464"};
 function emptyHose(label){
   return {
     label,
-    // No premade line – user builds from scratch
-    itemsMain:[],
-    hasWye:false, wyeLoss:10,
+    itemsMain:[], hasWye:false, wyeLoss:10,
     itemsLeft:[], itemsRight:[],
     nozLeft:NOZ.chiefXD, nozRight:NOZ.chiefXD,
-    elevFt:0,
-    visible:false,
-    build:{ size:'1.75', len:50 } // editor selections
+    elevFt:0, visible:false,
+    build:{ size:'1.75', len:200 } // default chooser
   };
 }
-const lines = {
-  left:  emptyHose('Line 1'),
-  back:  emptyHose('Line 2'),
-  right: emptyHose('Line 3')
-};
+const lines = { left:emptyHose('Line 1'), back:emptyHose('Line 2'), right:emptyHose('Line 3') };
 let plusContext = { key:null, where:'main' };
 let currentSupply = 'none';
 
@@ -290,7 +238,6 @@ const G_branches= document.getElementById('branches');
 const G_labels  = document.getElementById('labels');
 const G_tips    = document.getElementById('tips');
 const topInfo   = document.getElementById('topInfo');
-
 const picker    = document.getElementById('picker');
 const pickerTitle = document.getElementById('pickerTitle');
 const pickHome  = document.getElementById('pickHome');
@@ -306,32 +253,24 @@ const addBtns   = document.getElementById('addBtns');
 const setupSize = document.getElementById('setupSize');
 const setupLen  = document.getElementById('setupLen');
 const setupNoz  = document.getElementById('setupNoz');
-
 const linesTable= document.getElementById('linesTable');
 const supplyBtn = document.getElementById('supplyBtn');
 const supplyMenu= document.getElementById('supplyMenu');
+const menuPop   = document.getElementById('menuPop');
 
 /* ===== Helpers ===== */
 function clsFor(size){ return size==='5'?'hose5':(size==='2.5'?'hose25':'hose175'); }
 function sumFt(items){ return (items||[]).reduce((s,h)=>s + (h.lengthFt||0), 0); }
 function FL(gpm, size, ft){ const C=COEFF[size]||0, Q=gpm/100; return C*(Q*Q)*(ft/100); }
-function FL_total(gpm, segments){ return (segments||[]).reduce((acc,seg)=> acc + FL(gpm, seg.size, seg.lengthFt||0), 0); }
+function FL_total(gpm, segments){ return (segments||[]).reduce((acc,seg)=> acc + FL(gpm, seg.size, seg.lengthFt||0), 0); } // mixed-size safe
 function clearGroup(g){ while(g.firstChild) g.removeChild(g.firstChild); }
 function supplyHeight(){ return currentSupply==='drafting'?150: currentSupply==='pressurized'?150: currentSupply==='relay'?170: 0; }
 function sizeLabel(sz){ return sz==='2.5'?'2½″':(sz==='1.75'?'1¾″':sz+'"'); }
 function round(n){ return Math.round(n); }
 
-/* Split into <=100′ sections for visuals */
+/* split into <=100′ sections for visuals */
 function splitIntoSections(segments){
-  const out=[];
-  (segments||[]).forEach(seg=>{
-    let remain = seg.lengthFt||0;
-    while(remain>0){
-      const take = Math.min(100, remain);
-      out.push({size:seg.size, lengthFt:take});
-      remain -= take;
-    }
-  });
+  const out=[]; (segments||[]).forEach(seg=>{ let r=seg.lengthFt||0; while(r>0){ const take=Math.min(100,r); out.push({size:seg.size,lengthFt:take}); r-=take; }});
   return out;
 }
 
@@ -356,7 +295,7 @@ function pumpXY(viewH){
   return { x: TRUCK_W * PUMP_REL.x, y: top + TRUCK_H * PUMP_REL.y };
 }
 
-/* Geometry for rig */
+/* Geometry */
 function mainCurve(dir, totalPx, viewH){
   const {x:sx,y:sy} = pumpXY(viewH);
   const ex = dir===-1 ? sx - 110 : dir===1 ? sx + 110 : sx;
@@ -373,7 +312,7 @@ function straightBranch(side, startX, startY, totalPx){
   return { d:`M ${startX},${startY} L ${startX},${y1} L ${x},${y1} L ${x},${y2}`, endX:x, endY:y2 };
 }
 
-/* Draw segmented path on rig */
+/* draw segmented on rig */
 function drawSegmentedPath(group, basePath, segs, sizeToClass){
   const sh = document.createElementNS('http://www.w3.org/2000/svg','path');
   sh.setAttribute('class','hoseBase shadow');
@@ -396,13 +335,12 @@ function drawSegmentedPath(group, basePath, segs, sizeToClass){
   });
 }
 
-/* Labels on rig (show hose length + flow + nozzle NP) */
+/* rig labels (show length + gpm + nozzle NP) */
 function addLabel(text, x, y, dy=0){
   const g = document.createElementNS('http://www.w3.org/2000/svg','g');
   const pad = 4;
   const t = document.createElementNS('http://www.w3.org/2000/svg','text');
-  t.setAttribute('class','lbl'); t.setAttribute('x', x); t.setAttribute('y', y+dy); t.setAttribute('text-anchor','middle');
-  t.textContent = text;
+  t.setAttribute('class','lbl'); t.setAttribute('x', x); t.setAttribute('y', y+dy); t.setAttribute('text-anchor','middle'); t.textContent = text;
   g.appendChild(t); G_labels.appendChild(g);
   const bb = t.getBBox();
   const bg = document.createElementNS('http://www.w3.org/2000/svg','rect');
@@ -413,7 +351,7 @@ function addLabel(text, x, y, dy=0){
 }
 function labelDyForLine(key){ return key==='left' ? -10 : key==='back' ? -22 : -34; }
 
-/* ===== Draw complete rig ===== */
+/* ===== Draw ===== */
 function drawAll(){
   const viewH = Math.ceil(computeNeededHeightPx());
   overlay.setAttribute('viewBox', `0 0 ${TRUCK_W} ${viewH}`);
@@ -438,11 +376,9 @@ function drawAll(){
     drawSegmentedPath(G_hoses, base, L.itemsMain, clsFor);
     addTip(key,'main',geom.endX,geom.endY);
 
-    // Show length + flow + nozzle (phone friendly label)
     const flowGpm = L.hasWye ? (L.nozLeft.gpm + L.nozRight.gpm) : L.nozRight.gpm;
     addLabel(`${mainFt}′ @ ${flowGpm} gpm — Nozzle ${L.nozRight.NP} psi`, geom.endX, geom.endY-6, labelDyForLine(key)-10);
 
-    // Wye branches
     if(L.hasWye){
       if(sumFt(L.itemsLeft)>0){
         const gL = straightBranch('L', geom.endX, geom.endY, (sumFt(L.itemsLeft)/50)*PX_PER_50FT);
@@ -452,9 +388,7 @@ function drawAll(){
         addTip(key,'L',gL.endX,gL.endY);
         const mid = pathL.getTotalLength()/2, pt = pathL.getPointAtLength(mid);
         addLabel(`${sumFt(L.itemsLeft)}′ @ ${L.nozLeft.gpm} gpm`, pt.x, pt.y, labelDyForLine(key)-8);
-      } else {
-        addTip(key,'L',geom.endX-20,geom.endY-20);
-      }
+      } else addTip(key,'L',geom.endX-20,geom.endY-20);
 
       if(sumFt(L.itemsRight)>0){
         const gR = straightBranch('R', geom.endX, geom.endY, (sumFt(L.itemsRight)/50)*PX_PER_50FT);
@@ -464,11 +398,8 @@ function drawAll(){
         addTip(key,'R',gR.endX,gR.endY);
         const mid = pathR.getTotalLength()/2, pt = pathR.getPointAtLength(mid);
         addLabel(`${sumFt(L.itemsRight)}′ @ ${L.nozRight.gpm} gpm`, pt.x, pt.y, labelDyForLine(key)-8);
-      } else {
-        addTip(key,'R',geom.endX+20,geom.endY-20);
-      }
+      } else addTip(key,'R',geom.endX+20,geom.endY-20);
     }
-
     base.remove();
   });
 
@@ -477,7 +408,7 @@ function drawAll(){
   renderLinesPanel();
 }
 
-/* Supply */
+/* Supply visuals */
 function drawSupply(viewH){
   const G = document.getElementById('supplyG'); clearGroup(G);
   const h = supplyHeight(); if(!h) return;
@@ -508,7 +439,7 @@ function drawSupply(viewH){
   }
 }
 
-/* Totals (PDP uses max branch + main FL + wye + elevation) */
+/* Totals */
 function refreshTotals(){
   const vis = Object.values(lines).filter(l=>l.visible);
   let totalGPM = 0, maxPDP = 0;
@@ -525,13 +456,12 @@ function refreshTotals(){
   document.getElementById('PDP').textContent = vis.length? `${Math.round(maxPDP)} psi` : '— psi';
 }
 
-/* ===== Visual math breakdown & equations ===== */
+/* Breakdown + equations (unchanged math) */
 function breakdown(L){
   const mainLen  = sumFt(L.itemsMain) || 0;
   const flow     = L.hasWye ? (L.nozLeft?.gpm||0)+(L.nozRight?.gpm||0) : (L.nozRight?.gpm||0);
   const mainFL   = flow ? FL_total(flow, L.itemsMain) : 0;
-  const lLen  = sumFt(L.itemsLeft)||0;
-  const rLen  = sumFt(L.itemsRight)||0;
+  const lLen  = sumFt(L.itemsLeft)||0, rLen = sumFt(L.itemsRight)||0;
   const lFL   = L.hasWye ? FL_total(L.nozLeft?.gpm||0, L.itemsLeft) : 0;
   const rFL   = L.hasWye ? FL_total(L.nozRight?.gpm||0, L.itemsRight) : 0;
   const leftNeed  = L.hasWye ? (lFL + (L.nozLeft?.NP||0)) : 0;
@@ -568,156 +498,71 @@ function eqStringsWye(L){
   return { aEq, bEq, final };
 }
 
-/* Horizontal hose bar with NP pill at the end (always) */
+/* Horizontal bar with NP pill */
 function drawHoseBar(container, sections, gpm, npPsi, nozzleText){
-  const totalLen = sumFt(sections);
-  container.innerHTML = '';
-  if(!totalLen || !gpm){
-    const msg = document.createElement('div');
-    msg.style.color = '#9fb0c8'; msg.style.fontSize='12px';
-    msg.textContent = 'No hose yet';
-    container.appendChild(msg);
-    return;
-  }
+  const totalLen = sumFt(sections); container.innerHTML=''; if(!totalLen||!gpm){ container.textContent='No hose yet'; container.style.color='#9fb0c8'; container.style.fontSize='12px'; return; }
+  const W = Math.max(320, Math.min(container.clientWidth||640, 720)), NP_W=70, H=56;
+  const svgNS='http://www.w3.org/2000/svg'; const svg=document.createElementNS(svgNS,'svg'); svg.setAttribute('width','100%'); svg.setAttribute('height',H); svg.setAttribute('viewBox',`0 0 ${W} ${H}`); const innerW=W-16-NP_W;
 
-  const W = Math.max(320, Math.min(container.clientWidth || 640, 720));
-  const NP_W = 70;
-  const H = 56;
-  const svgNS = 'http://www.w3.org/2000/svg';
-  const svg = document.createElementNS(svgNS, 'svg');
-  svg.setAttribute('width', '100%');
-  svg.setAttribute('height', H);
-  svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
+  if(nozzleText){ const t=document.createElementNS(svgNS,'text'); t.setAttribute('x',8); t.setAttribute('y',12); t.setAttribute('fill','#cfe4ff'); t.setAttribute('font-size','12'); t.textContent=nozzleText; svg.appendChild(t); }
 
-  const innerW = W - 16 - NP_W;
+  const track=document.createElementNS(svgNS,'rect'); track.setAttribute('x',8); track.setAttribute('y',20); track.setAttribute('width',innerW); track.setAttribute('height',20); track.setAttribute('fill','#0c1726'); track.setAttribute('stroke','#20324f'); track.setAttribute('rx',6); track.setAttribute('ry',6); svg.appendChild(track);
 
-  if(nozzleText){
-    const t = document.createElementNS(svgNS,'text');
-    t.setAttribute('x', 8);
-    t.setAttribute('y', 12);
-    t.setAttribute('fill', '#cfe4ff');
-    t.setAttribute('font-size','12');
-    t.textContent = nozzleText;
-    svg.appendChild(t);
-  }
-
-  const track = document.createElementNS(svgNS,'rect');
-  track.setAttribute('x', 8); track.setAttribute('y', 20);
-  track.setAttribute('width', innerW); track.setAttribute('height', 20);
-  track.setAttribute('fill', '#0c1726');
-  track.setAttribute('stroke', '#20324f');
-  track.setAttribute('rx', 6); track.setAttribute('ry', 6);
-  svg.appendChild(track);
-
-  let x = 8;
+  let x=8;
   sections.forEach(seg=>{
-    const segW = (seg.lengthFt/totalLen) * innerW;
-    const r = document.createElementNS(svgNS,'rect');
-    r.setAttribute('x', x); r.setAttribute('y', 20);
-    r.setAttribute('width', Math.max(segW,1)); r.setAttribute('height', 20);
-    r.setAttribute('fill', COLORS[seg.size] || '#888');
-    r.setAttribute('stroke', 'rgba(0,0,0,.35)');
-    r.setAttribute('rx', 5); r.setAttribute('ry', 5);
-    svg.appendChild(r);
-
-    const fl = FL(gpm, seg.size, seg.lengthFt);
-    const t = document.createElementNS(svgNS,'text');
-    t.setAttribute('fill', '#0b0f14');
-    t.setAttribute('font-size','11');
-    t.setAttribute('font-family','ui-monospace, Menlo, Consolas, monospace');
-    t.setAttribute('text-anchor','middle');
-    t.setAttribute('x', x + segW/2);
-    t.setAttribute('y', 35);
-    t.textContent = `${seg.lengthFt}′ • ${Math.round(fl)} psi`;
-    svg.appendChild(t);
-
-    x += segW;
+    const segW=(seg.lengthFt/totalLen)*innerW;
+    const r=document.createElementNS(svgNS,'rect'); r.setAttribute('x',x); r.setAttribute('y',20); r.setAttribute('width',Math.max(segW,1)); r.setAttribute('height',20); r.setAttribute('fill',COLORS[seg.size]||'#888'); r.setAttribute('stroke','rgba(0,0,0,.35)'); r.setAttribute('rx',5); r.setAttribute('ry',5); svg.appendChild(r);
+    const fl=FL(gpm,seg.size,seg.lengthFt);
+    const t=document.createElementNS(svgNS,'text'); t.setAttribute('fill','#0b0f14'); t.setAttribute('font-size','11'); t.setAttribute('font-family','ui-monospace,Menlo,Consolas,monospace'); t.setAttribute('text-anchor','middle'); t.setAttribute('x',x+segW/2); t.setAttribute('y',35); t.textContent=`${seg.lengthFt}′ • ${Math.round(fl)} psi`; svg.appendChild(t);
+    x+=segW;
   });
 
-  const pill = document.createElementNS(svgNS,'rect');
-  pill.setAttribute('x', innerW + 8 + 6);
-  pill.setAttribute('y', 20);
-  pill.setAttribute('width', NP_W-12);
-  pill.setAttribute('height', 20);
-  pill.setAttribute('fill', '#eaf2ff');
-  pill.setAttribute('stroke', '#20324f');
-  pill.setAttribute('rx', 6); pill.setAttribute('ry', 6);
-  svg.appendChild(pill);
-
-  const npT = document.createElementNS(svgNS,'text');
-  npT.setAttribute('x', innerW + 8 + (NP_W-12)/2);
-  npT.setAttribute('y', 34);
-  npT.setAttribute('text-anchor','middle');
-  npT.setAttribute('fill', '#0b0f14');
-  npT.setAttribute('font-size','11');
-  npT.setAttribute('font-family','ui-monospace, Menlo, Consolas, monospace');
-  npT.textContent = `NP ${npPsi}`;
-  svg.appendChild(npT);
+  const pill=document.createElementNS(svgNS,'rect'); pill.setAttribute('x',innerW+8+6); pill.setAttribute('y',20); pill.setAttribute('width',NP_W-12); pill.setAttribute('height',20); pill.setAttribute('fill','#eaf2ff'); pill.setAttribute('stroke','#20324f'); pill.setAttribute('rx',6); pill.setAttribute('ry',6); svg.appendChild(pill);
+  const npT=document.createElementNS(svgNS,'text'); npT.setAttribute('x',innerW+8+(NP_W-12)/2); npT.setAttribute('y',34); npT.setAttribute('text-anchor','middle'); npT.setAttribute('fill','#0b0f14'); npT.setAttribute('font-size','11'); npT.setAttribute('font-family','ui-monospace,Menlo,Consolas,monospace'); npT.textContent=`NP ${npPsi}`; svg.appendChild(npT);
 
   container.appendChild(svg);
 }
 
-/* ===== Render line editor (SIMPLE) =====
-   Start: only editor. After Deploy: visual + math shown below.
-*/
+/* ===== SIMPLE TWO-ROW EDITOR ===== */
 function renderLinesPanel(){
-  linesTable.innerHTML = '';
+  linesTable.innerHTML='';
   ['left','back','right'].forEach(key=>{
     const L = lines[key];
-    const row = document.createElement('div');
-    row.className='lineRow';
+    const row = document.createElement('div'); row.className='lineRow';
 
-    // Current build summary (top)
-    const segSummary = L.itemsMain.length
-      ? L.itemsMain.map(s=>`<span class="tag">${s.lengthFt}′ ${sizeLabel(s.size)}</span>`).join('')
-      : '<i>No segments yet. Use the controls below.</i>';
-    const totalFt = sumFt(L.itemsMain);
-    const flowGpm = L.hasWye ? (L.nozLeft.gpm + L.nozRight.gpm) : L.nozRight.gpm;
-
-    row.innerHTML = `
-      <div class="title">${L.label} — ${L.visible?'DEPLOYED':'not deployed'}</div>
-      <div class="builtTags">${segSummary}</div>
-      <div class="miniNote">Total: <b>${totalFt}′</b> @ <b>${flowGpm} gpm</b> • Nozzle: ${L.nozRight.name} ${L.nozRight.NP} psi / ${L.nozRight.gpm} gpm • Elev: ${L.elevFt||0}′</div>
-
-      <div class="editorSimple">
-        <label>Size
-          <select data-key="${key}" data-edit="buildSize">
-            <option value="1.75" ${L.build.size==='1.75'?'selected':''}>1¾″</option>
-            <option value="2.5"  ${L.build.size==='2.5'?'selected':''}>2½″</option>
-          </select>
-        </label>
-
-        <label>Length
-          <select data-key="${key}" data-edit="buildLen">
-            ${[50,100,150,200,250,300,350,400].map(v=>`<option value="${v}" ${L.build.len===v?'selected':''}>${v}′</option>`).join('')}
-          </select>
-        </label>
-
-        <label>Nozzle
-          <select data-key="${key}" data-edit="buildNoz">
-            ${NOZ_LIST.map(n=>`<option value="${n.id}" ${L.nozRight.id===n.id?'selected':''}>${n.name} ${n.NP}/${n.gpm}</option>`).join('')}
-          </select>
-        </label>
-
-        <label>Elev
-          <input type="number" data-key="${key}" data-edit="buildElev" value="${L.elevFt||0}" style="width:90px"/>
-        </label>
-
-        <button class="actionBtn addBtn" data-key="${key}" data-edit="addSeg">Add</button>
-        <button class="actionBtn" data-key="${key}" data-edit="clearSegs">Clear</button>
-        ${L.visible
-          ? `<button class="actionBtn" data-key="${key}" data-edit="retract">Retract</button>`
-          : `<button class="actionBtn" data-key="${key}" data-edit="deploy">Deploy</button>`}
-      </div>
+    // single text row showing current line
+    const segs = L.itemsMain.length ? L.itemsMain.map(s=>`${s.lengthFt}′ ${sizeLabel(s.size)}`).join(' + ') : 'empty';
+    const flow = L.hasWye ? (L.nozLeft.gpm + L.nozRight.gpm) : L.nozRight.gpm;
+    const head = document.createElement('div'); head.className='lineHeader'; head.innerHTML = `
+      <span class="title">${L.label}</span>
+      <span class="tag">Main: ${sumFt(L.itemsMain)}′ (${segs})</span>
+      <span class="tag">Flow: ${flow} gpm</span>
+      <span class="tag">Nozzle: ${L.nozRight.name} ${L.nozRight.NP}/${L.nozRight.gpm}</span>
+      <span class="tag">Elev: ${L.elevFt||0}′</span>
+      <span class="tag">${L.visible? 'DEPLOYED':'not deployed'}</span>
     `;
+    row.appendChild(head);
+
+    // two rows of buttons with dropdowns
+    const grid = document.createElement('div'); grid.className='editorGrid';
+    grid.innerHTML = `
+      <button class="edBtn" data-key="${key}" data-menu="size">Size ▾</button>
+      <button class="edBtn" data-key="${key}" data-menu="len">Length ▾</button>
+      <button class="edBtn" data-key="${key}" data-menu="noz">Nozzle ▾</button>
+      <button class="edBtn" data-key="${key}" data-menu="app">Appliance ▾</button>
+      <button class="edBtn" data-key="${key}" data-menu="elev">Elevation ▾</button>
+      ${L.visible
+        ? `<button class="edBtn edPrimary" data-key="${key}" data-menu="retract">Retract</button>`
+        : `<button class="edBtn edPrimary" data-key="${key}" data-menu="deploy">Deploy</button>`}
+    `;
+    row.appendChild(grid);
     linesTable.appendChild(row);
 
-    // If deployed: show breakdown below
+    // math (only when deployed) – unchanged
     if(L.visible){
       const b = breakdown(L);
       const gpmMain = L.hasWye ? (L.nozLeft?.gpm||0)+(L.nozRight?.gpm||0) : (L.nozRight?.gpm||0);
       const mathWrap = document.createElement('div');
-      mathWrap.className = 'break';
       mathWrap.innerHTML = `
         <details class="math" open>
           <summary>Line math</summary>
@@ -748,132 +593,135 @@ function renderLinesPanel(){
           </div>
         </details>
       `;
-      row.appendChild(mathWrap);
+      linesTable.appendChild(mathWrap);
 
-      // Render horizontal bars + equations
-      const mainCont = document.getElementById(`viz_main_${key}`);
-      if(mainCont){
-        drawHoseBar(mainCont, splitIntoSections(L.itemsMain), gpmMain, (L.nozRight?.NP||0),
-          `Main ${sumFt(L.itemsMain)}′ @ ${gpmMain} gpm — nozzle ${L.nozRight.gpm} @ ${L.nozRight.NP} psi`);
-      }
+      // render bars + eq
+      drawHoseBar(document.getElementById(`viz_main_${key}`), splitIntoSections(L.itemsMain), gpmMain, (L.nozRight?.NP||0),
+        `Main ${sumFt(L.itemsMain)}′ @ ${gpmMain} gpm — nozzle ${L.nozRight.gpm} @ ${L.nozRight.NP} psi`);
       if(!L.hasWye){
-        const eq = document.getElementById(`eq_main_${key}`);
-        if(eq) eq.textContent = eqStringNoWye(L);
-      } else {
-        const lCont = document.getElementById(`viz_L_${key}`);
-        const rCont = document.getElementById(`viz_R_${key}`);
-        if(lCont) drawHoseBar(lCont, splitIntoSections(L.itemsLeft), L.nozLeft?.gpm||0, L.nozLeft?.NP||0,
-          `Branch A ${sumFt(L.itemsLeft)||0}′ @ ${L.nozLeft.gpm} gpm — nozzle ${L.nozLeft.gpm} @ ${L.nozLeft.NP} psi`);
-        if(rCont) drawHoseBar(rCont, splitIntoSections(L.itemsRight), L.nozRight?.gpm||0, L.nozRight?.NP||0,
-          `Branch B ${sumFt(L.itemsRight)||0}′ @ ${L.nozRight.gpm} gpm — nozzle ${L.nozRight.gpm} @ ${L.nozRight.NP} psi`);
-        const {aEq, bEq, final} = eqStringsWye(L);
-        const aDiv = document.getElementById(`eq_L_${key}`);
-        const bDiv = document.getElementById(`eq_R_${key}`);
-        const fDiv = document.getElementById(`eq_final_${key}`);
-        if(aDiv) aDiv.textContent = aEq;
-        if(bDiv) bDiv.textContent = bEq;
-        if(fDiv) fDiv.textContent = final;
+        const eq = document.getElementById(`eq_main_${key}`); if(eq) eq.textContent = eqStringNoWye(L);
+      }else{
+        drawHoseBar(document.getElementById(`viz_L_${key}`), splitIntoSections(L.itemsLeft), L.nozLeft?.gpm||0, L.nozLeft?.NP||0,
+          `Branch A ${sumFt(L.itemsLeft)||0}′ @ ${L.nozLeft.gpm} gpm`);
+        drawHoseBar(document.getElementById(`viz_R_${key}`), splitIntoSections(L.itemsRight), L.nozRight?.gpm||0, L.nozRight?.NP||0,
+          `Branch B ${sumFt(L.itemsRight)||0}′ @ ${L.nozRight.gpm} gpm`);
+        const {aEq,bEq,final}=eqStringsWye(L);
+        document.getElementById(`eq_L_${key}`).textContent=aEq;
+        document.getElementById(`eq_R_${key}`).textContent=bEq;
+        document.getElementById(`eq_final_${key}`).textContent=final;
       }
     }
   });
 
-  // === Simple editor handlers ===
-  // Selections
-  linesTable.querySelectorAll('[data-edit="buildSize"]').forEach(sel=>{
-    sel.addEventListener('change', e=>{
-      const key=e.target.dataset.key; const L=lines[key];
-      L.build.size = e.target.value; drawAll();
-    });
-  });
-  linesTable.querySelectorAll('[data-edit="buildLen"]').forEach(sel=>{
-    sel.addEventListener('change', e=>{
-      const key=e.target.dataset.key; const L=lines[key];
-      L.build.len = parseInt(e.target.value,10); drawAll();
-    });
-  });
-  linesTable.querySelectorAll('[data-edit="buildNoz"]').forEach(sel=>{
-    sel.addEventListener('change', e=>{
-      const key=e.target.dataset.key; const L=lines[key];
-      const noz = NOZ[e.target.value]; L.nozLeft=L.nozRight=noz; drawAll();
-    });
-  });
-  linesTable.querySelectorAll('[data-edit="buildElev"]').forEach(inp=>{
-    inp.addEventListener('change', e=>{
-      const key=e.target.dataset.key; const L=lines[key];
-      L.elevFt = Number(e.target.value||0); drawAll();
-    });
-  });
-
-  // Add / clear / deploy
-  linesTable.querySelectorAll('[data-edit="addSeg"]').forEach(btn=>{
-    btn.addEventListener('click', e=>{
-      const key=e.target.dataset.key; const L=lines[key];
-      const lastSize = L.itemsMain[L.itemsMain.length-1]?.size;
-      if(lastSize==='1.75' && L.build.size==='2.5'){ alert('Cannot increase from 1¾″ to 2½″ later in the line. Add 2½″ first, then 1¾″.'); return; }
-      L.itemsMain.push({size:L.build.size, lengthFt:L.build.len});
-      drawAll();
-    });
-  });
-  linesTable.querySelectorAll('[data-edit="clearSegs"]').forEach(btn=>{
-    btn.addEventListener('click', e=>{
-      const key=e.target.dataset.key; const L=lines[key];
-      L.itemsMain=[]; drawAll();
-    });
-  });
-  linesTable.querySelectorAll('[data-edit="deploy"]').forEach(btn=>{
-    btn.addEventListener('click', e=>{
-      const key=e.target.dataset.key; const L=lines[key];
-      if(!L.itemsMain.length){ alert('Add at least one main segment before deploying.'); return; }
-      L.visible=true; toggleLineBtn(key,true); drawAll();
-    });
-  });
-  linesTable.querySelectorAll('[data-edit="retract"]').forEach(btn=>{
-    btn.addEventListener('click', e=>{
-      const key=e.target.dataset.key; const L=lines[key];
-      L.visible=false; toggleLineBtn(key,false); drawAll();
+  // button handlers (all dropdown driven)
+  linesTable.querySelectorAll('[data-menu]').forEach(btn=>{
+    btn.addEventListener('click', (e)=>{
+      const key = e.currentTarget.dataset.key;
+      const type = e.currentTarget.dataset.menu;
+      if(type==='deploy'){ onDeploy(key); return; }
+      if(type==='retract'){ onRetract(key); return; }
+      openMenuForButton(e.currentTarget, key, type);
     });
   });
 }
 
-/* Top bar line buttons toggle deploy/retract too */
-function toggleLineBtn(key,on){
-  const btn = document.querySelector(`.linebtn[data-line="${key}"]`);
-  if(btn){ btn.classList.toggle('active', on); }
+/* Defaults when hitting line button first (visual editor) */
+function applyDefaultsForKey(key){
+  const L = lines[key];
+  if(key==='left' || key==='back'){
+    L.itemsMain=[{size:'1.75', lengthFt:200}];
+    L.nozLeft=L.nozRight=NOZ.chiefXD;
+    L.build.size='1.75'; L.build.len=200;
+  } else { // right
+    L.itemsMain=[{size:'2.5', lengthFt:250}];
+    L.nozLeft=L.nozRight=NOZ.chief265;
+    L.build.size='2.5'; L.build.len=250;
+  }
 }
+
+/* editor dropdowns */
+function openMenuForButton(btn, key, type){
+  const L = lines[key];
+  menuPop.innerHTML='';
+  if(type==='size'){
+    ['1.75','2.5'].forEach(sz=>{
+      const b=document.createElement('button'); b.textContent=`${sizeLabel(sz)}`;
+      b.addEventListener('click',()=>{ L.build.size=sz; if(L.itemsMain.length===1){ L.itemsMain[0].size=sz; } closeMenu(); drawAll(); });
+      menuPop.appendChild(b);
+    });
+  } else if(type==='len'){
+    [50,100,150,200,250,300,350,400].forEach(n=>{
+      const b=document.createElement('button'); b.textContent=`${n}′ (set main)`;
+      b.addEventListener('click',()=>{ L.itemsMain=[{size:L.build.size, lengthFt:n}]; L.build.len=n; closeMenu(); drawAll(); });
+      menuPop.appendChild(b);
+    });
+  } else if(type==='noz'){
+    NOZ_LIST.forEach(n=>{
+      const b=document.createElement('button'); b.textContent=`${n.name} • ${n.NP} psi / ${n.gpm} gpm`;
+      b.addEventListener('click',()=>{ L.nozLeft=L.nozRight=n; closeMenu(); drawAll(); });
+      menuPop.appendChild(b);
+    });
+  } else if(type==='app'){
+    [['None',false],['Wye (+10)',true]].forEach(([label,val])=>{
+      const b=document.createElement('button'); b.textContent=label;
+      b.addEventListener('click',()=>{ L.hasWye=val; if(!val){L.itemsLeft=[];L.itemsRight=[];} closeMenu(); drawAll(); });
+      menuPop.appendChild(b);
+    });
+  } else if(type==='elev'){
+    [-50,-25,0,25,50].forEach(v=>{
+      const b=document.createElement('button'); b.textContent=`${v}′ (${v*0.434|0} psi)`;
+      b.addEventListener('click',()=>{ L.elevFt=v; closeMenu(); drawAll(); });
+      menuPop.appendChild(b);
+    });
+    const cust=document.createElement('button'); cust.textContent='Custom…';
+    cust.addEventListener('click',()=>{
+      const v = prompt('Elevation in feet (±):', String(L.elevFt||0));
+      if(v!==null){ L.elevFt = Number(v)||0; } closeMenu(); drawAll();
+    });
+    menuPop.appendChild(cust);
+  }
+
+  const r = btn.getBoundingClientRect(), container = document.body.getBoundingClientRect();
+  menuPop.style.left = `${r.left - container.left}px`;
+  menuPop.style.top  = `${r.bottom - container.top + 6}px`;
+  menuPop.style.display='block';
+  menuPop.setAttribute('aria-hidden','false');
+
+  const off=(ev)=>{ if(!menuPop.contains(ev.target) && ev.target!==btn){ closeMenu(); document.removeEventListener('click',off); } };
+  setTimeout(()=>document.addEventListener('click',off),0);
+}
+function closeMenu(){ menuPop.style.display='none'; menuPop.setAttribute('aria-hidden','true'); }
+
+/* Deploy/Retract */
+function onDeploy(key){
+  const L = lines[key];
+  if(!L.itemsMain.length){ applyDefaultsForKey(key); }
+  L.visible=true; toggleLineBtn(key,true); drawAll();
+}
+function onRetract(key){ const L=lines[key]; L.visible=false; toggleLineBtn(key,false); drawAll(); }
+
+/* Top buttons: click = toggle; first click pre-fills defaults */
+function toggleLineBtn(key,on){ const btn=document.querySelector(`.linebtn[data-line="${key}"]`); if(btn){ btn.classList.toggle('active', on); } }
 document.querySelectorAll('.linebtn').forEach(b=>{
   b.addEventListener('click', ()=>{
-    const key=b.dataset.line;
-    const L=lines[key];
-    if(!L.visible && !L.itemsMain.length){ alert('Build a line in the editor first, then Deploy.'); return; }
-    L.visible = !L.visible;
-    b.classList.toggle('active', L.visible);
-    drawAll();
+    const key=b.dataset.line; const L=lines[key];
+    if(!L.itemsMain.length){ applyDefaultsForKey(key); }         // prefill defaults
+    L.visible = !L.visible; b.classList.toggle('active', L.visible);
+    drawAll();                                                    // numbers in rig mirror editor
   });
 });
 
-/* Allowed adds from rig UI (+ bubbles) — keep default lengths from before */
-function allowedAddOptions(curr){
-  if(curr==='2.5'){ return [{len:50,size:'2.5'},{len:50,size:'1.75'},{len:100,size:'1.75'}]; }
-  return [{len:50,size:'1.75'},{len:100,size:'1.75'}];
-}
-
-/* ===== + Tips on rig ===== */
+/* ===== Rig + menu ===== */
+function allowedAddOptions(curr){ return (curr==='2.5') ? [{len:50,size:'2.5'},{len:50,size:'1.75'},{len:100,size:'1.75'}] : [{len:50,size:'1.75'},{len:100,size:'1.75'}]; }
 function addTip(key, where, x, y){
   const g = document.createElementNS('http://www.w3.org/2000/svg','g');
   g.setAttribute('class','hose-end'); g.setAttribute('data-line',key); g.setAttribute('data-where',where);
-  const hit = document.createElementNS('http://www.w3.org/2000/svg','rect');
-  hit.setAttribute('class','plus-hit'); hit.setAttribute('x', x-20); hit.setAttribute('y', y-20); hit.setAttribute('width', 40); hit.setAttribute('height', 40);
-  const c = document.createElementNS('http://www.w3.org/2000/svg','circle');
-  c.setAttribute('class','plus-circle'); c.setAttribute('cx',x); c.setAttribute('cy',y); c.setAttribute('r',14);
-  const v = document.createElementNS('http://www.w3.org/2000/svg','line');
-  v.setAttribute('class','plus-sign'); v.setAttribute('x1',x); v.setAttribute('y1',y-6); v.setAttribute('x2',x); v.setAttribute('y2',y+6);
-  const h = document.createElementNS('http://www.w3.org/2000/svg','line');
-  h.setAttribute('class','plus-sign'); h.setAttribute('x1',x-6); h.setAttribute('y1',y); h.setAttribute('x2',x+6); h.setAttribute('y2',y);
-  g.appendChild(hit); g.appendChild(c); g.appendChild(v); g.appendChild(h);
-  G_tips.appendChild(g);
+  const hit = document.createElementNS('http://www.w3.org/2000/svg','rect'); hit.setAttribute('class','plus-hit'); hit.setAttribute('x', x-20); hit.setAttribute('y', y-20); hit.setAttribute('width', 40); hit.setAttribute('height', 40);
+  const c = document.createElementNS('http://www.w3.org/2000/svg','circle'); c.setAttribute('class','plus-circle'); c.setAttribute('cx',x); c.setAttribute('cy',y); c.setAttribute('r',14);
+  const v = document.createElementNS('http://www.w3.org/2000/svg','line'); v.setAttribute('class','plus-sign'); v.setAttribute('x1',x); v.setAttribute('y1',y-6); v.setAttribute('x2',x); v.setAttribute('y2',y+6);
+  const h = document.createElementNS('http://www.w3.org/2000/svg','line'); h.setAttribute('class','plus-sign'); h.setAttribute('x1',x-6); h.setAttribute('y1',y); h.setAttribute('x2',x+6); h.setAttribute('y2',y);
+  g.appendChild(hit); g.appendChild(c); g.appendChild(v); g.appendChild(h); G_tips.appendChild(g);
 }
-
-/* Picker open/close (rig bubbles) – includes length/gpm/nozzle summary */
 overlay.addEventListener('click', (e)=>{
   const tip = e.target.closest('.hose-end'); if(!tip) return;
   const key = tip.getAttribute('data-line'); const where = tip.getAttribute('data-where');
@@ -888,7 +736,7 @@ document.addEventListener('click', (e)=>{
   const inSupply = supplyMenu.contains(e.target) || e.target===supplyBtn;
   if(inPick || inSupply) return;
   if(e.target.closest('.hose-end')) return;
-  hidePicker(); hideSupplyMenu();
+  hidePicker(); hideSupplyMenu(); closeMenu();
 });
 
 function showPicker(key, where, cx, cy){
@@ -896,13 +744,13 @@ function showPicker(key, where, cx, cy){
   const L = lines[key];
   pickerTitle.textContent = where==='main' ? `${L.label} — Main` : `${L.label} — ${where==='L'?'Left':'Right'}`;
 
-  // Summary in + menu (length, gpm, nozzle, elevation)
+  // show current hose length + flow + nozzle in +menu header
   const totalFt = sumFt(L.itemsMain);
   const gpm = L.hasWye ? (L.nozLeft.gpm + L.nozRight.gpm) : L.nozRight.gpm;
   pickSum.innerHTML = `
     <span class="tag">Main: ${totalFt}′</span>
     <span class="tag">Flow: ${gpm} gpm</span>
-    <span class="tag">Nozzle: ${L.nozRight.name} ${L.nozRight.NP} psi / ${L.nozRight.gpm} gpm</span>
+    <span class="tag">Nozzle: ${L.nozRight.name} ${L.nozRight.NP}/${L.nozRight.gpm}</span>
     <span class="tag">Elev: ${L.elevFt||0}′</span>
   `;
 
@@ -912,35 +760,27 @@ function showPicker(key, where, cx, cy){
   nozGrid.innerHTML = NOZ_LIST.map(n=>`<div class="pick" data-noz="${n.id}">${n.name} • ${n.NP} psi / ${n.gpm} gpm</div>`).join('');
 
   const currentSize = currentSegmentSize(L, where);
-  addBtns.innerHTML = '';
-  allowedAddOptions(currentSize).forEach(o=>{
-    const b = document.createElement('button');
-    b.className='pick-small';
-    b.textContent = `+${o.len}′ ${o.size==='2.5'?'2½″':'1¾″'}`;
-    b.dataset.addlen=o.len; b.dataset.size=o.size;
-    addBtns.appendChild(b);
+  addBtns.innerHTML=''; allowedAddOptions(currentSize).forEach(o=>{
+    const b=document.createElement('button'); b.className='pick-small'; b.textContent=`+${o.len}′ ${o.size==='2.5'?'2½″':'1¾″'}`;
+    b.dataset.addlen=o.len; b.dataset.size=o.size; addBtns.appendChild(b);
   });
 
-  picker.style.display='block'; picker.setAttribute('aria-hidden','false');
-  showPane('pickHome');
+  picker.style.display='block'; picker.setAttribute('aria-hidden','false'); showPane('pickHome');
 
-  const stg = stage.getBoundingClientRect();
-  const pw = 340, ph = 300;
-  let x = cx - stg.left + 8, y = cy - stg.top - ph - 8;
-  if(y < 8) y = cy - stg.top + 8;
-  x = Math.max(8, Math.min(x, stg.width - pw - 8));
-  y = Math.max(8, Math.min(y, stg.height - ph - 8));
+  const stg = stage.getBoundingClientRect(); const pw=340, ph=300;
+  let x = cx - stg.left + 8, y = cy - stg.top - ph - 8; if(y<8) y = cy - stg.top + 8;
+  x = Math.max(8, Math.min(x, stg.width - pw - 8)); y = Math.max(8, Math.min(y, stg.height - ph - 8));
   picker.style.left = `${x}px`; picker.style.top = `${y}px`;
 }
 function hidePicker(){ picker.style.display='none'; picker.setAttribute('aria-hidden','true'); }
-function showPane(id){ ['pickHome','pickAdd','pickNoz','pickAcc','pickElev','pickSetup'].forEach(pid=>{ document.getElementById(pid).style.display = (pid===id)?'block':'none'; }); }
+function showPane(id){ ['pickHome','pickAdd','pickNoz','pickAcc','pickElev','pickSetup'].forEach(pid=>{ document.getElementById(pid).style.display=(pid===id)?'block':'none'; }); }
 function currentSegmentSize(L, where){
   if(where==='L')  return L.itemsLeft[0]?.size || '1.75';
   if(where==='R')  return L.itemsRight[0]?.size || L.itemsMain[0]?.size || '1.75';
   return L.itemsMain[L.itemsMain.length-1]?.size || '1.75';
 }
 
-/* Picker actions */
+/* picker actions */
 picker.addEventListener('click', (e)=>{
   const view = e.target.closest('.pick')?.dataset.view;
   if(view==='addhose') showPane('pickAdd');
@@ -951,27 +791,19 @@ picker.addEventListener('click', (e)=>{
   if(e.target.hasAttribute('data-back')) showPane('pickHome');
 
   const nozId = e.target.closest('.pick')?.dataset.noz;
-  if(nozId){
-    const L=lines[plusContext.key];
-    if(plusContext.where==='L'){ L.nozLeft = NOZ[nozId]; } else { L.nozRight = NOZ[nozId]; }
-    if(!L.visible){ L.visible=true; toggleLineBtn(plusContext.key,true); }
-    hidePicker(); drawAll();
-  }
+  if(nozId){ const L=lines[plusContext.key]; if(plusContext.where==='L'){ L.nozLeft=NOZ[nozId]; } else { L.nozRight=NOZ[nozId]; } if(!L.visible){ L.visible=true; toggleLineBtn(plusContext.key,true); } hidePicker(); drawAll(); }
 });
 document.getElementById('setupApply').addEventListener('click', ()=>{
   const key=plusContext.key; const L=lines[key];
   const size=setupSize.value; const len=parseInt(setupLen.value,10); const noz=NOZ[setupNoz.value];
-  L.itemsMain=[{size,lengthFt:len}]; L.nozLeft=L.nozRight=noz;
+  L.itemsMain=[{size,lengthFt:len}]; L.nozLeft=L.nozRight=noz; L.build.size=size; L.build.len=len;
   if(!L.visible){ L.visible=true; toggleLineBtn(key,true); }
   hidePicker(); drawAll();
 });
 document.getElementById('pickAdd').addEventListener('click', (e)=>{
   const btn = e.target.closest('[data-addlen]'); if(!btn) return;
-  const len = parseInt(btn.dataset.addlen,10);
-  const size = btn.dataset.size;
-  const L = lines[plusContext.key];
-  const curr = currentSegmentSize(L, plusContext.where);
-  if(curr==='1.75' && size==='2.5'){ hidePicker(); return; } // enforce
+  const len = parseInt(btn.dataset.addlen,10), size = btn.dataset.size, L = lines[plusContext.key];
+  const curr = currentSegmentSize(L, plusContext.where); if(curr==='1.75' && size==='2.5'){ hidePicker(); return; }
   if(plusContext.where==='L'){ L.itemsLeft.push({size,lengthFt:len}); }
   else if(plusContext.where==='R'){ L.itemsRight.push({size,lengthFt:len}); }
   else { L.itemsMain.push({size,lengthFt:len}); }
@@ -981,8 +813,7 @@ document.getElementById('pickAdd').addEventListener('click', (e)=>{
 document.getElementById('pickAcc').addEventListener('click', (e)=>{
   const acc = e.target.closest('button')?.dataset.acc; if(!acc) return;
   const L = lines[plusContext.key];
-  if(acc==='wye'){ L.hasWye = true; }
-  if(acc==='removeWye'){ L.hasWye = false; L.itemsLeft=[]; L.itemsRight=[]; }
+  if(acc==='wye'){ L.hasWye = true; } if(acc==='removeWye'){ L.hasWye=false; L.itemsLeft=[]; L.itemsRight=[]; }
   if(!L.visible){ L.visible=true; toggleLineBtn(plusContext.key,true); }
   hidePicker(); drawAll();
 });
@@ -995,20 +826,12 @@ document.getElementById('pickElev').addEventListener('click', (e)=>{
 
 /* Supply dropdown */
 function showSupplyMenu(){
-  const rect = supplyBtn.getBoundingClientRect();
-  const lbRect = linebar.getBoundingClientRect();
-  supplyMenu.style.left = (rect.left - lbRect.left) + 'px';
-  supplyMenu.style.top  = (rect.bottom - lbRect.top + 6) + 'px';
-  supplyMenu.style.display='block';
-  supplyMenu.setAttribute('aria-hidden','false');
+  const rect = supplyBtn.getBoundingClientRect(); const lbRect = document.getElementById('linebar').getBoundingClientRect();
+  supplyMenu.style.left = (rect.left - lbRect.left) + 'px'; supplyMenu.style.top  = (rect.bottom - lbRect.top + 6) + 'px';
+  supplyMenu.style.display='block'; supplyMenu.setAttribute('aria-hidden','false');
 }
-function hideSupplyMenu(){
-  supplyMenu.style.display='none';
-  supplyMenu.setAttribute('aria-hidden','true');
-}
-supplyBtn.addEventListener('click', ()=>{
-  if(supplyMenu.style.display==='block') hideSupplyMenu(); else showSupplyMenu();
-});
+function hideSupplyMenu(){ supplyMenu.style.display='none'; supplyMenu.setAttribute('aria-hidden','true'); }
+supplyBtn.addEventListener('click', ()=>{ if(supplyMenu.style.display==='block') hideSupplyMenu(); else showSupplyMenu(); });
 
 /* Boot */
 drawAll();
