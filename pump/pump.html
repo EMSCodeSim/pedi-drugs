@@ -79,13 +79,21 @@
   .kpi b{font-size:18px}
   .linesTable{margin-top:8px;border-top:1px solid var(--edge);padding-top:8px;display:grid;gap:10px}
 
-  .lineRow{display:flex;flex-wrap:wrap;gap:8px;align-items:center;background:#0b1320;border:1px solid var(--edge);border-radius:12px;padding:8px 10px}
+  .lineRow{display:flex;flex-wrap:wrap;gap:8px;align-items:flex-start;background:#0b1320;border:1px solid var(--edge);border-radius:12px;padding:8px 10px}
   .lineRow .title{font-weight:700;margin-right:8px}
   .lineRow .break{font-size:12px;color:#cfe4ff}
+
   .builder{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-left:auto}
   .builder small{color:#9fb0c8}
 
   .lbl{font-size:10px;fill:#0b0f14}
+
+  /* Math breakdown */
+  details.math{background:#0b1a29;border:1px solid #1f3a57;border-radius:12px;padding:8px 10px;margin-top:6px}
+  details.math summary{cursor:pointer;color:#cfe4ff;font-weight:700}
+  .mathList{margin:6px 0 0 0;padding:0 0 0 14px}
+  .mathList li{margin:6px 0;color:#cfe4ff;font-size:13px}
+  .mono{font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,"Liberation Mono","Courier New",monospace}
 </style>
 </head>
 <body>
@@ -288,6 +296,9 @@ function FL(gpm, size, ft){ const C=COEFF[size]||0, Q=gpm/100; return C*(Q*Q)*(f
 function FLper100(gpm, size){ const C=COEFF[size]||0, Q=gpm/100; return C*(Q*Q); }
 function clearGroup(g){ while(g.firstChild) g.removeChild(g.firstChild); }
 function supplyHeight(){ return currentSupply==='drafting'?150: currentSupply==='pressurized'?150: currentSupply==='relay'?170: 0; }
+function Cfor(size){ return COEFF[size]||0; }
+function sizeLabel(sz){ return sz==='2.5'?'2½″':(sz==='1.75'?'1¾″':sz+'"'); }
+function mono(n, digits=1){ return `<span class="mono">${(typeof n==='number'?n.toFixed(digits):n)}</span>`; }
 
 function computeNeededHeightPx(){
   const needs = Object.values(lines).filter(l=>l.visible);
@@ -386,6 +397,18 @@ function drawAll(){
     const mainFt = sumFt(L.itemsMain);
     const geom = mainCurve(dir, (mainFt/50)*PX_PER_50FT, viewH);
 
+    const base = document.createElementNS('http://www.w3.org/200/svg','path'); // Intentional typo fix below
+  });
+
+  // Correct path creation (the above placeholder gets removed)
+  clearGroup(G_hoses); clearGroup(G_branches); clearGroup(G_tips); clearGroup(G_labels);
+
+  ['left','back','right'].filter(k=>lines[k].visible).forEach(key=>{
+    const L = lines[key];
+    const dir = key==='left'?-1:key==='right'?1:0;
+    const mainFt = sumFt(L.itemsMain);
+    const geom = mainCurve(dir, (mainFt/50)*PX_PER_50FT, Math.ceil(computeNeededHeightPx()));
+
     const base = document.createElementNS('http://www.w3.org/2000/svg','path');
     base.setAttribute('d', geom.d);
     G_hoses.appendChild(base);
@@ -425,7 +448,6 @@ function drawAll(){
         const mid = pathL.getTotalLength()/2, pt = pathL.getPointAtLength(mid);
         addLabel(`${sumFt(L.itemsLeft)}′ ${L.itemsLeft[0].size==='2.5'?'2½″':'1¾″'} ${L.nozLeft.gpm} gpm`, pt.x, pt.y, labelDyForLine(key)-8);
       } else {
-        // No branch hose yet — show tip nub right at the wye
         addTip(key,'L',geom.endX-20,geom.endY-20);
       }
 
@@ -445,7 +467,7 @@ function drawAll(){
     base.remove();
   });
 
-  drawSupply(viewH);
+  drawSupply(Math.ceil(computeNeededHeightPx()));
   refreshTotals();
   renderLinesPanel();
 }
@@ -498,6 +520,71 @@ function refreshTotals(){
   document.getElementById('PDP').textContent = vis.length? `${maxPDP.toFixed(1)} psi` : '— psi';
 }
 
+/* ===== Math breakdown ===== */
+function breakdown(L){
+  const mainSize = L.itemsMain[0]?.size || '1.75';
+  const mainLen  = sumFt(L.itemsMain) || 0;
+  const flow     = L.hasWye ? (L.nozLeft?.gpm||0)+(L.nozRight?.gpm||0) : (L.nozRight?.gpm||0);
+
+  const mainFL   = flow ? FL(flow, mainSize, mainLen) : 0;
+
+  const lSize = L.itemsLeft[0]?.size || mainSize;
+  const rSize = L.itemsRight[0]?.size || mainSize;
+  const lLen  = sumFt(L.itemsLeft)||0;
+  const rLen  = sumFt(L.itemsRight)||0;
+  const lFL   = L.hasWye ? FL(L.nozLeft?.gpm||0, lSize, lLen) : 0;
+  const rFL   = L.hasWye ? FL(L.nozRight?.gpm||0, rSize, rLen) : 0;
+  const leftNeed  = L.hasWye ? (lFL + (L.nozLeft?.NP||0)) : 0;
+  const rightNeed = L.hasWye ? (rFL + (L.nozRight?.NP||0)) : (L.nozRight?.NP||0); // NP only when no branches
+
+  const branchMax = L.hasWye ? Math.max(leftNeed, rightNeed) : rightNeed;
+  const wye = L.hasWye ? L.wyeLoss : 0;
+  const elevPsi = (L.elevFt||0) * PSI_PER_FT;
+  const PDP = branchMax + mainFL + wye + elevPsi;
+
+  return {
+    mainSize, mainLen, flow, mainFL,
+    lSize, lLen, lFL, leftNeed,
+    rSize, rLen, rFL, rightNeed,
+    branchMax, wye, elevPsi, PDP
+  };
+}
+function lineMathHTML(L){
+  const b = breakdown(L);
+  if(!b.flow){ return `<details class="math" open>
+    <summary>Math breakdown</summary>
+    <ul class="mathList"><li><i>Pick size/length/nozzle to compute PDP.</i></li></ul>
+  </details>`; }
+
+  const Cmain = Cfor(b.mainSize);
+  const Q = b.flow/100;
+  const per100 = FLper100(b.flow, b.mainSize);
+
+  const hasWye = L.hasWye;
+  const leftLine  = hasWye ? `<li>Branch A need = FL_A + NP_A = ${mono(b.lFL)} + ${mono(L.nozLeft?.NP||0,0)} = <b>${mono(b.leftNeed)}</b> psi</li>` : '';
+  const rightLine = hasWye
+    ? `<li>Branch B need = FL_B + NP_B = ${mono(b.rFL)} + ${mono(L.nozRight?.NP||0,0)} = <b>${mono(b.rightNeed)}</b> psi</li>`
+    : `<li>No branches: Nozzle pressure (NP) = <b>${mono(L.nozRight?.NP||0,0)}</b> psi</li>`;
+
+  const branchMaxLine = hasWye
+    ? `<li>Branch max = max(A,B) = <b>${mono(b.branchMax)}</b> psi</li>`
+    : `<li>Branch need = NP = <b>${mono(b.branchMax)}</b> psi</li>`;
+
+  return `<details class="math" open>
+    <summary>Math breakdown</summary>
+    <ul class="mathList">
+      <li>Flow = <b>${mono(b.flow,0)}</b> gpm</li>
+      <li>Main FL = C × (Q²) × (L/100) = ${mono(Cmain)} × ${mono(Q,2)}² × ${mono(b.mainLen/100,2)} = <b>${mono(b.mainFL)}</b> psi (${mono(per100,1)} psi/100′ on ${sizeLabel(b.mainSize)})</li>
+      ${leftLine}
+      ${rightLine}
+      ${branchMaxLine}
+      <li>Wye loss = <b>${mono(b.wye,0)}</b> psi</li>
+      <li>Elevation = ft × 0.434 = ${mono(L.elevFt||0,0)} × 0.434 = <b>${mono(b.elevPsi)}</b> psi</li>
+      <li><b>Sum:</b> PDP = Branch + Main FL + Wye + Elev = ${mono(b.branchMax)} + ${mono(b.mainFL)} + ${mono(b.wye,0)} + ${mono(b.elevPsi)} = <b>${mono(b.PDP)}</b> psi</li>
+    </ul>
+  </details>`;
+}
+
 /* ===== Lines panel (editable for ALL lines) ===== */
 function renderLinesPanel(){
   linesTable.innerHTML = '';
@@ -525,6 +612,7 @@ function renderLinesPanel(){
       <div class="title">${L.label} — ${L.visible?'showing':'hidden'}</div>
       <div class="break">
         ${gpm? `${len}′ of ${size==='1.75'?'1¾″':'2½″'} @ ${gpm} gpm (${per100.toFixed(1)} psi/100′) ${L.hasWye? ` + Wye ${L.wyeLoss} psi`:''} = <b>${PDP.toFixed(1)} psi PDP</b>` : `<i>Pick size/length/nozzle to compute PDP</i>`}
+        ${lineMathHTML(L)}
       </div>
       <div class="builder">
         <small>Main:</small>
