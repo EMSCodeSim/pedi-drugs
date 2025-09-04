@@ -34,12 +34,10 @@ hr{ border:none; height:1px; background:rgba(255,255,255,.08); margin:12px 0 }
 #errbar{ position:fixed; left:10px; bottom:10px; background:#2b0d0d; color:#ffd7d7; border:1px solid #7a2b2b; border-radius:12px; padding:8px 12px; display:none; z-index:9999 }
 #okbar{ position:fixed; left:10px; bottom:56px; background:#0f2a19; color:#d8ffe2; border:1px solid #2c7a4b; border-radius:12px; padding:8px 12px; display:none; z-index:9999 }
 
-/* loading overlay */
 #loader{ position:fixed; inset:0; display:none; place-items:center; z-index:99; background:rgba(6,12,20,.55); backdrop-filter:blur(2px) }
 .spinner{ width:42px; height:42px; border-radius:999px; border:4px solid rgba(255,255,255,.25); border-top-color:#fff; animation:spin 1s linear infinite }
 @keyframes spin{ to{ transform:rotate(360deg) } }
 
-/* modal */
 #photoModal{ position:fixed; inset:0; display:none; place-items:center; z-index:999; background:rgba(5,10,18,.6); backdrop-filter:blur(2px) }
 .modal-card{ width:min(760px,96vw); background:var(--card); border:1px solid var(--edge); border-radius:16px; padding:14px }
 .modal-head{ display:flex; align-items:center; gap:8px; margin-bottom:8px }
@@ -101,7 +99,7 @@ hr{ border:none; height:1px; background:rgba(255,255,255,.08); margin:12px 0 }
     </div>
 
     <hr />
-    <div class="row" style="margin-bottom:6px">
+    <div class="row" style="margin-top:6px">
       <div style="flex:1">
         <label>Title</label>
         <input id="eTitle" class="input" />
@@ -173,21 +171,32 @@ hr{ border:none; height:1px; background:rgba(255,255,255,.08); margin:12px 0 }
   </div>
 </div>
 
-<!-- Firebase (modules) -->
 <script type="module">
-/* ---------- UI helpers ---------- */
+/* ---------- UI helpers (bind early; never throw) ---------- */
 const $ = (id)=>document.getElementById(id);
-const show = (id, on)=> $(id).style.display = on ? '' : 'none';
-const ok = (m)=>{ const b=$('okbar'); b.textContent=m; b.style.display='block'; setTimeout(()=>b.style.display='none', 2400); };
-const err= (m)=>{ const b=$('errbar'); b.textContent=m; b.style.display='block'; setTimeout(()=>b.style.display='none', 4200); };
-const loading = (on)=>{ $('loader').style.display = on ? 'grid' : 'none'; };
+const show = (id, on)=> { const el=$(id); if (el) el.style.display = on ? '' : 'none'; };
+const ok = (m)=>{ const b=$('okbar'); if(!b) return; b.textContent=m; b.style.display='block'; setTimeout(()=>b.style.display='none', 2400); };
+const err= (m)=>{ const b=$('errbar'); if(!b) return; b.textContent=m; b.style.display='block'; setTimeout(()=>b.style.display='none', 5000); };
+const loading = (on)=>{ const l=$('loader'); if(l) l.style.display = on ? 'grid' : 'none'; };
 
-/* ---------- Firebase ---------- */
+/* ---------- Bind all button handlers immediately ---------- */
+(function bindUI(){
+  if ($('showCreate')) $('showCreate').onclick = ()=>{ show('createPane',true); show('editPane',false); };
+  if ($('showEdit'))   $('showEdit').onclick   = ()=>{ show('createPane',false); show('editPane',true); };
+
+  if ($('cBtnCam')) $('cBtnCam').onclick = ()=> $('cFilesCam').click();
+  if ($('cBtnLib')) $('cBtnLib').onclick = ()=> $('cFilesLib').click();
+  if ($('eBtnCam')) $('eBtnCam').onclick = ()=> $('eFilesCam').click();
+  if ($('eBtnLib')) $('eBtnLib').onclick = ()=> $('eFilesLib').click();
+})();
+
+/* ---------- Firebase (imports) ---------- */
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-app.js";
 import { getDatabase, ref as dbRef, set, push, get, onValue } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-database.js";
 import { getStorage, ref as stRef, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-storage.js";
 import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-auth.js";
 
+/* ---------- Firebase config ---------- */
 const firebaseConfig = {
   apiKey:"AIzaSyDM6DpRSeZueVKRpbyJyDmhf8WY66KyCDk",
   authDomain:"dailyquiz-d5279.firebaseapp.com",
@@ -202,63 +211,20 @@ const db = getDatabase(appFB);
 const storage = getStorage(appFB, "gs://dailyquiz-d5279.firebasestorage.app");
 const auth = getAuth(appFB);
 
+/* ---------- Globals ---------- */
+const ROOT='scenarios';
+let scenarios=[];
+let createdId=null;
+
+/* ---------- Auth (must complete before DB ops) ---------- */
 async function ensureAuthed(){
   if (auth.currentUser) return auth.currentUser;
   await signInAnonymously(auth);
   await new Promise(res => onAuthStateChanged(auth, u=>u && res(), { once:true }));
   return auth.currentUser;
 }
-ensureAuthed().catch(()=>{});
 
-/* ---------- Resize helpers (upload minimal size) ---------- */
-const ORIG_MAX_EDGE = 1600;  // longest side
-const THUMB_MAX_EDGE = 480;
-const JPEG_QUALITY   = 0.82;
-
-async function fileToBitmap(file){
-  if ('createImageBitmap' in window) {
-    try{
-      return await createImageBitmap(file, { imageOrientation: 'from-image' });
-    }catch(_){}
-  }
-  const url = URL.createObjectURL(file);
-  const img = new Image(); img.decoding='async'; img.src=url;
-  await img.decode(); URL.revokeObjectURL(url);
-  return img;
-}
-function scaleDims(w, h, maxEdge){
-  const s = Math.min(1, maxEdge / Math.max(w, h));
-  return { w: Math.round(w*s), h: Math.round(h*s) };
-}
-async function bitmapToBlob(bmp, maxEdge, quality=JPEG_QUALITY, type='image/jpeg'){
-  const { w, h } = scaleDims(bmp.width, bmp.height, maxEdge);
-  const c = ('OffscreenCanvas' in window) ? new OffscreenCanvas(w, h) : Object.assign(document.createElement('canvas'), { width:w, height:h });
-  if (!('width' in c)) { c.width = w; c.height = h; }
-  const ctx = c.getContext('2d');
-  ctx.imageSmoothingEnabled = true;
-  ctx.imageSmoothingQuality = 'high';
-  ctx.drawImage(bmp, 0, 0, w, h);
-  const blob = await (c.convertToBlob ? c.convertToBlob({ type, quality }) : new Promise(res => c.toBlob(res, type, quality)));
-  return { blob, width:w, height:h };
-}
-
-/* ---------- Location helpers ---------- */
-async function getCoords(){
-  if (!('geolocation' in navigator)) return null;
-  try{
-    return await new Promise((resolve)=> {
-      navigator.geolocation.getCurrentPosition(
-        pos => resolve({ lat: +pos.coords.latitude.toFixed(6), lng: +pos.coords.longitude.toFixed(6), accuracy: pos.coords.accuracy }),
-        _ => resolve(null),
-        { enableHighAccuracy:true, maximumAge:60000, timeout:10000 }
-      );
-    });
-  }catch{ return null; }
-}
-
-/* ---------- Data helpers ---------- */
-const ROOT='scenarios';
-let scenarios=[];
+/* ---------- Helpers ---------- */
 function coerceStops(sc){
   if (Array.isArray(sc?.stops)) return sc.stops;
   if (Array.isArray(sc?.photos)) return sc.photos;
@@ -272,146 +238,30 @@ function setStops(sc, stops){
   else sc.stops = stops;
 }
 function populateEditList(){
-  const sel=$('eSelect'); sel.innerHTML='<option value="">Select…</option>';
+  const sel=$('eSelect'); if(!sel) return;
+  sel.innerHTML='<option value="">Select…</option>';
   scenarios.forEach(s=>{
     const o=document.createElement('option');
     o.value=s.id; o.textContent=(s.title||'(untitled)') + (s.active?'':' (inactive)');
     sel.appendChild(o);
   });
 }
-async function loadScenarios(){
-  const snap = await get(dbRef(db, ROOT));
-  const obj = snap.exists() ? (snap.val()||{}) : {};
-  scenarios = Object.entries(obj).map(([id,s])=>({ id, _raw:s, _stops:coerceStops(s), ...s }))
-              .sort((a,b)=>(b.createdAt||0)-(a.createdAt||0));
-  populateEditList();
-}
-onValue(dbRef(db, ROOT), snap=>{
-  const obj=snap.val()||{};
-  scenarios = Object.entries(obj).map(([id,s])=>({ id, _raw:s, _stops:coerceStops(s), ...s }))
-              .sort((a,b)=>(b.createdAt||0)-(a.createdAt||0));
-  populateEditList();
-  const cur = $('eSelect').value;
-  if (cur) renderScenario(cur);
-});
-await loadScenarios();
-
-/* ---------- Pane toggles ---------- */
-$('showCreate').onclick=()=>{ show('createPane',true); show('editPane',false); };
-$('showEdit').onclick =()=>{ show('createPane',false); show('editPane',true); };
-
-/* ---------- Create Scenario ---------- */
-let createdId=null;
-$('createBtn').onclick = async ()=>{
+async function safeLoadScenarios(){
   try{
-    const title = $('cTitle').value.trim() || '(untitled)';
-    const desc  = $('cDesc').value.trim() || '';
-    $('createBtn').disabled = true;
-    $('createStatus').textContent='Creating…';
-    const id = (push(dbRef(db, ROOT))).key;
-    const rec = { id, title, description: desc, createdAt: Date.now(), active:true, stops: [] };
-    await set(dbRef(db, `${ROOT}/${id}`), rec);
-    createdId = id;
-    $('createStatus').textContent='Created ✓';
-    ok('Scenario created');
-    await loadScenarios();
-    $('eSelect').value = id;
-    $('eTitle').value  = title;
-    $('eDesc').value   = desc;
-    renderScenario(id);
-  }catch(e){ err('Create failed: '+(e.message||e)); }
-  finally{ $('createBtn').disabled = false; }
-};
-
-/* ----- unified upload handler with auto-GPS ----- */
-async function processFilesForScenario(files, scenarioId, uploadsContainerId){
-  if (!files?.length) return;
-  await ensureAuthed();
-  loading(true);
-  try{
-    // get location once per selection (better UX)
-    const coords = await getCoords();
-
-    for (const file of files){
-      const card = document.createElement('div');
-      card.innerHTML = `<div class="tag small">New photo</div>`;
-      $(uploadsContainerId).prepend(card);
-      const status = (t)=>{ card.querySelector('.tag').textContent=t; };
-
-      try{
-        status('Decoding…');
-        const bmp = await fileToBitmap(file);
-
-        status('Resizing…');
-        const { blob: fullBlob, width, height } = await bitmapToBlob(bmp, ORIG_MAX_EDGE, JPEG_QUALITY, 'image/jpeg');
-        const { blob: thumbBlob }               = await bitmapToBlob(bmp, THUMB_MAX_EDGE, 0.8, 'image/jpeg');
-
-        const ts = Date.now();
-        const basePath = `scenarios/${scenarioId}/${ts}`;
-        const fullRef  = stRef(storage, `${basePath}.jpg`);
-        const thumbRef = stRef(storage, `scenarios/${scenarioId}/thumbs/${ts}.jpg`);
-        const meta = { contentType: 'image/jpeg', cacheControl: 'public,max-age=31536000,immutable' };
-
-        status('Uploading full…'); await uploadBytes(fullRef,  fullBlob,  meta);
-        status('Uploading thumb…'); await uploadBytes(thumbRef, thumbBlob, meta);
-
-        status('Finalizing…');
-        const imageURL = await getDownloadURL(fullRef);
-        const thumbURL = await getDownloadURL(thumbRef);
-
-        status('Saving to DB…');
-        const snap = await get(dbRef(db, `${ROOT}/${scenarioId}`));
-        const sc = snap.val();
-        const stops = coerceStops(sc);
-        const stop = {
-          type:'photo',
-          title:'', caption:'',
-          lat: coords?.lat ?? null,
-          lng: coords?.lng ?? null,
-          locAccuracy: coords?.accuracy ?? null,
-          radiusMeters:50,
-          imageURL, thumbURL,
-          storagePath:`${basePath}.jpg`, thumbPath:`scenarios/${scenarioId}/thumbs/${ts}.jpg`,
-          gsUri:`gs://dailyquiz-d5279.firebasestorage.app/${basePath}.jpg`,
-          width, height,
-          overlays:[]
-        };
-        stops.push(stop);
-        setStops(sc, stops);
-        await set(dbRef(db, `${ROOT}/${scenarioId}`), sc);
-        status(coords ? 'Uploaded ✓ (GPS set)' : 'Uploaded ✓ (no GPS)');
-      }catch(ex){
-        status('Failed'); err('Upload failed: '+(ex.message||ex));
-      }
-    }
-    ok('All selected photos processed.');
-  }finally{
-    loading(false);
+    const snap = await get(dbRef(db, ROOT));
+    const obj = snap.exists() ? (snap.val()||{}) : {};
+    scenarios = Object.entries(obj).map(([id,s])=>({ id, _raw:s, _stops:coerceStops(s), ...s }))
+                .sort((a,b)=>(b.createdAt||0)-(a.createdAt||0));
+    populateEditList();
+    $('eStatus').textContent='Loaded';
+  }catch(e){
+    console.warn('loadScenarios failed:', e);
+    $('eStatus').textContent='Load failed';
   }
 }
-
-/* ---------- Create pane: add photos ---------- */
-$('cBtnCam').onclick = ()=> $('cFilesCam').click();
-$('cBtnLib').onclick = ()=> $('cFilesLib').click();
-
-$('cFilesCam').addEventListener('change', async (e)=>{
-  if (!createdId){ err('Create a scenario first.'); e.target.value=''; return; }
-  await processFilesForScenario(Array.from(e.target.files||[]), createdId, 'cUploads');
-  e.target.value='';
-});
-$('cFilesLib').addEventListener('change', async (e)=>{
-  if (!createdId){ err('Create a scenario first.'); e.target.value=''; return; }
-  await processFilesForScenario(Array.from(e.target.files||[]), createdId, 'cUploads');
-  e.target.value='';
-});
-
-/* ---------- Edit pane ---------- */
-$('refreshBtn').onclick = loadScenarios;
-
-$('eSelect').onchange = ()=>{ const id=$('eSelect').value; if (id) renderScenario(id); };
-
-async function renderScenario(id){
-  const s = scenarios.find(x=>x.id===id); if (!s){ $('eStatus').textContent='Not found'; return; }
+function renderScenario(id){
+  const s = scenarios.find(x=>x.id===id); 
+  if (!s){ $('eStatus').textContent='Not found'; $('stopsGrid').innerHTML=''; return; }
   $('eTitle').value = s.title||'';
   $('eDesc').value  = s.description||'';
   $('eStatus').textContent = `${(s._stops||[]).length} photo(s)`;
@@ -435,46 +285,179 @@ async function renderScenario(id){
       </div>
     `;
 
-    // Delete
     el.querySelector('[data-del]').onclick = async ()=>{
       try{
         loading(true);
+        await ensureAuthed();
         const snap = await get(dbRef(db, `${ROOT}/${id}`));
         const sc = snap.val(); const arr = coerceStops(sc);
         arr.splice(idx,1); setStops(sc, arr);
         await set(dbRef(db, `${ROOT}/${id}`), sc);
-        ok('Stop deleted'); await loadScenarios(); renderScenario(id);
+        ok('Stop deleted');
+        await safeLoadScenarios(); $('eSelect').value=id; renderScenario(id);
       }catch(e){ err('Delete failed: '+(e.message||e)); }
       finally{ loading(false); }
     };
 
-    // Inline set GPS
     el.querySelector('[data-gps]').onclick = async ()=>{
       const coords = await getCoords();
       if (!coords){ err('Could not get GPS (permission or signal).'); return; }
       try{
         loading(true);
+        await ensureAuthed();
         const snap = await get(dbRef(db, `${ROOT}/${id}`));
         const sc = snap.val(); const arr = coerceStops(sc);
         if (!arr[idx]) return;
         arr[idx].lat = coords.lat; arr[idx].lng = coords.lng; arr[idx].locAccuracy = coords.accuracy ?? null;
         setStops(sc, arr);
         await set(dbRef(db, `${ROOT}/${id}`), sc);
-        ok('GPS saved'); await loadScenarios(); renderScenario(id);
+        ok('GPS saved');
+        await safeLoadScenarios(); $('eSelect').value=id; renderScenario(id);
       }catch(e){ err('Save GPS failed: '+(e.message||e)); }
       finally{ loading(false); }
     };
 
-    // Edit
     el.querySelector('[data-edit]').onclick = ()=> openPhotoEditor(id, idx);
 
     grid.appendChild(el);
   });
 }
 
-/* Scenario meta save */
-$('saveMeta').onclick = async ()=>{
+/* ---------- Image processing (resize) ---------- */
+const ORIG_MAX_EDGE = 1600;
+const THUMB_MAX_EDGE = 480;
+const JPEG_QUALITY   = 0.82;
+
+async function fileToBitmap(file){
+  if ('createImageBitmap' in window) {
+    try{ return await createImageBitmap(file, { imageOrientation: 'from-image' }); }catch(_){}
+  }
+  const url = URL.createObjectURL(file);
+  const img = new Image(); img.decoding='async'; img.src=url;
+  await img.decode(); URL.revokeObjectURL(url);
+  return img;
+}
+function scaleDims(w, h, maxEdge){
+  const s = Math.min(1, maxEdge / Math.max(w, h));
+  return { w: Math.round(w*s), h: Math.round(h*s) };
+}
+async function bitmapToBlob(bmp, maxEdge, quality=JPEG_QUALITY, type='image/jpeg'){
+  const { w, h } = scaleDims(bmp.width, bmp.height, maxEdge);
+  const c = ('OffscreenCanvas' in window) ? new OffscreenCanvas(w, h) : Object.assign(document.createElement('canvas'), { width:w, height:h });
+  if (!('width' in c)) { c.width = w; c.height = h; }
+  const ctx = c.getContext('2d');
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = 'high';
+  ctx.drawImage(bmp, 0, 0, w, h);
+  const blob = await (c.convertToBlob ? c.convertToBlob({ type, quality }) : new Promise(res => c.toBlob(res, type, quality)));
+  return { blob, width:w, height:h };
+}
+
+/* ---------- Geolocation ---------- */
+async function getCoords(){
+  if (!('geolocation' in navigator)) return null;
   try{
+    return await new Promise((resolve)=> {
+      navigator.geolocation.getCurrentPosition(
+        pos => resolve({ lat: +pos.coords.latitude.toFixed(6), lng: +pos.coords.longitude.toFixed(6), accuracy: pos.coords.accuracy }),
+        _ => resolve(null),
+        { enableHighAccuracy:true, maximumAge:60000, timeout:10000 }
+      );
+    });
+  }catch{ return null; }
+}
+
+/* ---------- Upload flow (auto-GPS) ---------- */
+async function processFilesForScenario(files, scenarioId, uploadsContainerId){
+  if (!files?.length) return;
+  await ensureAuthed();
+  loading(true);
+  try{
+    const coords = await getCoords(); // once per batch
+    for (const file of files){
+      const card = document.createElement('div');
+      card.innerHTML = `<div class="tag small">Preparing…</div>`;
+      $(uploadsContainerId).prepend(card);
+      const status = (t)=>{ card.querySelector('.tag').textContent=t; };
+
+      try{
+        status('Decoding…');
+        const bmp = await fileToBitmap(file);
+        status('Resizing…');
+        const { blob: fullBlob, width, height } = await bitmapToBlob(bmp, ORIG_MAX_EDGE, JPEG_QUALITY, 'image/jpeg');
+        const { blob: thumbBlob }               = await bitmapToBlob(bmp, THUMB_MAX_EDGE, 0.8, 'image/jpeg');
+
+        const ts = Date.now();
+        const basePath = `scenarios/${scenarioId}/${ts}`;
+        const fullRef  = stRef(storage, `${basePath}.jpg`);
+        const thumbRef = stRef(storage, `scenarios/${scenarioId}/thumbs/${ts}.jpg`);
+        const meta = { contentType: 'image/jpeg', cacheControl: 'public,max-age=31536000,immutable' };
+
+        status('Uploading full…'); await uploadBytes(fullRef,  fullBlob,  meta);
+        status('Uploading thumb…'); await uploadBytes(thumbRef, thumbBlob, meta);
+
+        status('Finalizing…');
+        const imageURL = await getDownloadURL(fullRef);
+        const thumbURL = await getDownloadURL(thumbRef);
+
+        status('Saving…');
+        const snap = await get(dbRef(db, `${ROOT}/${scenarioId}`));
+        const sc = snap.val();
+        const stops = coerceStops(sc);
+        stops.push({
+          type:'photo', title:'', caption:'',
+          lat: coords?.lat ?? null, lng: coords?.lng ?? null, locAccuracy: coords?.accuracy ?? null,
+          radiusMeters:50,
+          imageURL, thumbURL,
+          storagePath:`${basePath}.jpg`, thumbPath:`scenarios/${scenarioId}/thumbs/${ts}.jpg`,
+          gsUri:`gs://dailyquiz-d5279.firebasestorage.app/${basePath}.jpg`,
+          width, height, overlays:[]
+        });
+        setStops(sc, stops);
+        await set(dbRef(db, `${ROOT}/${scenarioId}`), sc);
+        status(coords ? 'Uploaded ✓ (GPS set)' : 'Uploaded ✓ (no GPS)');
+      }catch(ex){
+        status('Failed'); err('Upload failed: '+(ex.message||ex));
+      }
+    }
+    ok('Photos processed.');
+  }finally{ loading(false); }
+}
+
+/* ---------- Create / Edit wiring (now safe) ---------- */
+if ($('createBtn')) $('createBtn').onclick = async ()=>{
+  try{
+    await ensureAuthed();
+    loading(true);
+    const title = $('cTitle').value.trim() || '(untitled)';
+    const desc  = $('cDesc').value.trim() || '';
+    $('createBtn').disabled = true; $('createStatus').textContent='Creating…';
+    const id = (push(dbRef(db, ROOT))).key;
+    const rec = { id, title, description: desc, createdAt: Date.now(), active:true, stops: [] };
+    await set(dbRef(db, `${ROOT}/${id}`), rec);
+    createdId = id;
+    $('createStatus').textContent='Created ✓';
+    ok('Scenario created');
+    await safeLoadScenarios();
+    $('showEdit').click(); // jump to Edit pane
+    $('eSelect').value = id;
+    $('eTitle').value  = title;
+    $('eDesc').value   = desc;
+    renderScenario(id);
+  }catch(e){ err('Create failed: '+(e.message||e)); }
+  finally{ $('createBtn').disabled = false; loading(false); }
+};
+
+if ($('refreshBtn')) $('refreshBtn').onclick = async ()=>{
+  await ensureAuthed();
+  await safeLoadScenarios();
+};
+
+if ($('eSelect')) $('eSelect').onchange = ()=>{ const id=$('eSelect').value; if (id) renderScenario(id); };
+
+if ($('saveMeta')) $('saveMeta').onclick = async ()=>{
+  try{
+    await ensureAuthed();
     const id=$('eSelect').value; if(!id) return;
     loading(true);
     const snap = await get(dbRef(db, `${ROOT}/${id}`));
@@ -483,49 +466,54 @@ $('saveMeta').onclick = async ()=>{
     sc.description = $('eDesc').value.trim()||'';
     await set(dbRef(db, `${ROOT}/${id}`), sc);
     ok('Scenario saved');
-    await loadScenarios(); $('eSelect').value=id; renderScenario(id);
+    await safeLoadScenarios(); $('eSelect').value=id; renderScenario(id);
   }catch(e){ err('Save failed: '+(e.message||e)); }
   finally{ loading(false); }
 };
 
-/* Edit pane: add photos */
-$('eBtnCam').onclick = ()=> $('eFilesCam').click();
-$('eBtnLib').onclick = ()=> $('eFilesLib').click();
-
-$('eFilesCam').addEventListener('change', async (e)=>{
-  const id=$('eSelect').value; if(!id){ err('Select a scenario first.'); e.target.value=''; return; }
-  await processFilesForScenario(Array.from(e.target.files||[]), id, 'eUploads');
-  await loadScenarios(); $('eSelect').value=id; renderScenario(id);
+/* Create pane file pickers */
+if ($('cFilesCam')) $('cFilesCam').addEventListener('change', async (e)=>{
+  if (!createdId){ err('Create a scenario first.'); e.target.value=''; return; }
+  await processFilesForScenario(Array.from(e.target.files||[]), createdId, 'cUploads');
   e.target.value='';
 });
-$('eFilesLib').addEventListener('change', async (e)=>{
-  const id=$('eSelect').value; if(!id){ err('Select a scenario first.'); e.target.value=''; return; }
-  await processFilesForScenario(Array.from(e.target.files||[]), id, 'eUploads');
-  await loadScenarios(); $('eSelect').value=id; renderScenario(id);
+if ($('cFilesLib')) $('cFilesLib').addEventListener('change', async (e)=>{
+  if (!createdId){ err('Create a scenario first.'); e.target.value=''; return; }
+  await processFilesForScenario(Array.from(e.target.files||[]), createdId, 'cUploads');
   e.target.value='';
 });
 
-/* ---------- Photo editor modal ---------- */
+/* Edit pane file pickers */
+if ($('eFilesCam')) $('eFilesCam').addEventListener('change', async (e)=>{
+  const id=$('eSelect').value; if(!id){ err('Select a scenario first.'); e.target.value=''; return; }
+  await processFilesForScenario(Array.from(e.target.files||[]), id, 'eUploads');
+  await safeLoadScenarios(); $('eSelect').value=id; renderScenario(id);
+  e.target.value='';
+});
+if ($('eFilesLib')) $('eFilesLib').addEventListener('change', async (e)=>{
+  const id=$('eSelect').value; if(!id){ err('Select a scenario first.'); e.target.value=''; return; }
+  await processFilesForScenario(Array.from(e.target.files||[]), id, 'eUploads');
+  await safeLoadScenarios(); $('eSelect').value=id; renderScenario(id);
+  e.target.value='';
+});
+
+/* ---------- Photo editor ---------- */
 let pmCtx = { scenarioId:null, index:-1 };
-
 function openPhotoEditor(scenarioId, index){
   pmCtx = { scenarioId, index };
   const s = scenarios.find(x=>x.id===scenarioId); if(!s) return;
   const st = (s._stops||[])[index]; if(!st) return;
-
   $('pmPreview').src = st.imageURL || st.thumbURL || '';
   $('pmTitle').value = st.title || '';
   $('pmCaption').value = st.caption || '';
   $('pmLat').value = (st.lat ?? '').toString();
   $('pmLng').value = (st.lng ?? '').toString();
   $('pmRadius').value = (st.radiusMeters ?? 50);
-
   $('pmGpsStatus').textContent = (st.lat!=null && st.lng!=null) ? 'GPS ✓' : 'GPS —';
   $('photoModal').style.display = 'grid';
 }
-$('pmClose').onclick = ()=>{ $('photoModal').style.display='none'; };
-
-$('pmUseMyLoc').onclick = async ()=>{
+if ($('pmClose')) $('pmClose').onclick = ()=>{ $('photoModal').style.display='none'; };
+if ($('pmUseMyLoc')) $('pmUseMyLoc').onclick = async ()=>{
   $('pmGpsStatus').textContent = 'Getting GPS…';
   const coords = await getCoords();
   if (!coords){ $('pmGpsStatus').textContent='GPS failed'; err('Could not get GPS.'); return; }
@@ -533,15 +521,14 @@ $('pmUseMyLoc').onclick = async ()=>{
   $('pmLng').value = coords.lng;
   $('pmGpsStatus').textContent = 'GPS ✓';
 };
-
-$('pmSave').onclick = async ()=>{
+if ($('pmSave')) $('pmSave').onclick = async ()=>{
   const { scenarioId, index } = pmCtx; if (!scenarioId || index<0) return;
   try{
     loading(true);
+    await ensureAuthed();
     const snap = await get(dbRef(db, `${ROOT}/${scenarioId}`));
     const sc = snap.val(); const arr = coerceStops(sc);
     const st = arr[index]; if (!st) throw new Error('Photo not found');
-
     st.title = $('pmTitle').value.trim();
     st.caption = $('pmCaption').value.trim();
     const lat = $('pmLat').value.trim(); const lng = $('pmLng').value.trim();
@@ -552,10 +539,32 @@ $('pmSave').onclick = async ()=>{
     await set(dbRef(db, `${ROOT}/${scenarioId}`), sc);
     ok('Photo saved');
     $('photoModal').style.display='none';
-    await loadScenarios(); $('eSelect').value=scenarioId; renderScenario(scenarioId);
+    await safeLoadScenarios(); $('eSelect').value=scenarioId; renderScenario(scenarioId);
   }catch(e){ err('Save photo failed: '+(e.message||e)); }
   finally{ loading(false); }
 };
+
+/* ---------- Live updates (subscribe AFTER auth) ---------- */
+(async function init(){
+  try{
+    loading(true);
+    await ensureAuthed();
+    // subscribe
+    onValue(dbRef(db, ROOT), snap=>{
+      const obj=snap.val()||{};
+      scenarios = Object.entries(obj).map(([id,s])=>({ id, _raw:s, _stops:coerceStops(s), ...s }))
+                  .sort((a,b)=>(b.createdAt||0)-(a.createdAt||0));
+      populateEditList();
+      const cur = $('eSelect').value;
+      if (cur) renderScenario(cur);
+    });
+    await safeLoadScenarios();
+  }catch(e){
+    err('Startup failed: '+(e.message||e));
+  }finally{
+    loading(false);
+  }
+})();
 </script>
 </body>
 </html>
