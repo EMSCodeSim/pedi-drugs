@@ -41,7 +41,7 @@ textarea{min-height:80px}
 #errbar{position:fixed;left:10px;bottom:10px;background:#2b0d0d;color:#ffd7d7;border:1px solid #7a2b2b;border-radius:12px;padding:8px 12px;display:none;z-index:9999;max-width:90vw}
 #okbar{position:fixed;left:10px;bottom:56px;background:#0f2a19;color:#d8ffe2;border:1px solid #2c7a4b;border-radius:12px;padding:8px 12px;display:none;z-index:9999;max-width:90vw}
 
-/* loader */
+/* lightweight loader only for init/DB saves */
 #loader{position:fixed;inset:0;display:none;place-items:center;z-index:99;background:rgba(6,12,20,.55);backdrop-filter:blur(2px)}
 .spinner{width:42px;height:42px;border-radius:999px;border:4px solid rgba(255,255,255,.25);border-top-color:#fff;animation:spin 1s linear infinite}
 @keyframes spin{to{transform:rotate(360deg)}}
@@ -176,7 +176,7 @@ textarea{min-height:80px}
 </div>
 
 <script type="module">
-/* ---------------- UI helpers (bind early, never throw) ---------------- */
+/* ---------------- UI helpers ---------------- */
 const $ = (id)=>document.getElementById(id);
 const show = (id, on)=>{ const el=$(id); if (el) el.style.display = on ? '' : 'none'; };
 const ok = (m)=>{ const b=$('okbar'); if(!b) return; b.textContent=m; b.style.display='block'; setTimeout(()=>b.style.display='none', 2600); };
@@ -190,7 +190,7 @@ if ($('showEdit'))   $('showEdit').onclick   = ()=>{ show('createPane',false); s
 /* ---------------- Firebase imports ---------------- */
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-app.js";
 import { getDatabase, ref as dbRef, set, push, get, onValue } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-database.js";
-import { getStorage, ref as stRef, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-storage.js";
+import { getStorage, ref as stRef, uploadBytesResumable, getDownloadURL } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-storage.js";
 import {
   getAuth, signInAnonymously, onAuthStateChanged,
   setPersistence, browserLocalPersistence, browserSessionPersistence, inMemoryPersistence
@@ -267,106 +267,168 @@ async function safeLoadScenarios(){
   }
 }
 
-/* ---------------- Image resize helpers ---------------- */
-const ORIG_MAX_EDGE = 1600, THUMB_MAX_EDGE = 480, JPEG_QUALITY = 0.82;
+/* ---------------- Image helpers (no OffscreenCanvas / no createImageBitmap) ---------------- */
+const ORIG_MAX_EDGE = 1600, THUMB_MAX_EDGE = 480, JPEG_QUALITY = 0.82, MAX_PIXELS = 4_000_000;
 
-async function fileToBitmap(file){
-  if ('createImageBitmap' in window) {
-    try{ return await createImageBitmap(file, { imageOrientation: 'from-image' }); }catch(_){}
-  }
-  const url = URL.createObjectURL(file);
-  const img = new Image(); img.decoding='async'; img.src=url;
-  await img.decode(); URL.revokeObjectURL(url);
-  return img;
-}
-function scaleDims(w,h,maxEdge){ const s = Math.min(1, maxEdge/Math.max(w,h)); return { w:Math.round(w*s), h:Math.round(h*s) }; }
-async function bitmapToBlob(bmp, maxEdge, quality=JPEG_QUALITY, type='image/jpeg'){
-  const { w, h } = scaleDims(bmp.width, bmp.height, maxEdge);
-  const c = ('OffscreenCanvas' in window) ? new OffscreenCanvas(w,h) : Object.assign(document.createElement('canvas'), { width:w, height:h });
-  if (!('width' in c)) { c.width=w; c.height=h; }
-  const ctx = c.getContext('2d'); ctx.imageSmoothingEnabled=true; ctx.imageSmoothingQuality='high';
-  ctx.drawImage(bmp,0,0,w,h);
-  const blob = await (c.convertToBlob ? c.convertToBlob({ type, quality }) : new Promise(res=>c.toBlob(res, type, quality)));
-  return { blob, width:w, height:h };
-}
-
-/* ---------------- Geolocation ---------------- */
-async function getCoords(){
-  if (!('geolocation' in navigator)) return null;
+async function decodeToImage(file){
+  // Robust decode: if the browser can't decode (e.g., HEIC), return null to trigger raw upload fallback.
   try{
-    return await new Promise((resolve)=> {
-      navigator.geolocation.getCurrentPosition(
-        pos => resolve({ lat:+pos.coords.latitude.toFixed(6), lng:+pos.coords.longitude.toFixed(6), accuracy:pos.coords.accuracy }),
-        _ => resolve(null),
-        { enableHighAccuracy:true, maximumAge:60000, timeout:10000 }
-      );
-    });
-  }catch{ return null; }
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.decoding = 'async';
+    img.src = url;
+    await img.decode();
+    URL.revokeObjectURL(url);
+    return img;
+  }catch{
+    return null;
+  }
+}
+function scaleByMaxEdgeOrPixels(w,h){
+  // Constrain by edge AND by megapixels (prevents huge memory spikes on phones)
+  const edgeScale = Math.min(1, ORIG_MAX_EDGE / Math.max(w,h));
+  const pixScale = Math.min(1, Math.sqrt(MAX_PIXELS / Math.max(1, w*h)));
+  const s = Math.min(edgeScale, pixScale);
+  return { w: Math.max(1, Math.round(w*s)), h: Math.max(1, Math.round(h*s)) };
+}
+async function canvasToBlob(img, targetEdge){
+  const dims = (targetEdge === ORIG_MAX_EDGE) ? scaleByMaxEdgeOrPixels(img.naturalWidth || img.width, img.naturalHeight || img.height)
+                                              : (()=>{ 
+                                                   const s = Math.min(1, targetEdge / Math.max(img.naturalWidth || img.width, img.naturalHeight || img.height));
+                                                   return { w: Math.round((img.naturalWidth||img.width)*s), h: Math.round((img.naturalHeight||img.height)*s) };
+                                                 })();
+  const c = document.createElement('canvas');
+  c.width = dims.w; c.height = dims.h;
+  const ctx = c.getContext('2d', { alpha:false, desynchronized:true });
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = 'high';
+  ctx.drawImage(img, 0, 0, dims.w, dims.h);
+  const blob = await new Promise(res=>c.toBlob(res, 'image/jpeg', JPEG_QUALITY));
+  return { blob, width:dims.w, height:dims.h };
 }
 
-/* ---------------- Upload flow (auto-GPS + robust errors) ---------------- */
+/* ---------------- Geolocation (soft timeout; non-blocking) ---------------- */
+function softCoords(timeoutMs=1200){
+  return new Promise((resolve)=>{
+    let done=false;
+    const finish=(v)=>{ if(!done){ done=true; resolve(v); } };
+    if (!('geolocation' in navigator)) return finish(null);
+    navigator.geolocation.getCurrentPosition(
+      pos => finish({ lat:+pos.coords.latitude.toFixed(6), lng:+pos.coords.longitude.toFixed(6), accuracy:pos.coords.accuracy }),
+      _ => finish(null),
+      { enableHighAccuracy:true, maximumAge:60000, timeout:timeoutMs }
+    );
+    setTimeout(()=>finish(null), timeoutMs); // soft race timeout
+  });
+}
+
+/* ---------------- Upload flow (sequential, resumable, yields to UI) ---------------- */
 async function processFilesForScenario(files, scenarioId, uploadsContainerId){
   if (!files?.length) return;
   await ensureAuthed();
-  loading(true);
-  try{
-    const coords = await getCoords(); // once per batch
-    for (const file of files){
-      const card = document.createElement('div');
-      card.innerHTML = `<div class="tag small">Preparing…</div>`;
-      $(uploadsContainerId).prepend(card);
-      const status = (t)=>{ card.querySelector('.tag').textContent=t; };
 
-      try{
-        status('Decoding…');
-        const bmp = await fileToBitmap(file);
+  // Soft-start GPS but don't block uploads.
+  const gpsPromise = softCoords(1200);
+
+  // Process sequentially to avoid memory spikes on mobile.
+  for (const file of files){
+    await new Promise(r=>setTimeout(r,0)); // yield to UI
+
+    const card = document.createElement('div');
+    const tag = document.createElement('div');
+    tag.className = 'tag small';
+    tag.textContent = 'Preparing…';
+    card.appendChild(tag);
+    $(uploadsContainerId).prepend(card);
+    const status = (t)=>{ tag.textContent=t; };
+
+    try{
+      let img = await decodeToImage(file);
+      let fullBlob, thumbBlob, width, height, usedOriginal = false;
+
+      if (img){
         status('Resizing…');
-        const { blob: fullBlob, width, height } = await bitmapToBlob(bmp, ORIG_MAX_EDGE, JPEG_QUALITY, 'image/jpeg');
-        const { blob: thumbBlob }               = await bitmapToBlob(bmp, THUMB_MAX_EDGE, 0.8, 'image/jpeg');
-
-        const ts = Date.now();
-        const basePath = `scenarios/${scenarioId}/${ts}`;
-        const fullRef  = stRef(storage, `${basePath}.jpg`);
-        const thumbRef = stRef(storage, `scenarios/${scenarioId}/thumbs/${ts}.jpg`);
-        const meta = { contentType:'image/jpeg', cacheControl:'public,max-age=31536000,immutable' };
-
-        status('Uploading full…'); await uploadBytes(fullRef,  fullBlob,  meta);
-        status('Uploading thumb…'); await uploadBytes(thumbRef, thumbBlob, meta);
-
-        status('Finalizing…');
-        const imageURL = await getDownloadURL(fullRef);
-        const thumbURL = await getDownloadURL(thumbRef);
-
-        status('Saving…');
-        const snap = await get(dbRef(db, `${ROOT}/${scenarioId}`));
-        const sc = snap.val(); const stops = coerceStops(sc);
-        stops.push({
-          type:'photo', title:'', caption:'',
-          lat: coords?.lat ?? null, lng: coords?.lng ?? null, locAccuracy: coords?.accuracy ?? null,
-          radiusMeters:50,
-          imageURL, thumbURL,
-          storagePath:`${basePath}.jpg`, thumbPath:`scenarios/${scenarioId}/thumbs/${ts}.jpg`,
-          gsUri:`gs://${bucketName}/${basePath}.jpg`,
-          width, height, overlays:[]
-        });
-        setStops(sc, stops);
-        await set(dbRef(db, `${ROOT}/${scenarioId}`), sc);
-
-        status(coords ? 'Uploaded ✓ (GPS set)' : 'Uploaded ✓ (no GPS)');
-      }catch(ex){
-        const msg = ex?.code || ex?.message || ex;
-        if (String(msg).includes('storage/unauthorized') || String(msg).includes('PERMISSION_DENIED')) {
-          err('Upload failed: permission denied. Check Firebase Storage/DB rules for path "scenarios/**" and that anonymous auth is allowed.');
-        } else {
-          err('Upload failed: ' + msg);
-        }
-        status('Failed');
+        const full = await canvasToBlob(img, ORIG_MAX_EDGE);
+        fullBlob = full.blob; width = full.width; height = full.height;
+        const thumb = await canvasToBlob(img, THUMB_MAX_EDGE);
+        thumbBlob = thumb.blob;
+      }else{
+        // HEIC or unknown format: upload original as-is, and create a tiny JPEG thumb from a video frame? Not possible here; fallback: show "no thumb".
+        status('Using original (no decode)…');
+        fullBlob = file; width = 0; height = 0; usedOriginal = true;
+        // try to at least generate a thumb if Safari can display it in <img> (often it can even if canvas can't draw)
+        try{
+          const previewImg = await decodeToImage(file);
+          if (previewImg){
+            const t = await canvasToBlob(previewImg, THUMB_MAX_EDGE);
+            thumbBlob = t.blob;
+          }
+        }catch{ /* ignore */ }
       }
+
+      const coords = await Promise.race([gpsPromise, Promise.resolve(null)]);
+      const ts = Date.now();
+      const basePath = `scenarios/${scenarioId}/${ts}`;
+      const fullRef  = stRef(storage, `${basePath}${usedOriginal && file.type ? (file.type.includes('heic')||file.type.includes('heif')?'.heic':'.bin') : '.jpg'}`);
+      const thumbRef = stRef(storage, `scenarios/${scenarioId}/thumbs/${ts}.jpg`);
+      const metaFull = { contentType: (usedOriginal && file.type) ? file.type : 'image/jpeg', cacheControl:'public,max-age=31536000,immutable' };
+      const metaThmb = { contentType:'image/jpeg', cacheControl:'public,max-age=31536000,immutable' };
+
+      // Resumable uploads to avoid big hangs
+      status('Uploading 0%…');
+      await new Promise((resolve, reject)=>{
+        const task = uploadBytesResumable(fullRef, fullBlob, metaFull);
+        task.on('state_changed',
+          s=>{
+            const pct = Math.round((s.bytesTransferred/s.totalBytes)*100);
+            status(`Uploading ${pct}%…`);
+          },
+          err2=>reject(err2),
+          ()=>resolve()
+        );
+      });
+
+      // Thumb (optional)
+      if (thumbBlob){
+        await new Promise((resolve, reject)=>{
+          const t2 = uploadBytesResumable(thumbRef, thumbBlob, metaThmb);
+          t2.on('state_changed', _=>{}, reject, resolve);
+        });
+      }
+
+      status('Finalizing…');
+      const imageURL = await getDownloadURL(fullRef);
+      const thumbURL = thumbBlob ? await getDownloadURL(thumbRef) : imageURL; // fallback
+
+      status('Saving…');
+      const snap = await get(dbRef(db, `${ROOT}/${scenarioId}`));
+      const sc = snap.val();
+      const stops = coerceStops(sc);
+      stops.push({
+        type:'photo', title:'', caption:'',
+        lat: coords?.lat ?? null, lng: coords?.lng ?? null, locAccuracy: coords?.accuracy ?? null,
+        radiusMeters:50,
+        imageURL, thumbURL,
+        storagePath: fullRef._location.path, thumbPath: thumbBlob ? thumbRef._location.path : null,
+        gsUri:`gs://${bucketName}/${fullRef._location.path}`,
+        width, height, overlays:[]
+      });
+      setStops(sc, stops);
+      await set(dbRef(db, `${ROOT}/${scenarioId}`), sc);
+
+      status(coords ? 'Uploaded ✓ (GPS set)' : 'Uploaded ✓');
+    }catch(ex){
+      const msg = ex?.code || ex?.message || ex;
+      if (String(msg).includes('storage/unauthorized') || String(msg).includes('PERMISSION_DENIED')) {
+        err('Upload failed: permission denied. Check Firebase Storage/DB rules for "scenarios/**" and allow anonymous writes.');
+      } else {
+        err('Upload failed: ' + msg);
+      }
+      status('Failed');
     }
-    ok('Photos processed.');
-  }finally{
-    loading(false);
   }
+
+  ok('Photos processed.');
 }
 
 /* ---------------- Render & edit ---------------- */
@@ -411,8 +473,8 @@ function renderScenario(id){
     };
 
     el.querySelector('[data-gps]').onclick = async ()=>{
-      const coords = await getCoords();
-      if (!coords){ err('Could not get GPS (permission or signal).'); return; }
+      const coords = await softCoords(2000);
+      if (!coords){ err('Could not get GPS (permission/signal).'); return; }
       try{
         loading(true);
         await ensureAuthed();
@@ -457,7 +519,7 @@ if ($('createBtn')) $('createBtn').onclick = async ()=>{
   }catch(e){
     const msg = e?.code || e?.message || e;
     if (String(msg).includes('PERMISSION_DENIED')) {
-      err('Create failed: Realtime Database rules block writes to "/scenarios". Enable auth writes in Firebase rules.');
+      err('Create failed: Realtime Database rules block writes to "/scenarios". Enable auth writes.');
     } else {
       err('Create failed: ' + msg);
     }
@@ -531,7 +593,7 @@ function openPhotoEditor(scenarioId, index){
 if ($('pmClose')) $('pmClose').onclick = ()=>{ $('photoModal').style.display='none'; };
 if ($('pmUseMyLoc')) $('pmUseMyLoc').onclick = async ()=>{
   $('pmGpsStatus').textContent = 'Getting GPS…';
-  const coords = await getCoords();
+  const coords = await softCoords(2000);
   if (!coords){ $('pmGpsStatus').textContent='GPS failed'; err('Could not get GPS.'); return; }
   $('pmLat').value = coords.lat; $('pmLng').value = coords.lng; $('pmGpsStatus').textContent = 'GPS ✓';
 };
