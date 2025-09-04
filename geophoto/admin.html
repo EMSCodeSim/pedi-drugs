@@ -6,7 +6,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
 <meta name="theme-color" content="#0b0f14" />
 <style>
-:root{ --bg:#0b0f14; --bg2:#0e1421; --card:#0f1624; --edge:rgba(255,255,255,.10); --text:#eaf2ff; --muted:#93a0b5; }
+:root{ --bg:#0b0f14; --bg2:#0e1421; --card:#0f1624; --edge:rgba(255,255,255,.10); --text:#eaf2ff; --muted:#93a0b5; --red:#7a2b2b; --green:#2c7a4b; }
 *{box-sizing:border-box}
 html,body{margin:0;height:100%;font-family:system-ui,-apple-system,Segoe UI,Roboto,Inter,Arial,sans-serif;color:var(--text);
   background:
@@ -17,9 +17,11 @@ html,body{margin:0;height:100%;font-family:system-ui,-apple-system,Segoe UI,Robo
 .topbar{position:sticky;top:0;z-index:20;background:rgba(12,15,22,.78);backdrop-filter:blur(6px) saturate(120%);border-bottom:1px solid rgba(255,255,255,.08)}
 .topnav{max-width:1200px;margin:0 auto;padding:10px 16px;display:flex;gap:10px;align-items:center}
 .brand{font-weight:900}
+.version{font-size:12px;color:var(--muted)}
 .spacer{flex:1}
 .btn{appearance:none;border:1px solid rgba(255,255,255,.18);background:linear-gradient(180deg,#142238,#0f1930);color:#fff;border-radius:12px;padding:9px 12px;font-weight:800;cursor:pointer}
 .btn[disabled]{opacity:.6;cursor:not-allowed}
+.btn-danger{background:#2a0f14;border-color:var(--red)}
 .tag{display:inline-flex;align-items:center;gap:8px;padding:6px 10px;border-radius:999px;border:1px solid rgba(255,255,255,.16);color:var(--muted)}
 .small{font-size:12px;opacity:.9}
 hr{border:none;height:1px;background:rgba(255,255,255,.08);margin:12px 0}
@@ -32,10 +34,8 @@ textarea{min-height:80px}
 .grid{display:grid;grid-template-columns:repeat(auto-fill, minmax(140px,1fr));gap:10px}
 .thumb{width:100%;height:110px;object-fit:cover;border-radius:10px;background:#0a1a2a;border:1px solid rgba(255,255,255,.14)}
 .visually-hidden{position:absolute; left:-9999px; top:auto; width:0.1px; height:0.1px; opacity:0; overflow:hidden; z-index:-1}
-
-/* toasts + loader */
-#errbar{position:fixed;left:10px;bottom:10px;background:#2b0d0d;color:#ffd7d7;border:1px solid #7a2b2b;border-radius:12px;padding:8px 12px;display:none;z-index:9999;max-width:90vw}
-#okbar{position:fixed;left:10px;bottom:56px;background:#0f2a19;color:#d8ffe2;border:1px solid #2c7a4b;border-radius:12px;padding:8px 12px;display:none;z-index:9999;max-width:90vw}
+#errbar{position:fixed;left:10px;bottom:10px;background:#2b0d0d;color:#ffd7d7;border:1px solid var(--red);border-radius:12px;padding:8px 12px;display:none;z-index:9999;max-width:90vw}
+#okbar{position:fixed;left:10px;bottom:56px;background:#0f2a19;color:#d8ffe2;border:1px solid var(--green);border-radius:12px;padding:8px 12px;display:none;z-index:9999;max-width:90vw}
 #loader{position:fixed;inset:0;display:none;place-items:center;z-index:99;background:rgba(6,12,20,.55);backdrop-filter:blur(2px)}
 .spinner{width:42px;height:42px;border-radius:999px;border:4px solid rgba(255,255,255,.25);border-top-color:#fff;animation:spin 1s linear infinite}
 @keyframes spin{to{transform:rotate(360deg)}}
@@ -56,6 +56,7 @@ textarea{min-height:80px}
 <div class="topbar">
   <div class="topnav">
     <div class="brand">FireOps SIM — Admin</div>
+    <span class="version">v2025-09-04a</span>
     <div class="spacer"></div>
     <button id="showCreate" class="btn">Create Scenario</button>
     <button id="showEdit" class="btn">Edit Scenario</button>
@@ -105,7 +106,7 @@ textarea{min-height:80px}
     <select id="eSelect"><option value="">Loading…</option></select>
     <div class="row" style="margin-top:6px">
       <button id="refreshBtn" class="btn">Refresh</button>
-      <button id="deleteScenario" class="btn" style="background:#2a0f14;border-color:#7a2b2b">Delete Scenario</button>
+      <button id="deleteScenario" class="btn btn-danger">Delete Scenario</button>
       <span id="eStatus" class="tag">—</span>
     </div>
 
@@ -210,9 +211,9 @@ function ok(m){ var b=$('okbar'); if(!b) return; b.textContent=m; b.style.displa
 function err(m){ var b=$('errbar'); if(!b) return; b.textContent=m; b.style.display='block'; setTimeout(function(){ b.style.display='none'; }, 6000); }
 function loading(on){ var l=$('loader'); if(l) l.style.display = on ? 'grid' : 'none'; }
 
-/* panes */
-if ($('showCreate')) $('showCreate').onclick = function(){ show('createPane',true); show('editPane',false); };
-if ($('showEdit')) $('showEdit').onclick = function(){ show('createPane',false); show('editPane',true); };
+/* Nav buttons */
+$('showCreate').onclick = function(){ show('createPane',true); show('editPane',false); };
+$('showEdit').onclick = function(){ show('createPane',false); show('editPane',true); };
 
 /* ---------- Firebase (modular SDK) ---------- */
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-app.js";
@@ -231,7 +232,7 @@ var firebaseConfig = {
   measurementId:"G-19DVN7NNH7"
 };
 var appFB = initializeApp(firebaseConfig);
-/* force real bucket for writes */
+/* Always write to the real bucket */
 var FORCE_BUCKET = "dailyquiz-d5279.appspot.com";
 var storage = getStorage(appFB, "gs://"+FORCE_BUCKET);
 var db = getDatabase(appFB);
@@ -291,8 +292,8 @@ async function safeLoadScenarios(){
     var cur = $('eSelect').value; if (cur) renderScenario(cur);
     $('eStatus').textContent='Loaded';
   }catch(e){
-    console.warn('loadScenarios failed:', e);
     $('eStatus').textContent='Load failed';
+    console.warn('loadScenarios failed:', e);
   }
 }
 
@@ -412,7 +413,7 @@ function renderPending(scope){
           '<div class="row">' +
             '<button class="btn" data-gps>Use My Location</button>' +
             '<button class="btn" data-save>Save</button>' +
-            '<button class="btn" data-del style="background:#2a0f14;border-color:#7a2b2b">Discard</button>' +
+            '<button class="btn btn-danger" data-del>Discard</button>' +
           '</div>' +
         '</div>';
       container.appendChild(card);
@@ -463,14 +464,19 @@ async function autoCreateIfNeeded(){
   var title = ($('cTitle') && $('cTitle').value ? $('cTitle').value.trim() : '') || '(untitled)';
   var desc  = ($('cDesc') && $('cDesc').value ? $('cDesc').value.trim() : '') || '';
   var id = (push(dbRef(db, ROOT))).key;
-  await set(dbRef(db, ROOT + '/' + id), { id:id, title:title, description:desc, createdAt:Date.now(), active:true, stops: [] });
-  createdId = id;
-  ok('Scenario created');
-  await safeLoadScenarios();
-  $('showEdit').click();
-  $('eSelect').value = id; $('eTitle').value = title; $('eDesc').value = desc;
-  renderScenario(id);
-  return id;
+  try{
+    await set(dbRef(db, ROOT + '/' + id), { id:id, title:title, description:desc, createdAt:Date.now(), active:true, stops: [] });
+    createdId = id;
+    ok('Scenario created');
+    await safeLoadScenarios();
+    $('showEdit').click();
+    $('eSelect').value = id; $('eTitle').value = title; $('eDesc').value = desc;
+    renderScenario(id);
+    return id;
+  }catch(e){
+    err('Create failed (DB rules?): '+(e && (e.code||e.message) ? (e.code||e.message) : e));
+    throw e;
+  }
 }
 function uploadWithTimeout(fullRef, blob, metadata, onProgress){
   return new Promise(function(resolve,reject){
@@ -575,7 +581,7 @@ async function saveOnePending(scope, idx, cardEl){
     if (uploads){
       var img = document.createElement('img');
       img.className='thumb';
-      img.src = cloud ? (stop.thumbURL || stop.imageURL) : dataURLFromStored(stop.imageData);
+      img.src = cloud ? (stop.thumbURL || stop.imageURL) : ('data:image/jpeg;base64,'+stop.imageData.data);
       uploads.prepend(img);
     }
 
@@ -629,7 +635,7 @@ function renderScenario(id){
         '<div class="row" style="margin-top:6px">' +
           '<button class="btn" data-edit>Edit</button>' +
           '<button class="btn" data-gps>Set GPS</button>' +
-          '<button class="btn" data-del style="background:#2a0f14;border-color:#7a2b2b">Delete</button>' +
+          '<button class="btn btn-danger" data-del>Delete</button>' +
         '</div>';
       grid.appendChild(el);
 
@@ -691,14 +697,14 @@ function openPhotoEditor(scenarioId, index){
   $('pmGpsStatus').textContent = (st.lat!=null && st.lng!=null) ? 'GPS ✓' : 'GPS —';
   $('photoModal').style.display = 'grid';
 }
-if ($('pmClose')) $('pmClose').onclick = function(){ $('photoModal').style.display='none'; };
-if ($('pmUseMyLoc')) $('pmUseMyLoc').onclick = async function(){
+$('pmClose').onclick = function(){ $('photoModal').style.display='none'; };
+$('pmUseMyLoc').onclick = async function(){
   $('pmGpsStatus').textContent = 'Getting GPS…';
   var coords = await softCoords(2000);
   if (!coords){ $('pmGpsStatus').textContent='GPS failed'; err('Could not get GPS.'); return; }
   $('pmLat').value = coords.lat; $('pmLng').value = coords.lng; $('pmGpsStatus').textContent = 'GPS ✓';
 };
-if ($('pmSave')) $('pmSave').onclick = async function(){
+$('pmSave').onclick = async function(){
   var scenarioId = pmCtx.scenarioId, index = pmCtx.index; if (!scenarioId || index<0) return;
   try{
     loading(true);
@@ -725,7 +731,7 @@ if ($('pmSave')) $('pmSave').onclick = async function(){
 };
 
 /* ---------- Create / Edit wiring ---------- */
-if ($('createBtn')) $('createBtn').onclick = async function(){
+$('createBtn').onclick = async function(){
   try{
     await ensureAuthed();
     loading(true);
@@ -750,10 +756,10 @@ if ($('createBtn')) $('createBtn').onclick = async function(){
   }
 };
 
-if ($('refreshBtn')) $('refreshBtn').onclick = async function(){ await ensureAuthed(); await safeLoadScenarios(); };
-if ($('eSelect')) $('eSelect').onchange = function(){ var id=$('eSelect').value; if (id) renderScenario(id); };
+$('refreshBtn').onclick = async function(){ await ensureAuthed(); await safeLoadScenarios(); };
+$('eSelect').onchange = function(){ var id=$('eSelect').value; if (id) renderScenario(id); };
 
-if ($('saveMeta')) $('saveMeta').onclick = async function(){
+$('saveMeta').onclick = async function(){
   try{
     await ensureAuthed();
     var id=$('eSelect').value; if(!id) return;
@@ -762,7 +768,6 @@ if ($('saveMeta')) $('saveMeta').onclick = async function(){
     var sc = snap.val()||{};
     sc.title = ($('eTitle').value||'').trim()||'(untitled)';
     sc.description = ($('eDesc').value||'').trim()||'';
-    /* ✅ FIXED: removed stray quote that broke the whole script */
     await set(dbRef(db, ROOT+'/'+id), sc);
     ok('Scenario saved');
     await safeLoadScenarios(); $('eSelect').value=id; renderScenario(id);
@@ -773,8 +778,8 @@ if ($('saveMeta')) $('saveMeta').onclick = async function(){
   }finally{ loading(false); }
 };
 
-/* Delete Scenario (Edit pane) */
-if ($('deleteScenario')) $('deleteScenario').onclick = async function(){
+/* Delete Scenario */
+$('deleteScenario').onclick = async function(){
   try{
     var id=$('eSelect').value; if(!id){ err('Select a scenario first.'); return; }
     var s=null; for (var i=0;i<scenarios.length;i++){ if (scenarios[i].id===id){ s=scenarios[i]; break; } }
@@ -813,18 +818,18 @@ function onFilesPicked(e, scope){
   enablePendingButtons(scope);
   e.target.value='';
 }
-if ($('cFilesCam')) $('cFilesCam').addEventListener('change', function(e){ onFilesPicked(e,'c'); });
-if ($('cFilesLib')) $('cFilesLib').addEventListener('change', function(e){ onFilesPicked(e,'c'); });
-if ($('eFilesCam')) $('eFilesCam').addEventListener('change', function(e){ onFilesPicked(e,'e'); });
-if ($('eFilesLib')) $('eFilesLib').addEventListener('change', function(e){ onFilesPicked(e,'e'); });
+$('cFilesCam').addEventListener('change', function(e){ onFilesPicked(e,'c'); });
+$('cFilesLib').addEventListener('change', function(e){ onFilesPicked(e,'c'); });
+$('eFilesCam').addEventListener('change', function(e){ onFilesPicked(e,'e'); });
+$('eFilesLib').addEventListener('change', function(e){ onFilesPicked(e,'e'); });
 
-if ($('cSaveAll')) $('cSaveAll').onclick = function(){ saveAll('c'); };
-if ($('eSaveAll')) $('eSaveAll').onclick = function(){ saveAll('e'); };
-if ($('cClear')) $('cClear').onclick = function(){
+$('cSaveAll').onclick = function(){ saveAll('c'); };
+$('eSaveAll').onclick = function(){ saveAll('e'); };
+$('cClear').onclick = function(){
   for (var i=0;i<pendingCreate.length;i++){ try{ if(pendingCreate[i].url) URL.revokeObjectURL(pendingCreate[i].url);}catch(e){} }
   pendingCreate = []; renderPending('c'); enablePendingButtons('c');
 };
-if ($('eClear')) $('eClear').onclick = function(){
+$('eClear').onclick = function(){
   for (var i=0;i<pendingEdit.length;i++){ try{ if(pendingEdit[i].url) URL.revokeObjectURL(pendingEdit[i].url);}catch(e){} }
   pendingEdit = []; renderPending('e'); enablePendingButtons('e');
 };
