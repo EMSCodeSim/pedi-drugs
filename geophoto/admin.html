@@ -26,17 +26,16 @@ html,body{margin:0;height:100%;font-family:system-ui,-apple-system,Segoe UI,Robo
 .tag{display:inline-flex;align-items:center;gap:8px;padding:6px 10px;border-radius:999px;border:1px solid rgba(255,255,255,.16);color:var(--muted)}
 .small{font-size:12px;opacity:.9}
 hr{border:none;height:1px;background:rgba(255,255,255,.08);margin:12px 0}
-
 main{max-width:1200px;margin:16px auto 40px;padding:0 16px;display:grid;grid-template-columns:340px 1fr;gap:12px}
 .card{background:var(--card);border:1px solid var(--edge);border-radius:16px;padding:12px;min-height:120px}
 label{display:block;margin:8px 0 6px 2px;font-size:12px;color:var(--muted)}
 .input, select, textarea{width:100%;padding:10px;border-radius:10px;border:1px solid rgba(255,255,255,.14);background:#0c1322;color:#eaf2ff}
 textarea{min-height:80px}
 .row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
-.grid{display:grid;grid-template-columns:repeat(auto-fill, minmax(120px,1fr));gap:10px}
-.thumb{width:100%;height:90px;object-fit:cover;border-radius:10px;background:#0a1a2a;border:1px solid rgba(255,255,255,.14)}
+.grid{display:grid;grid-template-columns:repeat(auto-fill, minmax(140px,1fr));gap:10px}
+.thumb{width:100%;height:110px;object-fit:cover;border-radius:10px;background:#0a1a2a;border:1px solid rgba(255,255,255,.14)}
 
-/* iOS-safe hidden input: not display:none; no pointer-events:none */
+/* iOS-safe hidden inputs: not display:none */
 .visually-hidden{
   position:absolute; left:-9999px; top:auto; width:0.1px; height:0.1px; opacity:0; overflow:hidden; z-index:-1;
 }
@@ -57,6 +56,12 @@ textarea{min-height:80px}
 .modal-body{display:grid;grid-template-columns:220px 1fr;gap:12px}
 .modal-body img{width:100%;border-radius:10px;border:1px solid rgba(255,255,255,.12);aspect-ratio:4/3;object-fit:cover}
 .modal-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:10px}
+
+/* pending review cards */
+.pcard{padding:8px;border:1px solid rgba(255,255,255,.14);border-radius:12px;background:#0f1624}
+.pmeta{display:flex;gap:8px;align-items:center;justify-content:space-between;margin-top:6px}
+.pinputs{display:flex;flex-direction:column;gap:6px;margin-top:6px}
+.pinputs input{font-size:12px;padding:8px}
 </style>
 </head>
 <body>
@@ -85,16 +90,26 @@ textarea{min-height:80px}
       <button id="createBtn" class="btn">Create</button>
       <span id="createStatus" class="tag">Ready</span>
     </div>
-    <hr />
-    <h4>Add Photos (auto GPS)</h4>
 
+    <hr />
+    <h4>Add Photos (auto GPS on save)</h4>
     <input id="cFilesCam" class="visually-hidden" type="file" accept="image/*" capture="environment" multiple />
     <input id="cFilesLib" class="visually-hidden" type="file" accept="image/*" multiple />
     <div class="row">
       <label for="cFilesCam" class="btn">📷 Take Photo</label>
       <label for="cFilesLib" class="btn">🖼️ Choose from Library</label>
     </div>
-    <div class="small" style="margin:6px 0">Photos are resized to max <b>1600px</b> (thumbs <b>480px</b>).</div>
+
+    <h4 style="margin-top:12px">Review (not saved yet)</h4>
+    <div class="small">Tap <b>Save</b> on a photo (or <b>Save All</b>) to upload to the cloud.</div>
+    <div class="row" style="margin:8px 0">
+      <button id="cSaveAll" class="btn" disabled>Save All to Cloud</button>
+      <button id="cClear" class="btn" disabled>Clear</button>
+    </div>
+    <div id="cPending" class="grid"></div>
+
+    <hr />
+    <h4>Uploaded Thumbs</h4>
     <div id="cUploads" class="grid"></div>
   </section>
 
@@ -123,7 +138,7 @@ textarea{min-height:80px}
     <textarea id="eDesc"></textarea>
 
     <hr />
-    <h4>Add Photos (auto GPS)</h4>
+    <h4>Add Photos (auto GPS on save)</h4>
     <input id="eFilesCam" class="visually-hidden" type="file" accept="image/*" capture="environment" multiple />
     <input id="eFilesLib" class="visually-hidden" type="file" accept="image/*" multiple />
     <div class="row">
@@ -131,7 +146,13 @@ textarea{min-height:80px}
       <label for="eFilesLib" class="btn">🖼️ Choose from Library</label>
     </div>
 
-    <div id="eUploads" class="grid" style="margin-top:8px"></div>
+    <h4 style="margin-top:12px">Review (not saved yet)</h4>
+    <div class="small">Tap <b>Save</b> to upload. Use <b>Use My Location</b> to attach GPS before saving.</div>
+    <div class="row" style="margin:8px 0">
+      <button id="eSaveAll" class="btn" disabled>Save All to Cloud</button>
+      <button id="eClear" class="btn" disabled>Clear</button>
+    </div>
+    <div id="ePending" class="grid"></div>
 
     <hr />
     <h4>Existing Stops</h4>
@@ -222,14 +243,13 @@ const firebaseConfig = {
   authDomain:"dailyquiz-d5279.firebaseapp.com",
   databaseURL:"https://dailyquiz-d5279-default-rtdb.firebaseio.com",
   projectId:"dailyquiz-d5279",
-  storageBucket:"dailyquiz-d5279.firebasestorage.app",  // normalize for gs:// below
+  storageBucket:"dailyquiz-d5279.firebasestorage.app",
   appId:"1:94577748034:web:c032d3a1d72db1313de5db",
   measurementId:"G-19DVN7NNH7"
 };
-
 const appFB = initializeApp(firebaseConfig);
 
-/* ✅ use appspot bucket for writes */
+/* ✅ Normalize bucket to appspot for writes */
 let bucketName = (firebaseConfig.storageBucket || `${firebaseConfig.projectId}.appspot.com`)
   .replace('.firebasestorage.app', '.appspot.com');
 const storage = getStorage(appFB, `gs://${bucketName}`);
@@ -297,9 +317,13 @@ async function decodeToImage(file){
     img.decoding = 'async';
     img.src = url;
     await img.decode();
-    URL.revokeObjectURL(url);
-    return img;
-  }catch{ return null; }
+    return { img, url };
+  }catch{ // preview may still work; try URL for <img> anyway
+    try{
+      const url = URL.createObjectURL(file);
+      return { img:null, url };
+    }catch{ return { img:null, url:null }; }
+  }
 }
 function scaleByMaxEdgeOrPixels(w,h){
   const edgeScale = Math.min(1, ORIG_MAX_EDGE / Math.max(w,h));
@@ -307,15 +331,16 @@ function scaleByMaxEdgeOrPixels(w,h){
   const s = Math.min(edgeScale, pixScale);
   return { w: Math.max(1, Math.round(w*s)), h: Math.max(1, Math.round(h*s)) };
 }
-async function canvasToBlob(img, targetEdge){
+async function canvasToBlob(nativeImg, targetEdge){
+  const w = nativeImg.naturalWidth || nativeImg.width;
+  const h = nativeImg.naturalHeight || nativeImg.height;
   const dims = (targetEdge === ORIG_MAX_EDGE)
-    ? scaleByMaxEdgeOrPixels(img.naturalWidth || img.width, img.naturalHeight || img.height)
-    : (()=>{ const s = Math.min(1, targetEdge / Math.max(img.naturalWidth||img.width, img.naturalHeight||img.height));
-             return { w: Math.round((img.naturalWidth||img.width)*s), h: Math.round((img.naturalHeight||img.height)*s) }; })();
+    ? scaleByMaxEdgeOrPixels(w,h)
+    : (()=>{ const s = Math.min(1, targetEdge / Math.max(w,h)); return { w:Math.round(w*s), h:Math.round(h*s) }; })();
   const c = document.createElement('canvas'); c.width = dims.w; c.height = dims.h;
   const ctx = c.getContext('2d', { alpha:false, desynchronized:true });
   ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality='high';
-  ctx.drawImage(img, 0, 0, dims.w, dims.h);
+  ctx.drawImage(nativeImg, 0, 0, dims.w, dims.h);
   const blob = await new Promise(res=>c.toBlob(res, 'image/jpeg', JPEG_QUALITY));
   return { blob, width:dims.w, height:dims.h };
 }
@@ -335,122 +360,213 @@ function softCoords(timeoutMs=1200){
   });
 }
 
-/* ---------------- Upload flow ---------------- */
-async function processFilesForScenario(files, scenarioId, uploadsContainerId){
-  if (!files?.length) return;
-  await ensureAuthed();
+/* ---------------- Pending review lists ---------------- */
+let pendingCreate = []; // {file,url,title,caption,lat,lng,progress}
+let pendingEdit   = [];
 
-  // immediate UI feedback
-  const picked = document.createElement('div');
-  picked.className = 'tag small';
-  picked.textContent = `Picked ${files.length} file(s)…`;
-  $(uploadsContainerId).prepend(picked);
+function enablePendingButtons(scope){
+  const has = (scope==='c') ? pendingCreate.length>0 : pendingEdit.length>0;
+  $(`${scope}SaveAll`).disabled = !has;
+  $(`${scope}Clear`).disabled   = !has;
+}
 
-  // log the change so we can see this in Diagnostics
-  logDiag(`CHANGE ${uploadsContainerId}:`, files.map(f=>`${f.name||'(no-name)'} [${f.type||'no-type'}] size=${f.size}`).join(', '));
+function addPending(files, scope){
+  const list = (scope==='c') ? pendingCreate : pendingEdit;
+  for (const f of files){
+    list.push({ file:f, url:null, title:'', caption:'', lat:null, lng:null, progress:0 });
+  }
+  renderPending(scope);
+}
 
-  const gpsPromise = softCoords(1200);
-
-  for (const file of files){
-    await new Promise(r=>setTimeout(r,0)); // let UI repaint
-
-    const card = document.createElement('div');
-    const tag = document.createElement('div');
-    tag.className = 'tag small';
-    tag.textContent = 'Preparing…';
-    card.appendChild(tag);
-    $(uploadsContainerId).prepend(card);
-    const status = (t)=>{ tag.textContent=t; };
-
-    try{
-      let img = await decodeToImage(file);
-      let fullBlob, thumbBlob, width=0, height=0, usedOriginal=false;
-
-      if (img){
-        status('Resizing…');
-        const full = await canvasToBlob(img, ORIG_MAX_EDGE);
-        fullBlob = full.blob; width = full.width; height = full.height;
-        const thumb = await canvasToBlob(img, THUMB_MAX_EDGE);
-        thumbBlob = thumb.blob;
-      } else {
-        status('Using original (no decode)…');
-        fullBlob = file; usedOriginal = true;
-        try{
-          const previewImg = await decodeToImage(file);
-          if (previewImg){
-            const t = await canvasToBlob(previewImg, THUMB_MAX_EDGE);
-            thumbBlob = t.blob;
-          }
-        }catch{}
-      }
-
-      const coords = await Promise.race([gpsPromise, Promise.resolve(null)]);
-      const ts = Date.now();
-
-      // Always use an image/* contentType (some iOS picks have no type)
-      const metaType = (usedOriginal && file.type && file.type.startsWith('image/')) ? file.type : 'image/jpeg';
-      const ext = (metaType.includes('png')?'.png':(metaType.includes('heic')?'.heic':(metaType.includes('webp')?'.webp':'.jpg')));
-
-      const basePath = `scenarios/${scenarioId}/${ts}`;
-      const fullRef  = stRef(storage, `${basePath}${usedOriginal ? ext : '.jpg'}`);
-      const thumbRef = stRef(storage, `scenarios/${scenarioId}/thumbs/${ts}.jpg`);
-      const metaFull = { contentType: metaType,  cacheControl:'public,max-age=31536000,immutable' };
-      const metaThmb = { contentType:'image/jpeg', cacheControl:'public,max-age=31536000,immutable' };
-
-      status('Uploading 0%…');
-      await new Promise((resolve, reject)=>{
-        const task = uploadBytesResumable(fullRef, fullBlob, metaFull);
-        task.on('state_changed',
-          s=>{ const pct = Math.round((s.bytesTransferred/s.totalBytes)*100); status(`Uploading ${pct}%…`); },
-          err2=>reject(err2),
-          ()=>resolve()
-        );
-      });
-
-      if (thumbBlob){
-        await new Promise((resolve, reject)=>{
-          const t2 = uploadBytesResumable(thumbRef, thumbBlob, metaThmb);
-          t2.on('state_changed', null, reject, resolve);
-        });
-      }
-
-      status('Finalizing…');
-      const imageURL = await getDownloadURL(fullRef);
-      const thumbURL = thumbBlob ? await getDownloadURL(thumbRef) : imageURL;
-
-      status('Saving…');
-      const snap = await get(dbRef(db, `${ROOT}/${scenarioId}`));
-      const sc = snap.val();
-      const stops = coerceStops(sc);
-      stops.push({
-        type:'photo', title:'', caption:'',
-        lat: coords?.lat ?? null, lng: coords?.lng ?? null, locAccuracy: coords?.accuracy ?? null,
-        radiusMeters:50,
-        imageURL, thumbURL,
-        storagePath: fullRef.fullPath, thumbPath: thumbBlob ? thumbRef.fullPath : null,
-        gsUri:`gs://${bucketName}/${fullRef.fullPath}`,
-        width, height, overlays:[]
-      });
-      setStops(sc, stops);
-      await set(dbRef(db, `${ROOT}/${scenarioId}`), sc);
-
-      status(coords ? 'Uploaded ✓ (GPS set)' : 'Uploaded ✓');
-    }catch(ex){
-      const code = ex?.code || '';
-      const msg  = ex?.message || String(ex);
-      console.error('UPLOAD ERROR:', ex);
-      logDiag('UPLOAD ERROR code:', code, 'message:', msg);
-      logDiag('Expected bucket:', `gs://${bucketName}`);
-      if (code.includes('unauthorized') || code.includes('permission') || msg.includes('PERMISSION_DENIED')){
-        err('Upload failed: permission denied. Run Diagnostics → Test Storage/DB.');
-      } else {
-        err('Upload failed: ' + (code || msg));
-      }
-      tag.textContent = 'Failed';
+async function renderPending(scope){
+  const list = (scope==='c') ? pendingCreate : pendingEdit;
+  const container = $(`${scope}Pending`);
+  container.innerHTML='';
+  for (let i=0; i<list.length; i++){
+    const p = list[i];
+    if (!p.url){
+      try{ p.url = URL.createObjectURL(p.file); }catch{ p.url = ''; }
     }
+    const card = document.createElement('div');
+    card.className = 'pcard';
+    card.innerHTML = `
+      <img class="thumb" src="${p.url || ''}" alt="preview" onerror="this.replaceWith(Object.assign(document.createElement('div'),{className:'tag small',textContent:'(Preview not supported)'}))" />
+      <div class="pinputs">
+        <input class="input ptitle" placeholder="Optional title" value="${p.title || ''}">
+        <input class="input pcaption" placeholder="Optional caption" value="${p.caption || ''}">
+      </div>
+      <div class="pmeta">
+        <span class="tag small" data-status>Ready</span>
+        <div class="row">
+          <button class="btn" data-gps>Use My Location</button>
+          <button class="btn" data-save>Save</button>
+          <button class="btn" data-del style="background:#2a0f14;border-color:#7a2b2b">Discard</button>
+        </div>
+      </div>
+    `;
+    card.querySelector('.ptitle').oninput = (e)=>{ p.title = e.target.value; };
+    card.querySelector('.pcaption').oninput = (e)=>{ p.caption = e.target.value; };
+    card.querySelector('[data-del]').onclick = ()=>{
+      try{ if (p.url) URL.revokeObjectURL(p.url); }catch{}
+      list.splice(i,1); renderPending(scope); enablePendingButtons(scope);
+    };
+    card.querySelector('[data-gps]').onclick = async ()=>{
+      const status = card.querySelector('[data-status]');
+      status.textContent = 'Getting GPS…';
+      const c = await softCoords(2000);
+      if (c){ p.lat=c.lat; p.lng=c.lng; status.textContent='GPS ✓'; }
+      else { status.textContent='GPS —'; err('Could not get GPS (permission/signal).'); }
+    };
+    card.querySelector('[data-save]').onclick = ()=> saveOnePending(scope, i, card);
+    container.appendChild(card);
+  }
+  enablePendingButtons(scope);
+}
+
+/* ---------------- Upload one / all ---------------- */
+function extFromType(t){
+  if (!t) return '.jpg';
+  const lt = t.toLowerCase();
+  if (lt.includes('jpeg')||lt.includes('jpg')) return '.jpg';
+  if (lt.includes('png')) return '.png';
+  if (lt.includes('heic')||lt.includes('heif')) return '.heic';
+  if (lt.includes('webp')) return '.webp';
+  return '.jpg';
+}
+
+async function saveOnePending(scope, idx, cardEl){
+  const list = (scope==='c') ? pendingCreate : pendingEdit;
+  const p = list[idx]; if (!p) return;
+  const status = cardEl.querySelector('[data-status]');
+
+  // determine scenario id
+  let scenarioId = null;
+  if (scope==='c'){
+    scenarioId = await autoCreateIfNeeded();
+  } else {
+    scenarioId = $('eSelect').value || null;
+    if (!scenarioId){ err('Select a scenario first.'); return; }
   }
 
-  ok('Photos processed.');
+  try{
+    await ensureAuthed();
+    status.textContent='Preparing…';
+
+    // try to decode for resize; if not, upload original and generate thumb if possible
+    let preview = await decodeToImage(p.file);
+    let fullBlob, thumbBlob, width=0, height=0, usedOriginal=false;
+
+    if (preview.img){
+      const full = await canvasToBlob(preview.img, ORIG_MAX_EDGE);
+      fullBlob = full.blob; width=full.width; height=full.height;
+      const th   = await canvasToBlob(preview.img, THUMB_MAX_EDGE);
+      thumbBlob = th.blob;
+    }else{
+      fullBlob = p.file; usedOriginal = true;
+      try{
+        if (preview.url){
+          const probe = new Image(); probe.src = preview.url; await probe.decode();
+          const th2 = await canvasToBlob(probe, THUMB_MAX_EDGE);
+          thumbBlob = th2.blob;
+        }
+      }catch{}
+    }
+
+    const coords = (p.lat!=null && p.lng!=null) ? {lat:p.lat,lng:p.lng} : await softCoords(1200);
+    const ts = Date.now();
+    const basePath = `scenarios/${scenarioId}/${ts}`;
+    const metaType = (usedOriginal && p.file.type && p.file.type.startsWith('image/')) ? p.file.type : 'image/jpeg';
+    const ext = usedOriginal ? extFromType(p.file.type) : '.jpg';
+
+    const fullRef  = stRef(storage, `${basePath}${ext}`);
+    const thumbRef = stRef(storage, `scenarios/${scenarioId}/thumbs/${ts}.jpg`);
+    const metaFull = { contentType: metaType,  cacheControl:'public,max-age=31536000,immutable' };
+    const metaThmb = { contentType:'image/jpeg', cacheControl:'public,max-age=31536000,immutable' };
+
+    status.textContent='Uploading 0%…';
+    await new Promise((resolve, reject)=>{
+      const task = uploadBytesResumable(fullRef, fullBlob, metaFull);
+      task.on('state_changed', s=>{
+        const pct = Math.round((s.bytesTransferred/s.totalBytes)*100);
+        status.textContent = `Uploading ${pct}%…`;
+      }, reject, resolve);
+    });
+
+    if (thumbBlob){
+      await new Promise((resolve, reject)=>{
+        const t2 = uploadBytesResumable(thumbRef, thumbBlob, metaThmb);
+        t2.on('state_changed', null, reject, resolve);
+      });
+    }
+
+    status.textContent='Finalizing…';
+    const imageURL = await getDownloadURL(fullRef);
+    const thumbURL = thumbBlob ? await getDownloadURL(thumbRef) : imageURL;
+
+    status.textContent='Saving to DB…';
+    const snap = await get(dbRef(db, `${ROOT}/${scenarioId}`));
+    const sc = snap.val();
+    const stops = coerceStops(sc);
+    stops.push({
+      type:'photo',
+      title: p.title || '',
+      caption: p.caption || '',
+      lat: coords?.lat ?? null,
+      lng: coords?.lng ?? null,
+      locAccuracy: null,
+      radiusMeters:50,
+      imageURL, thumbURL,
+      storagePath: fullRef.fullPath, thumbPath: thumbBlob ? thumbRef.fullPath : null,
+      gsUri:`gs://${bucketName}/${fullRef.fullPath}`,
+      width, height, overlays:[]
+    });
+    setStops(sc, stops);
+    await set(dbRef(db, `${ROOT}/${scenarioId}`), sc);
+
+    status.textContent='Saved ✓';
+    ok('Photo saved to cloud');
+
+    // show in uploaded thumbs area immediately
+    const thumbImg = document.createElement('img');
+    thumbImg.className = 'thumb';
+    thumbImg.src = thumbURL;
+    $(`${scope}Uploads`).prepend(thumbImg);
+
+    // cleanup pending entry
+    try{ if (p.url) URL.revokeObjectURL(p.url); }catch{}
+    list.splice(idx,1);
+    renderPending(scope);
+    enablePendingButtons(scope);
+
+    // update edit pane list if saving there
+    if (scope==='e'){
+      await safeLoadScenarios();
+      $('eSelect').value = scenarioId;
+      renderScenario(scenarioId);
+    }
+  }catch(ex){
+    const code = ex?.code || '';
+    const msg  = ex?.message || String(ex);
+    console.error('SAVE ERROR:', ex);
+    logDiag('SAVE ERROR code:', code, 'message:', msg);
+    if (code.includes('unauthorized') || code.includes('permission') || msg.includes('PERMISSION_DENIED')){
+      err('Permission denied saving photo. Check Storage/DB rules.');
+    } else {
+      err('Save failed: ' + (code || msg));
+    }
+    status.textContent='Failed';
+  }
+}
+
+async function saveAll(scope){
+  const list = (scope==='c') ? pendingCreate : pendingEdit;
+  // save sequentially to avoid memory spikes
+  for (let i=0; i<list.length; ){
+    const card = $(`${scope}Pending`).children[i];
+    await saveOnePending(scope, i, card);
+    // do not increment i when we splice; only increment if no removal (safety)
+    if ($(`${scope}Pending`).children[i] === card) i++;
+  }
 }
 
 /* ---------------- Render & edit ---------------- */
@@ -582,28 +698,31 @@ if ($('saveMeta')) $('saveMeta').onclick = async ()=>{
   }finally{ loading(false); }
 };
 
-/* ---------------- File input listeners ---------------- */
-async function handleCreatePicker(e, which){
-  const id = await autoCreateIfNeeded(); // auto-create if needed
-  logDiag(`Picker fired (${which}) with ${e.target.files?.length||0} file(s)`);
-  await processFilesForScenario(Array.from(e.target.files||[]), id, 'cUploads');
-  e.target.value='';
+/* ---------------- File input listeners (preview-first) ---------------- */
+function onFilesPicked(e, scope){
+  const files = Array.from(e.target.files||[]);
+  if (!files.length) return;
+  addPending(files, scope);
+  enablePendingButtons(scope);
+  e.target.value=''; // reset
 }
-async function handleEditPicker(e, which){
-  const id=$('eSelect').value;
-  if(!id){ err('Select a scenario first.'); e.target.value=''; return; }
-  logDiag(`Picker fired (${which}) with ${e.target.files?.length||0} file(s)`);
-  await processFilesForScenario(Array.from(e.target.files||[]), id, 'eUploads');
-  await safeLoadScenarios(); $('eSelect').value=id; renderScenario(id);
-  e.target.value='';
-}
+if ($('cFilesCam')) $('cFilesCam').addEventListener('change', (e)=>onFilesPicked(e,'c'));
+if ($('cFilesLib')) $('cFilesLib').addEventListener('change', (e)=>onFilesPicked(e,'c'));
+if ($('eFilesCam')) $('eFilesCam').addEventListener('change', (e)=>onFilesPicked(e,'e'));
+if ($('eFilesLib')) $('eFilesLib').addEventListener('change', (e)=>onFilesPicked(e,'e'));
 
-if ($('cFilesCam')) $('cFilesCam').addEventListener('change', (e)=>handleCreatePicker(e,'create/camera'));
-if ($('cFilesLib')) $('cFilesLib').addEventListener('change', (e)=>handleCreatePicker(e,'create/library'));
-if ($('eFilesCam')) $('eFilesCam').addEventListener('change', (e)=>handleEditPicker(e,'edit/camera'));
-if ($('eFilesLib')) $('eFilesLib').addEventListener('change', (e)=>handleEditPicker(e,'edit/library'));
+if ($('cSaveAll')) $('cSaveAll').onclick = ()=> saveAll('c');
+if ($('eSaveAll')) $('eSaveAll').onclick = ()=> saveAll('e');
+if ($('cClear')) $('cClear').onclick = ()=>{
+  pendingCreate.forEach(p=>{try{ if(p.url) URL.revokeObjectURL(p.url);}catch{}});
+  pendingCreate = []; renderPending('c'); enablePendingButtons('c');
+};
+if ($('eClear')) $('eClear').onclick = ()=>{
+  pendingEdit.forEach(p=>{try{ if(p.url) URL.revokeObjectURL(p.url);}catch{}});
+  pendingEdit = []; renderPending('e'); enablePendingButtons('e');
+};
 
-/* ---------------- Photo editor modal ---------------- */
+/* ---------------- Photo editor modal (existing uploads) ---------------- */
 let pmCtx = { scenarioId:null, index:-1 };
 function openPhotoEditor(scenarioId, index){
   pmCtx = { scenarioId, index };
