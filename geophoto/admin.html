@@ -84,14 +84,14 @@ textarea{min-height:80px}
     <hr />
     <h4>Add Photos (auto GPS)</h4>
 
-    <!-- iPhone-safe: use labels to open native pickers -->
+    <!-- iPhone-safe pickers -->
     <input id="cFilesCam" class="visually-hidden" type="file" accept="image/*" capture="environment" multiple />
     <input id="cFilesLib" class="visually-hidden" type="file" accept="image/*" multiple />
     <div class="row">
       <label for="cFilesCam" class="btn">📷 Take Photo</label>
       <label for="cFilesLib" class="btn">🖼️ Choose from Library</label>
     </div>
-    <div class="small" style="margin:6px 0">Photos are resized to max <b>1600px</b> (thumbs <b>480px</b>) to save space & speed up loads.</div>
+    <div class="small" style="margin:6px 0">Photos are resized to max <b>1600px</b> (thumbs <b>480px</b>).</div>
     <div id="cUploads" class="grid"></div>
   </section>
 
@@ -133,6 +133,17 @@ textarea{min-height:80px}
     <hr />
     <h4>Existing Stops</h4>
     <div id="stopsGrid" class="grid"></div>
+  </section>
+
+  <!-- DIAGNOSTICS -->
+  <section class="card" id="diagPane">
+    <h3>Diagnostics</h3>
+    <div class="row">
+      <button id="diagAuth" class="btn">Check Auth</button>
+      <button id="diagStorage" class="btn">Test Storage Write</button>
+      <button id="diagDB" class="btn">Test DB Write</button>
+    </div>
+    <pre id="diagOut" class="small" style="margin-top:8px; white-space:pre-wrap"></pre>
   </section>
 </main>
 
@@ -182,6 +193,12 @@ const show = (id, on)=>{ const el=$(id); if (el) el.style.display = on ? '' : 'n
 const ok = (m)=>{ const b=$('okbar'); if(!b) return; b.textContent=m; b.style.display='block'; setTimeout(()=>b.style.display='none', 2600); };
 const err= (m)=>{ const b=$('errbar'); if(!b) return; b.textContent=m; b.style.display='block'; setTimeout(()=>b.style.display='none', 6000); };
 const loading = (on)=>{ const l=$('loader'); if(l) l.style.display = on ? 'grid' : 'none'; };
+function logDiag(...args){
+  const out = $('diagOut');
+  const line = args.map(a => (typeof a==='object'? JSON.stringify(a,null,2) : String(a))).join(' ');
+  console.log('[DIAG]', ...args);
+  if (out) out.textContent += line + '\n';
+}
 
 /* pane toggles */
 if ($('showCreate')) $('showCreate').onclick = ()=>{ show('createPane',true); show('editPane',false); };
@@ -202,7 +219,7 @@ const firebaseConfig = {
   authDomain:"dailyquiz-d5279.firebaseapp.com",
   databaseURL:"https://dailyquiz-d5279-default-rtdb.firebaseio.com",
   projectId:"dailyquiz-d5279",
-  storageBucket:"dailyquiz-d5279.firebasestorage.app",  // console shows this domain; normalize for gs:// below
+  storageBucket:"dailyquiz-d5279.firebasestorage.app",  // console shows this; we normalize for gs:// below
   appId:"1:94577748034:web:c032d3a1d72db1313de5db",
   measurementId:"G-19DVN7NNH7"
 };
@@ -271,7 +288,6 @@ async function safeLoadScenarios(){
 const ORIG_MAX_EDGE = 1600, THUMB_MAX_EDGE = 480, JPEG_QUALITY = 0.82, MAX_PIXELS = 4_000_000;
 
 async function decodeToImage(file){
-  // Robust decode: if the browser can't decode (e.g., HEIC), return null to trigger raw upload fallback.
   try{
     const url = URL.createObjectURL(file);
     const img = new Image();
@@ -280,28 +296,22 @@ async function decodeToImage(file){
     await img.decode();
     URL.revokeObjectURL(url);
     return img;
-  }catch{
-    return null;
-  }
+  }catch{ return null; }
 }
 function scaleByMaxEdgeOrPixels(w,h){
-  // Constrain by edge AND by megapixels (prevents huge memory spikes on phones)
   const edgeScale = Math.min(1, ORIG_MAX_EDGE / Math.max(w,h));
   const pixScale = Math.min(1, Math.sqrt(MAX_PIXELS / Math.max(1, w*h)));
   const s = Math.min(edgeScale, pixScale);
   return { w: Math.max(1, Math.round(w*s)), h: Math.max(1, Math.round(h*s)) };
 }
 async function canvasToBlob(img, targetEdge){
-  const dims = (targetEdge === ORIG_MAX_EDGE) ? scaleByMaxEdgeOrPixels(img.naturalWidth || img.width, img.naturalHeight || img.height)
-                                              : (()=>{ 
-                                                   const s = Math.min(1, targetEdge / Math.max(img.naturalWidth || img.width, img.naturalHeight || img.height));
-                                                   return { w: Math.round((img.naturalWidth||img.width)*s), h: Math.round((img.naturalHeight||img.height)*s) };
-                                                 })();
-  const c = document.createElement('canvas');
-  c.width = dims.w; c.height = dims.h;
+  const dims = (targetEdge === ORIG_MAX_EDGE)
+    ? scaleByMaxEdgeOrPixels(img.naturalWidth || img.width, img.naturalHeight || img.height)
+    : (()=>{ const s = Math.min(1, targetEdge / Math.max(img.naturalWidth||img.width, img.naturalHeight||img.height));
+             return { w: Math.round((img.naturalWidth||img.width)*s), h: Math.round((img.naturalHeight||img.height)*s) }; })();
+  const c = document.createElement('canvas'); c.width = dims.w; c.height = dims.h;
   const ctx = c.getContext('2d', { alpha:false, desynchronized:true });
-  ctx.imageSmoothingEnabled = true;
-  ctx.imageSmoothingQuality = 'high';
+  ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality='high';
   ctx.drawImage(img, 0, 0, dims.w, dims.h);
   const blob = await new Promise(res=>c.toBlob(res, 'image/jpeg', JPEG_QUALITY));
   return { blob, width:dims.w, height:dims.h };
@@ -327,12 +337,11 @@ async function processFilesForScenario(files, scenarioId, uploadsContainerId){
   if (!files?.length) return;
   await ensureAuthed();
 
-  // Soft-start GPS but don't block uploads.
+  // soft-start GPS
   const gpsPromise = softCoords(1200);
 
-  // Process sequentially to avoid memory spikes on mobile.
   for (const file of files){
-    await new Promise(r=>setTimeout(r,0)); // yield to UI
+    await new Promise(r=>setTimeout(r,0)); // allow UI to breathe
 
     const card = document.createElement('div');
     const tag = document.createElement('div');
@@ -344,7 +353,7 @@ async function processFilesForScenario(files, scenarioId, uploadsContainerId){
 
     try{
       let img = await decodeToImage(file);
-      let fullBlob, thumbBlob, width, height, usedOriginal = false;
+      let fullBlob, thumbBlob, width=0, height=0, usedOriginal=false;
 
       if (img){
         status('Resizing…');
@@ -352,53 +361,55 @@ async function processFilesForScenario(files, scenarioId, uploadsContainerId){
         fullBlob = full.blob; width = full.width; height = full.height;
         const thumb = await canvasToBlob(img, THUMB_MAX_EDGE);
         thumbBlob = thumb.blob;
-      }else{
-        // HEIC or unknown format: upload original as-is, and create a tiny JPEG thumb from a video frame? Not possible here; fallback: show "no thumb".
+      } else {
         status('Using original (no decode)…');
-        fullBlob = file; width = 0; height = 0; usedOriginal = true;
-        // try to at least generate a thumb if Safari can display it in <img> (often it can even if canvas can't draw)
+        fullBlob = file; usedOriginal = true;
         try{
           const previewImg = await decodeToImage(file);
           if (previewImg){
             const t = await canvasToBlob(previewImg, THUMB_MAX_EDGE);
             thumbBlob = t.blob;
           }
-        }catch{ /* ignore */ }
+        }catch{}
       }
 
       const coords = await Promise.race([gpsPromise, Promise.resolve(null)]);
       const ts = Date.now();
+      const extByType = (t)=> {
+        if (!t) return '.bin';
+        const lt = t.toLowerCase();
+        if (lt.includes('jpeg') || lt.includes('jpg')) return '.jpg';
+        if (lt.includes('png')) return '.png';
+        if (lt.includes('heic') || lt.includes('heif')) return '.heic';
+        if (lt.includes('webp')) return '.webp';
+        return '.bin';
+      };
       const basePath = `scenarios/${scenarioId}/${ts}`;
-      const fullRef  = stRef(storage, `${basePath}${usedOriginal && file.type ? (file.type.includes('heic')||file.type.includes('heif')?'.heic':'.bin') : '.jpg'}`);
+      const fullRef  = stRef(storage, `${basePath}${usedOriginal ? extByType(file.type) : '.jpg'}`);
       const thumbRef = stRef(storage, `scenarios/${scenarioId}/thumbs/${ts}.jpg`);
-      const metaFull = { contentType: (usedOriginal && file.type) ? file.type : 'image/jpeg', cacheControl:'public,max-age=31536000,immutable' };
+      const metaFull = { contentType: usedOriginal ? (file.type || 'application/octet-stream') : 'image/jpeg', cacheControl:'public,max-age=31536000,immutable' };
       const metaThmb = { contentType:'image/jpeg', cacheControl:'public,max-age=31536000,immutable' };
 
-      // Resumable uploads to avoid big hangs
       status('Uploading 0%…');
       await new Promise((resolve, reject)=>{
         const task = uploadBytesResumable(fullRef, fullBlob, metaFull);
         task.on('state_changed',
-          s=>{
-            const pct = Math.round((s.bytesTransferred/s.totalBytes)*100);
-            status(`Uploading ${pct}%…`);
-          },
+          s=>{ const pct = Math.round((s.bytesTransferred/s.totalBytes)*100); status(`Uploading ${pct}%…`); },
           err2=>reject(err2),
           ()=>resolve()
         );
       });
 
-      // Thumb (optional)
       if (thumbBlob){
         await new Promise((resolve, reject)=>{
           const t2 = uploadBytesResumable(thumbRef, thumbBlob, metaThmb);
-          t2.on('state_changed', _=>{}, reject, resolve);
+          t2.on('state_changed', null, reject, resolve);
         });
       }
 
       status('Finalizing…');
       const imageURL = await getDownloadURL(fullRef);
-      const thumbURL = thumbBlob ? await getDownloadURL(thumbRef) : imageURL; // fallback
+      const thumbURL = thumbBlob ? await getDownloadURL(thumbRef) : imageURL;
 
       status('Saving…');
       const snap = await get(dbRef(db, `${ROOT}/${scenarioId}`));
@@ -409,8 +420,8 @@ async function processFilesForScenario(files, scenarioId, uploadsContainerId){
         lat: coords?.lat ?? null, lng: coords?.lng ?? null, locAccuracy: coords?.accuracy ?? null,
         radiusMeters:50,
         imageURL, thumbURL,
-        storagePath: fullRef._location.path, thumbPath: thumbBlob ? thumbRef._location.path : null,
-        gsUri:`gs://${bucketName}/${fullRef._location.path}`,
+        storagePath: fullRef.fullPath, thumbPath: thumbBlob ? thumbRef.fullPath : null,
+        gsUri:`gs://${bucketName}/${fullRef.fullPath}`,
         width, height, overlays:[]
       });
       setStops(sc, stops);
@@ -418,11 +429,15 @@ async function processFilesForScenario(files, scenarioId, uploadsContainerId){
 
       status(coords ? 'Uploaded ✓ (GPS set)' : 'Uploaded ✓');
     }catch(ex){
-      const msg = ex?.code || ex?.message || ex;
-      if (String(msg).includes('storage/unauthorized') || String(msg).includes('PERMISSION_DENIED')) {
-        err('Upload failed: permission denied. Check Firebase Storage/DB rules for "scenarios/**" and allow anonymous writes.');
+      const code = ex?.code || '';
+      const msg  = ex?.message || String(ex);
+      console.error('UPLOAD ERROR:', ex);
+      logDiag('UPLOAD ERROR code:', code, 'message:', msg);
+      logDiag('Expected bucket:', `gs://${bucketName}`);
+      if (code.includes('unauthorized') || code.includes('permission') || msg.includes('PERMISSION_DENIED')){
+        err('Upload failed: permission denied. Open Diagnostics → Test Storage/DB for exact error.');
       } else {
-        err('Upload failed: ' + msg);
+        err('Upload failed: ' + (code || msg));
       }
       status('Failed');
     }
@@ -511,7 +526,7 @@ if ($('createBtn')) $('createBtn').onclick = async ()=>{
     $('createStatus').textContent='Created ✓';
     ok('Scenario created');
     await safeLoadScenarios();
-    $('showEdit').click(); // jump to Edit pane
+    $('showEdit').click();
     $('eSelect').value = id;
     $('eTitle').value  = title;
     $('eDesc').value   = desc;
@@ -519,7 +534,7 @@ if ($('createBtn')) $('createBtn').onclick = async ()=>{
   }catch(e){
     const msg = e?.code || e?.message || e;
     if (String(msg).includes('PERMISSION_DENIED')) {
-      err('Create failed: Realtime Database rules block writes to "/scenarios". Enable auth writes.');
+      err('Create failed: DB rules block writes to "/scenarios". Enable auth writes.');
     } else {
       err('Create failed: ' + msg);
     }
@@ -551,7 +566,7 @@ if ($('saveMeta')) $('saveMeta').onclick = async ()=>{
   }finally{ loading(false); }
 };
 
-/* ---------------- File input listeners (no programmatic .click()) ---------------- */
+/* ---------------- File input listeners ---------------- */
 if ($('cFilesCam')) $('cFilesCam').addEventListener('change', async (e)=>{
   if (!createdId){ err('Create a scenario first.'); e.target.value=''; return; }
   await processFilesForScenario(Array.from(e.target.files||[]), createdId, 'cUploads');
@@ -622,6 +637,47 @@ if ($('pmSave')) $('pmSave').onclick = async ()=>{
       err('Save photo failed: DB rules block writes to "/scenarios".');
     } else { err('Save photo failed: '+msg); }
   }finally{ loading(false); }
+};
+
+/* ---------------- Diagnostics buttons ---------------- */
+async function makeTinyJPEG(){
+  const c = document.createElement('canvas'); c.width=2; c.height=2;
+  const ctx = c.getContext('2d'); ctx.fillStyle = '#888'; ctx.fillRect(0,0,2,2);
+  return await new Promise(res=>c.toBlob(res,'image/jpeg',0.7));
+}
+if ($('diagAuth')) $('diagAuth').onclick = async ()=>{
+  try{ const u = await ensureAuthed(); logDiag('Auth OK. uid:', u?.uid || '(none)'); }
+  catch(e){ logDiag('Auth FAILED:', e?.code || e?.message || String(e)); }
+};
+if ($('diagStorage')) $('diagStorage').onclick = async ()=>{
+  try{
+    const u = await ensureAuthed(); logDiag('User uid:', u?.uid || '(none)');
+    const ts = Date.now(); const testPath = `scenarios/__diag__/ping-${ts}.jpg`;
+    const blob = await makeTinyJPEG();
+    const ref1 = stRef(storage, testPath);
+    logDiag('Bucket target:', `gs://${bucketName}`);
+    logDiag('Uploading:', testPath, 'contentType=image/jpeg');
+    await new Promise((resolve, reject)=>{
+      const task = uploadBytesResumable(ref1, blob, { contentType:'image/jpeg' });
+      task.on('state_changed', null, reject, resolve);
+    });
+    const url = await getDownloadURL(ref1);
+    logDiag('Storage WRITE OK. URL:', url);
+  }catch(e){
+    logDiag('Storage WRITE FAILED:', e?.code || e?.message || String(e));
+    logDiag('Hint: ensure rules allow image/* under /scenarios/** and bucket is appspot.com');
+  }
+};
+if ($('diagDB')) $('diagDB').onclick = async ()=>{
+  try{
+    const u = await ensureAuthed();
+    const id = `__diag__-${Date.now()}`;
+    await set(dbRef(db, `${ROOT}/${id}`), { id, createdAt: Date.now(), title:'__diag__', stops:[] });
+    logDiag('DB WRITE OK at:', `${ROOT}/${id}`);
+  }catch(e){
+    logDiag('DB WRITE FAILED:', e?.code || e?.message || String(e));
+    logDiag('Hint: DB rules must allow auth writes to /scenarios/**');
+  }
 };
 
 /* ---------------- Init (auth first, then subscribe) ---------------- */
