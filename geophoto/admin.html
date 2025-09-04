@@ -32,6 +32,8 @@ textarea{min-height:80px}
 .grid{display:grid;grid-template-columns:repeat(auto-fill, minmax(140px,1fr));gap:10px}
 .thumb{width:100%;height:110px;object-fit:cover;border-radius:10px;background:#0a1a2a;border:1px solid rgba(255,255,255,.14)}
 .visually-hidden{position:absolute; left:-9999px; top:auto; width:0.1px; height:0.1px; opacity:0; overflow:hidden; z-index:-1}
+
+/* toasts + loader */
 #errbar{position:fixed;left:10px;bottom:10px;background:#2b0d0d;color:#ffd7d7;border:1px solid #7a2b2b;border-radius:12px;padding:8px 12px;display:none;z-index:9999;max-width:90vw}
 #okbar{position:fixed;left:10px;bottom:56px;background:#0f2a19;color:#d8ffe2;border:1px solid #2c7a4b;border-radius:12px;padding:8px 12px;display:none;z-index:9999;max-width:90vw}
 #loader{position:fixed;inset:0;display:none;place-items:center;z-index:99;background:rgba(6,12,20,.55);backdrop-filter:blur(2px)}
@@ -218,6 +220,7 @@ import { getDatabase, ref as dbRef, set, push, get, onValue, remove } from "http
 import { getStorage, ref as stRef, uploadBytesResumable, uploadBytes, getDownloadURL, deleteObject } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-storage.js";
 import { getAuth, signInAnonymously, onAuthStateChanged, setPersistence, browserLocalPersistence, browserSessionPersistence, inMemoryPersistence } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-auth.js";
 
+/* Firebase config */
 var firebaseConfig = {
   apiKey:"AIzaSyDM6DpRSeZueVKRpbyJyDmhf8WY66KyCDk",
   authDomain:"dailyquiz-d5279.firebaseapp.com",
@@ -228,7 +231,7 @@ var firebaseConfig = {
   measurementId:"G-19DVN7NNH7"
 };
 var appFB = initializeApp(firebaseConfig);
-/* force real bucket */
+/* force real bucket for writes */
 var FORCE_BUCKET = "dailyquiz-d5279.appspot.com";
 var storage = getStorage(appFB, "gs://"+FORCE_BUCKET);
 var db = getDatabase(appFB);
@@ -341,14 +344,6 @@ async function canvasToBlob(nativeImg, targetEdge){
   var blob = await new Promise(function(res){ c.toBlob(res, 'image/jpeg', JPEG_QUALITY); });
   var dataURL = c.toDataURL('image/jpeg', JPEG_QUALITY);
   return { blob:blob, dataURL:dataURL, width:dims.w, height:dims.h };
-}
-function dataURLtoBlob(dataURL){
-  var parts = dataURL.split(',');
-  var head = parts[0], b64 = parts[1]||'';
-  var mime = (head.match(/data:(.*?);base64/)||[])[1] || 'application/octet-stream';
-  var bin = atob(b64); var len = bin.length; var buf = new Uint8Array(len);
-  for (var i=0;i<len;i++) buf[i] = bin.charCodeAt(i);
-  return new Blob([buf], { type:mime });
 }
 function dataURLFromStored(stored){
   if (typeof stored === 'string') return stored;
@@ -767,7 +762,8 @@ if ($('saveMeta')) $('saveMeta').onclick = async function(){
     var sc = snap.val()||{};
     sc.title = ($('eTitle').value||'').trim()||'(untitled)';
     sc.description = ($('eDesc').value||'').trim()||'';
-    await set(dbRef(db, ROOT+'/'+id'), sc);
+    /* ✅ FIXED: removed stray quote that broke the whole script */
+    await set(dbRef(db, ROOT+'/'+id), sc);
     ok('Scenario saved');
     await safeLoadScenarios(); $('eSelect').value=id; renderScenario(id);
   }catch(e){
