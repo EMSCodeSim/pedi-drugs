@@ -81,18 +81,25 @@
 
   .lineRow{display:flex;flex-wrap:wrap;gap:8px;align-items:flex-start;background:#0b1320;border:1px solid var(--edge);border-radius:12px;padding:8px 10px}
   .lineRow .title{font-weight:700;margin-right:8px}
-  .lineRow .break{font-size:12px;color:#cfe4ff}
+  .lineRow .break{font-size:12px;color:#cfe4ff;min-width:260px}
 
   .builder{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-left:auto}
   .builder small{color:#9fb0c8}
 
   .lbl{font-size:10px;fill:#0b0f14}
 
-  /* Math breakdown */
-  details.math{background:#0b1a29;border:1px solid #1f3a57;border-radius:12px;padding:8px 10px;margin-top:6px}
+  /* Visual math breakdown */
+  details.math{background:#0b1a29;border:1px solid #1f3a57;border-radius:12px;padding:8px 10px;margin-top:8px}
   details.math summary{cursor:pointer;color:#cfe4ff;font-weight:700}
-  .mathList{margin:6px 0 0 0;padding:0 0 0 14px}
-  .mathList li{margin:6px 0;color:#cfe4ff;font-size:13px}
+  .hoseviz{margin-top:8px}
+  .hoseLegend{display:flex;gap:10px;align-items:center;font-size:11px;color:#cfe4ff;margin:4px 0 8px}
+  .legSwatch{width:14px;height:8px;border-radius:3px;display:inline-block;border:1px solid rgba(0,0,0,.35)}
+  .sw175{background:var(--hose175)}
+  .sw25{background:var(--hose25)}
+  .sw5{background:var(--hose5)}
+  .barWrap{background:#0b1320;border:1px solid #1f3a57;border-radius:10px;padding:8px;margin:6px 0}
+  .barTitle{font-size:12px;color:#9fb0c8;margin-bottom:6px}
+  .sumline{font-size:12px;color:#cfe4ff;margin-top:8px}
   .mono{font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,"Liberation Mono","Courier New",monospace}
 </style>
 </head>
@@ -239,6 +246,7 @@ const NOZ = {
   fog150_75: {name:'Fog 150', gpm:150, NP:75},
   sb265:     {name:'SB 1 1/8″', gpm:265, NP:50}
 };
+const COLORS = {"1.75":"#ff6b6b","2.5":"#6ecbff","5":"#ecd464"};
 
 /* ===== State ===== */
 function emptyHose(label, size, len, noz){
@@ -338,7 +346,7 @@ function straightBranch(side, startX, startY, totalPx){
   return { d:`M ${startX},${startY} L ${startX},${y1} L ${x},${y1} L ${x},${y2}`, endX:x, endY:y2 };
 }
 
-/* Segmented draw */
+/* Segmented draw (visual stage) */
 function drawSegmentedPath(group, basePath, segs, sizeToClass){
   const sh = document.createElementNS('http://www.w3.org/2000/svg','path');
   sh.setAttribute('class','hoseBase shadow');
@@ -361,7 +369,7 @@ function drawSegmentedPath(group, basePath, segs, sizeToClass){
   });
 }
 
-/* Labels */
+/* Labels on stage */
 function addLabel(text, x, y, dy=0){
   const g = document.createElementNS('http://www.w3.org/2000/svg','g');
   const pad = 4;
@@ -378,7 +386,7 @@ function addLabel(text, x, y, dy=0){
 }
 function labelDyForLine(key){ return key==='left' ? -10 : key==='back' ? -22 : -34; }
 
-/* Draw */
+/* ===== Draw whole stage ===== */
 function drawAll(){
   const viewH = Math.ceil(computeNeededHeightPx());
   overlay.setAttribute('viewBox', `0 0 ${TRUCK_W} ${viewH}`);
@@ -389,19 +397,6 @@ function drawAll(){
 
   const visibleKeys = ['left','back','right'].filter(k=>lines[k].visible);
   topInfo.textContent = visibleKeys.length ? `Showing: ${visibleKeys.map(k=>lines[k].label).join(' • ')}` : 'No lines selected';
-
-  visibleKeys.forEach(key=>{
-    const L = lines[key];
-    const dir = key==='left'?-1:key==='right'?1:0;
-
-    const mainFt = sumFt(L.itemsMain);
-    const geom = mainCurve(dir, (mainFt/50)*PX_PER_50FT, viewH);
-
-    const base = document.createElementNS('http://www.w3.org/200/svg','path'); // Intentional typo fix below
-  });
-
-  // Correct path creation (the above placeholder gets removed)
-  clearGroup(G_hoses); clearGroup(G_branches); clearGroup(G_tips); clearGroup(G_labels);
 
   ['left','back','right'].filter(k=>lines[k].visible).forEach(key=>{
     const L = lines[key];
@@ -416,7 +411,7 @@ function drawAll(){
     drawSegmentedPath(G_hoses, base, L.itemsMain, clsFor);
     addTip(key,'main',geom.endX,geom.endY);
 
-    // group contiguous runs & label
+    // merge contiguous runs for label
     const groups=[]; let acc=0, cur=null;
     L.itemsMain.forEach(seg=>{
       if(!cur || cur.size!==seg.size){ if(cur) groups.push(cur); cur={size:seg.size,lengthFt:0,startFt:acc}; }
@@ -426,7 +421,7 @@ function drawAll(){
 
     const totalLen = base.getTotalLength();
     groups.forEach(g=>{
-      const mid = (g.startFt + g.lengthFt/2)/mainFt * totalLen;
+      const mid = (g.startFt + g.lengthFt/2)/sumFt(L.itemsMain) * totalLen;
       const pt = base.getPointAtLength(mid);
       const gpm = L.hasWye ? (L.nozLeft?.gpm||0)+(L.nozRight?.gpm||0) : (L.nozRight?.gpm||0);
       const label = `${g.lengthFt}′ ${g.size==='2.5'?'2½″':'1¾″'} ${gpm||0} gpm`;
@@ -520,7 +515,7 @@ function refreshTotals(){
   document.getElementById('PDP').textContent = vis.length? `${maxPDP.toFixed(1)} psi` : '— psi';
 }
 
-/* ===== Math breakdown ===== */
+/* ===== Visual math breakdown ===== */
 function breakdown(L){
   const mainSize = L.itemsMain[0]?.size || '1.75';
   const mainLen  = sumFt(L.itemsMain) || 0;
@@ -549,43 +544,116 @@ function breakdown(L){
     branchMax, wye, elevPsi, PDP
   };
 }
-function lineMathHTML(L){
+
+function lineMathHTML(L, key){
   const b = breakdown(L);
-  if(!b.flow){ return `<details class="math" open>
-    <summary>Math breakdown</summary>
-    <ul class="mathList"><li><i>Pick size/length/nozzle to compute PDP.</i></li></ul>
-  </details>`; }
+  const legend = `<div class="hoseLegend">
+      <span class="legSwatch sw175"></span> 1¾″
+      <span class="legSwatch sw25"></span> 2½″
+      <span class="legSwatch sw5"></span> 5″
+    </div>`;
 
-  const Cmain = Cfor(b.mainSize);
-  const Q = b.flow/100;
-  const per100 = FLper100(b.flow, b.mainSize);
+  const mainBar = `<div class="barWrap">
+      <div class="barTitle">Main line FL by section (${b.mainLen}′ @ ${b.flow||0} gpm)</div>
+      <div class="hosebar" id="viz_main_${key}"></div>
+    </div>`;
 
-  const hasWye = L.hasWye;
-  const leftLine  = hasWye ? `<li>Branch A need = FL_A + NP_A = ${mono(b.lFL)} + ${mono(L.nozLeft?.NP||0,0)} = <b>${mono(b.leftNeed)}</b> psi</li>` : '';
-  const rightLine = hasWye
-    ? `<li>Branch B need = FL_B + NP_B = ${mono(b.rFL)} + ${mono(L.nozRight?.NP||0,0)} = <b>${mono(b.rightNeed)}</b> psi</li>`
-    : `<li>No branches: Nozzle pressure (NP) = <b>${mono(L.nozRight?.NP||0,0)}</b> psi</li>`;
+  const branches = L.hasWye ? `
+    <div class="barWrap">
+      <div class="barTitle">Branch A FL by section (${b.lLen}′ @ ${(L.nozLeft?.gpm)||0} gpm)</div>
+      <div class="hosebar" id="viz_L_${key}"></div>
+    </div>
+    <div class="barWrap">
+      <div class="barTitle">Branch B FL by section (${b.rLen}′ @ ${(L.nozRight?.gpm)||0} gpm)</div>
+      <div class="hosebar" id="viz_R_${key}"></div>
+    </div>
+  ` : '';
 
-  const branchMaxLine = hasWye
-    ? `<li>Branch max = max(A,B) = <b>${mono(b.branchMax)}</b> psi</li>`
-    : `<li>Branch need = NP = <b>${mono(b.branchMax)}</b> psi</li>`;
+  const sum = `<div class="sumline">
+      <b>PDP</b> = Branch(${mono(b.branchMax)}) + MainFL(${mono(b.mainFL)}) ${L.hasWye?`+ Wye(${mono(b.wye,0)})`:``} + Elev(${mono(b.elevPsi)}) = <b>${mono(b.PDP)}</b> psi
+    </div>`;
 
   return `<details class="math" open>
-    <summary>Math breakdown</summary>
-    <ul class="mathList">
-      <li>Flow = <b>${mono(b.flow,0)}</b> gpm</li>
-      <li>Main FL = C × (Q²) × (L/100) = ${mono(Cmain)} × ${mono(Q,2)}² × ${mono(b.mainLen/100,2)} = <b>${mono(b.mainFL)}</b> psi (${mono(per100,1)} psi/100′ on ${sizeLabel(b.mainSize)})</li>
-      ${leftLine}
-      ${rightLine}
-      ${branchMaxLine}
-      <li>Wye loss = <b>${mono(b.wye,0)}</b> psi</li>
-      <li>Elevation = ft × 0.434 = ${mono(L.elevFt||0,0)} × 0.434 = <b>${mono(b.elevPsi)}</b> psi</li>
-      <li><b>Sum:</b> PDP = Branch + Main FL + Wye + Elev = ${mono(b.branchMax)} + ${mono(b.mainFL)} + ${mono(b.wye,0)} + ${mono(b.elevPsi)} = <b>${mono(b.PDP)}</b> psi</li>
-    </ul>
+    <summary>Math breakdown (visual)</summary>
+    <div class="hoseviz">
+      ${legend}
+      ${mainBar}
+      ${branches}
+      ${sum}
+    </div>
   </details>`;
 }
 
-/* ===== Lines panel (editable for ALL lines) ===== */
+/* Build a horizontal hose bar SVG with per-segment FL labels */
+function drawHoseBar(container, segments, gpm){
+  const totalLen = sumFt(segments);
+  container.innerHTML = '';
+  if(!totalLen || !gpm){
+    const msg = document.createElement('div');
+    msg.style.color = '#9fb0c8'; msg.style.fontSize='12px';
+    msg.textContent = 'No hose yet';
+    container.appendChild(msg);
+    return;
+  }
+
+  // Measure container width for responsive SVG
+  const W = Math.max(260, Math.min(container.clientWidth || 520, 560));
+  const H = 40;
+  const svgNS = 'http://www.w3.org/2000/svg';
+  const svg = document.createElementNS(svgNS, 'svg');
+  svg.setAttribute('width', '100%');
+  svg.setAttribute('height', H);
+  svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
+
+  // Background track
+  const track = document.createElementNS(svgNS,'rect');
+  track.setAttribute('x', 8); track.setAttribute('y', 16);
+  track.setAttribute('width', W-16); track.setAttribute('height', 10);
+  track.setAttribute('fill', '#0c1726');
+  track.setAttribute('stroke', '#20324f');
+  track.setAttribute('rx', 5); track.setAttribute('ry', 5);
+  svg.appendChild(track);
+
+  let x = 8;
+  segments.forEach(seg=>{
+    const segW = (seg.lengthFt/totalLen) * (W-16);
+    const color = COLORS[seg.size] || '#888';
+    // Segment block
+    const r = document.createElementNS(svgNS,'rect');
+    r.setAttribute('x', x); r.setAttribute('y', 12);
+    r.setAttribute('width', Math.max(segW,1)); r.setAttribute('height', 18);
+    r.setAttribute('fill', color);
+    r.setAttribute('stroke', 'rgba(0,0,0,.35)');
+    r.setAttribute('rx', 4); r.setAttribute('ry', 4);
+    svg.appendChild(r);
+
+    // FL for this segment
+    const fl = FL(gpm, seg.size, seg.lengthFt);
+    const label = `${seg.lengthFt}′ • ${fl.toFixed(1)} psi`;
+    const t = document.createElementNS(svgNS,'text');
+    t.setAttribute('fill', '#0b0f14');
+    t.setAttribute('font-size','10');
+    t.setAttribute('font-family','ui-monospace, Menlo, Consolas, monospace');
+    // If too narrow, place label above; else center in block
+    if(segW < 70){
+      t.setAttribute('x', x + segW/2);
+      t.setAttribute('y', 9);
+      t.setAttribute('text-anchor','middle');
+    } else {
+      t.setAttribute('x', x + segW/2);
+      t.setAttribute('y', 24);
+      t.setAttribute('text-anchor','middle');
+    }
+    t.textContent = label;
+    svg.appendChild(t);
+
+    x += segW;
+  });
+
+  container.appendChild(svg);
+}
+
+/* ===== Lines panel (editable & visual math) ===== */
 function renderLinesPanel(){
   linesTable.innerHTML = '';
   ['left','back','right'].forEach(key=>{
@@ -612,7 +680,7 @@ function renderLinesPanel(){
       <div class="title">${L.label} — ${L.visible?'showing':'hidden'}</div>
       <div class="break">
         ${gpm? `${len}′ of ${size==='1.75'?'1¾″':'2½″'} @ ${gpm} gpm (${per100.toFixed(1)} psi/100′) ${L.hasWye? ` + Wye ${L.wyeLoss} psi`:''} = <b>${PDP.toFixed(1)} psi PDP</b>` : `<i>Pick size/length/nozzle to compute PDP</i>`}
-        ${lineMathHTML(L)}
+        ${lineMathHTML(L, key)}
       </div>
       <div class="builder">
         <small>Main:</small>
@@ -636,9 +704,9 @@ function renderLinesPanel(){
     linesTable.appendChild(row);
 
     if(L.hasWye){
-      // Branch editors even if arrays are empty (user can build from here)
+      // Branch editors (can be empty -> length 0)
       const br = document.createElement('div'); br.className='lineRow';
-      const leftSize  = L.itemsLeft[0]?.size || size;   // default to main size for UI
+      const leftSize  = L.itemsLeft[0]?.size || size;
       const leftLen   = sumFt(L.itemsLeft) || 0;
       const rightSize = L.itemsRight[0]?.size || size;
       const rightLen  = sumFt(L.itemsRight) || 0;
@@ -669,9 +737,19 @@ function renderLinesPanel(){
       `;
       linesTable.appendChild(br);
     }
+
+    // After this row is in DOM, render the visual bars
+    const mainCont = document.getElementById(`viz_main_${key}`);
+    if(mainCont) drawHoseBar(mainCont, L.itemsMain, gpm);
+    if(L.hasWye){
+      const lCont = document.getElementById(`viz_L_${key}`);
+      const rCont = document.getElementById(`viz_R_${key}`);
+      if(lCont) drawHoseBar(lCont, L.itemsLeft, L.nozLeft?.gpm||0);
+      if(rCont) drawHoseBar(rCont, L.itemsRight, L.nozRight?.gpm||0);
+    }
   });
 
-  // builder handlers (main)
+  /* builder handlers (main) */
   linesTable.querySelectorAll('[data-bld="size"],[data-bld="len"],[data-bld="noz"]').forEach(sel=>{
     sel.addEventListener('change', e=>{
       const key=e.target.dataset.key; const L=lines[key];
