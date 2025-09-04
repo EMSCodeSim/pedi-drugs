@@ -235,7 +235,7 @@ if ($('showEdit'))   $('showEdit').onclick   = ()=>{ show('createPane',false); s
 /* ---------------- Firebase imports ---------------- */
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-app.js";
 import { getDatabase, ref as dbRef, set, push, get, onValue } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-database.js";
-import { getStorage, ref as stRef, uploadBytesResumable, getDownloadURL } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-storage.js";
+import { getStorage, ref as stRef, uploadBytesResumable, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-storage.js";
 import {
   getAuth, signInAnonymously, onAuthStateChanged,
   setPersistence, browserLocalPersistence, browserSessionPersistence, inMemoryPersistence
@@ -253,10 +253,9 @@ const firebaseConfig = {
 };
 const appFB = initializeApp(firebaseConfig);
 
-/* ✅ Normalize bucket to appspot for writes */
-let bucketName = (firebaseConfig.storageBucket || `${firebaseConfig.projectId}.appspot.com`)
-  .replace('.firebasestorage.app', '.appspot.com');
-const storage = getStorage(appFB, `gs://${bucketName}`);
+/* ✅ Force the actual bucket name for writes */
+const FORCE_BUCKET = "dailyquiz-d5279.appspot.com";
+const storage = getStorage(appFB, `gs://${FORCE_BUCKET}`);
 
 const db = getDatabase(appFB);
 const auth = getAuth(appFB);
@@ -323,10 +322,8 @@ async function decodeToImage(file){
     await img.decode();
     return { img, url };
   }catch{
-    try{
-      const url = URL.createObjectURL(file);
-      return { img:null, url };
-    }catch{ return { img:null, url:null }; }
+    try{ const url = URL.createObjectURL(file); return { img:null, url }; }
+    catch{ return { img:null, url:null }; }
   }
 }
 function scaleByMaxEdgeOrPixels(w,h){
@@ -346,7 +343,39 @@ async function canvasToBlob(nativeImg, targetEdge){
   ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality='high';
   ctx.drawImage(nativeImg, 0, 0, dims.w, dims.h);
   const blob = await new Promise(res=>c.toBlob(res, 'image/jpeg', JPEG_QUALITY));
-  return { blob, width:dims.w, height:dims.h };
+  // Also produce a dataURL so we can fallback to function or inline save.
+  const dataURL = c.toDataURL('image/jpeg', JPEG_QUALITY);
+  return { blob, dataURL, width:dims.w, height:dims.h };
+}
+
+/* ---------------- DataURL / Blob utils (for fallbacks) ---------------- */
+function dataURLtoBlob(dataURL){
+  const [head,b64] = dataURL.split(',');
+  const mime = (/data:(.*?);base64/.exec(head)||[, 'application/octet-stream'])[1];
+  const bin = atob(b64); const len = bin.length; const buf = new Uint8Array(len);
+  for (let i=0;i<len;i++) buf[i] = bin.charCodeAt(i);
+  return new Blob([buf], { type:mime });
+}
+function dataURLFromStored(stored){
+  return typeof stored==='string'
+    ? stored
+    : (stored && stored.data ? `data:image/${stored.format||'jpeg'};base64,${stored.data}` : '');
+}
+function blobToDataURL(blob){
+  return new Promise((res,rej)=>{
+    const fr = new FileReader();
+    fr.onload = ()=>res(fr.result);
+    fr.onerror = rej;
+    fr.readAsDataURL(blob);
+  });
+}
+function fileToDataURL(file){
+  return new Promise((res,rej)=>{
+    const fr = new FileReader();
+    fr.onload = ()=>res(fr.result);
+    fr.onerror = rej;
+    fr.readAsDataURL(file);
+  });
 }
 
 /* ---------------- Geolocation (soft timeout; non-blocking) ---------------- */
@@ -365,7 +394,7 @@ function softCoords(timeoutMs=1200){
 }
 
 /* ---------------- Pending review lists ---------------- */
-let pendingCreate = []; // {file,url,title,caption,lat,lng,progress}
+let pendingCreate = []; // {file,url,title,caption,lat,lng}
 let pendingEdit   = [];
 
 function enablePendingButtons(scope){
@@ -373,28 +402,23 @@ function enablePendingButtons(scope){
   $(`${scope}SaveAll`).disabled = !has;
   $(`${scope}Clear`).disabled   = !has;
 }
-
 function addPending(files, scope){
   const list = (scope==='c') ? pendingCreate : pendingEdit;
   for (const f of files){
-    list.push({ file:f, url:null, title:'', caption:'', lat:null, lng:null, progress:0 });
+    list.push({ file:f, url:null, title:'', caption:'', lat:null, lng:null });
   }
   renderPending(scope);
 }
-
 async function renderPending(scope){
   const list = (scope==='c') ? pendingCreate : pendingEdit;
   const container = $(`${scope}Pending`);
   container.innerHTML='';
-  for (let i=0; i<list.length; i++){
-    const p = list[i];
-    if (!p.url){
-      try{ p.url = URL.createObjectURL(p.file); }catch{ p.url = ''; }
-    }
+  list.forEach((p, i)=>{
+    if (!p.url){ try{ p.url = URL.createObjectURL(p.file); }catch{ p.url=''; } }
     const card = document.createElement('div');
-    card.className = 'pcard';
-    card.innerHTML = `
-      <img class="thumb" src="${p.url || ''}" alt="preview" onerror="this.replaceWith(Object.assign(document.createElement('div'),{className:'tag small',textContent:'(Preview not supported)'}))" />
+    card.className='pcard';
+    card.innerHTML=`
+      <img class="thumb" src="${p.url}" alt="preview" onerror="this.replaceWith(Object.assign(document.createElement('div'),{className:'tag small',textContent:'(Preview not supported)'}))" />
       <div class="pinputs">
         <input class="input ptitle" placeholder="Optional title" value="${p.title || ''}">
         <input class="input pcaption" placeholder="Optional caption" value="${p.caption || ''}">
@@ -406,28 +430,51 @@ async function renderPending(scope){
           <button class="btn" data-save>Save</button>
           <button class="btn" data-del style="background:#2a0f14;border-color:#7a2b2b">Discard</button>
         </div>
-      </div>
-    `;
-    card.querySelector('.ptitle').oninput = (e)=>{ p.title = e.target.value; };
-    card.querySelector('.pcaption').oninput = (e)=>{ p.caption = e.target.value; };
+      </div>`;
+    card.querySelector('.ptitle').oninput = e=>{ p.title=e.target.value; };
+    card.querySelector('.pcaption').oninput = e=>{ p.caption=e.target.value; };
     card.querySelector('[data-del]').onclick = ()=>{
       try{ if (p.url) URL.revokeObjectURL(p.url); }catch{}
       list.splice(i,1); renderPending(scope); enablePendingButtons(scope);
     };
     card.querySelector('[data-gps]').onclick = async ()=>{
       const status = card.querySelector('[data-status]');
-      status.textContent = 'Getting GPS…';
+      status.textContent='Getting GPS…';
       const c = await softCoords(2000);
-      if (c){ p.lat=c.lat; p.lng=c.lng; status.textContent='GPS ✓'; }
-      else { status.textContent='GPS —'; err('Could not get GPS (permission/signal).'); }
+      if (c){ p.lat=c.lat; p.lng=c.lng; status.textContent='GPS ✓'; } else { status.textContent='GPS —'; err('Could not get GPS.'); }
     };
     card.querySelector('[data-save]').onclick = ()=> saveOnePending(scope, i, card);
     container.appendChild(card);
-  }
+  });
   enablePendingButtons(scope);
 }
 
-/* ---------------- Upload one / all ---------------- */
+/* ---------------- Cloud Function fallback (server-side upload) ---------------- */
+const FUNCTION_UPLOAD_URL = 'https://us-central1-dailyquiz-d5279.cloudfunctions.net/uploadScenarioImage';
+async function uploadViaFunction(dataURL, scenarioId, fileName){
+  const payload = { scenarioId, fileName, dataURL };
+  const resp = await fetch(FUNCTION_UPLOAD_URL, {
+    method:'POST',
+    headers:{ 'Content-Type':'application/json' },
+    body: JSON.stringify(payload)
+  });
+  if (!resp.ok) {
+    const txt = await resp.text();
+    const e = new Error(`Function HTTP ${resp.status} ${txt}`);
+    e.code = 'save/function-http';
+    throw e;
+  }
+  const json = await resp.json();
+  if (!json.ok) {
+    const e = new Error(`Function error: ${json.error||'unknown'}`);
+    e.code = 'save/function-error';
+    throw e;
+  }
+  // Expecting { ok:true, url, path, gsUri }
+  return { url: json.url, path: json.path, gsUri: json.gsUri, via:'function' };
+}
+
+/* ---------------- Upload helpers ---------------- */
 function extFromType(t){
   if (!t) return '.jpg';
   const lt = t.toLowerCase();
@@ -437,7 +484,6 @@ function extFromType(t){
   if (lt.includes('webp')) return '.webp';
   return '.jpg';
 }
-
 async function autoCreateIfNeeded(){
   if (createdId) return createdId;
   await ensureAuthed();
@@ -453,36 +499,49 @@ async function autoCreateIfNeeded(){
   renderScenario(id);
   return id;
 }
+async function uploadWithTimeout(fullRef, blob, metadata, onProgress){
+  return new Promise((resolve,reject)=>{
+    const task = uploadBytesResumable(fullRef, blob, metadata);
+    const killer = setTimeout(()=>{
+      try{ task.cancel(); }catch{}
+      reject(Object.assign(new Error('Timed out while uploading'), { code:'save/timeout-upload' }));
+    }, 45000);
+    task.on('state_changed',
+      s=>{ if (onProgress) onProgress(Math.round((s.bytesTransferred/s.totalBytes)*100)); },
+      e=>{ clearTimeout(killer); reject(e); },
+      ()=>{ clearTimeout(killer); resolve(); }
+    );
+  });
+}
 
+/* ---------------- Save one / all (Storage → Function → Inline) ---------------- */
 async function saveOnePending(scope, idx, cardEl){
   const list = (scope==='c') ? pendingCreate : pendingEdit;
   const p = list[idx]; if (!p) return;
   const status = cardEl.querySelector('[data-status]');
 
-  // determine scenario id
-  let scenarioId = null;
-  if (scope==='c'){
-    scenarioId = await autoCreateIfNeeded();
-  } else {
-    scenarioId = $('eSelect').value || null;
-    if (!scenarioId){ err('Select a scenario first.'); return; }
-  }
+  let scenarioId = (scope==='c') ? await autoCreateIfNeeded() : $('eSelect').value;
+  if (!scenarioId){ err('Select a scenario first.'); return; }
 
   try{
     await ensureAuthed();
     status.textContent='Preparing…';
 
-    // try to decode for resize; if not, upload original and generate thumb if possible
-    let preview = await decodeToImage(p.file);
-    let fullBlob, thumbBlob, width=0, height=0, usedOriginal=false;
+    // Build a JPEG blob + dataURL if possible; else use original file + dataURL.
+    let usedOriginal=false, width=0, height=0, fullBlob=null, dataURL=null, thumbBlob=null;
 
+    const preview = await decodeToImage(p.file);
     if (preview.img){
       const full = await canvasToBlob(preview.img, ORIG_MAX_EDGE);
-      fullBlob = full.blob; width=full.width; height=full.height;
+      fullBlob = full.blob; dataURL = full.dataURL; width=full.width; height=full.height;
       const th   = await canvasToBlob(preview.img, THUMB_MAX_EDGE);
       thumbBlob = th.blob;
     }else{
-      fullBlob = p.file; usedOriginal = true;
+      // cannot draw (HEIC/etc). Use original file and derive dataURL from it.
+      usedOriginal = true;
+      fullBlob = p.file;
+      dataURL = await fileToDataURL(p.file);
+      // try thumb anyway if browser can decode the object URL
       try{
         if (preview.url){
           const probe = new Image(); probe.src = preview.url; await probe.decode();
@@ -495,65 +554,76 @@ async function saveOnePending(scope, idx, cardEl){
     const coords = (p.lat!=null && p.lng!=null) ? {lat:p.lat,lng:p.lng} : await softCoords(1200);
     const ts = Date.now();
     const basePath = `scenarios/${scenarioId}/${ts}`;
-    const metaType = (usedOriginal && p.file.type && p.file.type.startsWith('image/')) ? p.file.type : 'image/jpeg';
     const ext = usedOriginal ? extFromType(p.file.type) : '.jpg';
-
     const fullRef  = stRef(storage, `${basePath}${ext}`);
     const thumbRef = stRef(storage, `scenarios/${scenarioId}/thumbs/${ts}.jpg`);
-    const metaFull = { contentType: metaType,  cacheControl:'public,max-age=31536000,immutable' };
+    const metaFull = { contentType: (usedOriginal && p.file.type) ? p.file.type : 'image/jpeg',  cacheControl:'public,max-age=31536000,immutable' };
     const metaThmb = { contentType:'image/jpeg', cacheControl:'public,max-age=31536000,immutable' };
 
+    // Try direct Storage (resumable) first
     status.textContent='Uploading 0%…';
-    await new Promise((resolve, reject)=>{
-      const task = uploadBytesResumable(fullRef, fullBlob, metaFull);
-      task.on('state_changed', s=>{
-        const pct = Math.round((s.bytesTransferred/s.totalBytes)*100);
-        status.textContent = `Uploading ${pct}%…`;
-      }, reject, resolve);
-    });
-
-    if (thumbBlob){
-      await new Promise((resolve, reject)=>{
-        const t2 = uploadBytesResumable(thumbRef, thumbBlob, metaThmb);
-        t2.on('state_changed', null, reject, resolve);
-      });
+    let cloud=null;
+    try{
+      await uploadWithTimeout(fullRef, fullBlob, metaFull, pct=>status.textContent=`Uploading ${pct}%…`);
+      if (thumbBlob){
+        try{ await uploadBytes(thumbRef, thumbBlob, metaThmb); }catch(e){ logDiag('Thumb upload failed (non-fatal):', e?.code||'', e?.message||''); }
+      }
+      const imageURL = await getDownloadURL(fullRef);
+      const thumbURL = thumbBlob ? (await getDownloadURL(thumbRef).catch(()=>imageURL)) : imageURL;
+      cloud = { url:imageURL, thumbURL, path:fullRef.fullPath, gsUri:`gs://${FORCE_BUCKET}/${fullRef.fullPath}`, via:'storage' };
+      logDiag('Saved (storage):', fullRef.fullPath, imageURL);
+    }catch(e1){
+      // Fallback to Cloud Function with the dataURL
+      status.textContent = `Direct upload failed (${e1.code||e1.message||'err'}). Trying server…`;
+      try{
+        const fileName = `${ts}.jpg`; // function will store as jpg
+        const res = await uploadViaFunction(dataURL, scenarioId, fileName);
+        cloud = { url:res.url, thumbURL:res.url, path:res.path, gsUri:res.gsUri, via:'function' };
+        logDiag('Saved (function):', res.path, res.url);
+      }catch(e2){
+        // Final fallback: Inline base64 in DB (do not lose the photo)
+        logDiag('Function upload failed:', e2?.code||'', e2?.message||'');
+        cloud = null;
+      }
     }
 
-    status.textContent='Finalizing…';
-    const imageURL = await getDownloadURL(fullRef);
-    const thumbURL = thumbBlob ? await getDownloadURL(thumbRef) : imageURL;
-
-    logDiag('Saved file:', fullRef.fullPath, 'URL:', imageURL);
-
-    status.textContent='Saving to DB…';
-    const snap = await get(dbRef(db, `${ROOT}/${scenarioId}`));
-    const sc = snap.val();
-    const stops = coerceStops(sc);
-    stops.push({
+    // Build stop
+    const stop = {
       type:'photo',
       title: p.title || '',
       caption: p.caption || '',
       lat: coords?.lat ?? null,
       lng: coords?.lng ?? null,
-      locAccuracy: null,
       radiusMeters:50,
-      imageURL, thumbURL,
-      storagePath: fullRef.fullPath, thumbPath: thumbBlob ? thumbRef.fullPath : null,
-      gsUri:`gs://${bucketName}/${fullRef.fullPath}`,
       width, height, overlays:[]
-    });
+    };
+    if (cloud){
+      stop.imageURL   = cloud.url;
+      stop.thumbURL   = cloud.thumbURL || cloud.url;
+      stop.storagePath= cloud.path;
+      stop.gsUri      = cloud.gsUri;
+    }else{
+      // Inline backup (base64)
+      stop.imageData = { format:'jpeg', data: (dataURL||'').split(',')[1] || '' };
+    }
+
+    status.textContent='Saving to DB…';
+    const snap = await get(dbRef(db, `${ROOT}/${scenarioId}`));
+    const sc = snap.val() || {};
+    const stops = coerceStops(sc);
+    stops.push(stop);
     setStops(sc, stops);
     await set(dbRef(db, `${ROOT}/${scenarioId}`), sc);
 
-    status.textContent='Saved ✓';
-    ok('Photo saved to cloud');
+    status.textContent = cloud ? 'Saved ✓' : 'Saved inline ✓';
+    ok(cloud ? 'Photo saved to cloud' : 'Photo saved (inline backup)');
 
     // show in uploaded thumbs area (guarded)
     const uploads = document.getElementById(`${scope}Uploads`);
     if (uploads) {
       const thumbImg = document.createElement('img');
       thumbImg.className = 'thumb';
-      thumbImg.src = thumbURL;
+      thumbImg.src = cloud ? (stop.thumbURL || stop.imageURL) : dataURLFromStored(stop.imageData);
       uploads.prepend(thumbImg);
     }
 
@@ -571,13 +641,12 @@ async function saveOnePending(scope, idx, cardEl){
   }catch(ex){
     const code = ex?.code || '';
     const msg  = ex?.message || String(ex);
+    const svr  = ex?.serverResponse || '';
     console.error('SAVE ERROR:', ex);
-    logDiag('SAVE ERROR code:', code, 'message:', msg);
-    if (code.includes('unauthorized') || code.includes('permission') || msg.includes('PERMISSION_DENIED')){
-      err('Permission denied saving photo. Check Storage/DB rules.');
-    } else {
-      err('Save failed: ' + (code || msg));
-    }
+    logDiag('SAVE ERROR:', code, msg, svr);
+    if (/app.?check/i.test(msg)) err('Blocked by App Check enforcement. Add App Check or disable enforcement.');
+    else if (code.includes('unauthorized') || /PERMISSION_DENIED/i.test(msg)) err('Permission denied saving photo. Check Storage/DB rules.');
+    else err('Save failed: ' + (code || msg));
     status.textContent='Failed';
   }
 }
@@ -602,9 +671,9 @@ function renderScenario(id){
   if (!s._stops?.length){ grid.innerHTML='<div class="small tag">No photos yet</div>'; return; }
 
   s._stops.forEach((st, idx)=>{
-    const el = document.createElement('div');
-    const thumb = st.thumbURL || st.imageURL || '';
+    const thumb = st.thumbURL || st.imageURL || dataURLFromStored(st.imageData) || '';
     const hasGPS = (st.lat!=null && st.lng!=null);
+    const el = document.createElement('div');
     el.innerHTML = `
       <img class="thumb" src="${thumb}" alt="thumb" />
       <div class="small" style="margin-top:6px">${st.title||('Stop '+(idx+1))}</div>
@@ -734,7 +803,7 @@ function openPhotoEditor(scenarioId, index){
   pmCtx = { scenarioId, index };
   const s = scenarios.find(x=>x.id===scenarioId); if(!s) return;
   const st = (s._stops||[])[index]; if(!st) return;
-  $('pmPreview').src = st.imageURL || st.thumbURL || '';
+  $('pmPreview').src = st.imageURL || st.thumbURL || dataURLFromStored(st.imageData) || '';
   $('pmTitle').value = st.title || '';
   $('pmCaption').value = st.caption || '';
   $('pmLat').value = (st.lat ?? '').toString();
@@ -792,12 +861,9 @@ if ($('diagStorage')) $('diagStorage').onclick = async ()=>{
     const ts = Date.now(); const testPath = `scenarios/__diag__/ping-${ts}.jpg`;
     const blob = await makeTinyJPEG();
     const ref1 = stRef(storage, testPath);
-    logDiag('Bucket target:', `gs://${bucketName}`);
+    logDiag('Bucket target:', `gs://${FORCE_BUCKET}`);
     logDiag('Uploading:', testPath, 'contentType=image/jpeg');
-    await new Promise((resolve, reject)=>{
-      const task = uploadBytesResumable(ref1, blob, { contentType:'image/jpeg' });
-      task.on('state_changed', null, reject, resolve);
-    });
+    await uploadWithTimeout(ref1, blob, { contentType:'image/jpeg' });
     const url = await getDownloadURL(ref1);
     logDiag('Storage WRITE OK. URL:', url);
   }catch(e){
