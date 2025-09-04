@@ -8,7 +8,7 @@
 <style>
 :root{
   --bg:#0b0f14; --bg2:#0e1421; --card:#0f1624; --edge:rgba(255,255,255,.10);
-  --text:#eaf2ff; --muted:#93a0b5; --blue:#0a84ff;
+  --text:#eaf2ff; --muted:#93a0b5;
 }
 *{box-sizing:border-box}
 html,body{margin:0;height:100%;font-family:system-ui,-apple-system,Segoe UI,Roboto,Inter,Arial,sans-serif;color:var(--text);
@@ -35,13 +35,17 @@ textarea{min-height:80px}
 .row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
 .grid{display:grid;grid-template-columns:repeat(auto-fill, minmax(120px,1fr));gap:10px}
 .thumb{width:100%;height:90px;object-fit:cover;border-radius:10px;background:#0a1a2a;border:1px solid rgba(255,255,255,.14)}
-.visually-hidden{position:absolute !important;left:-9999px;width:1px;height:1px;opacity:0;pointer-events:none}
+
+/* iOS-safe hidden input: not display:none; no pointer-events:none */
+.visually-hidden{
+  position:absolute; left:-9999px; top:auto; width:0.1px; height:0.1px; opacity:0; overflow:hidden; z-index:-1;
+}
 
 /* toasts */
 #errbar{position:fixed;left:10px;bottom:10px;background:#2b0d0d;color:#ffd7d7;border:1px solid #7a2b2b;border-radius:12px;padding:8px 12px;display:none;z-index:9999;max-width:90vw}
 #okbar{position:fixed;left:10px;bottom:56px;background:#0f2a19;color:#d8ffe2;border:1px solid #2c7a4b;border-radius:12px;padding:8px 12px;display:none;z-index:9999;max-width:90vw}
 
-/* lightweight loader only for init/DB saves */
+/* loader (only for init / DB saves) */
 #loader{position:fixed;inset:0;display:none;place-items:center;z-index:99;background:rgba(6,12,20,.55);backdrop-filter:blur(2px)}
 .spinner{width:42px;height:42px;border-radius:999px;border:4px solid rgba(255,255,255,.25);border-top-color:#fff;animation:spin 1s linear infinite}
 @keyframes spin{to{transform:rotate(360deg)}}
@@ -84,7 +88,6 @@ textarea{min-height:80px}
     <hr />
     <h4>Add Photos (auto GPS)</h4>
 
-    <!-- iPhone-safe pickers -->
     <input id="cFilesCam" class="visually-hidden" type="file" accept="image/*" capture="environment" multiple />
     <input id="cFilesLib" class="visually-hidden" type="file" accept="image/*" multiple />
     <div class="row">
@@ -219,14 +222,14 @@ const firebaseConfig = {
   authDomain:"dailyquiz-d5279.firebaseapp.com",
   databaseURL:"https://dailyquiz-d5279-default-rtdb.firebaseio.com",
   projectId:"dailyquiz-d5279",
-  storageBucket:"dailyquiz-d5279.firebasestorage.app",  // console shows this; we normalize for gs:// below
+  storageBucket:"dailyquiz-d5279.firebasestorage.app",  // normalize for gs:// below
   appId:"1:94577748034:web:c032d3a1d72db1313de5db",
   measurementId:"G-19DVN7NNH7"
 };
 
 const appFB = initializeApp(firebaseConfig);
 
-/* ✅ Normalize bucket for gs:// (writes must use *.appspot.com) */
+/* ✅ use appspot bucket for writes */
 let bucketName = (firebaseConfig.storageBucket || `${firebaseConfig.projectId}.appspot.com`)
   .replace('.firebasestorage.app', '.appspot.com');
 const storage = getStorage(appFB, `gs://${bucketName}`);
@@ -284,7 +287,7 @@ async function safeLoadScenarios(){
   }
 }
 
-/* ---------------- Image helpers (no OffscreenCanvas / no createImageBitmap) ---------------- */
+/* ---------------- Image helpers ---------------- */
 const ORIG_MAX_EDGE = 1600, THUMB_MAX_EDGE = 480, JPEG_QUALITY = 0.82, MAX_PIXELS = 4_000_000;
 
 async function decodeToImage(file){
@@ -328,20 +331,28 @@ function softCoords(timeoutMs=1200){
       _ => finish(null),
       { enableHighAccuracy:true, maximumAge:60000, timeout:timeoutMs }
     );
-    setTimeout(()=>finish(null), timeoutMs); // soft race timeout
+    setTimeout(()=>finish(null), timeoutMs);
   });
 }
 
-/* ---------------- Upload flow (sequential, resumable, yields to UI) ---------------- */
+/* ---------------- Upload flow ---------------- */
 async function processFilesForScenario(files, scenarioId, uploadsContainerId){
   if (!files?.length) return;
   await ensureAuthed();
 
-  // soft-start GPS
+  // immediate UI feedback
+  const picked = document.createElement('div');
+  picked.className = 'tag small';
+  picked.textContent = `Picked ${files.length} file(s)…`;
+  $(uploadsContainerId).prepend(picked);
+
+  // log the change so we can see this in Diagnostics
+  logDiag(`CHANGE ${uploadsContainerId}:`, files.map(f=>`${f.name||'(no-name)'} [${f.type||'no-type'}] size=${f.size}`).join(', '));
+
   const gpsPromise = softCoords(1200);
 
   for (const file of files){
-    await new Promise(r=>setTimeout(r,0)); // allow UI to breathe
+    await new Promise(r=>setTimeout(r,0)); // let UI repaint
 
     const card = document.createElement('div');
     const tag = document.createElement('div');
@@ -375,19 +386,15 @@ async function processFilesForScenario(files, scenarioId, uploadsContainerId){
 
       const coords = await Promise.race([gpsPromise, Promise.resolve(null)]);
       const ts = Date.now();
-      const extByType = (t)=> {
-        if (!t) return '.bin';
-        const lt = t.toLowerCase();
-        if (lt.includes('jpeg') || lt.includes('jpg')) return '.jpg';
-        if (lt.includes('png')) return '.png';
-        if (lt.includes('heic') || lt.includes('heif')) return '.heic';
-        if (lt.includes('webp')) return '.webp';
-        return '.bin';
-      };
+
+      // Always use an image/* contentType (some iOS picks have no type)
+      const metaType = (usedOriginal && file.type && file.type.startsWith('image/')) ? file.type : 'image/jpeg';
+      const ext = (metaType.includes('png')?'.png':(metaType.includes('heic')?'.heic':(metaType.includes('webp')?'.webp':'.jpg')));
+
       const basePath = `scenarios/${scenarioId}/${ts}`;
-      const fullRef  = stRef(storage, `${basePath}${usedOriginal ? extByType(file.type) : '.jpg'}`);
+      const fullRef  = stRef(storage, `${basePath}${usedOriginal ? ext : '.jpg'}`);
       const thumbRef = stRef(storage, `scenarios/${scenarioId}/thumbs/${ts}.jpg`);
-      const metaFull = { contentType: usedOriginal ? (file.type || 'application/octet-stream') : 'image/jpeg', cacheControl:'public,max-age=31536000,immutable' };
+      const metaFull = { contentType: metaType,  cacheControl:'public,max-age=31536000,immutable' };
       const metaThmb = { contentType:'image/jpeg', cacheControl:'public,max-age=31536000,immutable' };
 
       status('Uploading 0%…');
@@ -435,11 +442,11 @@ async function processFilesForScenario(files, scenarioId, uploadsContainerId){
       logDiag('UPLOAD ERROR code:', code, 'message:', msg);
       logDiag('Expected bucket:', `gs://${bucketName}`);
       if (code.includes('unauthorized') || code.includes('permission') || msg.includes('PERMISSION_DENIED')){
-        err('Upload failed: permission denied. Open Diagnostics → Test Storage/DB for exact error.');
+        err('Upload failed: permission denied. Run Diagnostics → Test Storage/DB.');
       } else {
         err('Upload failed: ' + (code || msg));
       }
-      status('Failed');
+      tag.textContent = 'Failed';
     }
   }
 
@@ -512,6 +519,22 @@ function renderScenario(id){
 }
 
 /* ---------------- Create / Edit wiring ---------------- */
+async function autoCreateIfNeeded(){
+  if (createdId) return createdId;
+  await ensureAuthed();
+  const title = $('cTitle')?.value?.trim() || '(untitled)';
+  const desc  = $('cDesc')?.value?.trim() || '';
+  const id = (push(dbRef(db, ROOT))).key;
+  await set(dbRef(db, `${ROOT}/${id}`), { id, title, description: desc, createdAt: Date.now(), active:true, stops: [] });
+  createdId = id;
+  ok('Scenario created');
+  await safeLoadScenarios();
+  $('showEdit').click();
+  $('eSelect').value = id; $('eTitle').value = title; $('eDesc').value = desc;
+  renderScenario(id);
+  return id;
+}
+
 if ($('createBtn')) $('createBtn').onclick = async ()=>{
   try{
     await ensureAuthed();
@@ -520,24 +543,18 @@ if ($('createBtn')) $('createBtn').onclick = async ()=>{
     const desc  = $('cDesc').value.trim() || '';
     $('createBtn').disabled = true; $('createStatus').textContent='Creating…';
     const id = (push(dbRef(db, ROOT))).key;
-    const rec = { id, title, description: desc, createdAt: Date.now(), active:true, stops: [] };
-    await set(dbRef(db, `${ROOT}/${id}`), rec);
+    await set(dbRef(db, `${ROOT}/${id}`), { id, title, description: desc, createdAt: Date.now(), active:true, stops: [] });
     createdId = id;
     $('createStatus').textContent='Created ✓';
     ok('Scenario created');
     await safeLoadScenarios();
     $('showEdit').click();
-    $('eSelect').value = id;
-    $('eTitle').value  = title;
-    $('eDesc').value   = desc;
+    $('eSelect').value = id; $('eTitle').value = title; $('eDesc').value = desc;
     renderScenario(id);
   }catch(e){
     const msg = e?.code || e?.message || e;
-    if (String(msg).includes('PERMISSION_DENIED')) {
-      err('Create failed: DB rules block writes to "/scenarios". Enable auth writes.');
-    } else {
-      err('Create failed: ' + msg);
-    }
+    if (String(msg).includes('PERMISSION_DENIED')) err('Create failed: DB rules block writes to "/scenarios".');
+    else err('Create failed: ' + msg);
   }finally{
     $('createBtn').disabled = false; loading(false);
   }
@@ -560,35 +577,31 @@ if ($('saveMeta')) $('saveMeta').onclick = async ()=>{
     await safeLoadScenarios(); $('eSelect').value=id; renderScenario(id);
   }catch(e){
     const msg = e?.code || e?.message || e;
-    if (String(msg).includes('PERMISSION_DENIED')) {
-      err('Save failed: DB rules block writes to "/scenarios".');
-    } else { err('Save failed: '+msg); }
+    if (String(msg).includes('PERMISSION_DENIED')) err('Save failed: DB rules block writes to "/scenarios".');
+    else err('Save failed: '+msg);
   }finally{ loading(false); }
 };
 
 /* ---------------- File input listeners ---------------- */
-if ($('cFilesCam')) $('cFilesCam').addEventListener('change', async (e)=>{
-  if (!createdId){ err('Create a scenario first.'); e.target.value=''; return; }
-  await processFilesForScenario(Array.from(e.target.files||[]), createdId, 'cUploads');
+async function handleCreatePicker(e, which){
+  const id = await autoCreateIfNeeded(); // auto-create if needed
+  logDiag(`Picker fired (${which}) with ${e.target.files?.length||0} file(s)`);
+  await processFilesForScenario(Array.from(e.target.files||[]), id, 'cUploads');
   e.target.value='';
-});
-if ($('cFilesLib')) $('cFilesLib').addEventListener('change', async (e)=>{
-  if (!createdId){ err('Create a scenario first.'); e.target.value=''; return; }
-  await processFilesForScenario(Array.from(e.target.files||[]), createdId, 'cUploads');
-  e.target.value='';
-});
-if ($('eFilesCam')) $('eFilesCam').addEventListener('change', async (e)=>{
-  const id=$('eSelect').value; if(!id){ err('Select a scenario first.'); e.target.value=''; return; }
+}
+async function handleEditPicker(e, which){
+  const id=$('eSelect').value;
+  if(!id){ err('Select a scenario first.'); e.target.value=''; return; }
+  logDiag(`Picker fired (${which}) with ${e.target.files?.length||0} file(s)`);
   await processFilesForScenario(Array.from(e.target.files||[]), id, 'eUploads');
   await safeLoadScenarios(); $('eSelect').value=id; renderScenario(id);
   e.target.value='';
-});
-if ($('eFilesLib')) $('eFilesLib').addEventListener('change', async (e)=>{
-  const id=$('eSelect').value; if(!id){ err('Select a scenario first.'); e.target.value=''; return; }
-  await processFilesForScenario(Array.from(e.target.files||[]), id, 'eUploads');
-  await safeLoadScenarios(); $('eSelect').value=id; renderScenario(id);
-  e.target.value='';
-});
+}
+
+if ($('cFilesCam')) $('cFilesCam').addEventListener('change', (e)=>handleCreatePicker(e,'create/camera'));
+if ($('cFilesLib')) $('cFilesLib').addEventListener('change', (e)=>handleCreatePicker(e,'create/library'));
+if ($('eFilesCam')) $('eFilesCam').addEventListener('change', (e)=>handleEditPicker(e,'edit/camera'));
+if ($('eFilesLib')) $('eFilesLib').addEventListener('change', (e)=>handleEditPicker(e,'edit/library'));
 
 /* ---------------- Photo editor modal ---------------- */
 let pmCtx = { scenarioId:null, index:-1 };
@@ -633,9 +646,8 @@ if ($('pmSave')) $('pmSave').onclick = async ()=>{
     await safeLoadScenarios(); $('eSelect').value=scenarioId; renderScenario(scenarioId);
   }catch(e){
     const msg = e?.code || e?.message || e;
-    if (String(msg).includes('PERMISSION_DENIED')) {
-      err('Save photo failed: DB rules block writes to "/scenarios".');
-    } else { err('Save photo failed: '+msg); }
+    if (String(msg).includes('PERMISSION_DENIED')) err('Save photo failed: DB rules block writes to "/scenarios".');
+    else err('Save photo failed: '+msg);
   }finally{ loading(false); }
 };
 
@@ -680,7 +692,7 @@ if ($('diagDB')) $('diagDB').onclick = async ()=>{
   }
 };
 
-/* ---------------- Init (auth first, then subscribe) ---------------- */
+/* ---------------- Init ---------------- */
 (async function init(){
   try{
     loading(true);
