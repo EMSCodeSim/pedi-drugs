@@ -3,47 +3,56 @@
 <head>
 <meta charset="utf-8" />
 <title>FireOps SIM — Admin</title>
-<meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
 <meta name="theme-color" content="#0b0f14" />
 <style>
-:root{ --bg:#0b0f14; --bg2:#0e1421; --card:#0f1624; --edge:rgba(255,255,255,.10); --text:#eaf2ff; --muted:#93a0b5; --blue:#0a84ff; }
-*{ box-sizing:border-box }
-html,body{ margin:0; height:100%; font-family:system-ui,-apple-system,Segoe UI,Roboto,Inter,Arial,sans-serif; color:var(--text); background:
-  radial-gradient(1400px 700px at 15% -15%, rgba(10,132,255,.28), transparent 60%),
-  radial-gradient(1200px 600px at 110% 0%, rgba(255,59,48,.22), transparent 60%),
-  linear-gradient(165deg, var(--bg2), var(--bg) 55%) }
-.topbar{ position:sticky; top:0; z-index:20; background:rgba(12,15,22,.78); backdrop-filter:blur(6px) saturate(120%); border-bottom:1px solid rgba(255,255,255,.08) }
-.topnav{ max-width:1200px; margin:0 auto; padding:10px 16px; display:flex; gap:10px; align-items:center }
-.brand{ font-weight:900 }
-.spacer{ flex:1 }
-.btn{ appearance:none; border:1px solid rgba(255,255,255,.18); background:linear-gradient(180deg,#142238,#0f1930); color:#fff; border-radius:12px; padding:9px 12px; font-weight:800; cursor:pointer }
-.btn[disabled]{ opacity:.6; cursor:not-allowed }
-.tag{ display:inline-flex; align-items:center; gap:8px; padding:6px 10px; border-radius:999px; border:1px solid rgba(255,255,255,.16); color:var(--muted) }
+:root{
+  --bg:#0b0f14; --bg2:#0e1421; --card:#0f1624; --edge:rgba(255,255,255,.10);
+  --text:#eaf2ff; --muted:#93a0b5; --blue:#0a84ff;
+}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;font-family:system-ui,-apple-system,Segoe UI,Roboto,Inter,Arial,sans-serif;color:var(--text);
+  background:
+    radial-gradient(1400px 700px at 15% -15%, rgba(10,132,255,.28), transparent 60%),
+    radial-gradient(1200px 600px at 110% 0%, rgba(255,59,48,.22), transparent 60%),
+    linear-gradient(165deg, var(--bg2), var(--bg) 55%);
+}
+.topbar{position:sticky;top:0;z-index:20;background:rgba(12,15,22,.78);backdrop-filter:blur(6px) saturate(120%);border-bottom:1px solid rgba(255,255,255,.08)}
+.topnav{max-width:1200px;margin:0 auto;padding:10px 16px;display:flex;gap:10px;align-items:center}
+.brand{font-weight:900}
+.spacer{flex:1}
+.btn{appearance:none;border:1px solid rgba(255,255,255,.18);background:linear-gradient(180deg,#142238,#0f1930);color:#fff;border-radius:12px;padding:9px 12px;font-weight:800;cursor:pointer}
+.btn[disabled]{opacity:.6;cursor:not-allowed}
+.tag{display:inline-flex;align-items:center;gap:8px;padding:6px 10px;border-radius:999px;border:1px solid rgba(255,255,255,.16);color:var(--muted)}
+.small{font-size:12px;opacity:.9}
+hr{border:none;height:1px;background:rgba(255,255,255,.08);margin:12px 0}
 
-main{ max-width:1200px; margin:16px auto 40px; padding:0 16px; display:grid; grid-template-columns:340px 1fr; gap:12px }
-.card{ background:var(--card); border:1px solid var(--edge); border-radius:16px; padding:12px; min-height:120px }
-label{ display:block; margin:8px 0 6px 2px; font-size:12px; color:var(--muted) }
-.input, select, textarea{ width:100%; padding:10px; border-radius:10px; border:1px solid rgba(255,255,255,.14); background:#0c1322; color:#eaf2ff }
-textarea{ min-height:80px }
-.row{ display:flex; gap:8px; align-items:center; flex-wrap:wrap }
-.grid{ display:grid; grid-template-columns:repeat(auto-fill, minmax(120px,1fr)); gap:10px }
-.thumb{ width:100%; height:90px; object-fit:cover; border-radius:10px; background:#0a1a2a; border:1px solid rgba(255,255,255,.14) }
-.small{ font-size:12px; opacity:.85 }
-hr{ border:none; height:1px; background:rgba(255,255,255,.08); margin:12px 0 }
+main{max-width:1200px;margin:16px auto 40px;padding:0 16px;display:grid;grid-template-columns:340px 1fr;gap:12px}
+.card{background:var(--card);border:1px solid var(--edge);border-radius:16px;padding:12px;min-height:120px}
+label{display:block;margin:8px 0 6px 2px;font-size:12px;color:var(--muted)}
+.input, select, textarea{width:100%;padding:10px;border-radius:10px;border:1px solid rgba(255,255,255,.14);background:#0c1322;color:#eaf2ff}
+textarea{min-height:80px}
+.row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.grid{display:grid;grid-template-columns:repeat(auto-fill, minmax(120px,1fr));gap:10px}
+.thumb{width:100%;height:90px;object-fit:cover;border-radius:10px;background:#0a1a2a;border:1px solid rgba(255,255,255,.14)}
+.visually-hidden{position:absolute !important;left:-9999px;width:1px;height:1px;opacity:0;pointer-events:none}
 
-#errbar{ position:fixed; left:10px; bottom:10px; background:#2b0d0d; color:#ffd7d7; border:1px solid #7a2b2b; border-radius:12px; padding:8px 12px; display:none; z-index:9999 }
-#okbar{ position:fixed; left:10px; bottom:56px; background:#0f2a19; color:#d8ffe2; border:1px solid #2c7a4b; border-radius:12px; padding:8px 12px; display:none; z-index:9999 }
+/* toasts */
+#errbar{position:fixed;left:10px;bottom:10px;background:#2b0d0d;color:#ffd7d7;border:1px solid #7a2b2b;border-radius:12px;padding:8px 12px;display:none;z-index:9999;max-width:90vw}
+#okbar{position:fixed;left:10px;bottom:56px;background:#0f2a19;color:#d8ffe2;border:1px solid #2c7a4b;border-radius:12px;padding:8px 12px;display:none;z-index:9999;max-width:90vw}
 
-#loader{ position:fixed; inset:0; display:none; place-items:center; z-index:99; background:rgba(6,12,20,.55); backdrop-filter:blur(2px) }
-.spinner{ width:42px; height:42px; border-radius:999px; border:4px solid rgba(255,255,255,.25); border-top-color:#fff; animation:spin 1s linear infinite }
-@keyframes spin{ to{ transform:rotate(360deg) } }
+/* loader */
+#loader{position:fixed;inset:0;display:none;place-items:center;z-index:99;background:rgba(6,12,20,.55);backdrop-filter:blur(2px)}
+.spinner{width:42px;height:42px;border-radius:999px;border:4px solid rgba(255,255,255,.25);border-top-color:#fff;animation:spin 1s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
 
-#photoModal{ position:fixed; inset:0; display:none; place-items:center; z-index:999; background:rgba(5,10,18,.6); backdrop-filter:blur(2px) }
-.modal-card{ width:min(760px,96vw); background:var(--card); border:1px solid var(--edge); border-radius:16px; padding:14px }
-.modal-head{ display:flex; align-items:center; gap:8px; margin-bottom:8px }
-.modal-body{ display:grid; grid-template-columns:220px 1fr; gap:12px }
-.modal-body img{ width:100%; border-radius:10px; border:1px solid rgba(255,255,255,.12); aspect-ratio: 4 / 3; object-fit:cover }
-.modal-actions{ display:flex; justify-content:flex-end; gap:8px; margin-top:10px }
+/* modal */
+#photoModal{position:fixed;inset:0;display:none;place-items:center;z-index:999;background:rgba(5,10,18,.6);backdrop-filter:blur(2px)}
+.modal-card{width:min(760px,96vw);background:var(--card);border:1px solid var(--edge);border-radius:16px;padding:14px}
+.modal-head{display:flex;align-items:center;gap:8px;margin-bottom:8px}
+.modal-body{display:grid;grid-template-columns:220px 1fr;gap:12px}
+.modal-body img{width:100%;border-radius:10px;border:1px solid rgba(255,255,255,.12);aspect-ratio:4/3;object-fit:cover}
+.modal-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:10px}
 </style>
 </head>
 <body>
@@ -75,16 +84,14 @@ hr{ border:none; height:1px; background:rgba(255,255,255,.08); margin:12px 0 }
     <hr />
     <h4>Add Photos (auto GPS)</h4>
 
-    <!-- Hidden inputs: camera vs library -->
-    <input id="cFilesCam" type="file" accept="image/*" capture="environment" multiple style="display:none" />
-    <input id="cFilesLib" type="file" accept="image/*" multiple style="display:none" />
-
+    <!-- iPhone-safe: use labels to open native pickers -->
+    <input id="cFilesCam" class="visually-hidden" type="file" accept="image/*" capture="environment" multiple />
+    <input id="cFilesLib" class="visually-hidden" type="file" accept="image/*" multiple />
     <div class="row">
-      <button id="cBtnCam" class="btn">📷 Take Photo</button>
-      <button id="cBtnLib" class="btn">🖼️ Choose from Library</button>
+      <label for="cFilesCam" class="btn">📷 Take Photo</label>
+      <label for="cFilesLib" class="btn">🖼️ Choose from Library</label>
     </div>
-
-    <div class="small" style="margin:6px 0">Photos are resized to max <b>1600px</b> (thumbs at <b>480px</b>) to save space & speed up loads.</div>
+    <div class="small" style="margin:6px 0">Photos are resized to max <b>1600px</b> (thumbs <b>480px</b>) to save space & speed up loads.</div>
     <div id="cUploads" class="grid"></div>
   </section>
 
@@ -114,14 +121,11 @@ hr{ border:none; height:1px; background:rgba(255,255,255,.08); margin:12px 0 }
 
     <hr />
     <h4>Add Photos (auto GPS)</h4>
-
-    <!-- Hidden inputs: camera vs library -->
-    <input id="eFilesCam" type="file" accept="image/*" capture="environment" multiple style="display:none" />
-    <input id="eFilesLib" type="file" accept="image/*" multiple style="display:none" />
-
+    <input id="eFilesCam" class="visually-hidden" type="file" accept="image/*" capture="environment" multiple />
+    <input id="eFilesLib" class="visually-hidden" type="file" accept="image/*" multiple />
     <div class="row">
-      <button id="eBtnCam" class="btn">📷 Take Photo</button>
-      <button id="eBtnLib" class="btn">🖼️ Choose from Library</button>
+      <label for="eFilesCam" class="btn">📷 Take Photo</label>
+      <label for="eFilesLib" class="btn">🖼️ Choose from Library</label>
     </div>
 
     <div id="eUploads" class="grid" style="margin-top:8px"></div>
@@ -172,59 +176,61 @@ hr{ border:none; height:1px; background:rgba(255,255,255,.08); margin:12px 0 }
 </div>
 
 <script type="module">
-/* ---------- UI helpers (bind early; never throw) ---------- */
+/* ---------------- UI helpers (bind early, never throw) ---------------- */
 const $ = (id)=>document.getElementById(id);
-const show = (id, on)=> { const el=$(id); if (el) el.style.display = on ? '' : 'none'; };
-const ok = (m)=>{ const b=$('okbar'); if(!b) return; b.textContent=m; b.style.display='block'; setTimeout(()=>b.style.display='none', 2400); };
-const err= (m)=>{ const b=$('errbar'); if(!b) return; b.textContent=m; b.style.display='block'; setTimeout(()=>b.style.display='none', 5000); };
+const show = (id, on)=>{ const el=$(id); if (el) el.style.display = on ? '' : 'none'; };
+const ok = (m)=>{ const b=$('okbar'); if(!b) return; b.textContent=m; b.style.display='block'; setTimeout(()=>b.style.display='none', 2600); };
+const err= (m)=>{ const b=$('errbar'); if(!b) return; b.textContent=m; b.style.display='block'; setTimeout(()=>b.style.display='none', 6000); };
 const loading = (on)=>{ const l=$('loader'); if(l) l.style.display = on ? 'grid' : 'none'; };
 
-/* ---------- Bind all button handlers immediately ---------- */
-(function bindUI(){
-  if ($('showCreate')) $('showCreate').onclick = ()=>{ show('createPane',true); show('editPane',false); };
-  if ($('showEdit'))   $('showEdit').onclick   = ()=>{ show('createPane',false); show('editPane',true); };
+/* pane toggles */
+if ($('showCreate')) $('showCreate').onclick = ()=>{ show('createPane',true); show('editPane',false); };
+if ($('showEdit'))   $('showEdit').onclick   = ()=>{ show('createPane',false); show('editPane',true); };
 
-  if ($('cBtnCam')) $('cBtnCam').onclick = ()=> $('cFilesCam').click();
-  if ($('cBtnLib')) $('cBtnLib').onclick = ()=> $('cFilesLib').click();
-  if ($('eBtnCam')) $('eBtnCam').onclick = ()=> $('eFilesCam').click();
-  if ($('eBtnLib')) $('eBtnLib').onclick = ()=> $('eFilesLib').click();
-})();
-
-/* ---------- Firebase (imports) ---------- */
+/* ---------------- Firebase imports ---------------- */
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-app.js";
 import { getDatabase, ref as dbRef, set, push, get, onValue } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-database.js";
 import { getStorage, ref as stRef, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-storage.js";
-import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-auth.js";
+import {
+  getAuth, signInAnonymously, onAuthStateChanged,
+  setPersistence, browserLocalPersistence, browserSessionPersistence, inMemoryPersistence
+} from "https://www.gstatic.com/firebasejs/10.12.4/firebase-auth.js";
 
-/* ---------- Firebase config ---------- */
+/* ---------------- Firebase config ---------------- */
 const firebaseConfig = {
   apiKey:"AIzaSyDM6DpRSeZueVKRpbyJyDmhf8WY66KyCDk",
   authDomain:"dailyquiz-d5279.firebaseapp.com",
   databaseURL:"https://dailyquiz-d5279-default-rtdb.firebaseio.com",
   projectId:"dailyquiz-d5279",
-  storageBucket:"dailyquiz-d5279.firebasestorage.app",
+  storageBucket:"dailyquiz-d5279.firebasestorage.app",  // console shows this domain; normalize for gs:// below
   appId:"1:94577748034:web:c032d3a1d72db1313de5db",
   measurementId:"G-19DVN7NNH7"
 };
+
 const appFB = initializeApp(firebaseConfig);
+
+/* ✅ Normalize bucket for gs:// (writes must use *.appspot.com) */
+let bucketName = (firebaseConfig.storageBucket || `${firebaseConfig.projectId}.appspot.com`)
+  .replace('.firebasestorage.app', '.appspot.com');
+const storage = getStorage(appFB, `gs://${bucketName}`);
+
 const db = getDatabase(appFB);
-const storage = getStorage(appFB, "gs://dailyquiz-d5279.firebasestorage.app");
 const auth = getAuth(appFB);
 
-/* ---------- Globals ---------- */
-const ROOT='scenarios';
-let scenarios=[];
-let createdId=null;
-
-/* ---------- Auth (must complete before DB ops) ---------- */
-async function ensureAuthed(){
-  if (auth.currentUser) return auth.currentUser;
-  await signInAnonymously(auth);
-  await new Promise(res => onAuthStateChanged(auth, u=>u && res(), { once:true }));
-  return auth.currentUser;
+/* ---------------- Auth (iOS Private Browsing safe) ---------------- */
+async function initAuth(){
+  try{ await setPersistence(auth, browserLocalPersistence); }
+  catch{ try{ await setPersistence(auth, browserSessionPersistence); }
+  catch{ await setPersistence(auth, inMemoryPersistence); } }
+  if (!auth.currentUser) await signInAnonymously(auth);
+  await new Promise(res => onAuthStateChanged(auth, u => u && res(), { once:true }));
 }
+async function ensureAuthed(){ if (!auth.currentUser) await initAuth(); return auth.currentUser; }
 
-/* ---------- Helpers ---------- */
+/* ---------------- Data helpers ---------------- */
+const ROOT='scenarios';
+let scenarios=[]; let createdId=null;
+
 function coerceStops(sc){
   if (Array.isArray(sc?.stops)) return sc.stops;
   if (Array.isArray(sc?.photos)) return sc.photos;
@@ -253,14 +259,119 @@ async function safeLoadScenarios(){
     scenarios = Object.entries(obj).map(([id,s])=>({ id, _raw:s, _stops:coerceStops(s), ...s }))
                 .sort((a,b)=>(b.createdAt||0)-(a.createdAt||0));
     populateEditList();
+    const cur = $('eSelect').value; if (cur) renderScenario(cur);
     $('eStatus').textContent='Loaded';
   }catch(e){
     console.warn('loadScenarios failed:', e);
     $('eStatus').textContent='Load failed';
   }
 }
+
+/* ---------------- Image resize helpers ---------------- */
+const ORIG_MAX_EDGE = 1600, THUMB_MAX_EDGE = 480, JPEG_QUALITY = 0.82;
+
+async function fileToBitmap(file){
+  if ('createImageBitmap' in window) {
+    try{ return await createImageBitmap(file, { imageOrientation: 'from-image' }); }catch(_){}
+  }
+  const url = URL.createObjectURL(file);
+  const img = new Image(); img.decoding='async'; img.src=url;
+  await img.decode(); URL.revokeObjectURL(url);
+  return img;
+}
+function scaleDims(w,h,maxEdge){ const s = Math.min(1, maxEdge/Math.max(w,h)); return { w:Math.round(w*s), h:Math.round(h*s) }; }
+async function bitmapToBlob(bmp, maxEdge, quality=JPEG_QUALITY, type='image/jpeg'){
+  const { w, h } = scaleDims(bmp.width, bmp.height, maxEdge);
+  const c = ('OffscreenCanvas' in window) ? new OffscreenCanvas(w,h) : Object.assign(document.createElement('canvas'), { width:w, height:h });
+  if (!('width' in c)) { c.width=w; c.height=h; }
+  const ctx = c.getContext('2d'); ctx.imageSmoothingEnabled=true; ctx.imageSmoothingQuality='high';
+  ctx.drawImage(bmp,0,0,w,h);
+  const blob = await (c.convertToBlob ? c.convertToBlob({ type, quality }) : new Promise(res=>c.toBlob(res, type, quality)));
+  return { blob, width:w, height:h };
+}
+
+/* ---------------- Geolocation ---------------- */
+async function getCoords(){
+  if (!('geolocation' in navigator)) return null;
+  try{
+    return await new Promise((resolve)=> {
+      navigator.geolocation.getCurrentPosition(
+        pos => resolve({ lat:+pos.coords.latitude.toFixed(6), lng:+pos.coords.longitude.toFixed(6), accuracy:pos.coords.accuracy }),
+        _ => resolve(null),
+        { enableHighAccuracy:true, maximumAge:60000, timeout:10000 }
+      );
+    });
+  }catch{ return null; }
+}
+
+/* ---------------- Upload flow (auto-GPS + robust errors) ---------------- */
+async function processFilesForScenario(files, scenarioId, uploadsContainerId){
+  if (!files?.length) return;
+  await ensureAuthed();
+  loading(true);
+  try{
+    const coords = await getCoords(); // once per batch
+    for (const file of files){
+      const card = document.createElement('div');
+      card.innerHTML = `<div class="tag small">Preparing…</div>`;
+      $(uploadsContainerId).prepend(card);
+      const status = (t)=>{ card.querySelector('.tag').textContent=t; };
+
+      try{
+        status('Decoding…');
+        const bmp = await fileToBitmap(file);
+        status('Resizing…');
+        const { blob: fullBlob, width, height } = await bitmapToBlob(bmp, ORIG_MAX_EDGE, JPEG_QUALITY, 'image/jpeg');
+        const { blob: thumbBlob }               = await bitmapToBlob(bmp, THUMB_MAX_EDGE, 0.8, 'image/jpeg');
+
+        const ts = Date.now();
+        const basePath = `scenarios/${scenarioId}/${ts}`;
+        const fullRef  = stRef(storage, `${basePath}.jpg`);
+        const thumbRef = stRef(storage, `scenarios/${scenarioId}/thumbs/${ts}.jpg`);
+        const meta = { contentType:'image/jpeg', cacheControl:'public,max-age=31536000,immutable' };
+
+        status('Uploading full…'); await uploadBytes(fullRef,  fullBlob,  meta);
+        status('Uploading thumb…'); await uploadBytes(thumbRef, thumbBlob, meta);
+
+        status('Finalizing…');
+        const imageURL = await getDownloadURL(fullRef);
+        const thumbURL = await getDownloadURL(thumbRef);
+
+        status('Saving…');
+        const snap = await get(dbRef(db, `${ROOT}/${scenarioId}`));
+        const sc = snap.val(); const stops = coerceStops(sc);
+        stops.push({
+          type:'photo', title:'', caption:'',
+          lat: coords?.lat ?? null, lng: coords?.lng ?? null, locAccuracy: coords?.accuracy ?? null,
+          radiusMeters:50,
+          imageURL, thumbURL,
+          storagePath:`${basePath}.jpg`, thumbPath:`scenarios/${scenarioId}/thumbs/${ts}.jpg`,
+          gsUri:`gs://${bucketName}/${basePath}.jpg`,
+          width, height, overlays:[]
+        });
+        setStops(sc, stops);
+        await set(dbRef(db, `${ROOT}/${scenarioId}`), sc);
+
+        status(coords ? 'Uploaded ✓ (GPS set)' : 'Uploaded ✓ (no GPS)');
+      }catch(ex){
+        const msg = ex?.code || ex?.message || ex;
+        if (String(msg).includes('storage/unauthorized') || String(msg).includes('PERMISSION_DENIED')) {
+          err('Upload failed: permission denied. Check Firebase Storage/DB rules for path "scenarios/**" and that anonymous auth is allowed.');
+        } else {
+          err('Upload failed: ' + msg);
+        }
+        status('Failed');
+      }
+    }
+    ok('Photos processed.');
+  }finally{
+    loading(false);
+  }
+}
+
+/* ---------------- Render & edit ---------------- */
 function renderScenario(id){
-  const s = scenarios.find(x=>x.id===id); 
+  const s = scenarios.find(x=>x.id===id);
   if (!s){ $('eStatus').textContent='Not found'; $('stopsGrid').innerHTML=''; return; }
   $('eTitle').value = s.title||'';
   $('eDesc').value  = s.description||'';
@@ -323,108 +434,7 @@ function renderScenario(id){
   });
 }
 
-/* ---------- Image processing (resize) ---------- */
-const ORIG_MAX_EDGE = 1600;
-const THUMB_MAX_EDGE = 480;
-const JPEG_QUALITY   = 0.82;
-
-async function fileToBitmap(file){
-  if ('createImageBitmap' in window) {
-    try{ return await createImageBitmap(file, { imageOrientation: 'from-image' }); }catch(_){}
-  }
-  const url = URL.createObjectURL(file);
-  const img = new Image(); img.decoding='async'; img.src=url;
-  await img.decode(); URL.revokeObjectURL(url);
-  return img;
-}
-function scaleDims(w, h, maxEdge){
-  const s = Math.min(1, maxEdge / Math.max(w, h));
-  return { w: Math.round(w*s), h: Math.round(h*s) };
-}
-async function bitmapToBlob(bmp, maxEdge, quality=JPEG_QUALITY, type='image/jpeg'){
-  const { w, h } = scaleDims(bmp.width, bmp.height, maxEdge);
-  const c = ('OffscreenCanvas' in window) ? new OffscreenCanvas(w, h) : Object.assign(document.createElement('canvas'), { width:w, height:h });
-  if (!('width' in c)) { c.width = w; c.height = h; }
-  const ctx = c.getContext('2d');
-  ctx.imageSmoothingEnabled = true;
-  ctx.imageSmoothingQuality = 'high';
-  ctx.drawImage(bmp, 0, 0, w, h);
-  const blob = await (c.convertToBlob ? c.convertToBlob({ type, quality }) : new Promise(res => c.toBlob(res, type, quality)));
-  return { blob, width:w, height:h };
-}
-
-/* ---------- Geolocation ---------- */
-async function getCoords(){
-  if (!('geolocation' in navigator)) return null;
-  try{
-    return await new Promise((resolve)=> {
-      navigator.geolocation.getCurrentPosition(
-        pos => resolve({ lat: +pos.coords.latitude.toFixed(6), lng: +pos.coords.longitude.toFixed(6), accuracy: pos.coords.accuracy }),
-        _ => resolve(null),
-        { enableHighAccuracy:true, maximumAge:60000, timeout:10000 }
-      );
-    });
-  }catch{ return null; }
-}
-
-/* ---------- Upload flow (auto-GPS) ---------- */
-async function processFilesForScenario(files, scenarioId, uploadsContainerId){
-  if (!files?.length) return;
-  await ensureAuthed();
-  loading(true);
-  try{
-    const coords = await getCoords(); // once per batch
-    for (const file of files){
-      const card = document.createElement('div');
-      card.innerHTML = `<div class="tag small">Preparing…</div>`;
-      $(uploadsContainerId).prepend(card);
-      const status = (t)=>{ card.querySelector('.tag').textContent=t; };
-
-      try{
-        status('Decoding…');
-        const bmp = await fileToBitmap(file);
-        status('Resizing…');
-        const { blob: fullBlob, width, height } = await bitmapToBlob(bmp, ORIG_MAX_EDGE, JPEG_QUALITY, 'image/jpeg');
-        const { blob: thumbBlob }               = await bitmapToBlob(bmp, THUMB_MAX_EDGE, 0.8, 'image/jpeg');
-
-        const ts = Date.now();
-        const basePath = `scenarios/${scenarioId}/${ts}`;
-        const fullRef  = stRef(storage, `${basePath}.jpg`);
-        const thumbRef = stRef(storage, `scenarios/${scenarioId}/thumbs/${ts}.jpg`);
-        const meta = { contentType: 'image/jpeg', cacheControl: 'public,max-age=31536000,immutable' };
-
-        status('Uploading full…'); await uploadBytes(fullRef,  fullBlob,  meta);
-        status('Uploading thumb…'); await uploadBytes(thumbRef, thumbBlob, meta);
-
-        status('Finalizing…');
-        const imageURL = await getDownloadURL(fullRef);
-        const thumbURL = await getDownloadURL(thumbRef);
-
-        status('Saving…');
-        const snap = await get(dbRef(db, `${ROOT}/${scenarioId}`));
-        const sc = snap.val();
-        const stops = coerceStops(sc);
-        stops.push({
-          type:'photo', title:'', caption:'',
-          lat: coords?.lat ?? null, lng: coords?.lng ?? null, locAccuracy: coords?.accuracy ?? null,
-          radiusMeters:50,
-          imageURL, thumbURL,
-          storagePath:`${basePath}.jpg`, thumbPath:`scenarios/${scenarioId}/thumbs/${ts}.jpg`,
-          gsUri:`gs://dailyquiz-d5279.firebasestorage.app/${basePath}.jpg`,
-          width, height, overlays:[]
-        });
-        setStops(sc, stops);
-        await set(dbRef(db, `${ROOT}/${scenarioId}`), sc);
-        status(coords ? 'Uploaded ✓ (GPS set)' : 'Uploaded ✓ (no GPS)');
-      }catch(ex){
-        status('Failed'); err('Upload failed: '+(ex.message||ex));
-      }
-    }
-    ok('Photos processed.');
-  }finally{ loading(false); }
-}
-
-/* ---------- Create / Edit wiring (now safe) ---------- */
+/* ---------------- Create / Edit wiring ---------------- */
 if ($('createBtn')) $('createBtn').onclick = async ()=>{
   try{
     await ensureAuthed();
@@ -444,15 +454,19 @@ if ($('createBtn')) $('createBtn').onclick = async ()=>{
     $('eTitle').value  = title;
     $('eDesc').value   = desc;
     renderScenario(id);
-  }catch(e){ err('Create failed: '+(e.message||e)); }
-  finally{ $('createBtn').disabled = false; loading(false); }
+  }catch(e){
+    const msg = e?.code || e?.message || e;
+    if (String(msg).includes('PERMISSION_DENIED')) {
+      err('Create failed: Realtime Database rules block writes to "/scenarios". Enable auth writes in Firebase rules.');
+    } else {
+      err('Create failed: ' + msg);
+    }
+  }finally{
+    $('createBtn').disabled = false; loading(false);
+  }
 };
 
-if ($('refreshBtn')) $('refreshBtn').onclick = async ()=>{
-  await ensureAuthed();
-  await safeLoadScenarios();
-};
-
+if ($('refreshBtn')) $('refreshBtn').onclick = async ()=>{ await ensureAuthed(); await safeLoadScenarios(); };
 if ($('eSelect')) $('eSelect').onchange = ()=>{ const id=$('eSelect').value; if (id) renderScenario(id); };
 
 if ($('saveMeta')) $('saveMeta').onclick = async ()=>{
@@ -467,11 +481,15 @@ if ($('saveMeta')) $('saveMeta').onclick = async ()=>{
     await set(dbRef(db, `${ROOT}/${id}`), sc);
     ok('Scenario saved');
     await safeLoadScenarios(); $('eSelect').value=id; renderScenario(id);
-  }catch(e){ err('Save failed: '+(e.message||e)); }
-  finally{ loading(false); }
+  }catch(e){
+    const msg = e?.code || e?.message || e;
+    if (String(msg).includes('PERMISSION_DENIED')) {
+      err('Save failed: DB rules block writes to "/scenarios".');
+    } else { err('Save failed: '+msg); }
+  }finally{ loading(false); }
 };
 
-/* Create pane file pickers */
+/* ---------------- File input listeners (no programmatic .click()) ---------------- */
 if ($('cFilesCam')) $('cFilesCam').addEventListener('change', async (e)=>{
   if (!createdId){ err('Create a scenario first.'); e.target.value=''; return; }
   await processFilesForScenario(Array.from(e.target.files||[]), createdId, 'cUploads');
@@ -482,8 +500,6 @@ if ($('cFilesLib')) $('cFilesLib').addEventListener('change', async (e)=>{
   await processFilesForScenario(Array.from(e.target.files||[]), createdId, 'cUploads');
   e.target.value='';
 });
-
-/* Edit pane file pickers */
 if ($('eFilesCam')) $('eFilesCam').addEventListener('change', async (e)=>{
   const id=$('eSelect').value; if(!id){ err('Select a scenario first.'); e.target.value=''; return; }
   await processFilesForScenario(Array.from(e.target.files||[]), id, 'eUploads');
@@ -497,7 +513,7 @@ if ($('eFilesLib')) $('eFilesLib').addEventListener('change', async (e)=>{
   e.target.value='';
 });
 
-/* ---------- Photo editor ---------- */
+/* ---------------- Photo editor modal ---------------- */
 let pmCtx = { scenarioId:null, index:-1 };
 function openPhotoEditor(scenarioId, index){
   pmCtx = { scenarioId, index };
@@ -517,9 +533,7 @@ if ($('pmUseMyLoc')) $('pmUseMyLoc').onclick = async ()=>{
   $('pmGpsStatus').textContent = 'Getting GPS…';
   const coords = await getCoords();
   if (!coords){ $('pmGpsStatus').textContent='GPS failed'; err('Could not get GPS.'); return; }
-  $('pmLat').value = coords.lat;
-  $('pmLng').value = coords.lng;
-  $('pmGpsStatus').textContent = 'GPS ✓';
+  $('pmLat').value = coords.lat; $('pmLng').value = coords.lng; $('pmGpsStatus').textContent = 'GPS ✓';
 };
 if ($('pmSave')) $('pmSave').onclick = async ()=>{
   const { scenarioId, index } = pmCtx; if (!scenarioId || index<0) return;
@@ -540,16 +554,19 @@ if ($('pmSave')) $('pmSave').onclick = async ()=>{
     ok('Photo saved');
     $('photoModal').style.display='none';
     await safeLoadScenarios(); $('eSelect').value=scenarioId; renderScenario(scenarioId);
-  }catch(e){ err('Save photo failed: '+(e.message||e)); }
-  finally{ loading(false); }
+  }catch(e){
+    const msg = e?.code || e?.message || e;
+    if (String(msg).includes('PERMISSION_DENIED')) {
+      err('Save photo failed: DB rules block writes to "/scenarios".');
+    } else { err('Save photo failed: '+msg); }
+  }finally{ loading(false); }
 };
 
-/* ---------- Live updates (subscribe AFTER auth) ---------- */
+/* ---------------- Init (auth first, then subscribe) ---------------- */
 (async function init(){
   try{
     loading(true);
     await ensureAuthed();
-    // subscribe
     onValue(dbRef(db, ROOT), snap=>{
       const obj=snap.val()||{};
       scenarios = Object.entries(obj).map(([id,s])=>({ id, _raw:s, _stops:coerceStops(s), ...s }))
@@ -560,7 +577,7 @@ if ($('pmSave')) $('pmSave').onclick = async ()=>{
     });
     await safeLoadScenarios();
   }catch(e){
-    err('Startup failed: '+(e.message||e));
+    err('Startup failed: '+(e?.message||e));
   }finally{
     loading(false);
   }
