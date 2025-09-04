@@ -38,6 +38,14 @@ hr{ border:none; height:1px; background:rgba(255,255,255,.08); margin:12px 0 }
 #loader{ position:fixed; inset:0; display:none; place-items:center; z-index:99; background:rgba(6,12,20,.55); backdrop-filter:blur(2px) }
 .spinner{ width:42px; height:42px; border-radius:999px; border:4px solid rgba(255,255,255,.25); border-top-color:#fff; animation:spin 1s linear infinite }
 @keyframes spin{ to{ transform:rotate(360deg) } }
+
+/* modal */
+#photoModal{ position:fixed; inset:0; display:none; place-items:center; z-index:999; background:rgba(5,10,18,.6); backdrop-filter:blur(2px) }
+.modal-card{ width:min(760px,96vw); background:var(--card); border:1px solid var(--edge); border-radius:16px; padding:14px }
+.modal-head{ display:flex; align-items:center; gap:8px; margin-bottom:8px }
+.modal-body{ display:grid; grid-template-columns:220px 1fr; gap:12px }
+.modal-body img{ width:100%; border-radius:10px; border:1px solid rgba(255,255,255,.12); aspect-ratio: 4 / 3; object-fit:cover }
+.modal-actions{ display:flex; justify-content:flex-end; gap:8px; margin-top:10px }
 </style>
 </head>
 <body>
@@ -67,8 +75,17 @@ hr{ border:none; height:1px; background:rgba(255,255,255,.08); margin:12px 0 }
       <span id="createStatus" class="tag">Ready</span>
     </div>
     <hr />
-    <h4>Add Photos</h4>
-    <input id="cFiles" type="file" accept="image/*" capture="environment" multiple />
+    <h4>Add Photos (auto GPS)</h4>
+
+    <!-- Hidden inputs: camera vs library -->
+    <input id="cFilesCam" type="file" accept="image/*" capture="environment" multiple style="display:none" />
+    <input id="cFilesLib" type="file" accept="image/*" multiple style="display:none" />
+
+    <div class="row">
+      <button id="cBtnCam" class="btn">📷 Take Photo</button>
+      <button id="cBtnLib" class="btn">🖼️ Choose from Library</button>
+    </div>
+
     <div class="small" style="margin:6px 0">Photos are resized to max <b>1600px</b> (thumbs at <b>480px</b>) to save space & speed up loads.</div>
     <div id="cUploads" class="grid"></div>
   </section>
@@ -84,7 +101,7 @@ hr{ border:none; height:1px; background:rgba(255,255,255,.08); margin:12px 0 }
     </div>
 
     <hr />
-    <div class="row">
+    <div class="row" style="margin-bottom:6px">
       <div style="flex:1">
         <label>Title</label>
         <input id="eTitle" class="input" />
@@ -98,8 +115,17 @@ hr{ border:none; height:1px; background:rgba(255,255,255,.08); margin:12px 0 }
     <textarea id="eDesc"></textarea>
 
     <hr />
-    <h4>Add Photos</h4>
-    <input id="eFiles" type="file" accept="image/*" capture="environment" multiple />
+    <h4>Add Photos (auto GPS)</h4>
+
+    <!-- Hidden inputs: camera vs library -->
+    <input id="eFilesCam" type="file" accept="image/*" capture="environment" multiple style="display:none" />
+    <input id="eFilesLib" type="file" accept="image/*" multiple style="display:none" />
+
+    <div class="row">
+      <button id="eBtnCam" class="btn">📷 Take Photo</button>
+      <button id="eBtnLib" class="btn">🖼️ Choose from Library</button>
+    </div>
+
     <div id="eUploads" class="grid" style="margin-top:8px"></div>
 
     <hr />
@@ -107,6 +133,45 @@ hr{ border:none; height:1px; background:rgba(255,255,255,.08); margin:12px 0 }
     <div id="stopsGrid" class="grid"></div>
   </section>
 </main>
+
+<!-- Photo editor modal -->
+<div id="photoModal">
+  <div class="modal-card">
+    <div class="modal-head">
+      <div class="brand">Edit Photo</div>
+      <div class="spacer"></div>
+      <button id="pmClose" class="btn">Close</button>
+    </div>
+    <div class="modal-body">
+      <img id="pmPreview" src="" alt="preview"/>
+      <div>
+        <label>Title</label>
+        <input id="pmTitle" class="input" />
+        <label>Caption / Notes</label>
+        <textarea id="pmCaption"></textarea>
+        <div class="row">
+          <div style="flex:1">
+            <label>Latitude</label>
+            <input id="pmLat" class="input" placeholder="e.g. 39.7392" />
+          </div>
+          <div style="flex:1">
+            <label>Longitude</label>
+            <input id="pmLng" class="input" placeholder="-104.9903" />
+          </div>
+        </div>
+        <div class="row">
+          <button id="pmUseMyLoc" class="btn">Use My Location</button>
+          <span id="pmGpsStatus" class="tag">—</span>
+        </div>
+        <label>Radius (meters)</label>
+        <input id="pmRadius" class="input" type="number" min="1" step="1" />
+      </div>
+    </div>
+    <div class="modal-actions">
+      <button id="pmSave" class="btn">Save Photo</button>
+    </div>
+  </div>
+</div>
 
 <!-- Firebase (modules) -->
 <script type="module">
@@ -177,6 +242,20 @@ async function bitmapToBlob(bmp, maxEdge, quality=JPEG_QUALITY, type='image/jpeg
   return { blob, width:w, height:h };
 }
 
+/* ---------- Location helpers ---------- */
+async function getCoords(){
+  if (!('geolocation' in navigator)) return null;
+  try{
+    return await new Promise((resolve)=> {
+      navigator.geolocation.getCurrentPosition(
+        pos => resolve({ lat: +pos.coords.latitude.toFixed(6), lng: +pos.coords.longitude.toFixed(6), accuracy: pos.coords.accuracy }),
+        _ => resolve(null),
+        { enableHighAccuracy:true, maximumAge:60000, timeout:10000 }
+      );
+    });
+  }catch{ return null; }
+}
+
 /* ---------- Data helpers ---------- */
 const ROOT='scenarios';
 let scenarios=[];
@@ -244,72 +323,63 @@ $('createBtn').onclick = async ()=>{
   finally{ $('createBtn').disabled = false; }
 };
 
-/* ---------- Upload helper (shared by create & edit) ---------- */
-async function uploadScenarioPhotoMinSize(file, scenarioId, onStatus){
-  if (!file || !scenarioId) throw new Error('Missing file or scenario ID');
-  onStatus?.('Decoding…');
-  const bmp = await fileToBitmap(file);
-
-  onStatus?.('Resizing…');
-  const { blob: fullBlob, width, height } = await bitmapToBlob(bmp, ORIG_MAX_EDGE, JPEG_QUALITY, 'image/jpeg');
-  const { blob: thumbBlob }               = await bitmapToBlob(bmp, THUMB_MAX_EDGE, 0.8, 'image/jpeg');
-
-  const ts = Date.now();
-  const basePath = `scenarios/${scenarioId}/${ts}`;
-  const fullRef  = stRef(storage, `${basePath}.jpg`);
-  const thumbRef = stRef(storage, `scenarios/${scenarioId}/thumbs/${ts}.jpg`);
-  const meta = { contentType: 'image/jpeg', cacheControl: 'public,max-age=31536000,immutable' };
-
-  onStatus?.('Uploading full…');
-  await uploadBytes(fullRef,  fullBlob,  meta);
-  onStatus?.('Uploading thumb…');
-  await uploadBytes(thumbRef, thumbBlob, meta);
-
-  onStatus?.('Finalizing…');
-  const imageURL = await getDownloadURL(fullRef);
-  const thumbURL = await getDownloadURL(thumbRef);
-
-  return {
-    imageURL, thumbURL,
-    storagePath: `${basePath}.jpg`,
-    thumbPath:   `scenarios/${scenarioId}/thumbs/${ts}.jpg`,
-    gsUri:       `gs://dailyquiz-d5279.firebasestorage.app/${basePath}.jpg`,
-    width, height
-  };
-}
-
-/* ---------- Create pane: add photos ---------- */
-$('cFiles').addEventListener('change', async (e)=>{
+/* ----- unified upload handler with auto-GPS ----- */
+async function processFilesForScenario(files, scenarioId, uploadsContainerId){
+  if (!files?.length) return;
+  await ensureAuthed();
+  loading(true);
   try{
-    if (!createdId){ err('Create a scenario first.'); return; }
-    await ensureAuthed();
-    const files = Array.from(e.target.files||[]);
-    if (!files.length) return;
+    // get location once per selection (better UX)
+    const coords = await getCoords();
 
-    loading(true);
     for (const file of files){
       const card = document.createElement('div');
       card.innerHTML = `<div class="tag small">New photo</div>`;
-      $('cUploads').prepend(card);
+      $(uploadsContainerId).prepend(card);
       const status = (t)=>{ card.querySelector('.tag').textContent=t; };
 
       try{
-        const saved = await uploadScenarioPhotoMinSize(file, createdId, status);
+        status('Decoding…');
+        const bmp = await fileToBitmap(file);
+
+        status('Resizing…');
+        const { blob: fullBlob, width, height } = await bitmapToBlob(bmp, ORIG_MAX_EDGE, JPEG_QUALITY, 'image/jpeg');
+        const { blob: thumbBlob }               = await bitmapToBlob(bmp, THUMB_MAX_EDGE, 0.8, 'image/jpeg');
+
+        const ts = Date.now();
+        const basePath = `scenarios/${scenarioId}/${ts}`;
+        const fullRef  = stRef(storage, `${basePath}.jpg`);
+        const thumbRef = stRef(storage, `scenarios/${scenarioId}/thumbs/${ts}.jpg`);
+        const meta = { contentType: 'image/jpeg', cacheControl: 'public,max-age=31536000,immutable' };
+
+        status('Uploading full…'); await uploadBytes(fullRef,  fullBlob,  meta);
+        status('Uploading thumb…'); await uploadBytes(thumbRef, thumbBlob, meta);
+
+        status('Finalizing…');
+        const imageURL = await getDownloadURL(fullRef);
+        const thumbURL = await getDownloadURL(thumbRef);
+
         status('Saving to DB…');
-        // Append stop
-        const snap = await get(dbRef(db, `${ROOT}/${createdId}`));
+        const snap = await get(dbRef(db, `${ROOT}/${scenarioId}`));
         const sc = snap.val();
         const stops = coerceStops(sc);
         const stop = {
-          type:'photo', title:'', caption:'', lat:null, lng:null, radiusMeters:50,
-          imageURL:saved.imageURL, thumbURL:saved.thumbURL,
-          storagePath:saved.storagePath, thumbPath:saved.thumbPath, gsUri:saved.gsUri,
-          width:saved.width, height:saved.height, overlays:[]
+          type:'photo',
+          title:'', caption:'',
+          lat: coords?.lat ?? null,
+          lng: coords?.lng ?? null,
+          locAccuracy: coords?.accuracy ?? null,
+          radiusMeters:50,
+          imageURL, thumbURL,
+          storagePath:`${basePath}.jpg`, thumbPath:`scenarios/${scenarioId}/thumbs/${ts}.jpg`,
+          gsUri:`gs://dailyquiz-d5279.firebasestorage.app/${basePath}.jpg`,
+          width, height,
+          overlays:[]
         };
         stops.push(stop);
         setStops(sc, stops);
-        await set(dbRef(db, `${ROOT}/${createdId}`), sc);
-        status('Uploaded ✓');
+        await set(dbRef(db, `${ROOT}/${scenarioId}`), sc);
+        status(coords ? 'Uploaded ✓ (GPS set)' : 'Uploaded ✓ (no GPS)');
       }catch(ex){
         status('Failed'); err('Upload failed: '+(ex.message||ex));
       }
@@ -317,8 +387,22 @@ $('cFiles').addEventListener('change', async (e)=>{
     ok('All selected photos processed.');
   }finally{
     loading(false);
-    e.target.value = '';
   }
+}
+
+/* ---------- Create pane: add photos ---------- */
+$('cBtnCam').onclick = ()=> $('cFilesCam').click();
+$('cBtnLib').onclick = ()=> $('cFilesLib').click();
+
+$('cFilesCam').addEventListener('change', async (e)=>{
+  if (!createdId){ err('Create a scenario first.'); e.target.value=''; return; }
+  await processFilesForScenario(Array.from(e.target.files||[]), createdId, 'cUploads');
+  e.target.value='';
+});
+$('cFilesLib').addEventListener('change', async (e)=>{
+  if (!createdId){ err('Create a scenario first.'); e.target.value=''; return; }
+  await processFilesForScenario(Array.from(e.target.files||[]), createdId, 'cUploads');
+  e.target.value='';
 });
 
 /* ---------- Edit pane ---------- */
@@ -331,19 +415,27 @@ async function renderScenario(id){
   $('eTitle').value = s.title||'';
   $('eDesc').value  = s.description||'';
   $('eStatus').textContent = `${(s._stops||[]).length} photo(s)`;
-  // Render grid
   const grid = $('stopsGrid'); grid.innerHTML='';
   if (!s._stops?.length){ grid.innerHTML='<div class="small tag">No photos yet</div>'; return; }
+
   s._stops.forEach((st, idx)=>{
     const el = document.createElement('div');
     const thumb = st.thumbURL || st.imageURL || '';
+    const hasGPS = (st.lat!=null && st.lng!=null);
     el.innerHTML = `
       <img class="thumb" src="${thumb}" alt="thumb" />
       <div class="small" style="margin-top:6px">${st.title||('Stop '+(idx+1))}</div>
       <div class="row" style="margin-top:6px">
+        <span class="tag small">${hasGPS ? 'GPS ✓' : 'GPS —'}</span>
+      </div>
+      <div class="row" style="margin-top:6px">
+        <button class="btn" data-edit="${idx}">Edit</button>
+        <button class="btn" data-gps="${idx}">Set GPS</button>
         <button class="btn" data-del="${idx}" style="background:#2a0f14;border-color:#7a2b2b">Delete</button>
       </div>
     `;
+
+    // Delete
     el.querySelector('[data-del]').onclick = async ()=>{
       try{
         loading(true);
@@ -355,10 +447,32 @@ async function renderScenario(id){
       }catch(e){ err('Delete failed: '+(e.message||e)); }
       finally{ loading(false); }
     };
+
+    // Inline set GPS
+    el.querySelector('[data-gps]').onclick = async ()=>{
+      const coords = await getCoords();
+      if (!coords){ err('Could not get GPS (permission or signal).'); return; }
+      try{
+        loading(true);
+        const snap = await get(dbRef(db, `${ROOT}/${id}`));
+        const sc = snap.val(); const arr = coerceStops(sc);
+        if (!arr[idx]) return;
+        arr[idx].lat = coords.lat; arr[idx].lng = coords.lng; arr[idx].locAccuracy = coords.accuracy ?? null;
+        setStops(sc, arr);
+        await set(dbRef(db, `${ROOT}/${id}`), sc);
+        ok('GPS saved'); await loadScenarios(); renderScenario(id);
+      }catch(e){ err('Save GPS failed: '+(e.message||e)); }
+      finally{ loading(false); }
+    };
+
+    // Edit
+    el.querySelector('[data-edit]').onclick = ()=> openPhotoEditor(id, idx);
+
     grid.appendChild(el);
   });
 }
 
+/* Scenario meta save */
 $('saveMeta').onclick = async ()=>{
   try{
     const id=$('eSelect').value; if(!id) return;
@@ -375,48 +489,73 @@ $('saveMeta').onclick = async ()=>{
 };
 
 /* Edit pane: add photos */
-$('eFiles').addEventListener('change', async (e)=>{
+$('eBtnCam').onclick = ()=> $('eFilesCam').click();
+$('eBtnLib').onclick = ()=> $('eFilesLib').click();
+
+$('eFilesCam').addEventListener('change', async (e)=>{
   const id=$('eSelect').value; if(!id){ err('Select a scenario first.'); e.target.value=''; return; }
-  try{
-    await ensureAuthed();
-    const files = Array.from(e.target.files||[]);
-    if (!files.length) return;
-
-    loading(true);
-    for (const file of files){
-      const card = document.createElement('div');
-      card.innerHTML = `<div class="tag small">New photo</div>`;
-      $('eUploads').prepend(card);
-      const status = (t)=>{ card.querySelector('.tag').textContent=t; };
-
-      try{
-        const saved = await uploadScenarioPhotoMinSize(file, id, status);
-        status('Saving to DB…');
-        // Append stop
-        const snap = await get(dbRef(db, `${ROOT}/${id}`));
-        const sc = snap.val();
-        const stops = coerceStops(sc);
-        const stop = {
-          type:'photo', title:'', caption:'', lat:null, lng:null, radiusMeters:50,
-          imageURL:saved.imageURL, thumbURL:saved.thumbURL,
-          storagePath:saved.storagePath, thumbPath:saved.thumbPath, gsUri:saved.gsUri,
-          width:saved.width, height:saved.height, overlays:[]
-        };
-        stops.push(stop);
-        setStops(sc, stops);
-        await set(dbRef(db, `${ROOT}/${id}`), sc);
-        status('Uploaded ✓');
-      }catch(ex){
-        status('Failed'); err('Upload failed: '+(ex.message||ex));
-      }
-    }
-    await loadScenarios(); $('eSelect').value=id; renderScenario(id);
-    ok('Photos added.');
-  }finally{
-    loading(false);
-    e.target.value = '';
-  }
+  await processFilesForScenario(Array.from(e.target.files||[]), id, 'eUploads');
+  await loadScenarios(); $('eSelect').value=id; renderScenario(id);
+  e.target.value='';
 });
+$('eFilesLib').addEventListener('change', async (e)=>{
+  const id=$('eSelect').value; if(!id){ err('Select a scenario first.'); e.target.value=''; return; }
+  await processFilesForScenario(Array.from(e.target.files||[]), id, 'eUploads');
+  await loadScenarios(); $('eSelect').value=id; renderScenario(id);
+  e.target.value='';
+});
+
+/* ---------- Photo editor modal ---------- */
+let pmCtx = { scenarioId:null, index:-1 };
+
+function openPhotoEditor(scenarioId, index){
+  pmCtx = { scenarioId, index };
+  const s = scenarios.find(x=>x.id===scenarioId); if(!s) return;
+  const st = (s._stops||[])[index]; if(!st) return;
+
+  $('pmPreview').src = st.imageURL || st.thumbURL || '';
+  $('pmTitle').value = st.title || '';
+  $('pmCaption').value = st.caption || '';
+  $('pmLat').value = (st.lat ?? '').toString();
+  $('pmLng').value = (st.lng ?? '').toString();
+  $('pmRadius').value = (st.radiusMeters ?? 50);
+
+  $('pmGpsStatus').textContent = (st.lat!=null && st.lng!=null) ? 'GPS ✓' : 'GPS —';
+  $('photoModal').style.display = 'grid';
+}
+$('pmClose').onclick = ()=>{ $('photoModal').style.display='none'; };
+
+$('pmUseMyLoc').onclick = async ()=>{
+  $('pmGpsStatus').textContent = 'Getting GPS…';
+  const coords = await getCoords();
+  if (!coords){ $('pmGpsStatus').textContent='GPS failed'; err('Could not get GPS.'); return; }
+  $('pmLat').value = coords.lat;
+  $('pmLng').value = coords.lng;
+  $('pmGpsStatus').textContent = 'GPS ✓';
+};
+
+$('pmSave').onclick = async ()=>{
+  const { scenarioId, index } = pmCtx; if (!scenarioId || index<0) return;
+  try{
+    loading(true);
+    const snap = await get(dbRef(db, `${ROOT}/${scenarioId}`));
+    const sc = snap.val(); const arr = coerceStops(sc);
+    const st = arr[index]; if (!st) throw new Error('Photo not found');
+
+    st.title = $('pmTitle').value.trim();
+    st.caption = $('pmCaption').value.trim();
+    const lat = $('pmLat').value.trim(); const lng = $('pmLng').value.trim();
+    st.lat = lat==='' ? null : Number(lat);
+    st.lng = lng==='' ? null : Number(lng);
+    st.radiusMeters = Math.max(1, parseInt(($('pmRadius').value||'50'),10));
+    setStops(sc, arr);
+    await set(dbRef(db, `${ROOT}/${scenarioId}`), sc);
+    ok('Photo saved');
+    $('photoModal').style.display='none';
+    await loadScenarios(); $('eSelect').value=scenarioId; renderScenario(scenarioId);
+  }catch(e){ err('Save photo failed: '+(e.message||e)); }
+  finally{ loading(false); }
+};
 </script>
 </body>
 </html>
