@@ -6,10 +6,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
 <meta name="theme-color" content="#0b0f14" />
 <style>
-:root{
-  --bg:#0b0f14; --bg2:#0e1421; --card:#0f1624; --edge:rgba(255,255,255,.10);
-  --text:#eaf2ff; --muted:#93a0b5;
-}
+:root{ --bg:#0b0f14; --bg2:#0e1421; --card:#0f1624; --edge:rgba(255,255,255,.10); --text:#eaf2ff; --muted:#93a0b5; }
 *{box-sizing:border-box}
 html,body{margin:0;height:100%;font-family:system-ui,-apple-system,Segoe UI,Roboto,Inter,Arial,sans-serif;color:var(--text);
   background:
@@ -26,6 +23,7 @@ html,body{margin:0;height:100%;font-family:system-ui,-apple-system,Segoe UI,Robo
 .tag{display:inline-flex;align-items:center;gap:8px;padding:6px 10px;border-radius:999px;border:1px solid rgba(255,255,255,.16);color:var(--muted)}
 .small{font-size:12px;opacity:.9}
 hr{border:none;height:1px;background:rgba(255,255,255,.08);margin:12px 0}
+
 main{max-width:1200px;margin:16px auto 40px;padding:0 16px;display:grid;grid-template-columns:340px 1fr;gap:12px}
 .card{background:var(--card);border:1px solid var(--edge);border-radius:16px;padding:12px;min-height:120px}
 label{display:block;margin:8px 0 6px 2px;font-size:12px;color:var(--muted)}
@@ -35,17 +33,13 @@ textarea{min-height:80px}
 .grid{display:grid;grid-template-columns:repeat(auto-fill, minmax(140px,1fr));gap:10px}
 .thumb{width:100%;height:110px;object-fit:cover;border-radius:10px;background:#0a1a2a;border:1px solid rgba(255,255,255,.14)}
 .visually-hidden{position:absolute; left:-9999px; top:auto; width:0.1px; height:0.1px; opacity:0; overflow:hidden; z-index:-1}
+
+/* toasts + loader */
 #errbar{position:fixed;left:10px;bottom:10px;background:#2b0d0d;color:#ffd7d7;border:1px solid #7a2b2b;border-radius:12px;padding:8px 12px;display:none;z-index:9999;max-width:90vw}
 #okbar{position:fixed;left:10px;bottom:56px;background:#0f2a19;color:#d8ffe2;border:1px solid #2c7a4b;border-radius:12px;padding:8px 12px;display:none;z-index:9999;max-width:90vw}
 #loader{position:fixed;inset:0;display:none;place-items:center;z-index:99;background:rgba(6,12,20,.55);backdrop-filter:blur(2px)}
 .spinner{width:42px;height:42px;border-radius:999px;border:4px solid rgba(255,255,255,.25);border-top-color:#fff;animation:spin 1s linear infinite}
 @keyframes spin{to{transform:rotate(360deg)}}
-#photoModal{position:fixed;inset:0;display:none;place-items:center;z-index:999;background:rgba(5,10,18,.6);backdrop-filter:blur(2px)}
-.modal-card{width:min(760px,96vw);background:var(--card);border:1px solid var(--edge);border-radius:16px;padding:14px}
-.modal-head{display:flex;align-items:center;gap:8px;margin-bottom:8px}
-.modal-body{display:grid;grid-template-columns:220px 1fr;gap:12px}
-.modal-body img{width:100%;border-radius:10px;border:1px solid rgba(255,255,255,.12);aspect-ratio:4/3;object-fit:cover}
-.modal-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:10px}
 </style>
 </head>
 <body>
@@ -149,81 +143,38 @@ textarea{min-height:80px}
   </section>
 </main>
 
-<!-- Photo editor modal -->
-<div id="photoModal">
-  <div class="modal-card">
-    <div class="modal-head">
-      <div class="brand">Edit Photo</div>
-      <div class="spacer"></div>
-      <button id="pmClose" class="btn">Close</button>
-    </div>
-    <div class="modal-body">
-      <img id="pmPreview" src="" alt="preview"/>
-      <div>
-        <label>Title</label>
-        <input id="pmTitle" class="input" />
-        <label>Caption / Notes</label>
-        <textarea id="pmCaption"></textarea>
-        <div class="row">
-          <div style="flex:1">
-            <label>Latitude</label>
-            <input id="pmLat" class="input" placeholder="e.g. 39.7392" />
-          </div>
-          <div style="flex:1">
-            <label>Longitude</label>
-            <input id="pmLng" class="input" placeholder="-104.9903" />
-          </div>
-        </div>
-        <div class="row">
-          <button id="pmUseMyLoc" class="btn">Use My Location</button>
-          <span id="pmGpsStatus" class="tag">—</span>
-        </div>
-        <label>Radius (meters)</label>
-        <input id="pmRadius" class="input" type="number" min="1" step="1" />
-      </div>
-    </div>
-    <div class="modal-actions">
-      <button id="pmSave" class="btn">Save Photo</button>
-    </div>
-  </div>
-</div>
-
 <script type="module">
-/* -------- iOS safety & error surfacing -------- */
-window.onerror = (m,src,lin,col,err)=>{ const b=document.getElementById('errbar'); if(b){ b.textContent = 'Script error: '+(err?.message||m); b.style.display='block'; } document.getElementById('loader').style.display='none'; };
-window.onunhandledrejection = (e)=>{ const b=document.getElementById('errbar'); if(b){ b.textContent = 'Unhandled: '+(e.reason?.message||String(e.reason||e)); b.style.display='block'; } document.getElementById('loader').style.display='none'; };
+/* ---------- iOS safety & tiny polyfills ---------- */
+window.onerror = function(m,src,lin,col,err){ var b=document.getElementById('errbar'); if(b){ b.textContent='Script error: '+(err&&err.message?err.message:m); b.style.display='block'; } document.getElementById('loader').style.display='none'; };
+window.onunhandledrejection = function(e){ var b=document.getElementById('errbar'); if(b){ b.textContent='Unhandled: '+(e && e.reason && e.reason.message ? e.reason.message : String(e && e.reason ? e.reason : e)); b.style.display='block'; } document.getElementById('loader').style.display='none'; };
 if (!HTMLCanvasElement.prototype.toBlob) {
   HTMLCanvasElement.prototype.toBlob = function (cb, type, quality) {
-    const bin = atob(this.toDataURL(type, quality).split(',')[1]);
-    const len = bin.length, u8 = new Uint8Array(len);
-    for (let i=0;i<len;i++) u8[i] = bin.charCodeAt(i);
+    var bin = atob(this.toDataURL(type, quality).split(',')[1]);
+    var len = bin.length, u8 = new Uint8Array(len);
+    for (var i=0;i<len;i++) u8[i] = bin.charCodeAt(i);
     cb(new Blob([u8], { type: type || 'image/png' }));
   };
 }
+if (!Object.entries) { Object.entries = function(obj){ var keys = Object.keys(obj); var out=[]; for (var i=0;i<keys.length;i++){ out.push([keys[i], obj[keys[i]]]); } return out; }; }
 
-/* ---------------- UI helpers ---------------- */
-const $ = (id)=>document.getElementById(id);
-const show = (id, on)=>{ const el=$(id); if (el) el.style.display = on ? '' : 'none'; };
-const ok = (m)=>{ const b=$('okbar'); if(!b) return; b.textContent=m; b.style.display='block'; setTimeout(()=>b.style.display='none', 2600); };
-const err= (m)=>{ const b=$('errbar'); if(!b) return; b.textContent=m; b.style.display='block'; setTimeout(()=>b.style.display='none', 6000); };
-const loading = (on)=>{ const l=$('loader'); if(l) l.style.display = on ? 'grid' : 'none'; };
-function logDiag(...args){ console.log('[DIAG]', ...args); }
+/* ---------- UI helpers ---------- */
+function $(id){ return document.getElementById(id); }
+function show(id,on){ var el=$(id); if(el) el.style.display = on ? '' : 'none'; }
+function ok(m){ var b=$('okbar'); if(!b) return; b.textContent=m; b.style.display='block'; setTimeout(function(){ b.style.display='none'; }, 2600); }
+function err(m){ var b=$('errbar'); if(!b) return; b.textContent=m; b.style.display='block'; setTimeout(function(){ b.style.display='none'; }, 6000); }
+function loading(on){ var l=$('loader'); if(l) l.style.display = on ? 'grid' : 'none'; }
 
-/* pane toggles */
-if ($('showCreate')) $('showCreate').onclick = ()=>{ show('createPane',true); show('editPane',false); };
-if ($('showEdit'))   $('showEdit').onclick   = ()=>{ show('createPane',false); show('editPane',true); };
+/* panes */
+if ($('showCreate')) $('showCreate').onclick = function(){ show('createPane',true); show('editPane',false); };
+if ($('showEdit')) $('showEdit').onclick = function(){ show('createPane',false); show('editPane',true); };
 
-/* ---------------- Firebase imports ---------------- */
+/* ---------- Firebase (modular SDK) ---------- */
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-app.js";
 import { getDatabase, ref as dbRef, set, push, get, onValue, remove } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-database.js";
 import { getStorage, ref as stRef, uploadBytesResumable, uploadBytes, getDownloadURL, deleteObject } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-storage.js";
-import {
-  getAuth, signInAnonymously, onAuthStateChanged,
-  setPersistence, browserLocalPersistence, browserSessionPersistence, inMemoryPersistence
-} from "https://www.gstatic.com/firebasejs/10.12.4/firebase-auth.js";
+import { getAuth, signInAnonymously, onAuthStateChanged, setPersistence, browserLocalPersistence, browserSessionPersistence, inMemoryPersistence } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-auth.js";
 
-/* ---------------- Firebase config ---------------- */
-const firebaseConfig = {
+var firebaseConfig = {
   apiKey:"AIzaSyDM6DpRSeZueVKRpbyJyDmhf8WY66KyCDk",
   authDomain:"dailyquiz-d5279.firebaseapp.com",
   databaseURL:"https://dailyquiz-d5279-default-rtdb.firebaseio.com",
@@ -232,58 +183,65 @@ const firebaseConfig = {
   appId:"1:94577748034:web:c032d3a1d72db1313de5db",
   measurementId:"G-19DVN7NNH7"
 };
-const appFB = initializeApp(firebaseConfig);
+var appFB = initializeApp(firebaseConfig);
+/* force real bucket */
+var FORCE_BUCKET = "dailyquiz-d5279.appspot.com";
+var storage = getStorage(appFB, "gs://"+FORCE_BUCKET);
+var db = getDatabase(appFB);
+var auth = getAuth(appFB);
 
-/* ✅ Force actual bucket (writes) */
-const FORCE_BUCKET = "dailyquiz-d5279.appspot.com";
-const storage = getStorage(appFB, `gs://${FORCE_BUCKET}`);
-
-const db = getDatabase(appFB);
-const auth = getAuth(appFB);
-
-/* ---------------- Auth (no top-level await) ---------------- */
+/* ---------- Auth ---------- */
 async function initAuth(){
   try{ await setPersistence(auth, browserLocalPersistence); }
-  catch{ try{ await setPersistence(auth, browserSessionPersistence); }
-  catch{ await setPersistence(auth, inMemoryPersistence); } }
+  catch(e1){ try{ await setPersistence(auth, browserSessionPersistence); }
+  catch(e2){ await setPersistence(auth, inMemoryPersistence); } }
   if (!auth.currentUser) await signInAnonymously(auth);
-  await new Promise(res => onAuthStateChanged(auth, u => u && res()));
+  await new Promise(function(res){ onAuthStateChanged(auth, function(u){ if(u) res(); }); });
 }
 async function ensureAuthed(){ if (!auth.currentUser) await initAuth(); return auth.currentUser; }
 
-/* ---------------- Data helpers ---------------- */
-const ROOT='scenarios';
-let scenarios=[]; let createdId=null;
+/* ---------- Data helpers ---------- */
+var ROOT = 'scenarios';
+var scenarios = [];
+var createdId = null;
 
 function coerceStops(sc){
-  if (Array.isArray(sc?.stops)) return sc.stops;
-  if (Array.isArray(sc?.photos)) return sc.photos;
-  if (Array.isArray(sc?.images)) return sc.images;
+  if (sc && Array.isArray(sc.stops)) return sc.stops;
+  if (sc && Array.isArray(sc.photos)) return sc.photos;
+  if (sc && Array.isArray(sc.images)) return sc.images;
   return [];
 }
 function setStops(sc, stops){
-  if (Array.isArray(sc?.stops)) sc.stops = stops;
-  else if (Array.isArray(sc?.photos)) sc.photos = stops;
-  else if (Array.isArray(sc?.images)) sc.images = stops;
+  if (!sc) return;
+  if (Array.isArray(sc.stops)) sc.stops = stops;
+  else if (Array.isArray(sc.photos)) sc.photos = stops;
+  else if (Array.isArray(sc.images)) sc.images = stops;
   else sc.stops = stops;
 }
 function populateEditList(){
-  const sel=$('eSelect'); if(!sel) return;
+  var sel=$('eSelect'); if(!sel) return;
   sel.innerHTML='<option value="">Select…</option>';
-  scenarios.forEach(s=>{
-    const o=document.createElement('option');
-    o.value=s.id; o.textContent=(s.title||'(untitled)') + (s.active?'':' (inactive)');
+  for (var i=0;i<scenarios.length;i++){
+    var s=scenarios[i];
+    var o=document.createElement('option');
+    o.value=s.id; o.textContent=(s.title||'(untitled)') + (s.active? '':' (inactive)');
     sel.appendChild(o);
-  });
+  }
 }
 async function safeLoadScenarios(){
   try{
-    const snap = await get(dbRef(db, ROOT));
-    const obj = snap.exists() ? (snap.val()||{}) : {};
-    scenarios = Object.entries(obj).map(([id,s])=>({ id, _raw:s, _stops:coerceStops(s), ...s }))
-                .sort((a,b)=>(b.createdAt||0)-(a.createdAt||0));
+    var snap = await get(dbRef(db, ROOT));
+    var obj = snap.exists() ? (snap.val()||{}) : {};
+    var arr = [];
+    var entries = Object.entries(obj);
+    for (var i=0;i<entries.length;i++){
+      var id = entries[i][0]; var s = entries[i][1];
+      arr.push({ id:id, _raw:s, _stops:coerceStops(s), title:s && s.title, description:s && s.description, createdAt:s && s.createdAt, active:(s && (s.active!==false)) });
+    }
+    arr.sort(function(a,b){ return (b.createdAt||0)-(a.createdAt||0); });
+    scenarios = arr;
     populateEditList();
-    const cur = $('eSelect').value; if (cur) renderScenario(cur);
+    var cur = $('eSelect').value; if (cur) renderScenario(cur);
     $('eStatus').textContent='Loaded';
   }catch(e){
     console.warn('loadScenarios failed:', e);
@@ -291,173 +249,182 @@ async function safeLoadScenarios(){
   }
 }
 
-/* ---------------- Image helpers ---------------- */
-const ORIG_MAX_EDGE = 1600, THUMB_MAX_EDGE = 480, JPEG_QUALITY = 0.82, MAX_PIXELS = 4_000_000;
+/* ---------- Image helpers (iOS-safe) ---------- */
+var ORIG_MAX_EDGE = 1600, THUMB_MAX_EDGE = 480, JPEG_QUALITY = 0.82, MAX_PIXELS = 4000000;
 
+function loadImageURL(url){
+  return new Promise(function(resolve,reject){
+    var img = new Image();
+    img.onload = function(){ resolve(img); };
+    img.onerror = function(){ reject(new Error('image load error')); };
+    img.src = url;
+  });
+}
 async function decodeToImage(file){
   try{
-    const url = URL.createObjectURL(file);
-    const img = new Image();
-    img.decoding = 'async';
-    img.src = url;
-    await img.decode();
-    return { img, url };
-  }catch{
-    try{ const url = URL.createObjectURL(file); return { img:null, url }; }
-    catch{ return { img:null, url:null }; }
+    var url = URL.createObjectURL(file);
+    var img = await loadImageURL(url);
+    return { img:img, url:url };
+  }catch(e){
+    try{
+      var url2 = URL.createObjectURL(file);
+      return { img:null, url:url2 };
+    }catch(e2){
+      return { img:null, url:null };
+    }
   }
 }
 function scaleByMaxEdgeOrPixels(w,h){
-  const edgeScale = Math.min(1, ORIG_MAX_EDGE / Math.max(w,h));
-  const pixScale = Math.min(1, Math.sqrt(MAX_PIXELS / Math.max(1, w*h)));
-  const s = Math.min(edgeScale, pixScale);
+  var edgeScale = Math.min(1, ORIG_MAX_EDGE / Math.max(w,h));
+  var pixScale = Math.min(1, Math.sqrt(MAX_PIXELS / Math.max(1, w*h)));
+  var s = Math.min(edgeScale, pixScale);
   return { w: Math.max(1, Math.round(w*s)), h: Math.max(1, Math.round(h*s)) };
 }
 async function canvasToBlob(nativeImg, targetEdge){
-  const w = nativeImg.naturalWidth || nativeImg.width;
-  const h = nativeImg.naturalHeight || nativeImg.height;
-  const dims = (targetEdge === ORIG_MAX_EDGE)
-    ? scaleByMaxEdgeOrPixels(w,h)
-    : (()=>{ const s = Math.min(1, targetEdge / Math.max(w,h)); return { w:Math.round(w*s), h:Math.round(h*s) }; })();
-  const c = document.createElement('canvas'); c.width = dims.w; c.height = dims.h;
-  const ctx = c.getContext('2d', { alpha:false, desynchronized:true });
+  var w = nativeImg.naturalWidth || nativeImg.width;
+  var h = nativeImg.naturalHeight || nativeImg.height;
+  var dims;
+  if (targetEdge === ORIG_MAX_EDGE){
+    dims = scaleByMaxEdgeOrPixels(w,h);
+  } else {
+    var s = Math.min(1, targetEdge / Math.max(w,h));
+    dims = { w:Math.round(w*s), h:Math.round(h*s) };
+  }
+  var c = document.createElement('canvas'); c.width = dims.w; c.height = dims.h;
+  var ctx = c.getContext('2d', { alpha:false });
   ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality='high';
   ctx.drawImage(nativeImg, 0, 0, dims.w, dims.h);
-  const blob = await new Promise(res=>c.toBlob(res, 'image/jpeg', JPEG_QUALITY));
-  const dataURL = c.toDataURL('image/jpeg', JPEG_QUALITY);
-  return { blob, dataURL, width:dims.w, height:dims.h };
+  var blob = await new Promise(function(res){ c.toBlob(res, 'image/jpeg', JPEG_QUALITY); });
+  var dataURL = c.toDataURL('image/jpeg', JPEG_QUALITY);
+  return { blob:blob, dataURL:dataURL, width:dims.w, height:dims.h };
 }
-
-/* ---------------- DataURL / Blob utils ---------------- */
 function dataURLtoBlob(dataURL){
-  const [head,b64] = dataURL.split(',');
-  const mime = (/data:(.*?);base64/.exec(head)||[, 'application/octet-stream'])[1];
-  const bin = atob(b64); const len = bin.length; const buf = new Uint8Array(len);
-  for (let i=0;i<len;i++) buf[i] = bin.charCodeAt(i);
+  var parts = dataURL.split(',');
+  var head = parts[0], b64 = parts[1]||'';
+  var mime = (head.match(/data:(.*?);base64/)||[])[1] || 'application/octet-stream';
+  var bin = atob(b64); var len = bin.length; var buf = new Uint8Array(len);
+  for (var i=0;i<len;i++) buf[i] = bin.charCodeAt(i);
   return new Blob([buf], { type:mime });
 }
 function dataURLFromStored(stored){
-  return typeof stored==='string'
-    ? stored
-    : (stored && stored.data ? `data:image/${stored.format||'jpeg'};base64,${stored.data}` : '');
+  if (typeof stored === 'string') return stored;
+  if (stored && stored.data){ return 'data:image/'+(stored.format||'jpeg')+';base64,'+stored.data; }
+  return '';
 }
 function fileToDataURL(file){
-  return new Promise((res,rej)=>{
-    const fr = new FileReader();
-    fr.onload = ()=>res(fr.result);
+  return new Promise(function(res,rej){
+    var fr = new FileReader();
+    fr.onload = function(){ res(fr.result); };
     fr.onerror = rej;
     fr.readAsDataURL(file);
   });
 }
 
-/* ---------------- Geolocation (soft timeout; non-blocking) ---------------- */
-function softCoords(timeoutMs=1200){
-  return new Promise((resolve)=>{
-    let done=false;
-    const finish=(v)=>{ if(!done){ done=true; resolve(v); } };
+/* ---------- Geolocation ---------- */
+function softCoords(timeoutMs){
+  timeoutMs = timeoutMs || 1200;
+  return new Promise(function(resolve){
+    var done=false;
+    function finish(v){ if(!done){ done=true; resolve(v); } }
     if (!('geolocation' in navigator)) return finish(null);
     navigator.geolocation.getCurrentPosition(
-      pos => finish({ lat:+pos.coords.latitude.toFixed(6), lng:+pos.coords.longitude.toFixed(6), accuracy:pos.coords.accuracy }),
-      _ => finish(null),
+      function(pos){ finish({ lat:+pos.coords.latitude.toFixed(6), lng:+pos.coords.longitude.toFixed(6), accuracy:pos.coords.accuracy }); },
+      function(){ finish(null); },
       { enableHighAccuracy:true, maximumAge:60000, timeout:timeoutMs }
     );
-    setTimeout(()=>finish(null), timeoutMs);
+    setTimeout(function(){ finish(null); }, timeoutMs+100);
   });
 }
 
-/* ---------------- Pending review lists ---------------- */
-let pendingCreate = []; // {file,url,title,caption,lat,lng}
-let pendingEdit   = [];
+/* ---------- Pending review lists ---------- */
+var pendingCreate = []; // {file,url,title,caption,lat,lng}
+var pendingEdit   = [];
 
 function enablePendingButtons(scope){
-  const has = (scope==='c') ? pendingCreate.length>0 : pendingEdit.length>0;
-  $(`${scope}SaveAll`).disabled = !has;
-  $(`${scope}Clear`).disabled   = !has;
+  var has = (scope==='c') ? pendingCreate.length>0 : pendingEdit.length>0;
+  $(scope+'SaveAll').disabled = !has;
+  $(scope+'Clear').disabled   = !has;
 }
 function addPending(files, scope){
-  const list = (scope==='c') ? pendingCreate : pendingEdit;
-  for (const f of files){
-    list.push({ file:f, url:null, title:'', caption:'', lat:null, lng:null });
+  var list = (scope==='c') ? pendingCreate : pendingEdit;
+  for (var i=0;i<files.length;i++){
+    list.push({ file:files[i], url:null, title:'', caption:'', lat:null, lng:null });
   }
   renderPending(scope);
 }
-async function renderPending(scope){
-  const list = (scope==='c') ? pendingCreate : pendingEdit;
-  const container = $(`${scope}Pending`);
+function renderPending(scope){
+  var list = (scope==='c') ? pendingCreate : pendingEdit;
+  var container = $(scope+'Pending');
   container.innerHTML='';
-  list.forEach((p, i)=>{
-    if (!p.url){ try{ p.url = URL.createObjectURL(p.file); }catch{ p.url=''; } }
-    const card = document.createElement('div');
-    card.className='pcard';
-    card.style.cssText='padding:8px;border:1px solid rgba(255,255,255,.14);border-radius:12px;background:#0f1624';
-    card.innerHTML=`
-      <img class="thumb" src="${p.url}" alt="preview" onerror="this.replaceWith(Object.assign(document.createElement('div'),{className:'tag small',textContent:'(Preview not supported)'}))" />
-      <div style="display:flex;flex-direction:column;gap:6px;margin-top:6px">
-        <input class="input ptitle" placeholder="Optional title" value="${p.title || ''}">
-        <input class="input pcaption" placeholder="Optional caption" value="${p.caption || ''}">
-      </div>
-      <div class="row" style="justify-content:space-between;margin-top:6px">
-        <span class="tag small" data-status>Ready</span>
-        <div class="row">
-          <button class="btn" data-gps>Use My Location</button>
-          <button class="btn" data-save>Save</button>
-          <button class="btn" data-del style="background:#2a0f14;border-color:#7a2b2b">Discard</button>
-        </div>
-      </div>`;
-    card.querySelector('.ptitle').oninput = e=>{ p.title=e.target.value; };
-    card.querySelector('.pcaption').oninput = e=>{ p.caption=e.target.value; };
-    card.querySelector('[data-del]').onclick = ()=>{
-      try{ if (p.url) URL.revokeObjectURL(p.url); }catch{}
-      list.splice(i,1); renderPending(scope); enablePendingButtons(scope);
-    };
-    card.querySelector('[data-gps]').onclick = async ()=>{
-      const status = card.querySelector('[data-status]');
-      status.textContent='Getting GPS…';
-      const c = await softCoords(2000);
-      if (c){ p.lat=c.lat; p.lng=c.lng; status.textContent='GPS ✓'; } else { status.textContent='GPS —'; err('Could not get GPS.'); }
-    };
-    card.querySelector('[data-save]').onclick = ()=> saveOnePending(scope, i, card);
-    container.appendChild(card);
-  });
+  for (var i=0;i<list.length;i++){
+    (function(i){
+      var p = list[i];
+      if (!p.url){ try{ p.url = URL.createObjectURL(p.file); }catch(e) { p.url=''; } }
+      var card = document.createElement('div');
+      card.style.cssText='padding:8px;border:1px solid rgba(255,255,255,.14);border-radius:12px;background:#0f1624';
+      card.innerHTML =
+        '<img class="thumb" src="'+p.url+'" alt="preview" onerror="this.replaceWith(Object.assign(document.createElement(\\'div\\'),{className:\\'tag small\\',textContent:\\'(Preview not supported)\\'}))" />' +
+        '<div style="display:flex;flex-direction:column;gap:6px;margin-top:6px">' +
+          '<input class="input ptitle" placeholder="Optional title" value="'+(p.title||'')+'">' +
+          '<input class="input pcaption" placeholder="Optional caption" value="'+(p.caption||'')+'">' +
+        '</div>' +
+        '<div class="row" style="justify-content:space-between;margin-top:6px">' +
+          '<span class="tag small" data-status>Ready</span>' +
+          '<div class="row">' +
+            '<button class="btn" data-gps>Use My Location</button>' +
+            '<button class="btn" data-save>Save</button>' +
+            '<button class="btn" data-del style="background:#2a0f14;border-color:#7a2b2b">Discard</button>' +
+          '</div>' +
+        '</div>';
+      container.appendChild(card);
+      card.querySelector('.ptitle').oninput = function(e){ p.title=e.target.value; };
+      card.querySelector('.pcaption').oninput = function(e){ p.caption=e.target.value; };
+      card.querySelector('[data-del]').onclick = function(){
+        try{ if (p.url) URL.revokeObjectURL(p.url); }catch(e){}
+        list.splice(i,1); renderPending(scope); enablePendingButtons(scope);
+      };
+      card.querySelector('[data-gps]').onclick = async function(){
+        var status = card.querySelector('[data-status]');
+        status.textContent='Getting GPS…';
+        var c = await softCoords(2000);
+        if (c){ p.lat=c.lat; p.lng=c.lng; status.textContent='GPS ✓'; } else { status.textContent='GPS —'; err('Could not get GPS.'); }
+      };
+      card.querySelector('[data-save]').onclick = function(){ saveOnePending(scope, i, card); };
+    })(i);
+  }
   enablePendingButtons(scope);
 }
 
-/* ---------------- Cloud Function fallback (server-side upload) ---------------- */
-const FUNCTION_UPLOAD_URL = 'https://us-central1-dailyquiz-d5279.cloudfunctions.net/uploadScenarioImage';
+/* ---------- Cloud Function fallback ---------- */
+var FUNCTION_UPLOAD_URL = 'https://us-central1-dailyquiz-d5279.cloudfunctions.net/uploadScenarioImage';
 async function uploadViaFunction(dataURL, scenarioId, fileName){
-  const resp = await fetch(FUNCTION_UPLOAD_URL, {
-    method:'POST',
-    headers:{ 'Content-Type':'application/json' },
-    body: JSON.stringify({ scenarioId, fileName, dataURL })
+  var resp = await fetch(FUNCTION_UPLOAD_URL, {
+    method:'POST', headers:{ 'Content-Type':'application/json' },
+    body: JSON.stringify({ scenarioId:scenarioId, fileName:fileName, dataURL:dataURL })
   });
-  if (!resp.ok) {
-    const txt = await resp.text();
-    const e = new Error(`Function HTTP ${resp.status} ${txt}`); e.code='save/function-http'; throw e;
-  }
-  const json = await resp.json();
-  if (!json.ok) {
-    const e = new Error(`Function error: ${json.error||'unknown'}`); e.code='save/function-error'; throw e;
-  }
+  if (!resp.ok){ var txt = await resp.text(); var e = new Error('Function HTTP '+resp.status+' '+txt); e.code='save/function-http'; throw e; }
+  var json = await resp.json();
+  if (!json.ok){ var e2 = new Error('Function error: '+(json.error||'unknown')); e2.code='save/function-error'; throw e2; }
   return { url: json.url, path: json.path, gsUri: json.gsUri, via:'function' };
 }
 
-/* ---------------- Upload helpers ---------------- */
+/* ---------- Upload helpers ---------- */
 function extFromType(t){
   if (!t) return '.jpg';
-  const lt = t.toLowerCase();
-  if (lt.includes('jpeg')||lt.includes('jpg')) return '.jpg';
-  if (lt.includes('png')) return '.png';
-  if (lt.includes('heic')||lt.includes('heif')) return '.heic';
-  if (lt.includes('webp')) return '.webp';
+  var lt = String(t).toLowerCase();
+  if (lt.indexOf('jpeg')>=0 || lt.indexOf('jpg')>=0) return '.jpg';
+  if (lt.indexOf('png')>=0) return '.png';
+  if (lt.indexOf('heic')>=0 || lt.indexOf('heif')>=0) return '.heic';
+  if (lt.indexOf('webp')>=0) return '.webp';
   return '.jpg';
 }
 async function autoCreateIfNeeded(){
   if (createdId) return createdId;
   await ensureAuthed();
-  const title = $('cTitle')?.value?.trim() || '(untitled)';
-  const desc  = $('cDesc')?.value?.trim() || '';
-  const id = (push(dbRef(db, ROOT))).key;
-  await set(dbRef(db, `${ROOT}/${id}`), { id, title, description: desc, createdAt: Date.now(), active:true, stops: [] });
+  var title = ($('cTitle') && $('cTitle').value ? $('cTitle').value.trim() : '') || '(untitled)';
+  var desc  = ($('cDesc') && $('cDesc').value ? $('cDesc').value.trim() : '') || '';
+  var id = (push(dbRef(db, ROOT))).key;
+  await set(dbRef(db, ROOT + '/' + id), { id:id, title:title, description:desc, createdAt:Date.now(), active:true, stops: [] });
   createdId = id;
   ok('Scenario created');
   await safeLoadScenarios();
@@ -466,42 +433,40 @@ async function autoCreateIfNeeded(){
   renderScenario(id);
   return id;
 }
-async function uploadWithTimeout(fullRef, blob, metadata, onProgress){
-  return new Promise((resolve,reject)=>{
-    const task = uploadBytesResumable(fullRef, blob, metadata);
-    const killer = setTimeout(()=>{
-      try{ task.cancel(); }catch{}
-      reject(Object.assign(new Error('Timed out while uploading'), { code:'save/timeout-upload' }));
+function uploadWithTimeout(fullRef, blob, metadata, onProgress){
+  return new Promise(function(resolve,reject){
+    var task = uploadBytesResumable(fullRef, blob, metadata);
+    var killer = setTimeout(function(){
+      try{ task.cancel(); }catch(e){}
+      var er = new Error('Timed out while uploading'); er.code='save/timeout-upload'; reject(er);
     }, 45000);
     task.on('state_changed',
-      s=>{ if (onProgress) onProgress(Math.round((s.bytesTransferred/s.totalBytes)*100)); },
-      e=>{ clearTimeout(killer); reject(e); },
-      ()=>{ clearTimeout(killer); resolve(); }
+      function(s){ if (onProgress){ onProgress(Math.round((s.bytesTransferred/s.totalBytes)*100)); } },
+      function(e){ clearTimeout(killer); reject(e); },
+      function(){ clearTimeout(killer); resolve(); }
     );
   });
 }
 
-/* ---------------- Save one / all (Storage → Function → Inline) ---------------- */
+/* ---------- Save one / all ---------- */
 async function saveOnePending(scope, idx, cardEl){
-  const list = (scope==='c') ? pendingCreate : pendingEdit;
-  const p = list[idx]; if (!p) return;
-  const status = cardEl.querySelector('[data-status]');
-
-  let scenarioId = (scope==='c') ? await autoCreateIfNeeded() : $('eSelect').value;
+  var list = (scope==='c') ? pendingCreate : pendingEdit;
+  var p = list[idx]; if (!p) return;
+  var status = cardEl.querySelector('[data-status]');
+  var scenarioId = (scope==='c') ? await autoCreateIfNeeded() : $('eSelect').value;
   if (!scenarioId){ err('Select a scenario first.'); return; }
 
   try{
     await ensureAuthed();
     status.textContent='Preparing…';
 
-    // Build JPEG blob + dataURL if possible; else use original file + dataURL.
-    let usedOriginal=false, width=0, height=0, fullBlob=null, dataURL=null, thumbBlob=null;
+    var usedOriginal=false, width=0, height=0, fullBlob=null, dataURL=null, thumbBlob=null;
 
-    const preview = await decodeToImage(p.file);
+    var preview = await decodeToImage(p.file);
     if (preview.img){
-      const full = await canvasToBlob(preview.img, ORIG_MAX_EDGE);
+      var full = await canvasToBlob(preview.img, ORIG_MAX_EDGE);
       fullBlob = full.blob; dataURL = full.dataURL; width=full.width; height=full.height;
-      const th   = await canvasToBlob(preview.img, THUMB_MAX_EDGE);
+      var th   = await canvasToBlob(preview.img, THUMB_MAX_EDGE);
       thumbBlob = th.blob;
     }else{
       usedOriginal = true;
@@ -509,52 +474,43 @@ async function saveOnePending(scope, idx, cardEl){
       dataURL = await fileToDataURL(p.file);
     }
 
-    const coords = (p.lat!=null && p.lng!=null) ? {lat:p.lat,lng:p.lng} : await softCoords(1200);
-    const ts = Date.now();
-    const basePath = `scenarios/${scenarioId}/${ts}`;
-    const ext = usedOriginal ? extFromType(p.file.type) : '.jpg';
-    const fullRef  = stRef(storage, `${basePath}${ext}`);
-    const thumbRef = stRef(storage, `scenarios/${scenarioId}/thumbs/${ts}.jpg`);
-    const metaFull = { contentType: (usedOriginal && p.file.type) ? p.file.type : 'image/jpeg',  cacheControl:'public,max-age=31536000,immutable' };
-    const metaThmb = { contentType:'image/jpeg', cacheControl:'public,max-age=31536000,immutable' };
+    var coords = (p.lat!=null && p.lng!=null) ? {lat:p.lat,lng:p.lng} : await softCoords(1200);
+    var ts = Date.now();
+    var basePath = 'scenarios/'+scenarioId+'/'+ts;
+    var ext = usedOriginal ? extFromType(p.file.type) : '.jpg';
+    var fullRef  = stRef(storage, basePath+ext);
+    var thumbRef = stRef(storage, 'scenarios/'+scenarioId+'/thumbs/'+ts+'.jpg');
+    var metaFull = { contentType: (usedOriginal && p.file.type) ? p.file.type : 'image/jpeg', cacheControl:'public,max-age=31536000,immutable' };
+    var metaThmb = { contentType:'image/jpeg', cacheControl:'public,max-age=31536000,immutable' };
 
-    // Try direct Storage (resumable) first
     status.textContent='Uploading 0%…';
-    let cloud=null;
+    var cloud=null;
     try{
-      await uploadWithTimeout(fullRef, fullBlob, metaFull, pct=>status.textContent=`Uploading ${pct}%…`);
-      if (thumbBlob){
-        try{ await uploadBytes(thumbRef, thumbBlob, metaThmb); }catch(e){ logDiag('Thumb upload failed (non-fatal):', e?.code||'', e?.message||''); }
-      }
-      const imageURL = await getDownloadURL(fullRef);
-      let thumbURL = imageURL;
-      if (thumbBlob){
-        try{ thumbURL = await getDownloadURL(thumbRef); }catch{}
-      }
-      cloud = { url:imageURL, thumbURL, path:fullRef.fullPath, gsUri:`gs://${FORCE_BUCKET}/${fullRef.fullPath}`, via:'storage' };
+      await uploadWithTimeout(fullRef, fullBlob, metaFull, function(pct){ status.textContent='Uploading '+pct+'%…'; });
+      if (thumbBlob){ try{ await uploadBytes(thumbRef, thumbBlob, metaThmb); }catch(e3){} }
+      var imageURL = await getDownloadURL(fullRef);
+      var thumbURL = imageURL;
+      if (thumbBlob){ try{ thumbURL = await getDownloadURL(thumbRef); }catch(e4){} }
+      cloud = { url:imageURL, thumbURL:thumbURL, path:fullRef.fullPath, gsUri:'gs://'+FORCE_BUCKET+'/'+fullRef.fullPath, via:'storage' };
     }catch(e1){
-      // Fallback to Cloud Function
-      status.textContent = `Direct upload failed (${e1.code||e1.message||'err'}). Trying server…`;
+      status.textContent = 'Direct failed. Trying server…';
       try{
-        const fileName = `${ts}.jpg`;
-        const res = await uploadViaFunction(dataURL, scenarioId, fileName);
+        var fileName = ts+'.jpg';
+        var res = await uploadViaFunction(dataURL, scenarioId, fileName);
         cloud = { url:res.url, thumbURL:res.url, path:res.path, gsUri:res.gsUri, via:'function' };
       }catch(e2){
-        // Final fallback: inline base64 in DB
-        logDiag('Function upload failed:', e2?.code||'', e2?.message||'');
-        cloud = null;
+        cloud = null; // inline fallback
       }
     }
 
-    // Build stop
-    const stop = {
+    var stop = {
       type:'photo',
       title: p.title || '',
       caption: p.caption || '',
-      lat: coords?.lat ?? null,
-      lng: coords?.lng ?? null,
+      lat: coords && coords.lat!=null ? coords.lat : null,
+      lng: coords && coords.lng!=null ? coords.lng : null,
       radiusMeters:50,
-      width, height, overlays:[]
+      width: width, height: height, overlays:[]
     };
     if (cloud){
       stop.imageURL   = cloud.url;
@@ -562,302 +518,132 @@ async function saveOnePending(scope, idx, cardEl){
       stop.storagePath= cloud.path;
       stop.gsUri      = cloud.gsUri;
     }else{
-      stop.imageData = { format:'jpeg', data: (dataURL||'').split(',')[1] || '' };
+      stop.imageData  = { format:'jpeg', data: (dataURL||'').split(',')[1] || '' };
     }
 
     status.textContent='Saving to DB…';
-    const snap = await get(dbRef(db, `${ROOT}/${scenarioId}`));
-    const sc = snap.val() || {};
-    const stops = coerceStops(sc);
+    var snap = await get(dbRef(db, ROOT+'/'+scenarioId));
+    var sc = snap.val() || {};
+    var stops = coerceStops(sc);
     stops.push(stop);
     setStops(sc, stops);
-    await set(dbRef(db, `${ROOT}/${scenarioId}`), sc);
+    await set(dbRef(db, ROOT+'/'+scenarioId), sc);
 
     status.textContent = cloud ? 'Saved ✓' : 'Saved inline ✓';
     ok(cloud ? 'Photo saved to cloud' : 'Photo saved (inline backup)');
 
-    // show in uploaded thumbs area
-    const uploads = document.getElementById(`${scope}Uploads`);
-    if (uploads) {
-      const img = document.createElement('img');
-      img.className = 'thumb';
+    var uploads = $(scope+'Uploads');
+    if (uploads){
+      var img = document.createElement('img');
+      img.className='thumb';
       img.src = cloud ? (stop.thumbURL || stop.imageURL) : dataURLFromStored(stop.imageData);
       uploads.prepend(img);
     }
 
-    // cleanup pending entry
-    try{ if (p.url) URL.revokeObjectURL(p.url); }catch{}
+    try{ if (p.url) URL.revokeObjectURL(p.url); }catch(e){}
     list.splice(idx,1);
-    renderPending(scope);
-    enablePendingButtons(scope);
+    renderPending(scope); enablePendingButtons(scope);
 
-    // refresh data so “Existing Stops” shows the new photo
     await safeLoadScenarios();
-    const sel = document.getElementById('eSelect');
-    if (sel) { sel.value = scenarioId; renderScenario(scenarioId); }
+    if ($('eSelect')){ $('eSelect').value = scenarioId; renderScenario(scenarioId); }
 
   }catch(ex){
-    const code = ex?.code || '';
-    const msg  = ex?.message || String(ex);
-    if (/app.?check/i.test(msg)) err('Blocked by App Check enforcement. Add App Check or disable enforcement.');
-    else if (code.includes('unauthorized') || /PERMISSION_DENIED/i.test(msg)) err('Permission denied saving photo. Check Storage/DB rules.');
+    var code = ex && ex.code ? ex.code : '';
+    var msg  = ex && ex.message ? ex.message : String(ex);
+    if ((msg||'').match(/app.?check/i)) err('Blocked by App Check enforcement. Add App Check or disable enforcement.');
+    else if (code.indexOf('unauthorized')>=0 || /PERMISSION_DENIED/i.test(msg)) err('Permission denied saving photo. Check Storage/DB rules.');
     else err('Save failed: ' + (code || msg));
     status.textContent='Failed';
   }
 }
 async function saveAll(scope){
-  const list = (scope==='c') ? pendingCreate : pendingEdit;
-  for (let i=0; i<list.length; ){
-    const card = $(`${scope}Pending`).children[i];
+  var list = (scope==='c') ? pendingCreate : pendingEdit;
+  var i=0;
+  while (i<list.length){
+    var card = $(scope+'Pending').children[i];
     await saveOnePending(scope, i, card);
-    if ($(`${scope}Pending`).children[i] === card) i++;
+    if ($(scope+'Pending').children[i] === card){ i++; }
   }
 }
 
-/* ---------------- Render & edit ---------------- */
+/* ---------- Render & edit ---------- */
 function renderScenario(id){
-  const s = scenarios.find(x=>x.id===id);
+  var s = null;
+  for (var i=0;i<scenarios.length;i++){ if (scenarios[i].id===id){ s=scenarios[i]; break; } }
   if (!s){ $('eStatus').textContent='Not found'; $('stopsGrid').innerHTML=''; return; }
   $('eTitle').value = s.title||'';
   $('eDesc').value  = s.description||'';
-  $('eStatus').textContent = `${(s._stops||[]).length} photo(s)`;
-  const grid = $('stopsGrid'); grid.innerHTML='';
-  if (!s._stops?.length){ grid.innerHTML='<div class="small tag">No photos yet</div>'; return; }
+  $('eStatus').textContent = (s._stops && s._stops.length ? s._stops.length : 0) + ' photo(s)';
+  var grid = $('stopsGrid'); grid.innerHTML='';
+  if (!(s._stops && s._stops.length)){ grid.innerHTML='<div class="small tag">No photos yet</div>'; return; }
 
-  s._stops.forEach((st, idx)=>{
-    const thumb = st.thumbURL || st.imageURL || dataURLFromStored(st.imageData) || '';
-    const hasGPS = (st.lat!=null && st.lng!=null);
-    const el = document.createElement('div');
-    el.innerHTML = `
-      <img class="thumb" src="${thumb}" alt="thumb" />
-      <div class="small" style="margin-top:6px">${st.title||('Stop '+(idx+1))}</div>
-      <div class="row" style="margin-top:6px">
-        <span class="tag small">${hasGPS ? 'GPS ✓' : 'GPS —'}</span>
-      </div>
-      <div class="row" style="margin-top:6px">
-        <button class="btn" data-edit="${idx}">Edit</button>
-        <button class="btn" data-gps="${idx}">Set GPS</button>
-        <button class="btn" data-del="${idx}" style="background:#2a0f14;border-color:#7a2b2b">Delete</button>
-      </div>
-    `;
+  for (var idx=0; idx<s._stops.length; idx++){
+    (function(idx){
+      var st = s._stops[idx];
+      var thumb = (st && (st.thumbURL || st.imageURL)) || dataURLFromStored(st && st.imageData) || '';
+      var hasGPS = !!(st && st.lat!=null && st.lng!=null);
+      var el = document.createElement('div');
+      el.innerHTML =
+        '<img class="thumb" src="'+thumb+'" alt="thumb" />' +
+        '<div class="small" style="margin-top:6px">'+(st.title||('Stop '+(idx+1)))+'</div>' +
+        '<div class="row" style="margin-top:6px"><span class="tag small">'+(hasGPS?'GPS ✓':'GPS —')+'</span></div>' +
+        '<div class="row" style="margin-top:6px">' +
+          '<button class="btn" data-gps>Set GPS</button>' +
+          '<button class="btn" data-del style="background:#2a0f14;border-color:#7a2b2b">Delete</button>' +
+        '</div>';
+      grid.appendChild(el);
 
-    el.querySelector('[data-del]').onclick = async ()=>{
-      try{
-        loading(true);
-        await ensureAuthed();
-        const snap = await get(dbRef(db, `${ROOT}/${id}`));
-        const sc = snap.val(); const arr = coerceStops(sc);
-        const removed = arr.splice(idx,1)[0]; setStops(sc, arr);
-        await set(dbRef(db, `${ROOT}/${id}`), sc);
-        // best-effort delete storage files
-        const paths = [removed?.storagePath, removed?.thumbPath, removed?.gsUri].filter(Boolean);
-        for (const pth of paths){ try{ await deleteObject(stRef(storage, pth)); }catch{} }
-        ok('Stop deleted');
-        await safeLoadScenarios(); $('eSelect').value=id; renderScenario(id);
-      }catch(e){ err('Delete failed: '+(e.message||e)); }
-      finally{ loading(false); }
-    };
+      el.querySelector('[data-del]').onclick = async function(){
+        try{
+          loading(true);
+          await ensureAuthed();
+          var snap = await get(dbRef(db, ROOT+'/'+id));
+          var sc = snap.val(); var arr = coerceStops(sc);
+          var removed = arr.splice(idx,1)[0]; setStops(sc, arr);
+          await set(dbRef(db, ROOT+'/'+id), sc);
+          var paths = [];
+          if (removed && removed.storagePath) paths.push(removed.storagePath);
+          if (removed && removed.thumbPath)   paths.push(removed.thumbPath);
+          if (removed && removed.gsUri)       paths.push(removed.gsUri);
+          for (var j=0;j<paths.length;j++){ try{ await deleteObject(stRef(storage, paths[j])); }catch(e){} }
+          ok('Stop deleted');
+          await safeLoadScenarios(); $('eSelect').value=id; renderScenario(id);
+        }catch(e){ err('Delete failed: '+(e.message||e)); }
+        finally{ loading(false); }
+      };
 
-    el.querySelector('[data-gps]').onclick = async ()=>{
-      const coords = await softCoords(2000);
-      if (!coords){ err('Could not get GPS (permission/signal).'); return; }
-      try{
-        loading(true);
-        await ensureAuthed();
-        const snap = await get(dbRef(db, `${ROOT}/${id}`));
-        const sc = snap.val(); const arr = coerceStops(sc);
-        if (!arr[idx]) return;
-        arr[idx].lat = coords.lat; arr[idx].lng = coords.lng; arr[idx].locAccuracy = coords.accuracy ?? null;
-        setStops(sc, arr);
-        await set(dbRef(db, `${ROOT}/${id}`), sc);
-        ok('GPS saved');
-        await safeLoadScenarios(); $('eSelect').value=id; renderScenario(id);
-      }catch(e){ err('Save GPS failed: '+(e.message||e)); }
-      finally{ loading(false); }
-    };
-
-    el.querySelector('[data-edit]').onclick = ()=> openPhotoEditor(id, idx);
-    grid.appendChild(el);
-  });
+      el.querySelector('[data-gps]').onclick = async function(){
+        var coords = await softCoords(2000);
+        if (!coords){ err('Could not get GPS (permission/signal).'); return; }
+        try{
+          loading(true);
+          await ensureAuthed();
+          var snap = await get(dbRef(db, ROOT+'/'+id));
+          var sc = snap.val(); var arr = coerceStops(sc);
+          if (!arr[idx]) return;
+          arr[idx].lat = coords.lat; arr[idx].lng = coords.lng; arr[idx].locAccuracy = coords.accuracy || null;
+          setStops(sc, arr);
+          await set(dbRef(db, ROOT+'/'+id), sc);
+          ok('GPS saved');
+          await safeLoadScenarios(); $('eSelect').value=id; renderScenario(id);
+        }catch(e){ err('Save GPS failed: '+(e.message||e)); }
+        finally{ loading(false); }
+      };
+    })(idx);
+  }
 }
 
-/* ---------------- Create / Edit wiring ---------------- */
-if ($('createBtn')) $('createBtn').onclick = async ()=>{
+/* ---------- Create / Edit wiring ---------- */
+if ($('createBtn')) $('createBtn').onclick = async function(){
   try{
     await ensureAuthed();
     loading(true);
-    const title = $('cTitle').value.trim() || '(untitled)';
-    const desc  = $('cDesc').value.trim() || '';
+    var title = ($('cTitle').value||'').trim() || '(untitled)';
+    var desc  = ($('cDesc').value||'').trim() || '';
     $('createBtn').disabled = true; $('createStatus').textContent='Creating…';
-    const id = (push(dbRef(db, ROOT))).key;
-    await set(dbRef(db, `${ROOT}/${id}`), { id, title, description: desc, createdAt: Date.now(), active:true, stops: [] });
+    var id = (push(dbRef(db, ROOT))).key;
+    await set(dbRef(db, ROOT+'/'+id), { id:id, title:title, description:desc, createdAt:Date.now(), active:true, stops: [] });
     createdId = id;
     $('createStatus').textContent='Created ✓';
     ok('Scenario created');
-    await safeLoadScenarios();
-    $('showEdit').click();
-    $('eSelect').value = id; $('eTitle').value = title; $('eDesc').value = desc;
-    renderScenario(id);
-  }catch(e){
-    const msg = e?.code || e?.message || e;
-    if (String(msg).includes('PERMISSION_DENIED')) err('Create failed: DB rules block writes to "/scenarios".');
-    else err('Create failed: ' + msg);
-  }finally{
-    $('createBtn').disabled = false; loading(false);
-  }
-};
-
-if ($('refreshBtn')) $('refreshBtn').onclick = async ()=>{ await ensureAuthed(); await safeLoadScenarios(); };
-if ($('eSelect')) $('eSelect').onchange = ()=>{ const id=$('eSelect').value; if (id) renderScenario(id); };
-
-if ($('saveMeta')) $('saveMeta').onclick = async ()=>{
-  try{
-    await ensureAuthed();
-    const id=$('eSelect').value; if(!id) return;
-    loading(true);
-    const snap = await get(dbRef(db, `${ROOT}/${id}`));
-    const sc = snap.val()||{};
-    sc.title = $('eTitle').value.trim()||'(untitled)';
-    sc.description = $('eDesc').value.trim()||'';
-    await set(dbRef(db, `${ROOT}/${id}`), sc);
-    ok('Scenario saved');
-    await safeLoadScenarios(); $('eSelect').value=id; renderScenario(id);
-  }catch(e){
-    const msg = e?.code || e?.message || e;
-    if (String(msg).includes('PERMISSION_DENIED')) err('Save failed: DB rules block writes to "/scenarios".');
-    else err('Save failed: '+msg);
-  }finally{ loading(false); }
-};
-
-/* ---- Delete Scenario (Edit pane) ---- */
-if ($('deleteScenario')) $('deleteScenario').onclick = async ()=>{
-  try{
-    const id=$('eSelect').value; if(!id){ err('Select a scenario first.'); return; }
-    const s = scenarios.find(x=>x.id===id);
-    const go = confirm(`Delete scenario "${s?.title||id}" and its photos? This cannot be undone.`);
-    if (!go) return;
-    loading(true);
-    await ensureAuthed();
-
-    // best-effort delete storage files
-    const paths = new Set();
-    (s?._stops||[]).forEach(st=>{
-      if (st.storagePath) paths.add(st.storagePath);
-      if (st.thumbPath)   paths.add(st.thumbPath);
-      if (st.gsUri)       paths.add(st.gsUri);
-    });
-    for (const p of paths){ try{ await deleteObject(stRef(storage, p)); }catch{} }
-
-    // remove DB node
-    await remove(dbRef(db, `${ROOT}/${id}`));
-    ok('Scenario deleted');
-
-    await safeLoadScenarios();
-    $('eSelect').value='';
-    $('stopsGrid').innerHTML='';
-    $('eTitle').value=''; $('eDesc').value='';
-    $('eStatus').textContent='—';
-  }catch(e){
-    err('Delete scenario failed: '+(e.message||e));
-  }finally{
-    loading(false);
-  }
-};
-
-/* ---------------- File input listeners (preview-first) ---------------- */
-function onFilesPicked(e, scope){
-  const files = Array.from(e.target.files||[]);
-  if (!files.length) return;
-  addPending(files, scope);
-  enablePendingButtons(scope);
-  e.target.value=''; // reset
-}
-if ($('cFilesCam')) $('cFilesCam').addEventListener('change', (e)=>onFilesPicked(e,'c'));
-if ($('cFilesLib')) $('cFilesLib').addEventListener('change', (e)=>onFilesPicked(e,'c'));
-if ($('eFilesCam')) $('eFilesCam').addEventListener('change', (e)=>onFilesPicked(e,'e'));
-if ($('eFilesLib')) $('eFilesLib').addEventListener('change', (e)=>onFilesPicked(e,'e'));
-
-if ($('cSaveAll')) $('cSaveAll').onclick = ()=> saveAll('c');
-if ($('eSaveAll')) $('eSaveAll').onclick = ()=> saveAll('e');
-if ($('cClear')) $('cClear').onclick = ()=>{
-  pendingCreate.forEach(p=>{try{ if(p.url) URL.revokeObjectURL(p.url);}catch{}});
-  pendingCreate = []; renderPending('c'); enablePendingButtons('c');
-};
-if ($('eClear')) $('eClear').onclick = ()=>{
-  pendingEdit.forEach(p=>{try{ if(p.url) URL.revokeObjectURL(p.url);}catch{}});
-  pendingEdit = []; renderPending('e'); enablePendingButtons('e');
-};
-
-/* ---------------- Photo editor modal ---------------- */
-let pmCtx = { scenarioId:null, index:-1 };
-function openPhotoEditor(scenarioId, index){
-  pmCtx = { scenarioId, index };
-  const s = scenarios.find(x=>x.id===scenarioId); if(!s) return;
-  const st = (s._stops||[])[index]; if(!st) return;
-  $('pmPreview').src = st.imageURL || st.thumbURL || dataURLFromStored(st.imageData) || '';
-  $('pmTitle').value = st.title || '';
-  $('pmCaption').value = st.caption || '';
-  $('pmLat').value = (st.lat ?? '').toString();
-  $('pmLng').value = (st.lng ?? '').toString();
-  $('pmRadius').value = (st.radiusMeters ?? 50);
-  $('pmGpsStatus').textContent = (st.lat!=null && st.lng!=null) ? 'GPS ✓' : 'GPS —';
-  $('photoModal').style.display = 'grid';
-}
-if ($('pmClose')) $('pmClose').onclick = ()=>{ $('photoModal').style.display='none'; };
-if ($('pmUseMyLoc')) $('pmUseMyLoc').onclick = async ()=>{
-  $('pmGpsStatus').textContent = 'Getting GPS…';
-  const coords = await softCoords(2000);
-  if (!coords){ $('pmGpsStatus').textContent='GPS failed'; err('Could not get GPS.'); return; }
-  $('pmLat').value = coords.lat; $('pmLng').value = coords.lng; $('pmGpsStatus').textContent = 'GPS ✓';
-};
-if ($('pmSave')) $('pmSave').onclick = async ()=>{
-  const { scenarioId, index } = pmCtx; if (!scenarioId || index<0) return;
-  try{
-    loading(true);
-    await ensureAuthed();
-    const snap = await get(dbRef(db, `${ROOT}/${scenarioId}`));
-    const sc = snap.val(); const arr = coerceStops(sc);
-    const st = arr[index]; if (!st) throw new Error('Photo not found');
-    st.title = $('pmTitle').value.trim();
-    st.caption = $('pmCaption').value.trim();
-    const lat = $('pmLat').value.trim(); const lng = $('pmLng').value.trim();
-    st.lat = lat==='' ? null : Number(lat);
-    st.lng = lng==='' ? null : Number(lng);
-    st.radiusMeters = Math.max(1, parseInt(($('pmRadius').value||'50'),10));
-    setStops(sc, arr);
-    await set(dbRef(db, `${ROOT}/${scenarioId}`), sc);
-    ok('Photo saved');
-    $('photoModal').style.display='none';
-    await safeLoadScenarios(); $('eSelect').value=scenarioId; renderScenario(scenarioId);
-  }catch(e){
-    const msg = e?.code || e?.message || e;
-    if (String(msg).includes('PERMISSION_DENIED')) {
-      err('Save photo failed: DB rules block writes to "/scenarios".');
-    } else { err('Save photo failed: '+msg); }
-  }finally{ loading(false); }
-};
-
-/* ---------------- Init (no top-level await) ---------------- */
-async function init(){
-  try{
-    loading(true);
-    await ensureAuthed();
-    onValue(dbRef(db, ROOT), snap=>{
-      const obj=snap.val()||{};
-      scenarios = Object.entries(obj).map(([id,s])=>({ id, _raw:s, _stops:coerceStops(s), ...s }))
-                  .sort((a,b)=>(b.createdAt||0)-(a.createdAt||0));
-      populateEditList();
-      const cur = $('eSelect').value;
-      if (cur) renderScenario(cur);
-    });
-    await safeLoadScenarios();
-  }catch(e){
-    err('Startup failed: '+(e?.message||e));
-  }finally{
-    loading(false);
-  }
-}
-document.addEventListener('DOMContentLoaded', init);
-</script>
-</body>
-</html>
+    await safeLoad
