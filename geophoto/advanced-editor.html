@@ -6,10 +6,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
 <meta name="theme-color" content="#0b0f14" />
 <style>
-:root{
-  --bg:#0b0f14;--bg2:#0e1421;--card:#0f1624;--edge:rgba(255,255,255,.10);
-  --text:#eaf2ff;--muted:#93a0b5;--blue:#0a84ff;
-}
+:root{ --bg:#0b0f14;--bg2:#0e1421;--card:#0f1624;--edge:rgba(255,255,255,.10); --text:#eaf2ff;--muted:#93a0b5;--blue:#0a84ff; }
 *{box-sizing:border-box}
 html,body{margin:0;height:100%;color:var(--text);font-family:system-ui,-apple-system,Segoe UI,Roboto,Inter,Arial,sans-serif;background:
   radial-gradient(1400px 700px at 15% -15%, rgba(10,132,255,.28), transparent 60%),
@@ -83,6 +80,7 @@ textarea{min-height:80px}
           <select id="scenarioSel"><option value="">Select scenario…</option></select>
           <div class="row" style="margin-top:6px">
             <button class="btn" id="refreshBtn">Refresh</button>
+            <button class="btn" id="deleteScenario" style="background:#2a0f14;border-color:#7a2b2b">Delete Scenario</button>
             <span id="statusPill" class="pill">Loading…</span>
           </div>
 
@@ -192,9 +190,9 @@ $('toggleTools').onclick = ()=>{
 
 /* ---------- Firebase ---------- */
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-app.js";
-import { getDatabase, ref as dbRef, get, set, onValue } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-database.js";
-import { getStorage, ref as stRef, uploadString, getDownloadURL, getBlob } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-storage.js";
-import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-auth.js";
+import { getDatabase, ref as dbRef, get, set, onValue, remove } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-database.js";
+import { getStorage, ref as stRef, uploadBytesResumable, uploadBytes, getDownloadURL, getBlob, deleteObject } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-storage.js";
+import { getAuth, signInAnonymously, onAuthStateChanged, setPersistence, browserLocalPersistence, browserSessionPersistence, inMemoryPersistence } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-auth.js";
 
 const firebaseConfig = {
   apiKey:"AIzaSyDM6DpRSeZueVKRpbyJyDmhf8WY66KyCDk",
@@ -206,16 +204,42 @@ const firebaseConfig = {
   measurementId:"G-19DVN7NNH7"
 };
 const appFB = initializeApp(firebaseConfig);
+
+/* ✅ Force real bucket */
+const FORCE_BUCKET = "dailyquiz-d5279.appspot.com";
+const storage = getStorage(appFB, `gs://${FORCE_BUCKET}`);
+
 const db = getDatabase(appFB);
-const storage = getStorage(appFB, "gs://dailyquiz-d5279.firebasestorage.app");
 const auth = getAuth(appFB);
 async function ensureAuthed(){
+  try{ await setPersistence(auth, browserLocalPersistence); }
+  catch{ try{ await setPersistence(auth, browserSessionPersistence); }
+  catch{ await setPersistence(auth, inMemoryPersistence); } }
   if (auth.currentUser) return auth.currentUser;
   await signInAnonymously(auth);
   await new Promise(res => onAuthStateChanged(auth, u=>u && res(), { once:true }));
   return auth.currentUser;
 }
 ensureAuthed().catch(()=>{});
+
+/* ---------- Cloud Function (fallback upload) ---------- */
+const FUNCTION_UPLOAD_URL = 'https://us-central1-dailyquiz-d5279.cloudfunctions.net/uploadScenarioImage';
+async function uploadViaFunction(dataURL, scenarioId, fileName){
+  const resp = await fetch(FUNCTION_UPLOAD_URL, {
+    method:'POST',
+    headers:{ 'Content-Type':'application/json' },
+    body: JSON.stringify({ scenarioId, fileName, dataURL })
+  });
+  if (!resp.ok){
+    const txt = await resp.text();
+    const e = new Error(`Function HTTP ${resp.status} ${txt}`); e.code='save/function-http'; throw e;
+  }
+  const json = await resp.json();
+  if (!json.ok){
+    const e = new Error(`Function error: ${json.error||'unknown'}`); e.code='save/function-error'; throw e;
+  }
+  return { url: json.url, path: json.path, gsUri: json.gsUri, via:'function' };
+}
 
 /* ---------- Canvas ---------- */
 const f = new fabric.Canvas('c', { backgroundColor:'#061621', preserveObjectStacking:true });
@@ -233,7 +257,6 @@ function fitCanvas(){
   f.calcOffset(); f.requestRenderAll();
 }
 fitCanvas(); addEventListener('resize', fitCanvas);
-
 function blobToObjectURL(blob){ return URL.createObjectURL(blob); }
 function revokeURL(u){ try{ URL.revokeObjectURL(u); }catch{} }
 
@@ -256,7 +279,7 @@ function candidateOriginals(pathOrUrl){
   return Array.from(out).filter(Boolean);
 }
 
-/* ---------- Image load pipeline (SDK-first, with fallbacks) ---------- */
+/* ---------- Image load pipeline ---------- */
 async function getBlobFromRefString(refStr){
   await ensureAuthed();
   const ref = stRef(storage, refStr);
@@ -373,11 +396,16 @@ await loadScenarios();
 $('refreshBtn').onclick=loadScenarios;
 
 /* ---------- Thumbnails row ---------- */
+function dataURLFromStored(stored){
+  return typeof stored==='string'
+    ? stored
+    : (stored && stored.data ? `data:image/${stored.format||'jpeg'};base64,${stored.data}` : '');
+}
 function renderThumbs(){
   const row=$('thumbRow'); row.innerHTML='';
   if (!current || !current._stops?.length){ row.innerHTML='<div class="pill small">No photos/slides</div>'; return; }
   current._stops.forEach((s,i)=>{
-    const thumbSrc = s.thumbURL || s.imageURL || '';
+    const thumbSrc = s.thumbURL || s.imageURL || dataURLFromStored(s.imageData) || '';
     const img=document.createElement('img'); img.className='thumb'+(i===stopIndex?' active':'');
     img.src=thumbSrc; img.alt=s.title||('Stop '+(i+1));
     img.onerror=()=>{ img.src = 'data:image/svg+xml;utf8,' + encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" width="120" height="120"><rect width="100%" height="100%" fill="#000"/><text x="50%" y="52%" fill="#fff" font-size="14" text-anchor="middle">No image</text></svg>`); };
@@ -523,7 +551,7 @@ $('saveMeta').onclick = async ()=>{
   }catch(e){ $('metaMsg').textContent=String(e.message||e); }
 };
 
-/* ---------- Export / Save (compressed + thumb) ---------- */
+/* ---------- Export / Save (Storage → Function → Inline) ---------- */
 const EDIT_MAX_EDGE     = 1600;
 const EDIT_THUMB_EDGE   = 480;
 const EDIT_JPEG_QUALITY = 0.85;
@@ -551,36 +579,82 @@ async function thumbFromDataURL(dataURL, maxEdge=EDIT_THUMB_EDGE, q=0.8){
   return c.toDataURL('image/jpeg', q);
 }
 
+function dataURLtoBlob(dataURL){
+  const [head,b64] = dataURL.split(',');
+  const mime = (/data:(.*?);base64/.exec(head)||[, 'application/octet-stream'])[1];
+  const bin = atob(b64), len = bin.length, buf = new Uint8Array(len);
+  for (let i=0;i<len;i++) buf[i] = bin.charCodeAt(i);
+  return new Blob([buf], { type:mime });
+}
+async function uploadWithTimeout(ref, blob, metadata, onProgress){
+  return new Promise((resolve,reject)=>{
+    const task = uploadBytesResumable(ref, blob, metadata);
+    const killer = setTimeout(()=>{ try{ task.cancel(); }catch{}; reject(Object.assign(new Error('Timed out while uploading'), { code:'save/timeout-upload' })); }, 45000);
+    task.on('state_changed',
+      s=>{ if(onProgress){ onProgress(Math.round((s.bytesTransferred/s.totalBytes)*100)); } },
+      e=>{ clearTimeout(killer); reject(e); },
+      ()=>{ clearTimeout(killer); resolve(); }
+    );
+  });
+}
+
 $('exportPNG').onclick = async ()=>{
   const url = await dataURLFromCanvasScaled(f, EDIT_MAX_EDGE, 0.95);
   const a=document.createElement('a'); a.href=url; a.download='image-edited.jpg'; a.click();
 };
+
 $('saveImage').onclick = async ()=>{
   try{
     if(!current || stopIndex<0) throw new Error('Select a stop first.');
     showLoad(true);
-    const dataURL     = await dataURLFromCanvasScaled(f, EDIT_MAX_EDGE, EDIT_JPEG_QUALITY);
-    const thumbURLData= await thumbFromDataURL(dataURL, EDIT_THUMB_EDGE, 0.8);
-
     await ensureAuthed();
+
+    // Render dataURLs
+    const dataURL      = await dataURLFromCanvasScaled(f, EDIT_MAX_EDGE, EDIT_JPEG_QUALITY);
+    const thumbDataURL = await thumbFromDataURL(dataURL, EDIT_THUMB_EDGE, 0.8);
+
+    // Convert to blobs for resumable upload
+    const fullBlob  = dataURLtoBlob(dataURL);
+    const thumbBlob = dataURLtoBlob(thumbDataURL);
+
     const ts = Date.now();
     const base = `scenarios/${current.id}/${ts}_edited_${stopIndex}`;
     const fullRef  = stRef(storage, `${base}.jpg`);
     const thumbRef = stRef(storage, `scenarios/${current.id}/thumbs/${ts}_edited_${stopIndex}.jpg`);
+    const metaFull = { contentType:'image/jpeg', cacheControl:'public,max-age=31536000,immutable' };
+    const metaThmb = { contentType:'image/jpeg', cacheControl:'public,max-age=31536000,immutable' };
 
-    await uploadString(fullRef,  dataURL,      'data_url', { contentType:'image/jpeg', cacheControl:'public,max-age=31536000,immutable' });
-    await uploadString(thumbRef, thumbURLData, 'data_url', { contentType:'image/jpeg', cacheControl:'public,max-age=31536000,immutable' });
+    let cloud=null;
+    // Try direct Storage first
+    try{
+      await uploadWithTimeout(fullRef, fullBlob, metaFull);
+      try{ await uploadBytes(thumbRef, thumbBlob, metaThmb); }catch(e){ /* thumb failure is non-fatal */ }
+      const fullURL  = await getDownloadURL(fullRef);
+      const thumbURL = await getDownloadURL(thumbRef).catch(()=>fullURL);
+      cloud = { url:fullURL, thumbURL, path:fullRef.fullPath, gsUri:`gs://${FORCE_BUCKET}/${fullRef.fullPath}`, via:'storage' };
+    }catch(e1){
+      // Fallback to Cloud Function
+      try{
+        const res = await uploadViaFunction(dataURL, current.id, `${ts}_edited_${stopIndex}.jpg`);
+        cloud = { url:res.url, thumbURL:res.url, path:res.path, gsUri:res.gsUri, via:'function' };
+      }catch(e2){
+        // Final fallback: inline base64 in DB (do not lose the edit)
+        cloud = null;
+      }
+    }
 
-    const fullURL  = await getDownloadURL(fullRef);
-    const thumbURL = await getDownloadURL(thumbRef);
-
+    // Update stop
     const s = Object.assign({}, current._stops[stopIndex]);
-    s.imageURL    = fullURL;
-    s.thumbURL    = thumbURL;
-    s.storagePath = `${base}.jpg`;
-    s.gsUri       = `gs://dailyquiz-d5279.firebasestorage.app/${base}.jpg`;
-    s.imageData   = null;
-    s.overlays    = serializeOverlays();
+    s.overlays = serializeOverlays();
+    if (cloud){
+      s.imageURL    = cloud.url;
+      s.thumbURL    = cloud.thumbURL || cloud.url;
+      s.storagePath = cloud.path;
+      s.gsUri       = cloud.gsUri;
+      s.imageData   = null;
+    }else{
+      s.imageData   = { format:'jpeg', data:dataURL.split(',')[1] };
+    }
 
     const next=current._stops.slice(); next[stopIndex]=s;
     const updated=Object.assign({}, current._raw); setStops(updated,next);
@@ -588,9 +662,50 @@ $('saveImage').onclick = async ()=>{
 
     current._raw=updated; current._stops=next;
     renderThumbs();
-    $('metaMsg').textContent='Compressed image saved to Cloud.';
+    $('metaMsg').textContent = cloud ? 'Compressed image saved to Cloud.' : 'Saved inline (backup).';
   }catch(e){
     $('metaMsg').textContent='Save failed: '+(e.message||e);
+  }finally{
+    showLoad(false);
+  }
+};
+
+/* ---------- Delete scenario (best-effort Storage cleanup) ---------- */
+$('deleteScenario').onclick = async ()=>{
+  try{
+    if (!current) { alert('Select a scenario first.'); return; }
+    const sure = confirm(`Delete scenario "${current.title||current.id}" and its photos? This cannot be undone.`);
+    if (!sure) return;
+    showLoad(true);
+    await ensureAuthed();
+
+    // Collect storage refs from stops
+    const paths = new Set();
+    (current._stops||[]).forEach(s=>{
+      if (s.storagePath) paths.add(s.storagePath);
+      if (s.thumbPath)   paths.add(s.thumbPath);
+      if (s.gsUri)       paths.add(s.gsUri);
+      // Try to infer a thumb path if not present
+      if (!s.thumbPath && s.storagePath){
+        const guess = s.storagePath.replace(`/scenarios/${current.id}/`, `/scenarios/${current.id}/thumbs/`).replace(/\.jpg$/i,'');
+        // not pushing guess blindly
+      }
+    });
+
+    // Best-effort delete each
+    for (const p of paths){
+      try{ await deleteObject(stRef(storage, p)); }catch(_e){ /* ignore */ }
+    }
+
+    // Remove DB node
+    await remove(dbRef(db, `${ROOT}/${current.id}`));
+
+    // Reset UI
+    current=null; stopIndex=-1; populateScenarios(); $('scenarioSel').value=''; $('thumbRow').innerHTML='';
+    f.clear(); baseImage=null; fitCanvas();
+    status('Scenario deleted.');
+  }catch(e){
+    showErr('Delete failed: '+(e.message||e));
   }finally{
     showLoad(false);
   }
