@@ -23,7 +23,6 @@ html,body{margin:0;height:100%;font-family:system-ui,-apple-system,Segoe UI,Robo
 .tag{display:inline-flex;align-items:center;gap:8px;padding:6px 10px;border-radius:999px;border:1px solid rgba(255,255,255,.16);color:var(--muted)}
 .small{font-size:12px;opacity:.9}
 hr{border:none;height:1px;background:rgba(255,255,255,.08);margin:12px 0}
-
 main{max-width:1200px;margin:16px auto 40px;padding:0 16px;display:grid;grid-template-columns:340px 1fr;gap:12px}
 .card{background:var(--card);border:1px solid var(--edge);border-radius:16px;padding:12px;min-height:120px}
 label{display:block;margin:8px 0 6px 2px;font-size:12px;color:var(--muted)}
@@ -33,13 +32,19 @@ textarea{min-height:80px}
 .grid{display:grid;grid-template-columns:repeat(auto-fill, minmax(140px,1fr));gap:10px}
 .thumb{width:100%;height:110px;object-fit:cover;border-radius:10px;background:#0a1a2a;border:1px solid rgba(255,255,255,.14)}
 .visually-hidden{position:absolute; left:-9999px; top:auto; width:0.1px; height:0.1px; opacity:0; overflow:hidden; z-index:-1}
-
-/* toasts + loader */
 #errbar{position:fixed;left:10px;bottom:10px;background:#2b0d0d;color:#ffd7d7;border:1px solid #7a2b2b;border-radius:12px;padding:8px 12px;display:none;z-index:9999;max-width:90vw}
 #okbar{position:fixed;left:10px;bottom:56px;background:#0f2a19;color:#d8ffe2;border:1px solid #2c7a4b;border-radius:12px;padding:8px 12px;display:none;z-index:9999;max-width:90vw}
 #loader{position:fixed;inset:0;display:none;place-items:center;z-index:99;background:rgba(6,12,20,.55);backdrop-filter:blur(2px)}
 .spinner{width:42px;height:42px;border-radius:999px;border:4px solid rgba(255,255,255,.25);border-top-color:#fff;animation:spin 1s linear infinite}
 @keyframes spin{to{transform:rotate(360deg)}}
+
+/* modal */
+#photoModal{position:fixed;inset:0;display:none;place-items:center;z-index:999;background:rgba(5,10,18,.6);backdrop-filter:blur(2px)}
+.modal-card{width:min(760px,96vw);background:var(--card);border:1px solid var(--edge);border-radius:16px;padding:14px}
+.modal-head{display:flex;align-items:center;gap:8px;margin-bottom:8px}
+.modal-body{display:grid;grid-template-columns:220px 1fr;gap:12px}
+.modal-body img{width:100%;border-radius:10px;border:1px solid rgba(255,255,255,.12);aspect-ratio:4/3;object-fit:cover}
+.modal-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:10px}
 </style>
 </head>
 <body>
@@ -143,8 +148,47 @@ textarea{min-height:80px}
   </section>
 </main>
 
+<!-- Photo editor modal -->
+<div id="photoModal">
+  <div class="modal-card">
+    <div class="modal-head">
+      <div class="brand">Edit Photo</div>
+      <div class="spacer"></div>
+      <button id="pmClose" class="btn">Close</button>
+    </div>
+    <div class="modal-body">
+      <img id="pmPreview" src="" alt="preview"/>
+      <div>
+        <label>Title</label>
+        <input id="pmTitle" class="input" />
+        <label>Caption / Notes</label>
+        <textarea id="pmCaption"></textarea>
+        <div class="row">
+          <div style="flex:1">
+            <label>Latitude</label>
+            <input id="pmLat" class="input" placeholder="e.g. 39.7392" />
+          </div>
+          <div style="flex:1">
+            <label>Longitude</label>
+            <input id="pmLng" class="input" placeholder="-104.9903" />
+          </div>
+        </div>
+        <div class="row">
+          <button id="pmUseMyLoc" class="btn">Use My Location</button>
+          <span id="pmGpsStatus" class="tag">—</span>
+        </div>
+        <label>Radius (meters)</label>
+        <input id="pmRadius" class="input" type="number" min="1" step="1" />
+      </div>
+    </div>
+    <div class="modal-actions">
+      <button id="pmSave" class="btn">Save Photo</button>
+    </div>
+  </div>
+</div>
+
 <script type="module">
-/* ---------- iOS safety & tiny polyfills ---------- */
+/* ---------- iOS safety & polyfills ---------- */
 window.onerror = function(m,src,lin,col,err){ var b=document.getElementById('errbar'); if(b){ b.textContent='Script error: '+(err&&err.message?err.message:m); b.style.display='block'; } document.getElementById('loader').style.display='none'; };
 window.onunhandledrejection = function(e){ var b=document.getElementById('errbar'); if(b){ b.textContent='Unhandled: '+(e && e.reason && e.reason.message ? e.reason.message : String(e && e.reason ? e.reason : e)); b.style.display='block'; } document.getElementById('loader').style.display='none'; };
 if (!HTMLCanvasElement.prototype.toBlob) {
@@ -588,10 +632,13 @@ function renderScenario(id){
         '<div class="small" style="margin-top:6px">'+(st.title||('Stop '+(idx+1)))+'</div>' +
         '<div class="row" style="margin-top:6px"><span class="tag small">'+(hasGPS?'GPS ✓':'GPS —')+'</span></div>' +
         '<div class="row" style="margin-top:6px">' +
+          '<button class="btn" data-edit>Edit</button>' +
           '<button class="btn" data-gps>Set GPS</button>' +
           '<button class="btn" data-del style="background:#2a0f14;border-color:#7a2b2b">Delete</button>' +
         '</div>';
       grid.appendChild(el);
+
+      el.querySelector('[data-edit]').onclick = function(){ openPhotoEditor(id, idx); };
 
       el.querySelector('[data-del]').onclick = async function(){
         try{
@@ -633,6 +680,55 @@ function renderScenario(id){
   }
 }
 
+/* ---------- Photo editor modal ---------- */
+var pmCtx = { scenarioId:null, index:-1 };
+function openPhotoEditor(scenarioId, index){
+  pmCtx = { scenarioId:scenarioId, index:index };
+  var s=null; for (var i=0;i<scenarios.length;i++){ if (scenarios[i].id===scenarioId){ s=scenarios[i]; break; } }
+  if(!s) return;
+  var st = (s._stops||[])[index]; if(!st) return;
+  $('pmPreview').src = st.imageURL || st.thumbURL || dataURLFromStored(st.imageData) || '';
+  $('pmTitle').value = st.title || '';
+  $('pmCaption').value = st.caption || '';
+  $('pmLat').value = (st.lat!=null ? String(st.lat) : '');
+  $('pmLng').value = (st.lng!=null ? String(st.lng) : '');
+  $('pmRadius').value = (st.radiusMeters!=null ? String(st.radiusMeters) : '50');
+  $('pmGpsStatus').textContent = (st.lat!=null && st.lng!=null) ? 'GPS ✓' : 'GPS —';
+  $('photoModal').style.display = 'grid';
+}
+if ($('pmClose')) $('pmClose').onclick = function(){ $('photoModal').style.display='none'; };
+if ($('pmUseMyLoc')) $('pmUseMyLoc').onclick = async function(){
+  $('pmGpsStatus').textContent = 'Getting GPS…';
+  var coords = await softCoords(2000);
+  if (!coords){ $('pmGpsStatus').textContent='GPS failed'; err('Could not get GPS.'); return; }
+  $('pmLat').value = coords.lat; $('pmLng').value = coords.lng; $('pmGpsStatus').textContent = 'GPS ✓';
+};
+if ($('pmSave')) $('pmSave').onclick = async function(){
+  var scenarioId = pmCtx.scenarioId, index = pmCtx.index; if (!scenarioId || index<0) return;
+  try{
+    loading(true);
+    await ensureAuthed();
+    var snap = await get(dbRef(db, ROOT+'/'+scenarioId));
+    var sc = snap.val(); var arr = coerceStops(sc);
+    var st = arr[index]; if (!st) throw new Error('Photo not found');
+    st.title = ($('pmTitle').value||'').trim();
+    st.caption = ($('pmCaption').value||'').trim();
+    var lat = ($('pmLat').value||'').trim(); var lng = ($('pmLng').value||'').trim();
+    st.lat = lat==='' ? null : Number(lat);
+    st.lng = lng==='' ? null : Number(lng);
+    var rad = parseInt(($('pmRadius').value||'50'),10); if (!(rad>0)) rad = 50; st.radiusMeters = rad;
+    setStops(sc, arr);
+    await set(dbRef(db, ROOT+'/'+scenarioId), sc);
+    ok('Photo saved');
+    $('photoModal').style.display='none';
+    await safeLoadScenarios(); $('eSelect').value=scenarioId; renderScenario(scenarioId);
+  }catch(e){
+    var msg = e && (e.code||e.message) ? (e.code||e.message) : e;
+    if (String(msg).indexOf('PERMISSION_DENIED')>=0) { err('Save photo failed: DB rules block writes to "/scenarios".'); }
+    else { err('Save photo failed: '+msg); }
+  }finally{ loading(false); }
+};
+
 /* ---------- Create / Edit wiring ---------- */
 if ($('createBtn')) $('createBtn').onclick = async function(){
   try{
@@ -646,4 +742,122 @@ if ($('createBtn')) $('createBtn').onclick = async function(){
     createdId = id;
     $('createStatus').textContent='Created ✓';
     ok('Scenario created');
-    await safeLoad
+    await safeLoadScenarios();
+    $('showEdit').click();
+    $('eSelect').value = id; $('eTitle').value = title; $('eDesc').value = desc;
+    renderScenario(id);
+  }catch(e){
+    var msg = e && (e.code||e.message) ? (e.code||e.message) : e;
+    if (String(msg).indexOf('PERMISSION_DENIED')>=0) err('Create failed: DB rules block writes to "/scenarios".');
+    else err('Create failed: ' + msg);
+  }finally{
+    $('createBtn').disabled = false; loading(false);
+  }
+};
+
+if ($('refreshBtn')) $('refreshBtn').onclick = async function(){ await ensureAuthed(); await safeLoadScenarios(); };
+if ($('eSelect')) $('eSelect').onchange = function(){ var id=$('eSelect').value; if (id) renderScenario(id); };
+
+if ($('saveMeta')) $('saveMeta').onclick = async function(){
+  try{
+    await ensureAuthed();
+    var id=$('eSelect').value; if(!id) return;
+    loading(true);
+    var snap = await get(dbRef(db, ROOT+'/'+id));
+    var sc = snap.val()||{};
+    sc.title = ($('eTitle').value||'').trim()||'(untitled)';
+    sc.description = ($('eDesc').value||'').trim()||'';
+    await set(dbRef(db, ROOT+'/'+id'), sc);
+    ok('Scenario saved');
+    await safeLoadScenarios(); $('eSelect').value=id; renderScenario(id);
+  }catch(e){
+    var msg = e && (e.code||e.message) ? (e.code||e.message) : e;
+    if (String(msg).indexOf('PERMISSION_DENIED')>=0) err('Save failed: DB rules block writes to "/scenarios".');
+    else err('Save failed: '+msg);
+  }finally{ loading(false); }
+};
+
+/* Delete Scenario (Edit pane) */
+if ($('deleteScenario')) $('deleteScenario').onclick = async function(){
+  try{
+    var id=$('eSelect').value; if(!id){ err('Select a scenario first.'); return; }
+    var s=null; for (var i=0;i<scenarios.length;i++){ if (scenarios[i].id===id){ s=scenarios[i]; break; } }
+    var go = confirm('Delete scenario "'+((s && s.title)||id)+'" and its photos? This cannot be undone.');
+    if (!go) return;
+    loading(true);
+    await ensureAuthed();
+
+    var paths = [];
+    var stops = s && s._stops ? s._stops : [];
+    for (var j=0;j<stops.length;j++){
+      var st = stops[j];
+      if (st && st.storagePath) paths.push(st.storagePath);
+      if (st && st.thumbPath)   paths.push(st.thumbPath);
+      if (st && st.gsUri)       paths.push(st.gsUri);
+    }
+    for (var k=0;k<paths.length;k++){ try{ await deleteObject(stRef(storage, paths[k])); }catch(e){} }
+
+    await remove(dbRef(db, ROOT+'/'+id));
+    ok('Scenario deleted');
+
+    await safeLoadScenarios();
+    $('eSelect').value=''; $('stopsGrid').innerHTML=''; $('eTitle').value=''; $('eDesc').value=''; $('eStatus').textContent='—';
+  }catch(e){
+    err('Delete scenario failed: '+(e.message||e));
+  }finally{
+    loading(false);
+  }
+};
+
+/* ---------- File input listeners ---------- */
+function onFilesPicked(e, scope){
+  var files = Array.from(e.target.files||[]);
+  if (!files.length) return;
+  addPending(files, scope);
+  enablePendingButtons(scope);
+  e.target.value='';
+}
+if ($('cFilesCam')) $('cFilesCam').addEventListener('change', function(e){ onFilesPicked(e,'c'); });
+if ($('cFilesLib')) $('cFilesLib').addEventListener('change', function(e){ onFilesPicked(e,'c'); });
+if ($('eFilesCam')) $('eFilesCam').addEventListener('change', function(e){ onFilesPicked(e,'e'); });
+if ($('eFilesLib')) $('eFilesLib').addEventListener('change', function(e){ onFilesPicked(e,'e'); });
+
+if ($('cSaveAll')) $('cSaveAll').onclick = function(){ saveAll('c'); };
+if ($('eSaveAll')) $('eSaveAll').onclick = function(){ saveAll('e'); };
+if ($('cClear')) $('cClear').onclick = function(){
+  for (var i=0;i<pendingCreate.length;i++){ try{ if(pendingCreate[i].url) URL.revokeObjectURL(pendingCreate[i].url);}catch(e){} }
+  pendingCreate = []; renderPending('c'); enablePendingButtons('c');
+};
+if ($('eClear')) $('eClear').onclick = function(){
+  for (var i=0;i<pendingEdit.length;i++){ try{ if(pendingEdit[i].url) URL.revokeObjectURL(pendingEdit[i].url);}catch(e){} }
+  pendingEdit = []; renderPending('e'); enablePendingButtons('e');
+};
+
+/* ---------- Init ---------- */
+async function init(){
+  try{
+    loading(true);
+    await ensureAuthed();
+    onValue(dbRef(db, ROOT), function(snap){
+      var obj=snap.val()||{};
+      var arr=[]; var entries = Object.entries(obj);
+      for (var i=0;i<entries.length;i++){
+        var id = entries[i][0], s = entries[i][1];
+        arr.push({ id:id, _raw:s, _stops:coerceStops(s), title:s && s.title, description:s && s.description, createdAt:s && s.createdAt, active:(s && (s.active!==false)) });
+      }
+      arr.sort(function(a,b){ return (b.createdAt||0)-(a.createdAt||0); });
+      scenarios = arr;
+      populateEditList();
+      var cur = $('eSelect').value; if (cur) renderScenario(cur);
+    });
+    await safeLoadScenarios();
+  }catch(e){
+    err('Startup failed: '+(e && e.message ? e.message : e));
+  }finally{
+    loading(false);
+  }
+}
+document.addEventListener('DOMContentLoaded', init);
+</script>
+</body>
+</html>
