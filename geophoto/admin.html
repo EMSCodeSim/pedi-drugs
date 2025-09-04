@@ -92,7 +92,7 @@ textarea{min-height:80px}
     </div>
 
     <hr />
-    <h4>Add Photos (auto GPS on save)</h4>
+    <h4>Add Photos (preview first, GPS on save)</h4>
     <input id="cFilesCam" class="visually-hidden" type="file" accept="image/*" capture="environment" multiple />
     <input id="cFilesLib" class="visually-hidden" type="file" accept="image/*" multiple />
     <div class="row">
@@ -138,7 +138,7 @@ textarea{min-height:80px}
     <textarea id="eDesc"></textarea>
 
     <hr />
-    <h4>Add Photos (auto GPS on save)</h4>
+    <h4>Add Photos (preview first, GPS on save)</h4>
     <input id="eFilesCam" class="visually-hidden" type="file" accept="image/*" capture="environment" multiple />
     <input id="eFilesLib" class="visually-hidden" type="file" accept="image/*" multiple />
     <div class="row">
@@ -153,6 +153,10 @@ textarea{min-height:80px}
       <button id="eClear" class="btn" disabled>Clear</button>
     </div>
     <div id="ePending" class="grid"></div>
+
+    <hr />
+    <h4>Uploaded Thumbs</h4>
+    <div id="eUploads" class="grid" style="margin-top:8px"></div>
 
     <hr />
     <h4>Existing Stops</h4>
@@ -318,7 +322,7 @@ async function decodeToImage(file){
     img.src = url;
     await img.decode();
     return { img, url };
-  }catch{ // preview may still work; try URL for <img> anyway
+  }catch{
     try{
       const url = URL.createObjectURL(file);
       return { img:null, url };
@@ -434,6 +438,22 @@ function extFromType(t){
   return '.jpg';
 }
 
+async function autoCreateIfNeeded(){
+  if (createdId) return createdId;
+  await ensureAuthed();
+  const title = $('cTitle')?.value?.trim() || '(untitled)';
+  const desc  = $('cDesc')?.value?.trim() || '';
+  const id = (push(dbRef(db, ROOT))).key;
+  await set(dbRef(db, `${ROOT}/${id}`), { id, title, description: desc, createdAt: Date.now(), active:true, stops: [] });
+  createdId = id;
+  ok('Scenario created');
+  await safeLoadScenarios();
+  $('showEdit').click();
+  $('eSelect').value = id; $('eTitle').value = title; $('eDesc').value = desc;
+  renderScenario(id);
+  return id;
+}
+
 async function saveOnePending(scope, idx, cardEl){
   const list = (scope==='c') ? pendingCreate : pendingEdit;
   const p = list[idx]; if (!p) return;
@@ -503,6 +523,8 @@ async function saveOnePending(scope, idx, cardEl){
     const imageURL = await getDownloadURL(fullRef);
     const thumbURL = thumbBlob ? await getDownloadURL(thumbRef) : imageURL;
 
+    logDiag('Saved file:', fullRef.fullPath, 'URL:', imageURL);
+
     status.textContent='Saving to DB…';
     const snap = await get(dbRef(db, `${ROOT}/${scenarioId}`));
     const sc = snap.val();
@@ -526,11 +548,14 @@ async function saveOnePending(scope, idx, cardEl){
     status.textContent='Saved ✓';
     ok('Photo saved to cloud');
 
-    // show in uploaded thumbs area immediately
-    const thumbImg = document.createElement('img');
-    thumbImg.className = 'thumb';
-    thumbImg.src = thumbURL;
-    $(`${scope}Uploads`).prepend(thumbImg);
+    // show in uploaded thumbs area (guarded)
+    const uploads = document.getElementById(`${scope}Uploads`);
+    if (uploads) {
+      const thumbImg = document.createElement('img');
+      thumbImg.className = 'thumb';
+      thumbImg.src = thumbURL;
+      uploads.prepend(thumbImg);
+    }
 
     // cleanup pending entry
     try{ if (p.url) URL.revokeObjectURL(p.url); }catch{}
@@ -538,12 +563,11 @@ async function saveOnePending(scope, idx, cardEl){
     renderPending(scope);
     enablePendingButtons(scope);
 
-    // update edit pane list if saving there
-    if (scope==='e'){
-      await safeLoadScenarios();
-      $('eSelect').value = scenarioId;
-      renderScenario(scenarioId);
-    }
+    // refresh data so “Existing Stops” shows the new photo
+    await safeLoadScenarios();
+    const sel = document.getElementById('eSelect');
+    if (sel) { sel.value = scenarioId; renderScenario(scenarioId); }
+
   }catch(ex){
     const code = ex?.code || '';
     const msg  = ex?.message || String(ex);
@@ -560,11 +584,9 @@ async function saveOnePending(scope, idx, cardEl){
 
 async function saveAll(scope){
   const list = (scope==='c') ? pendingCreate : pendingEdit;
-  // save sequentially to avoid memory spikes
   for (let i=0; i<list.length; ){
     const card = $(`${scope}Pending`).children[i];
     await saveOnePending(scope, i, card);
-    // do not increment i when we splice; only increment if no removal (safety)
     if ($(`${scope}Pending`).children[i] === card) i++;
   }
 }
@@ -635,22 +657,6 @@ function renderScenario(id){
 }
 
 /* ---------------- Create / Edit wiring ---------------- */
-async function autoCreateIfNeeded(){
-  if (createdId) return createdId;
-  await ensureAuthed();
-  const title = $('cTitle')?.value?.trim() || '(untitled)';
-  const desc  = $('cDesc')?.value?.trim() || '';
-  const id = (push(dbRef(db, ROOT))).key;
-  await set(dbRef(db, `${ROOT}/${id}`), { id, title, description: desc, createdAt: Date.now(), active:true, stops: [] });
-  createdId = id;
-  ok('Scenario created');
-  await safeLoadScenarios();
-  $('showEdit').click();
-  $('eSelect').value = id; $('eTitle').value = title; $('eDesc').value = desc;
-  renderScenario(id);
-  return id;
-}
-
 if ($('createBtn')) $('createBtn').onclick = async ()=>{
   try{
     await ensureAuthed();
