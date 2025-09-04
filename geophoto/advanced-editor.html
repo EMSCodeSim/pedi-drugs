@@ -54,12 +54,9 @@ textarea{min-height:80px}
 #drawer[open] summary{background:#0e1a30}
 
 /* loading overlay */
-#loader{
-  position:fixed; inset:0; display:none; place-items:center; z-index:99;
-  background:rgba(6,12,20,.55); backdrop-filter:blur(2px)
-}
-.spinner{width:42px;height:42px;border-radius:999px;border:4px solid rgba(255,255,255,.25);border-top-color:#fff;animation:spin 1s linear infinite}
-@keyframes spin{to{transform:rotate(360deg)}}
+#loader{ position:fixed; inset:0; display:none; place-items:center; z-index:99; background:rgba(6,12,20,.55); backdrop-filter:blur(2px) }
+.spinner{ width:42px; height:42px; border-radius:999px; border:4px solid rgba(255,255,255,.25); border-top-color:#fff; animation:spin 1s linear infinite }
+@keyframes spin{ to{ transform:rotate(360deg) } }
 </style>
 </head>
 <body>
@@ -176,9 +173,7 @@ textarea{min-height:80px}
   </div>
 </main>
 
-<!-- Fabric -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/fabric.js/5.3.0/fabric.min.js" crossorigin="anonymous"></script>
-<!-- Firebase (modules) -->
 <script type="module">
 /* ---------- helpers ---------- */
 const $ = (id)=>document.getElementById(id);
@@ -195,12 +190,10 @@ $('toggleTools').onclick = ()=>{
   fitCanvas();
 };
 
-/* ---------- Firebase config ---------- */
+/* ---------- Firebase ---------- */
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-app.js";
 import { getDatabase, ref as dbRef, get, set, onValue } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-database.js";
-import {
-  getStorage, ref as stRef, uploadString, getDownloadURL, getBlob
-} from "https://www.gstatic.com/firebasejs/10.12.4/firebase-storage.js";
+import { getStorage, ref as stRef, uploadString, getDownloadURL, getBlob } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-storage.js";
 import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-auth.js";
 
 const firebaseConfig = {
@@ -241,9 +234,7 @@ function fitCanvas(){
 }
 fitCanvas(); addEventListener('resize', fitCanvas);
 
-function blobToObjectURL(blob){
-  return URL.createObjectURL(blob);
-}
+function blobToObjectURL(blob){ return URL.createObjectURL(blob); }
 function revokeURL(u){ try{ URL.revokeObjectURL(u); }catch{} }
 
 /* ---------- Smart path fixer (thumbnail -> original) ---------- */
@@ -251,29 +242,13 @@ function candidateOriginals(pathOrUrl){
   const out = new Set();
   if (!pathOrUrl) return [];
   let s = pathOrUrl;
-
-  // Decode %2F so we can regex cleanly
   try{ s = decodeURIComponent(s); }catch{}
-
-  // Strip query string
   const [base, qs] = s.split('?');
-
-  const variants = new Set();
-  variants.add(base);
-
-  // Replace '/thumbs/' folder
+  const variants = new Set([base]);
   variants.add(base.replace(/\/thumbs\//i,'/'));
-  // Remove 'thumb_' prefix
   variants.add(base.replace(/\/thumb_([^/]+)/i, '/$1'));
-  // Remove suffixes like -thumb, _thumb, -small, _small, -preview, _min, -tiny
   variants.add(base.replace(/([-_])(thumb|small|preview|min|tiny)(\.[a-z0-9]+)$/i, '$3'));
-
-  // Also try removing any double extensions like .jpg.jpg
-  variants.forEach(v=>{
-    variants.add(v.replace(/(\.[a-z0-9]+)\1$/i, '$1'));
-  });
-
-  // Put back original querystring for https URLs
+  variants.forEach(v=> variants.add(v.replace(/(\.[a-z0-9]+)\1$/i, '$1')));
   for (const v of variants){
     if (/^https?:\/\//i.test(s) && qs) out.add(v + '?' + qs);
     out.add(v);
@@ -287,36 +262,21 @@ async function getBlobFromRefString(refStr){
   const ref = stRef(storage, refStr);
   return await getBlob(ref);
 }
-
 async function loadBlobForStop(stop){
-  // Highest confidence: gsUri or storagePath
-  if (stop.gsUri){
-    return await getBlobFromRefString(stop.gsUri);
-  }
-  if (stop.storagePath){
-    return await getBlobFromRefString(stop.storagePath);
-  }
-
-  // Next: imageURL (could be a download URL or a path accidentally set)
+  if (stop.gsUri)        return await getBlobFromRefString(stop.gsUri);
+  if (stop.storagePath)  return await getBlobFromRefString(stop.storagePath);
   if (typeof stop.imageURL === 'string' && stop.imageURL){
-    // Try SDK using the URL (works for Firebase download URLs)
-    try{
-      return await getBlobFromRefString(stop.imageURL);
-    }catch(_e){}
-    // Fallback: fetch over network (public object)
+    try{ return await getBlobFromRefString(stop.imageURL); }catch(_e){}
     const r = await fetch(stop.imageURL, { mode:'cors', credentials:'omit', cache:'no-store' });
     if (!r.ok) throw new Error('HTTP '+r.status);
     return await r.blob();
   }
-
-  // Legacy inline
   if (stop.imageData?.data){
     const fmt = stop.imageData.format==='jpeg' ? 'jpeg' : 'png';
     return await (await fetch(`data:image/${fmt};base64,${stop.imageData.data}`)).blob();
   }
   throw new Error('No image source on this stop.');
 }
-
 async function setBaseFromBlob(blob){
   return new Promise((resolve,reject)=>{
     const u = blobToObjectURL(blob);
@@ -325,24 +285,18 @@ async function setBaseFromBlob(blob){
       if(!img){ reject(new Error('Image decode failed')); return; }
       if (baseImage) f.remove(baseImage);
       baseImage = img; baseImage.selectable=false; baseImage.evented=false; baseImage.set('erasable', false);
-
       const cw=f.getWidth(), ch=f.getHeight();
       const s=Math.min(cw/img.width, ch/img.height);
       img.scale(s); img.set({ left:(cw-img.width*s)/2, top:(ch-img.height*s)/2 });
-
       f.add(img); img.moveTo(0); f.requestRenderAll();
       $('canvasInfo').textContent=`Image ${Math.round(img.width)}×${Math.round(img.height)} | shown ${Math.round(img.width*s)}×${Math.round(img.height*s)}`;
       resolve({ naturalW: img.width, naturalH: img.height });
     }, { crossOrigin:'anonymous' });
   });
 }
-
-/* Try to upgrade from a likely thumbnail to the original */
-async function tryUpgradeIfTiny(stop, initialBlob, dims){
-  const minGood = 400; // anything smaller likely a thumb
+async function tryUpgradeIfTiny(stop, dims){
+  const minGood = 400;
   if ((dims.naturalW >= minGood) || (dims.naturalH >= minGood)) return true;
-
-  // Generate candidate originals from any known string
   const seeds = [stop.storagePath, stop.gsUri, stop.imageURL].filter(Boolean);
   for (const seed of seeds){
     const candidates = candidateOriginals(seed).slice(0, 6);
@@ -351,7 +305,6 @@ async function tryUpgradeIfTiny(stop, initialBlob, dims){
         const blob = await getBlobFromRefString(cand);
         const res = await setBaseFromBlob(blob);
         if (res.naturalW >= minGood || res.naturalH >= minGood){
-          // persist better source for next time
           if (!stop.storagePath && !/^gs:\/\//.test(cand)) stop.storagePath = cand;
           if (!stop.gsUri && /^gs:\/\//.test(cand)) stop.gsUri = cand;
           await persistStopSource(stop);
@@ -362,7 +315,6 @@ async function tryUpgradeIfTiny(stop, initialBlob, dims){
   }
   return false;
 }
-
 async function persistStopSource(stop){
   if (!current || stopIndex<0) return;
   const next = current._stops.slice();
@@ -420,33 +372,21 @@ onValue(dbRef(db, ROOT), snap=>{
 await loadScenarios();
 $('refreshBtn').onclick=loadScenarios;
 
+/* ---------- Thumbnails row ---------- */
 function renderThumbs(){
   const row=$('thumbRow'); row.innerHTML='';
   if (!current || !current._stops?.length){ row.innerHTML='<div class="pill small">No photos/slides</div>'; return; }
   current._stops.forEach((s,i)=>{
+    const thumbSrc = s.thumbURL || s.imageURL || '';
     const img=document.createElement('img'); img.className='thumb'+(i===stopIndex?' active':'');
-    const src=(s?.type==='text')? textThumb(s?.text||s?.title||'') :
-              (typeof s.imageURL==='string' && s.imageURL ? s.imageURL :
-               s.imageData?.data ? `data:image/${s.imageData.format==='jpeg'?'jpeg':'png'};base64,${s.imageData.data}` :
-               '');
-    img.src=src || textThumb(s?.title||'');
-    img.alt=s.title||('Stop '+(i+1));
-    img.onerror=()=>{ img.src = textThumb(s?.title||''); };
-    img.onclick=()=>loadStop(i);              /* click to view/edit */
+    img.src=thumbSrc; img.alt=s.title||('Stop '+(i+1));
+    img.onerror=()=>{ img.src = 'data:image/svg+xml;utf8,' + encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" width="120" height="120"><rect width="100%" height="100%" fill="#000"/><text x="50%" y="52%" fill="#fff" font-size="14" text-anchor="middle">No image</text></svg>`); };
+    img.onclick=()=>loadStop(i);
     row.appendChild(img);
   });
 }
-function textThumb(text){
-  const t=(text||'TEXT').split('\n')[0].slice(0,18);
-  const svg = `<svg xmlns='http://www.w3.org/2000/svg' width='120' height='120'>
-    <rect width='100%' height='100%' fill='#000'/>
-    <rect x='10' y='10' width='100' height='26' rx='8' fill='#0a84ff'/>
-    <text x='60' y='28' fill='#001' font-size='16' text-anchor='middle' font-weight='700'>TEXT</text>
-    <text x='60' y='78' fill='#fff' font-size='12' text-anchor='middle'>${t.replace(/&/g,'&amp;')}</text>
-  </svg>`;
-  return "data:image/svg+xml;utf8,"+encodeURIComponent(svg);
-}
 
+/* ---------- Scenario selection ---------- */
 $('scenarioSel').onchange = async ()=>{
   const id=$('scenarioSel').value;
   current=scenarios.find(s=>s.id===id)||null;
@@ -456,6 +396,7 @@ $('scenarioSel').onchange = async ()=>{
   if (current && current._stops.length){ await loadStop(0); } // auto open first
 };
 
+/* ---------- Load a stop ---------- */
 async function loadStop(i){
   hideErr();
   if (!current) return;
@@ -470,19 +411,18 @@ async function loadStop(i){
   $('stopRadius').value = (s.radiusMeters ?? s.radius ?? 50);
 
   f.clear(); baseImage=null;
-  if (s.type==='text'){ setBaseAsTextSlide(s.text||'', s.fontSize||34); return; }
+  if (s.type==='text'){
+    setBaseAsTextSlide(s.text||'', s.fontSize||34);
+    return;
+  }
 
   try{
     showLoad(true);
-    // 1) Load the blob (SDK first)
     const blob = await loadBlobForStop(s);
-    // 2) Draw it
     const dims = await setBaseFromBlob(blob);
-
-    // 3) If it looks like a thumbnail, try to upgrade by guessing original path
-    const ok = await tryUpgradeIfTiny(s, blob, dims);
+    const ok = await tryUpgradeIfTiny(s, dims);
     if (!ok && (dims.naturalW < 400 || dims.naturalH < 400)){
-      showErr('Loaded a small thumbnail. If you have an original, the editor tried to find it but could not.');
+      showErr('Loaded a small thumbnail. A higher-resolution original could not be found.');
     }
   }catch(e){
     showErr('Image load failed: '+(e.message||e));
@@ -513,6 +453,24 @@ async function loadStop(i){
     }
     f.requestRenderAll();
   }
+}
+
+/* ---------- Base makers ---------- */
+function setBaseAsTextSlide(text, fontSize){
+  f.clear();
+  const rect = new fabric.Rect({ left:0, top:0, width:f.getWidth(), height:f.getHeight(), fill:'#000', selectable:false, evented:false, erasable:false });
+  baseImage = rect;
+  const tb = new fabric.Textbox(text||'', {
+    width: Math.floor(f.getWidth()*0.8),
+    left: Math.floor(f.getWidth()*0.1),
+    top:  Math.floor(f.getHeight()*0.2),
+    fontSize: fontSize||34, fill:'#fff', textAlign:'center',
+    fontFamily:'system-ui,-apple-system,Segoe UI,Roboto,Inter,Arial,sans-serif',
+    selectable:false, evented:false, erasable:false
+  });
+  tb.isBaseText=true;
+  f.add(rect); f.add(tb); rect.moveTo(0); f.requestRenderAll();
+  $('canvasInfo').textContent='Text slide';
 }
 
 /* ---------- Meta save ---------- */
@@ -565,55 +523,82 @@ $('saveMeta').onclick = async ()=>{
   }catch(e){ $('metaMsg').textContent=String(e.message||e); }
 };
 
-/* ---------- Export / Save to Cloud ---------- */
-function encodeCanvas(){
-  const MAX = 9_000_000; // ~9MB base64
-  let url = f.toDataURL({ format:'png', quality:1, multiplier:1 });
-  let b64 = url.split(',')[1]||'';
-  const bytes = (s)=>Math.floor((s.length*3)/4);
-  if (bytes(b64)<=MAX) return url;
-  const steps=[0.95,0.9,0.85,0.8,0.75,0.7];
-  for (const q of steps){
-    url = f.toDataURL({ format:'jpeg', quality:q, multiplier:1 });
-    b64 = url.split(',')[1]||'';
-    if (bytes(b64)<=MAX) return url;
-  }
-  return f.toDataURL({ format:'jpeg', quality:0.65, multiplier:0.85 });
+/* ---------- Export / Save (compressed + thumb) ---------- */
+const EDIT_MAX_EDGE     = 1600;
+const EDIT_THUMB_EDGE   = 480;
+const EDIT_JPEG_QUALITY = 0.85;
+
+async function dataURLFromCanvasScaled(fabricCanvas, maxEdge=EDIT_MAX_EDGE, quality=EDIT_JPEG_QUALITY){
+  const raw = fabricCanvas.toDataURL({ format:'jpeg', quality:1 });
+  const img = new Image(); img.decoding = 'async'; img.src = raw; await img.decode();
+  const w = img.naturalWidth, h = img.naturalHeight;
+  const s = Math.min(1, maxEdge / Math.max(w, h));
+  const outW = Math.round(w*s), outH = Math.round(h*s);
+  const c = document.createElement('canvas'); c.width = outW; c.height = outH;
+  const ctx = c.getContext('2d');
+  ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = 'high';
+  ctx.drawImage(img, 0, 0, outW, outH);
+  return c.toDataURL('image/jpeg', quality);
 }
-$('exportPNG').onclick = ()=>{
-  const url = encodeCanvas();
-  const a=document.createElement('a'); a.href=url; a.download='image-edited.'+(url.includes('image/png')?'png':'jpg'); a.click();
+async function thumbFromDataURL(dataURL, maxEdge=EDIT_THUMB_EDGE, q=0.8){
+  const img = new Image(); img.decoding='async'; img.src=dataURL; await img.decode();
+  const w = img.naturalWidth, h = img.naturalHeight;
+  const s = Math.min(1, maxEdge / Math.max(w, h));
+  const outW = Math.round(w*s), outH = Math.round(h*s);
+  const c = document.createElement('canvas'); c.width=outW; c.height=outH;
+  const ctx = c.getContext('2d'); ctx.imageSmoothingEnabled=true; ctx.imageSmoothingQuality='high';
+  ctx.drawImage(img, 0, 0, outW, outH);
+  return c.toDataURL('image/jpeg', q);
+}
+
+$('exportPNG').onclick = async ()=>{
+  const url = await dataURLFromCanvasScaled(f, EDIT_MAX_EDGE, 0.95);
+  const a=document.createElement('a'); a.href=url; a.download='image-edited.jpg'; a.click();
 };
-async function uploadEditedToStorage(dataURL, scenarioId, idx){
-  await ensureAuthed();
-  const ts = Date.now();
-  const path = `scenarios/${scenarioId}/${ts}_edited_${idx}.jpg`;
-  const obj = stRef(storage, path);
-  await uploadString(obj, dataURL, 'data_url');
-  const url = await getDownloadURL(obj);
-  return { url, path, gsUri: `gs://dailyquiz-d5279.firebasestorage.app/${path}` };
-}
 $('saveImage').onclick = async ()=>{
   try{
     if(!current || stopIndex<0) throw new Error('Select a stop first.');
-    const dataURL = encodeCanvas();
-    const { url, path, gsUri } = await uploadEditedToStorage(dataURL, current.id, stopIndex);
+    showLoad(true);
+    const dataURL     = await dataURLFromCanvasScaled(f, EDIT_MAX_EDGE, EDIT_JPEG_QUALITY);
+    const thumbURLData= await thumbFromDataURL(dataURL, EDIT_THUMB_EDGE, 0.8);
+
+    await ensureAuthed();
+    const ts = Date.now();
+    const base = `scenarios/${current.id}/${ts}_edited_${stopIndex}`;
+    const fullRef  = stRef(storage, `${base}.jpg`);
+    const thumbRef = stRef(storage, `scenarios/${current.id}/thumbs/${ts}_edited_${stopIndex}.jpg`);
+
+    await uploadString(fullRef,  dataURL,      'data_url', { contentType:'image/jpeg', cacheControl:'public,max-age=31536000,immutable' });
+    await uploadString(thumbRef, thumbURLData, 'data_url', { contentType:'image/jpeg', cacheControl:'public,max-age=31536000,immutable' });
+
+    const fullURL  = await getDownloadURL(fullRef);
+    const thumbURL = await getDownloadURL(thumbRef);
+
     const s = Object.assign({}, current._stops[stopIndex]);
-    s.imageURL = url; s.storagePath = path; s.gsUri = gsUri; s.imageData = null;
-    s.overlays = serializeOverlays();
+    s.imageURL    = fullURL;
+    s.thumbURL    = thumbURL;
+    s.storagePath = `${base}.jpg`;
+    s.gsUri       = `gs://dailyquiz-d5279.firebasestorage.app/${base}.jpg`;
+    s.imageData   = null;
+    s.overlays    = serializeOverlays();
+
     const next=current._stops.slice(); next[stopIndex]=s;
     const updated=Object.assign({}, current._raw); setStops(updated,next);
     await set(dbRef(db, `${ROOT}/${current.id}`), updated);
+
     current._raw=updated; current._stops=next;
     renderThumbs();
-    $('metaMsg').textContent='Image saved to Cloud & linked.';
-  }catch(e){ $('metaMsg').textContent='Save failed: '+(e.message||e); }
+    $('metaMsg').textContent='Compressed image saved to Cloud.';
+  }catch(e){
+    $('metaMsg').textContent='Save failed: '+(e.message||e);
+  }finally{
+    showLoad(false);
+  }
 };
 
 /* ---------- Canvas utilities ---------- */
 $('fit').onclick  = ()=>{
   if (baseImage && baseImage.type==='image'){
-    // re-center & re-fit
     const cw=f.getWidth(), ch=f.getHeight(), s=Math.min(cw/baseImage.width, ch/baseImage.height);
     baseImage.scale(s); baseImage.set({ left:(cw-baseImage.width*s)/2, top:(ch-baseImage.height*s)/2 });
     f.requestRenderAll();
