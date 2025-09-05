@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8" />
-<title>FireOps SIM — Admin</title>
+<title>FireOps SIM — Admin (Legacy ES5)</title>
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
 <meta name="theme-color" content="#0b0f14" />
 <style>
@@ -18,6 +18,7 @@ html,body{margin:0;height:100%;font-family:system-ui,-apple-system,Segoe UI,Robo
 .topnav{max-width:1200px;margin:0 auto;padding:10px 16px;display:flex;gap:10px;align-items:center}
 .brand{font-weight:900}
 .version{font-size:12px;color:var(--muted)}
+.diag{font-size:12px;color:#ffd88a;margin-left:10px}
 .spacer{flex:1}
 .btn{appearance:none;border:1px solid rgba(255,255,255,.18);background:linear-gradient(180deg,#142238,#0f1930);color:#fff;border-radius:12px;padding:9px 12px;font-weight:800;cursor:pointer}
 .btn[disabled]{opacity:.6;cursor:not-allowed}
@@ -56,7 +57,8 @@ textarea{min-height:80px}
 <div class="topbar">
   <div class="topnav">
     <div class="brand">FireOps SIM — Admin</div>
-    <span class="version">compat-build</span>
+    <span class="version">legacy-es5</span>
+    <span id="diag" class="diag">[booting]</span>
     <div class="spacer"></div>
     <button id="showCreate" class="btn">Create Scenario</button>
     <button id="showEdit" class="btn">Edit Scenario</button>
@@ -197,75 +199,84 @@ textarea{min-height:80px}
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-storage-compat.js"></script>
 
 <script>
-/* ---------- iOS safety & polyfills ---------- */
-window.onerror = function(m,src,lin,col,err){ var b=document.getElementById('errbar'); if(b){ b.textContent='Script error: '+(err&&err.message?err.message:m); b.style.display='block'; } document.getElementById('loader').style.display='none'; };
-window.onunhandledrejection = function(e){ var b=document.getElementById('errbar'); if(b){ b.textContent='Unhandled: '+(e && e.reason && e.reason.message ? e.reason.message : String(e && e.reason ? e.reason : e)); b.style.display='block'; } document.getElementById('loader').style.display='none'; };
-if (!HTMLCanvasElement.prototype.toBlob) {
-  HTMLCanvasElement.prototype.toBlob = function (cb, type, quality) {
-    var bin = atob(this.toDataURL(type, quality).split(',')[1]||'');
-    var len = bin.length, u8 = new Uint8Array(len);
-    for (var i=0;i<len;i++) u8[i] = bin.charCodeAt(i);
-    cb(new Blob([u8], { type: type || 'image/png' }));
-  };
-}
-if (!Object.entries) { Object.entries = function(obj){ var keys = Object.keys(obj||{}); var out=[]; for (var i=0;i<keys.length;i++){ out.push([keys[i], obj[keys[i]]]); } return out; }; }
-
+/* -------------- Hard ES5 mode helpers -------------- */
 function $(id){ return document.getElementById(id); }
 function show(id,on){ var el=$(id); if(el) el.style.display = on ? '' : 'none'; }
 function ok(m){ var b=$('okbar'); if(!b) return; b.textContent=m; b.style.display='block'; setTimeout(function(){ b.style.display='none'; }, 2600); }
 function err(m){ var b=$('errbar'); if(!b) return; b.textContent=m; b.style.display='block'; setTimeout(function(){ b.style.display='none'; }, 6000); }
 function loading(on){ var l=$('loader'); if(l) l.style.display = on ? 'grid' : 'none'; }
+function diag(m){ var d=$('diag'); if(d) d.textContent=m; }
 
-/* Nav buttons */
-$('showCreate').onclick = function(){ show('createPane',true); show('editPane',false); };
-$('showEdit').onclick = function(){ show('createPane',false); show('editPane',true); };
+/* Show panels (proves JS is running even without Firebase) */
+$('showCreate').onclick = function(){ show('createPane',true); show('editPane',false); diag('[create pane]'); };
+$('showEdit').onclick   = function(){ show('createPane',false); show('editPane',true); diag('[edit pane]'); };
 
-/* ---------- Firebase (compat) ---------- */
+/* Canvas toBlob polyfill */
+if (!HTMLCanvasElement.prototype.toBlob) {
+  HTMLCanvasElement.prototype.toBlob = function (cb, type, quality) {
+    try{
+      var bin = atob(this.toDataURL(type, quality).split(',')[1]||'');
+      var len = bin.length, u8 = new Uint8Array(len);
+      for (var i=0;i<len;i++) u8[i] = bin.charCodeAt(i);
+      cb(new Blob([u8], { type: type || 'image/png' }));
+    }catch(e){ cb(null); }
+  };
+}
+
+/* -------------- Firebase (compat) -------------- */
 var firebaseConfig = {
   apiKey:"AIzaSyDM6DpRSeZueVKRpbyJyDmhf8WY66KyCDk",
   authDomain:"dailyquiz-d5279.firebaseapp.com",
   databaseURL:"https://dailyquiz-d5279-default-rtdb.firebaseio.com",
   projectId:"dailyquiz-d5279",
-  storageBucket:"dailyquiz-d5279.firebasestorage.app", /* will be normalized */
+  storageBucket:"dailyquiz-d5279.firebasestorage.app",
   appId:"1:94577748034:web:c032d3a1d72db1313de5db",
   measurementId:"G-19DVN7NNH7"
 };
-/* ✅ Force correct bucket for writes */
+/* Force real bucket for writes */
 firebaseConfig.storageBucket = (firebaseConfig.storageBucket || (firebaseConfig.projectId + ".appspot.com")).replace(".firebasestorage.app", ".appspot.com");
-firebase.initializeApp(firebaseConfig);
+
+try{
+  firebase.initializeApp(firebaseConfig);
+  diag('[firebase init ok]');
+}catch(e){
+  diag('[firebase init error]');
+  err('Firebase init failed: ' + (e.message||e));
+}
 
 var auth = firebase.auth();
 var db   = firebase.database();
-var storage = firebase.storage(); // uses normalized bucket above
+var storage = firebase.storage();
 
-/* ---------- Auth (fallbacks for iOS private mode) ---------- */
-async function initAuth(){
-  try { await auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL); }
-  catch(e1){
-    try { await auth.setPersistence(firebase.auth.Auth.Persistence.SESSION); }
-    catch(e2){ await auth.setPersistence(firebase.auth.Auth.Persistence.NONE); }
-  }
-  if (!auth.currentUser) await auth.signInAnonymously();
-  return new Promise(function(res){ var unsub = auth.onAuthStateChanged(function(u){ if(u){ unsub(); res(u); } }); });
+function ensureAuthed(){
+  return auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL)
+  .catch(function(){ return auth.setPersistence(firebase.auth.Auth.Persistence.SESSION); })
+  .catch(function(){ return auth.setPersistence(firebase.auth.Auth.Persistence.NONE); })
+  .then(function(){
+    if (auth.currentUser) return auth.currentUser;
+    return auth.signInAnonymously().then(function(){ return new Promise(function(res){
+      var unsub = auth.onAuthStateChanged(function(u){ if (u){ unsub(); res(u); } });
+    });});
+  });
 }
-async function ensureAuthed(){ if (!auth.currentUser) await initAuth(); return auth.currentUser; }
 
-/* ---------- Data helpers ---------- */
+/* -------------- App state -------------- */
 var ROOT = 'scenarios';
 var scenarios = [];
 var createdId = null;
 
+/* Stops helpers */
 function coerceStops(sc){
-  if (sc && Array.isArray(sc.stops)) return sc.stops;
-  if (sc && Array.isArray(sc.photos)) return sc.photos;
-  if (sc && Array.isArray(sc.images)) return sc.images;
+  if (sc && Object.prototype.toString.call(sc.stops)==='[object Array]') return sc.stops;
+  if (sc && Object.prototype.toString.call(sc.photos)==='[object Array]') return sc.photos;
+  if (sc && Object.prototype.toString.call(sc.images)==='[object Array]') return sc.images;
   return [];
 }
 function setStops(sc, stops){
   if (!sc) return;
-  if (Array.isArray(sc.stops)) sc.stops = stops;
-  else if (Array.isArray(sc.photos)) sc.photos = stops;
-  else if (Array.isArray(sc.images)) sc.images = stops;
+  if (Object.prototype.toString.call(sc.stops)==='[object Array]') sc.stops = stops;
+  else if (Object.prototype.toString.call(sc.photos)==='[object Array]') sc.photos = stops;
+  else if (Object.prototype.toString.call(sc.images)==='[object Array]') sc.images = stops;
   else sc.stops = stops;
 }
 function populateEditList(){
@@ -278,38 +289,35 @@ function populateEditList(){
     sel.appendChild(o);
   }
 }
-async function safeLoadScenarios(){
-  try{
-    var snap = await db.ref(ROOT).get();
+
+/* Load scenarios (once) + live subscribe */
+function safeLoadScenarios(){
+  return db.ref(ROOT).get().then(function(snap){
     var obj = snap.exists() ? (snap.val()||{}) : {};
-    var arr = [];
-    var entries = Object.entries(obj);
+    scenarios = [];
+    var entries = Object.keys(obj);
     for (var i=0;i<entries.length;i++){
-      var id = entries[i][0]; var s = entries[i][1];
-      arr.push({ id:id, _raw:s, _stops:coerceStops(s), title:s && s.title, description:s && s.description, createdAt:s && s.createdAt, active:(s && (s.active!==false)) });
+      var id = entries[i]; var s = obj[id]||{};
+      scenarios.push({ id:id, _raw:s, _stops:coerceStops(s), title:s.title, description:s.description, createdAt:s.createdAt, active:(s.active!==false) });
     }
-    arr.sort(function(a,b){ return (b.createdAt||0)-(a.createdAt||0); });
-    scenarios = arr;
+    scenarios.sort(function(a,b){ return (b.createdAt||0)-(a.createdAt||0); });
     populateEditList();
     var cur = $('eSelect').value; if (cur) renderScenario(cur);
     $('eStatus').textContent='Loaded';
-  }catch(e){
+  }).catch(function(e){
     $('eStatus').textContent='Load failed';
-    console.warn('loadScenarios failed:', e);
-  }
+    err('Load failed: '+(e.message||e));
+  });
 }
-
-/* live subscribe to keep list fresh */
 db.ref(ROOT).on('value', function(snap){
   var obj=snap.val()||{};
-  var arr=[];
-  var entries = Object.entries(obj);
+  scenarios = [];
+  var entries = Object.keys(obj);
   for (var i=0;i<entries.length;i++){
-    var id = entries[i][0], s = entries[i][1];
-    arr.push({ id:id, _raw:s, _stops:coerceStops(s), title:s && s.title, description:s && s.description, createdAt:s && s.createdAt, active:(s && (s.active!==false)) });
+    var id = entries[i]; var s = obj[id]||{};
+    scenarios.push({ id:id, _raw:s, _stops:coerceStops(s), title:s.title, description:s.description, createdAt:s.createdAt, active:(s.active!==false) });
   }
-  arr.sort(function(a,b){ return (b.createdAt||0)-(a.createdAt||0); });
-  scenarios = arr;
+  scenarios.sort(function(a,b){ return (b.createdAt||0)-(a.createdAt||0); });
   populateEditList();
   var cur = $('eSelect').value; if (cur) renderScenario(cur);
 });
@@ -325,19 +333,14 @@ function loadImageURL(url){
     img.src = url;
   });
 }
-async function decodeToImage(file){
-  try{
-    var url = URL.createObjectURL(file);
-    var img = await loadImageURL(url);
-    return { img:img, url:url };
-  }catch(e){
+function decodeToImage(file){
+  return new Promise(function(resolve){
     try{
-      var url2 = URL.createObjectURL(file);
-      return { img:null, url:url2 };
-    }catch(e2){
-      return { img:null, url:null };
-    }
-  }
+      var url = URL.createObjectURL(file);
+      loadImageURL(url).then(function(img){ resolve({ img:img, url:url }); })
+      .catch(function(){ resolve({ img:null, url:url }); });
+    }catch(e){ resolve({ img:null, url:null }); }
+  });
 }
 function scaleByMaxEdgeOrPixels(w,h){
   var edgeScale = Math.min(1, ORIG_MAX_EDGE / Math.max(w,h));
@@ -345,28 +348,27 @@ function scaleByMaxEdgeOrPixels(w,h){
   var s = Math.min(edgeScale, pixScale);
   return { w: Math.max(1, Math.round(w*s)), h: Math.max(1, Math.round(h*s)) };
 }
-async function canvasToBlob(nativeImg, targetEdge){
-  var w = nativeImg.naturalWidth || nativeImg.width;
-  var h = nativeImg.naturalHeight || nativeImg.height;
-  var dims;
-  if (targetEdge === ORIG_MAX_EDGE){
-    dims = scaleByMaxEdgeOrPixels(w,h);
-  } else {
-    var s = Math.min(1, targetEdge / Math.max(w,h));
-    dims = { w:Math.round(w*s), h:Math.round(h*s) };
-  }
-  var c = document.createElement('canvas'); c.width = dims.w; c.height = dims.h;
-  var ctx = c.getContext('2d', { alpha:false });
-  ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality='high';
-  ctx.drawImage(nativeImg, 0, 0, dims.w, dims.h);
-  var blob = await new Promise(function(res){ c.toBlob(res, 'image/jpeg', JPEG_QUALITY); });
-  var dataURL = c.toDataURL('image/jpeg', JPEG_QUALITY);
-  return { blob:blob, dataURL:dataURL, width:dims.w, height:dims.h };
-}
-function dataURLFromStored(stored){
-  if (typeof stored === 'string') return stored;
-  if (stored && stored.data){ return 'data:image/'+(stored.format||'jpeg')+';base64,'+stored.data; }
-  return '';
+function canvasToBlob(nativeImg, targetEdge){
+  return new Promise(function(res){
+    var w = nativeImg.naturalWidth || nativeImg.width;
+    var h = nativeImg.naturalHeight || nativeImg.height;
+    var dims;
+    if (targetEdge === ORIG_MAX_EDGE){
+      dims = scaleByMaxEdgeOrPixels(w,h);
+    } else {
+      var s = Math.min(1, targetEdge / Math.max(w,h));
+      dims = { w:Math.round(w*s), h:Math.round(h*s) };
+    }
+    var c = document.createElement('canvas'); c.width = dims.w; c.height = dims.h;
+    var ctx = c.getContext('2d', { alpha:false });
+    ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality='high';
+    ctx.drawImage(nativeImg, 0, 0, dims.w, dims.h);
+    c.toBlob(function(blob){
+      var dataURL;
+      try{ dataURL = c.toDataURL('image/jpeg', JPEG_QUALITY); }catch(e){ dataURL = null; }
+      res({ blob:blob, dataURL:dataURL, width:dims.w, height:dims.h });
+    }, 'image/jpeg', JPEG_QUALITY);
+  });
 }
 function fileToDataURL(file){
   return new Promise(function(res,rej){
@@ -375,6 +377,11 @@ function fileToDataURL(file){
     fr.onerror = rej;
     fr.readAsDataURL(file);
   });
+}
+function dataURLFromStored(stored){
+  if (typeof stored === 'string') return stored;
+  if (stored && stored.data){ return 'data:image/'+(stored.format||'jpeg')+';base64,'+stored.data; }
+  return '';
 }
 
 /* ---------- Geolocation ---------- */
@@ -413,46 +420,47 @@ function renderPending(scope){
   var list = (scope==='c') ? pendingCreate : pendingEdit;
   var container = $(scope+'Pending');
   container.innerHTML='';
-  for (var i=0;i<list.length;i++){
-    (function(i){
-      var p = list[i];
-      if (!p.url){ try{ p.url = URL.createObjectURL(p.file); }catch(e) { p.url=''; } }
-      var card = document.createElement('div');
-      card.style.cssText='padding:8px;border:1px solid rgba(255,255,255,.14);border-radius:12px;background:#0f1624';
-      card.innerHTML =
-        '<img class="thumb" src="'+p.url+'" alt="preview" onerror="this.replaceWith(Object.assign(document.createElement(\\'div\\'),{className:\\'tag small\\',textContent:\\'(Preview not supported)\\'}))" />' +
-        '<div style="display:flex;flex-direction:column;gap:6px;margin-top:6px">' +
-          '<input class="input ptitle" placeholder="Optional title" value="'+(p.title||'')+'">' +
-          '<input class="input pcaption" placeholder="Optional caption" value="'+(p.caption||'')+'">' +
+  var i;
+  var makeCard = function(i){
+    var p = list[i];
+    if (!p.url){ try{ p.url = URL.createObjectURL(p.file); }catch(e) { p.url=''; } }
+    var card = document.createElement('div');
+    card.style.cssText='padding:8px;border:1px solid rgba(255,255,255,.14);border-radius:12px;background:#0f1624';
+    card.innerHTML =
+      '<img class="thumb" src="'+p.url+'" alt="preview" onerror="this.replaceWith(Object.assign(document.createElement(\'div\'),{className:\'tag small\',textContent:\'(Preview not supported)\'}))" />' +
+      '<div style="display:flex;flex-direction:column;gap:6px;margin-top:6px">' +
+        '<input class="input ptitle" placeholder="Optional title" value="'+(p.title||'')+'">' +
+        '<input class="input pcaption" placeholder="Optional caption" value="'+(p.caption||'')+'">' +
+      '</div>' +
+      '<div class="row" style="justify-content:space-between;margin-top:6px">' +
+        '<span class="tag small" data-status>Ready</span>' +
+        '<div class="row">' +
+          '<button class="btn" data-gps>Use My Location</button>' +
+          '<button class="btn" data-save>Save</button>' +
+          '<button class="btn btn-danger" data-del>Discard</button>' +
         '</div>' +
-        '<div class="row" style="justify-content:space-between;margin-top:6px">' +
-          '<span class="tag small" data-status>Ready</span>' +
-          '<div class="row">' +
-            '<button class="btn" data-gps>Use My Location</button>' +
-            '<button class="btn" data-save>Save</button>' +
-            '<button class="btn btn-danger" data-del>Discard</button>' +
-          '</div>' +
-        '</div>';
-      container.appendChild(card);
-      card.querySelector('.ptitle').oninput = function(e){ p.title=e.target.value; };
-      card.querySelector('.pcaption').oninput = function(e){ p.caption=e.target.value; };
-      card.querySelector('[data-del]').onclick = function(){
-        try{ if (p.url) URL.revokeObjectURL(p.url); }catch(e){}
-        list.splice(i,1); renderPending(scope); enablePendingButtons(scope);
-      };
-      card.querySelector('[data-gps]').onclick = async function(){
-        var status = card.querySelector('[data-status]');
-        status.textContent='Getting GPS…';
-        var c = await softCoords(2000);
+      '</div>';
+    container.appendChild(card);
+    card.querySelector('.ptitle').oninput = function(e){ p.title=e.target.value; };
+    card.querySelector('.pcaption').oninput = function(e){ p.caption=e.target.value; };
+    card.querySelector('[data-del]').onclick = function(){
+      try{ if (p.url) URL.revokeObjectURL(p.url); }catch(e){}
+      list.splice(i,1); renderPending(scope); enablePendingButtons(scope);
+    };
+    card.querySelector('[data-gps]').onclick = function(){
+      var status = card.querySelector('[data-status]');
+      status.textContent='Getting GPS…';
+      softCoords(2000).then(function(c){
         if (c){ p.lat=c.lat; p.lng=c.lng; status.textContent='GPS ✓'; } else { status.textContent='GPS —'; err('Could not get GPS.'); }
-      };
-      card.querySelector('[data-save]').onclick = function(){ saveOnePending(scope, i, card); };
-    })(i);
-  }
+      });
+    };
+    card.querySelector('[data-save]').onclick = function(){ saveOnePending(scope, i, card); };
+  };
+  for (i=0;i<list.length;i++){ makeCard(i); }
   enablePendingButtons(scope);
 }
 
-/* ---------- Upload helpers (compat) ---------- */
+/* ---------- Upload helpers ---------- */
 function extFromType(t){
   if (!t) return '.jpg';
   var lt = String(t).toLowerCase();
@@ -462,28 +470,33 @@ function extFromType(t){
   if (lt.indexOf('webp')>=0) return '.webp';
   return '.jpg';
 }
-async function autoCreateIfNeeded(){
-  if (createdId) return createdId;
-  await ensureAuthed();
-  var title = ($('cTitle') && $('cTitle').value ? $('cTitle').value.trim() : '') || '(untitled)';
-  var desc  = ($('cDesc') && $('cDesc').value ? $('cDesc').value.trim() : '') || '';
-  var ref = db.ref(ROOT).push();
-  var id = ref.key;
-  await db.ref(ROOT+'/'+id).set({ id:id, title:title, description:desc, createdAt:Date.now(), active:true, stops: [] });
-  createdId = id;
-  ok('Scenario created');
-  await safeLoadScenarios();
-  $('showEdit').click();
-  $('eSelect').value = id; $('eTitle').value = title; $('eDesc').value = desc;
-  renderScenario(id);
-  return id;
+function autoCreateIfNeeded(){
+  if (createdId) return Promise.resolve(createdId);
+  return ensureAuthed().then(function(){
+    var title = ($('cTitle') && $('cTitle').value ? $('cTitle').value.trim() : '') || '(untitled)';
+    var desc  = ($('cDesc') && $('cDesc').value ? $('cDesc').value.trim() : '') || '';
+    var ref = db.ref(ROOT).push();
+    var id = ref.key;
+    return db.ref(ROOT+'/'+id).set({ id:id, title:title, description:desc, createdAt:Date.now(), active:true, stops: [] })
+      .then(function(){
+        createdId = id;
+        ok('Scenario created');
+        return safeLoadScenarios().then(function(){
+          $('showEdit').click();
+          $('eSelect').value = id; $('eTitle').value = title; $('eDesc').value = desc;
+          renderScenario(id);
+          return id;
+        });
+      });
+  });
 }
 function uploadWithProgress(storageRef, blob, metadata, onProgress){
   return new Promise(function(resolve,reject){
     var task = storageRef.put(blob, metadata);
     var killer = setTimeout(function(){ try{ task.cancel(); }catch(e){} reject(new Error('Timed out while uploading')); }, 45000);
     task.on('state_changed',
-      function(s){ if (onProgress){ onProgress(Math.round((s.bytesTransferred/s.totalBytes)*100)); } },
+      function(s){ try{ if (onProgress){ onProgress(Math.round((s.bytesTransferred/s.totalBytes)*100)); } }catch(_){}
+      ,
       function(e){ clearTimeout(killer); reject(e); },
       function(){ clearTimeout(killer); resolve(); }
     );
@@ -491,200 +504,209 @@ function uploadWithProgress(storageRef, blob, metadata, onProgress){
 }
 
 /* ---------- Save one / all ---------- */
-async function saveOnePending(scope, idx, cardEl){
+function saveOnePending(scope, idx, cardEl){
   var list = (scope==='c') ? pendingCreate : pendingEdit;
   var p = list[idx]; if (!p) return;
   var status = cardEl.querySelector('[data-status]');
-  var scenarioId = (scope==='c') ? await autoCreateIfNeeded() : $('eSelect').value;
-  if (!scenarioId){ err('Select a scenario first.'); return; }
+  var scenarioIdPromise = (scope==='c') ? autoCreateIfNeeded() : Promise.resolve($('eSelect').value);
+  scenarioIdPromise.then(function(scenarioId){
+    if (!scenarioId){ err('Select a scenario first.'); return; }
+    return ensureAuthed().then(function(){
+      status.textContent='Preparing…';
+      return decodeToImage(p.file).then(function(preview){
+        var usedOriginal=false, width=0, height=0, fullBlob=null, dataURL=null, thumbBlob=null;
+        var makeBlobs = (preview.img)
+          ? canvasToBlob(preview.img, ORIG_MAX_EDGE).then(function(full){
+              fullBlob = full.blob; dataURL = full.dataURL; width=full.width; height=full.height;
+              return canvasToBlob(preview.img, THUMB_MAX_EDGE).then(function(th){ thumbBlob = th.blob; });
+            })
+          : fileToDataURL(p.file).then(function(d){ usedOriginal=true; fullBlob=p.file; dataURL=d; });
 
-  try{
-    await ensureAuthed();
-    status.textContent='Preparing…';
+        return makeBlobs.then(function(){
+          return softCoords(1200).then(function(coords){
+            var ts = Date.now();
+            var basePath = 'scenarios/'+scenarioId+'/'+ts;
+            var ext = usedOriginal ? extFromType(p.file.type) : '.jpg';
+            var fullRef  = storage.ref(basePath+ext);
+            var thumbRef = storage.ref('scenarios/'+scenarioId+'/thumbs/'+ts+'.jpg');
+            var metaFull = { contentType: (usedOriginal && p.file.type) ? p.file.type : 'image/jpeg', cacheControl:'public,max-age=31536000,immutable' };
+            var metaThmb = { contentType:'image/jpeg', cacheControl:'public,max-age=31536000,immutable' };
 
-    var usedOriginal=false, width=0, height=0, fullBlob=null, dataURL=null, thumbBlob=null;
-
-    var preview = await decodeToImage(p.file);
-    if (preview.img){
-      var full = await canvasToBlob(preview.img, ORIG_MAX_EDGE);
-      fullBlob = full.blob; dataURL = full.dataURL; width=full.width; height=full.height;
-      var th   = await canvasToBlob(preview.img, THUMB_MAX_EDGE);
-      thumbBlob = th.blob;
-    }else{
-      usedOriginal = true;
-      fullBlob = p.file;
-      dataURL = await fileToDataURL(p.file);
-    }
-
-    var coords = (p.lat!=null && p.lng!=null) ? {lat:p.lat,lng:p.lng} : await softCoords(1200);
-    var ts = Date.now();
-    var basePath = 'scenarios/'+scenarioId+'/'+ts;
-    var ext = usedOriginal ? extFromType(p.file.type) : '.jpg';
-    var fullRef  = storage.ref(basePath+ext);
-    var thumbRef = storage.ref('scenarios/'+scenarioId+'/thumbs/'+ts+'.jpg');
-    var metaFull = { contentType: (usedOriginal && p.file.type) ? p.file.type : 'image/jpeg', cacheControl:'public,max-age=31536000,immutable' };
-    var metaThmb = { contentType:'image/jpeg', cacheControl:'public,max-age=31536000,immutable' };
-
-    status.textContent='Uploading 0%…';
-    try{
-      await uploadWithProgress(fullRef, fullBlob, metaFull, function(pct){ status.textContent='Uploading '+pct+'%…'; });
-      if (thumbBlob){ try{ await thumbRef.put(thumbBlob, metaThmb); }catch(e3){} }
-    }catch(eUp){
-      // last-resort inline store in DB (still shows in app)
-      var stopInline = {
-        type:'photo', title:p.title||'', caption:p.caption||'',
-        lat: coords && coords.lat!=null ? coords.lat : null,
-        lng: coords && coords.lng!=null ? coords.lng : null,
-        radiusMeters:50, width:width, height:height,
-        imageData: { format:'jpeg', data: (dataURL||'').split(',')[1] || '' }, overlays:[]
-      };
-      var snap = await db.ref(ROOT+'/'+scenarioId).get();
-      var sc = snap.exists()? snap.val(): {};
-      var stops = coerceStops(sc); stops.push(stopInline); setStops(sc, stops);
-      await db.ref(ROOT+'/'+scenarioId).set(sc);
-      status.textContent='Saved inline ✓';
-      ok('Photo saved inline (Storage blocked)');
-      list.splice(idx,1); renderPending(scope); enablePendingButtons(scope);
-      await safeLoadScenarios(); if ($('eSelect')){ $('eSelect').value = scenarioId; renderScenario(scenarioId); }
-      return;
-    }
-
-    var imageURL = await fullRef.getDownloadURL();
-    var thumbURL = imageURL;
-    try{ if (thumbBlob) thumbURL = await thumbRef.getDownloadURL(); }catch(e4){}
-
-    var stop = {
-      type:'photo',
-      title: p.title || '',
-      caption: p.caption || '',
-      lat: coords && coords.lat!=null ? coords.lat : null,
-      lng: coords && coords.lng!=null ? coords.lng : null,
-      radiusMeters:50,
-      width: width, height: height, overlays:[],
-      imageURL: imageURL, thumbURL: thumbURL,
-      storagePath: fullRef.fullPath, thumbPath: (thumbBlob? thumbRef.fullPath : null),
-      gsUri: 'gs://'+firebase.app().options.storageBucket+'/'+fullRef.fullPath
-    };
-
-    status.textContent='Saving to DB…';
-    var snap2 = await db.ref(ROOT+'/'+scenarioId).get();
-    var sc2 = snap2.exists()? snap2.val(): {};
-    var stops2 = coerceStops(sc2); stops2.push(stop); setStops(sc2, stops2);
-    await db.ref(ROOT+'/'+scenarioId).set(sc2);
-
-    status.textContent='Saved ✓';
-    ok('Photo saved to cloud');
-
-    var uploads = $(scope+'Uploads');
-    if (uploads){
-      var img = document.createElement('img');
-      img.className='thumb';
-      img.src = stop.thumbURL || stop.imageURL;
-      uploads.prepend(img);
-    }
-
-    try{ if (p.url) URL.revokeObjectURL(p.url); }catch(e){}
-    list.splice(idx,1);
-    renderPending(scope); enablePendingButtons(scope);
-
-    await safeLoadScenarios();
-    if ($('eSelect')){ $('eSelect').value = scenarioId; renderScenario(scenarioId); }
-
-  }catch(ex){
-    var msg  = ex && ex.message ? ex.message : String(ex);
-    if ((msg||'').match(/app.?check/i)) err('Blocked by App Check enforcement. Add App Check or disable enforcement.');
-    else if (/PERMISSION_DENIED|unauthorized|storage\/unauthorized/i.test(msg)) err('Permission denied saving photo. Check Storage/DB rules.');
-    else err('Save failed: ' + msg);
-    status.textContent='Failed';
-  }
+            status.textContent='Uploading 0%…';
+            return uploadWithProgress(fullRef, fullBlob, metaFull, function(pct){ status.textContent='Uploading '+pct+'%…'; })
+            .then(function(){ if (thumbBlob) return thumbRef.put(thumbBlob, metaThmb); })
+            .catch(function(eUp){
+              /* inline DB fallback if Storage blocked */
+              var stopInline = {
+                type:'photo', title:p.title||'', caption:p.caption||'',
+                lat: coords && coords.lat!=null ? coords.lat : null,
+                lng: coords && coords.lng!=null ? coords.lng : null,
+                radiusMeters:50, width:width, height:height,
+                imageData: { format:'jpeg', data: (dataURL||'').split(',')[1] || '' }, overlays:[]
+              };
+              return db.ref(ROOT+'/'+scenarioId).get().then(function(snap){
+                var sc = snap.exists()? snap.val(): {};
+                var stops = coerceStops(sc); stops.push(stopInline); setStops(sc, stops);
+                return db.ref(ROOT+'/'+scenarioId).set(sc).then(function(){
+                  status.textContent='Saved inline ✓';
+                  ok('Photo saved inline (Storage blocked)');
+                  try{ if (p.url) URL.revokeObjectURL(p.url); }catch(e){}
+                  list.splice(idx,1); renderPending(scope); enablePendingButtons(scope);
+                  return safeLoadScenarios().then(function(){ if ($('eSelect')){ $('eSelect').value = scenarioId; renderScenario(scenarioId); } });
+                });
+              });
+            })
+            .then(function(){
+              if (status.textContent.indexOf('inline')>=0) return; // already handled fallback path
+              return fullRef.getDownloadURL().then(function(imageURL){
+                var thumbURLPromise = (thumbBlob ? thumbRef.getDownloadURL() : Promise.resolve(imageURL));
+                return thumbURLPromise.then(function(thumbURL){
+                  var stop = {
+                    type:'photo',
+                    title: p.title || '',
+                    caption: p.caption || '',
+                    lat: coords && coords.lat!=null ? coords.lat : null,
+                    lng: coords && coords.lng!=null ? coords.lng : null,
+                    radiusMeters:50,
+                    width: width, height: height, overlays:[],
+                    imageURL: imageURL, thumbURL: thumbURL,
+                    storagePath: fullRef.fullPath, thumbPath: (thumbBlob? thumbRef.fullPath : null),
+                    gsUri: 'gs://'+firebase.app().options.storageBucket+'/'+fullRef.fullPath
+                  };
+                  status.textContent='Saving to DB…';
+                  return db.ref(ROOT+'/'+scenarioId).get().then(function(snap2){
+                    var sc2 = snap2.exists()? snap2.val(): {};
+                    var stops2 = coerceStops(sc2); stops2.push(stop); setStops(sc2, stops2);
+                    return db.ref(ROOT+'/'+scenarioId).set(sc2).then(function(){
+                      status.textContent='Saved ✓';
+                      ok('Photo saved to cloud');
+                      var uploads = $(scope+'Uploads');
+                      if (uploads){
+                        var img = document.createElement('img');
+                        img.className='thumb';
+                        img.src = stop.thumbURL || stop.imageURL;
+                        uploads.prepend(img);
+                      }
+                      try{ if (p.url) URL.revokeObjectURL(p.url); }catch(e){}
+                      list.splice(idx,1);
+                      renderPending(scope); enablePendingButtons(scope);
+                      return safeLoadScenarios().then(function(){
+                        if ($('eSelect')){ $('eSelect').value = scenarioId; renderScenario(scenarioId); }
+                      });
+                    });
+                  });
+                });
+              });
+            });
+          });
+        });
+      });
+    }).catch(function(ex){
+      var msg  = ex && ex.message ? ex.message : String(ex);
+      if ((msg||'').match(/app.?check/i)) err('Blocked by App Check enforcement. Add App Check or disable enforcement.');
+      else if (/PERMISSION_DENIED|unauthorized|storage\/unauthorized/i.test(msg)) err('Permission denied saving photo. Check Storage/DB rules.');
+      else err('Save failed: ' + msg);
+      status.textContent='Failed';
+    });
+  });
 }
-async function saveAll(scope){
+function saveAll(scope){
   var list = (scope==='c') ? pendingCreate : pendingEdit;
   var i=0;
-  while (i<list.length){
+  function next(){
+    if (i>=list.length) return;
     var card = $(scope+'Pending').children[i];
-    await saveOnePending(scope, i, card);
-    if ($(scope+'Pending').children[i] === card){ i++; }
+    saveOnePending(scope, i, card);
+    i++;
+    setTimeout(next, 50);
   }
+  next();
 }
 
 /* ---------- Render & edit ---------- */
 function renderScenario(id){
-  var s = null;
-  for (var i=0;i<scenarios.length;i++){ if (scenarios[i].id===id){ s=scenarios[i]; break; } }
+  var s = null, i;
+  for (i=0;i<scenarios.length;i++){ if (scenarios[i].id===id){ s=scenarios[i]; break; } }
   if (!s){ $('eStatus').textContent='Not found'; $('stopsGrid').innerHTML=''; return; }
   $('eTitle').value = s.title||'';
   $('eDesc').value  = s.description||'';
-  $('eStatus').textContent = (s._stops && s._stops.length ? s._stops.length : 0) + ' photo(s)';
+  $('eStatus').textContent = ((s._stops && s._stops.length ? s._stops.length : 0) + ' photo(s)');
   var grid = $('stopsGrid'); grid.innerHTML='';
   if (!(s._stops && s._stops.length)){ grid.innerHTML='<div class="small tag">No photos yet</div>'; return; }
 
-  for (var idx=0; idx<s._stops.length; idx++){
-    (function(idx){
-      var st = s._stops[idx];
-      var thumb = (st && (st.thumbURL || st.imageURL)) || dataURLFromStored(st && st.imageData) || '';
-      var hasGPS = !!(st && st.lat!=null && st.lng!=null);
-      var el = document.createElement('div');
-      el.innerHTML =
-        '<img class="thumb" src="'+thumb+'" alt="thumb" />' +
-        '<div class="small" style="margin-top:6px">'+(st.title||('Stop '+(idx+1)))+'</div>' +
-        '<div class="row" style="margin-top:6px"><span class="tag small">'+(hasGPS?'GPS ✓':'GPS —')+'</span></div>' +
-        '<div class="row" style="margin-top:6px">' +
-          '<button class="btn" data-edit>Edit</button>' +
-          '<button class="btn" data-gps>Set GPS</button>' +
-          '<button class="btn btn-danger" data-del>Delete</button>' +
-        '</div>';
-      grid.appendChild(el);
+  var addRow = function(idx){
+    var st = s._stops[idx] || {};
+    var thumb = (st.thumbURL || st.imageURL || dataURLFromStored(st.imageData) || '');
+    var hasGPS = !!(st.lat!=null && st.lng!=null);
+    var el = document.createElement('div');
+    el.innerHTML =
+      '<img class="thumb" src="'+thumb+'" alt="thumb" />' +
+      '<div class="small" style="margin-top:6px">'+(st.title||('Stop '+(idx+1)))+'</div>' +
+      '<div class="row" style="margin-top:6px"><span class="tag small">'+(hasGPS?'GPS ✓':'GPS —')+'</span></div>' +
+      '<div class="row" style="margin-top:6px">' +
+        '<button class="btn" data-edit>Edit</button>' +
+        '<button class="btn" data-gps>Set GPS</button>' +
+        '<button class="btn btn-danger" data-del>Delete</button>' +
+      '</div>';
+    grid.appendChild(el);
 
-      el.querySelector('[data-edit]').onclick = function(){ openPhotoEditor(id, idx); };
+    el.querySelector('[data-edit]').onclick = function(){ openPhotoEditor(id, idx); };
 
-      el.querySelector('[data-del]').onclick = async function(){
-        try{
-          loading(true);
-          await ensureAuthed();
-          var snap = await db.ref(ROOT+'/'+id).get();
+    el.querySelector('[data-del]').onclick = function(){
+      loading(true);
+      ensureAuthed().then(function(){
+        return db.ref(ROOT+'/'+id).get().then(function(snap){
           var sc = snap.exists()? snap.val() : null; if (!sc) return;
           var arr = coerceStops(sc);
           var removed = arr.splice(idx,1)[0]; setStops(sc, arr);
-          await db.ref(ROOT+'/'+id).set(sc);
-          /* best-effort storage cleanup */
-          var paths = [];
-          if (removed && removed.storagePath) paths.push(removed.storagePath);
-          if (removed && removed.thumbPath)   paths.push(removed.thumbPath);
-          for (var j=0;j<paths.length;j++){ try{ await storage.ref(paths[j]).delete(); }catch(e){} }
-          ok('Stop deleted');
-          await safeLoadScenarios(); $('eSelect').value=id; renderScenario(id);
-        }catch(e){ err('Delete failed: '+(e.message||e)); }
-        finally{ loading(false); }
-      };
+          return db.ref(ROOT+'/'+id).set(sc).then(function(){
+            var paths = [];
+            if (removed && removed.storagePath) paths.push(removed.storagePath);
+            if (removed && removed.thumbPath)   paths.push(removed.thumbPath);
+            var j=0;
+            function delNext(){
+              if (j>=paths.length) return Promise.resolve();
+              return storage.ref(paths[j++]).delete().catch(function(){ return Promise.resolve(); }).then(delNext);
+            }
+            return delNext().then(function(){
+              ok('Stop deleted');
+              return safeLoadScenarios().then(function(){ $('eSelect').value=id; renderScenario(id); });
+            });
+          });
+        });
+      }).catch(function(e){ err('Delete failed: '+(e.message||e)); })
+      .finally ? loading(false) : (function(){ loading(false); })();
+    };
 
-      el.querySelector('[data-gps]').onclick = async function(){
-        var coords = await softCoords(2000);
+    el.querySelector('[data-gps]').onclick = function(){
+      softCoords(2000).then(function(coords){
         if (!coords){ err('Could not get GPS (permission/signal).'); return; }
-        try{
-          loading(true);
-          await ensureAuthed();
-          var snap = await db.ref(ROOT+'/'+id).get();
-          var sc = snap.exists()? snap.val() : null; if (!sc) return;
-          var arr = coerceStops(sc);
-          if (!arr[idx]) return;
-          arr[idx].lat = coords.lat; arr[idx].lng = coords.lng; arr[idx].locAccuracy = coords.accuracy || null;
-          setStops(sc, arr);
-          await db.ref(ROOT+'/'+id).set(sc);
-          ok('GPS saved');
-          await safeLoadScenarios(); $('eSelect').value=id; renderScenario(id);
-        }catch(e){ err('Save GPS failed: '+(e.message||e)); }
-        finally{ loading(false); }
-      };
-    })(idx);
-  }
+        loading(true);
+        ensureAuthed().then(function(){
+          return db.ref(ROOT+'/'+id).get().then(function(snap){
+            var sc = snap.exists()? snap.val() : null; if (!sc) return;
+            var arr = coerceStops(sc);
+            if (!arr[idx]) return;
+            arr[idx].lat = coords.lat; arr[idx].lng = coords.lng; arr[idx].locAccuracy = coords.accuracy || null;
+            setStops(sc, arr);
+            return db.ref(ROOT+'/'+id).set(sc).then(function(){
+              ok('GPS saved');
+              return safeLoadScenarios().then(function(){ $('eSelect').value=id; renderScenario(id); });
+            });
+          });
+        }).catch(function(e){ err('Save GPS failed: '+(e.message||e)); })
+        .finally ? loading(false) : (function(){ loading(false); })();
+      });
+    };
+  };
+  for (var k=0;k<s._stops.length;k++){ addRow(k); }
 }
 
 /* ---------- Photo editor modal ---------- */
 var pmCtx = { scenarioId:null, index:-1 };
 function openPhotoEditor(scenarioId, index){
   pmCtx = { scenarioId:scenarioId, index:index };
-  var s=null; for (var i=0;i<scenarios.length;i++){ if (scenarios[i].id===scenarioId){ s=scenarios[i]; break; } }
+  var s=null, i; for (i=0;i<scenarios.length;i++){ if (scenarios[i].id===scenarioId){ s=scenarios[i]; break; } }
   if(!s) return;
   var st = (s._stops||[])[index]; if(!st) return;
   $('pmPreview').src = st.imageURL || st.thumbURL || dataURLFromStored(st.imageData) || '';
@@ -697,95 +719,97 @@ function openPhotoEditor(scenarioId, index){
   $('photoModal').style.display = 'grid';
 }
 $('pmClose').onclick = function(){ $('photoModal').style.display='none'; };
-$('pmUseMyLoc').onclick = async function(){
+$('pmUseMyLoc').onclick = function(){
   $('pmGpsStatus').textContent = 'Getting GPS…';
-  var coords = await softCoords(2000);
-  if (!coords){ $('pmGpsStatus').textContent='GPS failed'; err('Could not get GPS.'); return; }
-  $('pmLat').value = coords.lat; $('pmLng').value = coords.lng; $('pmGpsStatus').textContent = 'GPS ✓';
+  softCoords(2000).then(function(coords){
+    if (!coords){ $('pmGpsStatus').textContent='GPS failed'; err('Could not get GPS.'); return; }
+    $('pmLat').value = coords.lat; $('pmLng').value = coords.lng; $('pmGpsStatus').textContent = 'GPS ✓';
+  });
 };
-$('pmSave').onclick = async function(){
+$('pmSave').onclick = function(){
   var scenarioId = pmCtx.scenarioId, index = pmCtx.index; if (!scenarioId || index<0) return;
-  try{
-    loading(true);
-    await ensureAuthed();
-    var snap = await db.ref(ROOT+'/'+scenarioId).get();
-    var sc = snap.exists()? snap.val() : null; if (!sc) return;
-    var arr = coerceStops(sc);
-    var st = arr[index]; if (!st) throw new Error('Photo not found');
-    st.title = ($('pmTitle').value||'').trim();
-    st.caption = ($('pmCaption').value||'').trim();
-    var lat = ($('pmLat').value||'').trim(); var lng = ($('pmLng').value||'').trim();
-    st.lat = lat==='' ? null : Number(lat);
-    st.lng = lng==='' ? null : Number(lng);
-    var rad = parseInt(($('pmRadius').value||'50'),10); if (!(rad>0)) rad = 50; st.radiusMeters = rad;
-    setStops(sc, arr);
-    await db.ref(ROOT+'/'+scenarioId).set(sc);
-    ok('Photo saved');
-    $('photoModal').style.display='none';
-    await safeLoadScenarios(); $('eSelect').value=scenarioId; renderScenario(scenarioId);
-  }catch(e){
+  loading(true);
+  ensureAuthed().then(function(){
+    return db.ref(ROOT+'/'+scenarioId).get().then(function(snap){
+      var sc = snap.exists()? snap.val() : null; if (!sc) return;
+      var arr = coerceStops(sc);
+      var st = arr[index]; if (!st) throw new Error('Photo not found');
+      st.title = ($('pmTitle').value||'').trim();
+      st.caption = ($('pmCaption').value||'').trim();
+      var lat = ($('pmLat').value||'').trim(); var lng = ($('pmLng').value||'').trim();
+      st.lat = lat==='' ? null : Number(lat);
+      st.lng = lng==='' ? null : Number(lng);
+      var rad = parseInt(($('pmRadius').value||'50'),10); if (!(rad>0)) rad = 50; st.radiusMeters = rad;
+      setStops(sc, arr);
+      return db.ref(ROOT+'/'+scenarioId).set(sc).then(function(){
+        ok('Photo saved');
+        $('photoModal').style.display='none';
+        return safeLoadScenarios().then(function(){ $('eSelect').value=scenarioId; renderScenario(scenarioId); });
+      });
+    });
+  }).catch(function(e){
     if (String(e).indexOf('PERMISSION_DENIED')>=0) { err('Save photo failed: DB rules block writes to "/scenarios".'); }
     else { err('Save photo failed: '+(e.message||e)); }
-  }finally{ loading(false); }
+  }).finally ? loading(false) : (function(){ loading(false); })();
 };
 
 /* ---------- Create / Edit wiring ---------- */
-$('createBtn').onclick = async function(){
-  try{
-    await ensureAuthed();
+$('createBtn').onclick = function(){
+  ensureAuthed().then(function(){
     loading(true);
     var title = ($('cTitle').value||'').trim() || '(untitled)';
     var desc  = ($('cDesc').value||'').trim() || '';
     $('createBtn').disabled = true; $('createStatus').textContent='Creating…';
     var ref = db.ref(ROOT).push();
     var id = ref.key;
-    await db.ref(ROOT+'/'+id).set({ id:id, title:title, description:desc, createdAt:Date.now(), active:true, stops: [] });
-    createdId = id;
-    $('createStatus').textContent='Created ✓';
-    ok('Scenario created');
-    await safeLoadScenarios();
-    $('showEdit').click();
-    $('eSelect').value = id; $('eTitle').value = title; $('eDesc').value = desc;
-    renderScenario(id);
-  }catch(e){
-    if (String(e).indexOf('PERMISSION_DENIED')>=0) err('Create failed: DB rules block writes to "/scenarios".');
-    else err('Create failed: ' + (e.message||e));
-  }finally{
-    $('createBtn').disabled = false; loading(false);
-  }
+    return db.ref(ROOT+'/'+id).set({ id:id, title:title, description:desc, createdAt:Date.now(), active:true, stops: [] })
+      .then(function(){
+        createdId = id;
+        $('createStatus').textContent='Created ✓';
+        ok('Scenario created');
+        return safeLoadScenarios().then(function(){
+          $('showEdit').click();
+          $('eSelect').value = id; $('eTitle').value = title; $('eDesc').value = desc;
+          renderScenario(id);
+        });
+      })
+      .catch(function(e){
+        if (String(e).indexOf('PERMISSION_DENIED')>=0) err('Create failed: DB rules block writes to "/scenarios".');
+        else err('Create failed: ' + (e.message||e));
+      })
+      .finally ? null : null;
+  }).finally ? (function(){ $('createBtn').disabled=false; loading(false); })() : (function(){ $('createBtn').disabled=false; loading(false); })();
 };
 
-$('refreshBtn').onclick = async function(){ await ensureAuthed(); await safeLoadScenarios(); };
+$('refreshBtn').onclick = function(){ ensureAuthed().then(safeLoadScenarios); };
 $('eSelect').onchange = function(){ var id=$('eSelect').value; if (id) renderScenario(id); };
 
-$('saveMeta').onclick = async function(){
-  try{
-    await ensureAuthed();
+$('saveMeta').onclick = function(){
+  ensureAuthed().then(function(){
     var id=$('eSelect').value; if(!id) return;
     loading(true);
-    var snap = await db.ref(ROOT+'/'+id).get();
-    var sc = snap.exists()? snap.val(): {};
-    sc.title = ($('eTitle').value||'').trim()||'(untitled)';
-    sc.description = ($('eDesc').value||'').trim()||'';
-    await db.ref(ROOT+'/'+id).set(sc);
-    ok('Scenario saved');
-    await safeLoadScenarios(); $('eSelect').value=id; renderScenario(id);
-  }catch(e){
+    return db.ref(ROOT+'/'+id).get().then(function(snap){
+      var sc = snap.exists()? snap.val(): {};
+      sc.title = ($('eTitle').value||'').trim()||'(untitled)';
+      sc.description = ($('eDesc').value||'').trim()||'';
+      return db.ref(ROOT+'/'+id).set(sc).then(function(){
+        ok('Scenario saved');
+        return safeLoadScenarios().then(function(){ $('eSelect').value=id; renderScenario(id); });
+      });
+    });
+  }).catch(function(e){
     if (String(e).indexOf('PERMISSION_DENIED')>=0) err('Save failed: DB rules block writes to "/scenarios".');
     else err('Save failed: '+(e.message||e));
-  }finally{ loading(false); }
+  }).finally ? loading(false) : (function(){ loading(false); })();
 };
 
 /* Delete Scenario */
-$('deleteScenario').onclick = async function(){
-  try{
-    var id=$('eSelect').value; if(!id){ err('Select a scenario first.'); return; }
-    var s=null; for (var i=0;i<scenarios.length;i++){ if (scenarios[i].id===id){ s=scenarios[i]; break; } }
-    var go = confirm('Delete scenario "'+((s && s.title)||id)+'" and its photos? This cannot be undone.');
-    if (!go) return;
-    loading(true);
-    await ensureAuthed();
-
+$('deleteScenario').onclick = function(){
+  var id=$('eSelect').value; if(!id){ err('Select a scenario first.'); return; }
+  var s=null; for (var i=0;i<scenarios.length;i++){ if (scenarios[i].id===id){ s=scenarios[i]; break; } }
+  var go = confirm('Delete scenario "'+((s && s.title)||id)+'" and its photos? This cannot be undone.'); if (!go) return;
+  loading(true);
+  ensureAuthed().then(function(){
     var paths = [];
     var stops = s && s._stops ? s._stops : [];
     for (var j=0;j<stops.length;j++){
@@ -793,23 +817,26 @@ $('deleteScenario').onclick = async function(){
       if (st && st.storagePath) paths.push(st.storagePath);
       if (st && st.thumbPath)   paths.push(st.thumbPath);
     }
-    for (var k=0;k<paths.length;k++){ try{ await storage.ref(paths[k]).delete(); }catch(e){} }
-
-    await db.ref(ROOT+'/'+id).remove();
-    ok('Scenario deleted');
-
-    await safeLoadScenarios();
-    $('eSelect').value=''; $('stopsGrid').innerHTML=''; $('eTitle').value=''; $('eDesc').value=''; $('eStatus').textContent='—';
-  }catch(e){
-    err('Delete scenario failed: '+(e.message||e));
-  }finally{
-    loading(false);
-  }
+    var k=0;
+    function delNext(){
+      if (k>=paths.length) return Promise.resolve();
+      return storage.ref(paths[k++]).delete().catch(function(){ return Promise.resolve(); }).then(delNext);
+    }
+    return delNext().then(function(){
+      return db.ref(ROOT+'/'+id).remove().then(function(){
+        ok('Scenario deleted');
+        return safeLoadScenarios().then(function(){
+          $('eSelect').value=''; $('stopsGrid').innerHTML=''; $('eTitle').value=''; $('eDesc').value=''; $('eStatus').textContent='—';
+        });
+      });
+    });
+  }).catch(function(e){ err('Delete scenario failed: '+(e.message||e)); })
+  .finally ? loading(false) : (function(){ loading(false); })();
 };
 
 /* ---------- File input listeners ---------- */
 function onFilesPicked(e, scope){
-  var files = Array.from(e.target.files||[]);
+  var files = Array.prototype.slice.call(e.target.files||[], 0);
   if (!files.length) return;
   addPending(files, scope);
   enablePendingButtons(scope);
@@ -832,16 +859,15 @@ $('eClear').onclick = function(){
 };
 
 /* ---------- Init ---------- */
-(async function init(){
-  try{
-    loading(true);
-    await ensureAuthed();
-    await safeLoadScenarios();
-  }catch(e){
+(function init(){
+  diag('[starting]');
+  ensureAuthed().then(function(){
+    diag('[authed]');
+    return safeLoadScenarios().then(function(){ diag('[ready]'); });
+  }).catch(function(e){
+    diag('[auth error]');
     err('Startup failed: '+(e && e.message ? e.message : e));
-  }finally{
-    loading(false);
-  }
+  });
 })();
 </script>
 </body>
