@@ -1,588 +1,450 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="utf-8" />
-  <title>Scenario Admin (Single File)</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <meta name="theme-color" content="#0b0f14" />
-  <style>
-    :root{
-      --bg:#0b0f14; --panel:#0f1624; --text:#eaf2ff; --muted:#94a3b8;
-      --edge: rgba(255,255,255,.08); --edge2: rgba(255,255,255,.14);
-      --ok:#22c55e; --warn:#f59e0b; --err:#ef4444; --accent:#60a5fa;
-    }
-    *{box-sizing:border-box}
-    html,body{margin:0;height:100%;background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,Segoe UI,Roboto,Inter,Arial,sans-serif}
-    header{position:sticky;top:0;background:linear-gradient(180deg,#0b0f14,rgba(11,15,20,.8));border-bottom:1px solid var(--edge2);z-index:9}
-    .wrap{max-width:980px;margin:0 auto;padding:12px}
-    h1{font-size:20px;margin:6px 0 2px}
-    .sub{color:var(--muted);font-size:12px}
-    .status{display:flex;gap:8px;align-items:center;margin-top:8px;flex-wrap:wrap}
-    .pill{padding:4px 8px;border-radius:999px;background:var(--edge2);color:var(--muted);font-size:12px}
-    .pill.good{background:rgba(34,197,94,.1);color:var(--ok)}
-    .pill.warn{background:rgba(245,158,11,.08);color:var(--warn)}
-    .pill.bad{background:rgba(239,68,68,.08);color:var(--err)}
-    nav{display:flex;gap:8px;margin:12px 0 6px;flex-wrap:wrap}
-    .tab{border:1px solid var(--edge2);background:var(--panel);padding:8px 10px;border-radius:10px;cursor:pointer}
-    .tab.active{outline:2px solid var(--accent);}
-    .card{border:1px solid var(--edge2);background:linear-gradient(180deg,rgba(255,255,255,.02),rgba(255,255,255,.00));padding:14px;border-radius:14px;box-shadow:0 0 0 1px var(--edge) inset}
-    .row{display:flex;gap:10px;flex-wrap:wrap}
-    label{font-size:12px;color:var(--muted);display:block;margin-bottom:4px}
-    input[type=text], textarea, select{width:100%;padding:10px;border-radius:10px;border:1px solid var(--edge2);background:#0c131f;color:var(--text)}
-    textarea{min-height:80px;resize:vertical}
-    .btn{padding:10px 12px;border-radius:10px;border:1px solid var(--edge2);background:#132031;color:var(--text);cursor:pointer}
-    .btn.primary{background:#0f2a4a; border-color:#164777}
-    .btn.red{background:#3b1111;border-color:#5a1a1a}
-    .btn:disabled{opacity:.5;cursor:not-allowed}
-    .fine{font-size:12px;color:var(--muted)}
-    .grid{display:grid;grid-template-columns:1fr;gap:12px}
-    @media(min-width:760px){ .grid{grid-template-columns:1fr 1fr} }
-    .hidden{display:none!important}
-    .toastz{position:fixed;right:10px;bottom:10px;display:flex;flex-direction:column;gap:8px;z-index:99}
-    .toast{padding:10px 12px;background:#132031;border:1px solid var(--edge2);border-left:4px solid var(--edge2);border-radius:10px;max-width:72vw}
-    .toast.ok{border-left-color:var(--ok)}
-    .toast.err{border-left-color:var(--err)}
-    .toast.warn{border-left-color:var(--warn)}
-    .mono{font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,"Liberation Mono","Courier New",monospace;font-size:12px}
-    .uploader{border:1px dashed var(--edge2);border-radius:12px;padding:12px}
-    .preview{display:flex;gap:10px;align-items:center}
-    .preview img{max-width:120px;max-height:90px;border-radius:8px;border:1px solid var(--edge)}
-    progress{width:100%;height:10px}
-    .list{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px}
-    .item{border:1px solid var(--edge2);border-radius:10px;padding:8px}
-    .diag{margin-top:12px;padding:10px;border-radius:12px;background:#0c131f;border:1px solid var(--edge2)}
-    .diag h3{margin:0 0 6px;font-size:14px}
-    .diag pre{white-space:pre-wrap;word-break:break-word}
-  </style>
+<meta charset="utf-8" />
+<title>FireOps SIM — Admin</title>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta name="theme-color" content="#0b0f14" />
+<style>
+:root{ --bg:#0b0f14; --bg2:#0e1421; --card:#0f1624; --edge:rgba(255,255,255,.10); --text:#eaf2ff; --muted:#93a0b5; --blue:#0a84ff; }
+*{ box-sizing:border-box }
+html,body{ margin:0; height:100%; font-family:system-ui,-apple-system,Segoe UI,Roboto,Inter,Arial,sans-serif; color:var(--text); background:
+  radial-gradient(1400px 700px at 15% -15%, rgba(10,132,255,.28), transparent 60%),
+  radial-gradient(1200px 600px at 110% 0%, rgba(255,59,48,.22), transparent 60%),
+  linear-gradient(165deg, var(--bg2), var(--bg) 55%) }
+.topbar{ position:sticky; top:0; z-index:20; background:rgba(12,15,22,.78); backdrop-filter:blur(6px) saturate(120%); border-bottom:1px solid rgba(255,255,255,.08) }
+.topnav{ max-width:1200px; margin:0 auto; padding:10px 16px; display:flex; gap:10px; align-items:center }
+.brand{ font-weight:900 }
+.spacer{ flex:1 }
+.btn{ appearance:none; border:1px solid rgba(255,255,255,.18); background:linear-gradient(180deg,#142238,#0f1930); color:#fff; border-radius:12px; padding:9px 12px; font-weight:800; cursor:pointer }
+.btn[disabled]{ opacity:.6; cursor:not-allowed }
+.tag{ display:inline-flex; align-items:center; gap:8px; padding:6px 10px; border-radius:999px; border:1px solid rgba(255,255,255,.16); color:var(--muted) }
 
-  <!-- Firebase SDKs (compat) -->
-  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-storage-compat.js"></script>
-  <!-- If App Check is enforced, uncomment the next line and configure in JS -->
-  <!-- <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-check-compat.js"></script> -->
+main{ max-width:1200px; margin:16px auto 40px; padding:0 16px; display:grid; grid-template-columns:340px 1fr; gap:12px }
+.card{ background:var(--card); border:1px solid var(--edge); border-radius:16px; padding:12px; min-height:120px }
+label{ display:block; margin:8px 0 6px 2px; font-size:12px; color:var(--muted) }
+.input, select, textarea{ width:100%; padding:10px; border-radius:10px; border:1px solid rgba(255,255,255,.14); background:#0c1322; color:#eaf2ff }
+textarea{ min-height:80px }
+.row{ display:flex; gap:8px; align-items:center; flex-wrap:wrap }
+.grid{ display:grid; grid-template-columns:repeat(auto-fill, minmax(120px,1fr)); gap:10px }
+.thumb{ width:100%; height:90px; object-fit:cover; border-radius:10px; background:#0a1a2a; border:1px solid rgba(255,255,255,.14) }
+.small{ font-size:12px; opacity:.85 }
+hr{ border:none; height:1px; background:rgba(255,255,255,.08); margin:12px 0 }
+
+#errbar{ position:fixed; left:10px; bottom:10px; background:#2b0d0d; color:#ffd7d7; border:1px solid #7a2b2b; border-radius:12px; padding:8px 12px; display:none; z-index:9999 }
+#okbar{ position:fixed; left:10px; bottom:56px; background:#0f2a19; color:#d8ffe2; border:1px solid #2c7a4b; border-radius:12px; padding:8px 12px; display:none; z-index:9999 }
+
+/* loading overlay */
+#loader{ position:fixed; inset:0; display:none; place-items:center; z-index:99; background:rgba(6,12,20,.55); backdrop-filter:blur(2px) }
+.spinner{ width:42px; height:42px; border-radius:999px; border:4px solid rgba(255,255,255,.25); border-top-color:#fff; animation:spin 1s linear infinite }
+@keyframes spin{ to{ transform:rotate(360deg) } }
+</style>
 </head>
 <body>
-  <header>
-    <div class="wrap">
-      <h1>Scenario Admin</h1>
-      <div class="sub">Create scenarios, upload photos, and edit details. (Single file)</div>
-      <div class="status">
-        <div id="stBoot" class="pill warn">booting…</div>
-        <div id="stFB" class="pill">firebase</div>
-        <div id="stAuth" class="pill">auth</div>
-        <div id="stReady" class="pill">ready</div>
-      </div>
-      <nav>
-        <button id="tabCreate" class="tab active">Create</button>
-        <button id="tabEdit" class="tab">Edit / Upload</button>
-      </nav>
+<div id="errbar"></div><div id="okbar"></div>
+<div id="loader"><div class="spinner"></div></div>
+
+<div class="topbar">
+  <div class="topnav">
+    <div class="brand">FireOps SIM — Admin</div>
+    <div class="spacer"></div>
+    <button id="showCreate" class="btn">Create Scenario</button>
+    <button id="showEdit" class="btn">Edit Scenario</button>
+    <a class="btn" href="./advanced-editor.html">Open Advanced Editor</a>
+  </div>
+</div>
+
+<main>
+  <!-- LEFT: Create -->
+  <section class="card" id="createPane">
+    <h3>Create Scenario</h3>
+    <label>Title</label>
+    <input id="cTitle" class="input" placeholder="e.g., Apartment Fire — 5th St" />
+    <label>Description</label>
+    <textarea id="cDesc" placeholder="Short description…"></textarea>
+    <div class="row">
+      <button id="createBtn" class="btn">Create</button>
+      <span id="createStatus" class="tag">Ready</span>
     </div>
-  </header>
+    <hr />
+    <h4>Add Photos</h4>
+    <input id="cFiles" type="file" accept="image/*" capture="environment" multiple />
+    <div class="small" style="margin:6px 0">Photos are resized to max <b>1600px</b> (thumbs at <b>480px</b>) to save space & speed up loads.</div>
+    <div id="cUploads" class="grid"></div>
+  </section>
 
-  <main class="wrap">
-    <!-- CREATE -->
-    <section id="paneCreate" class="card">
-      <h2 style="margin-top:6px">Create Scenario</h2>
-      <div class="grid">
-        <div>
-          <label>Title</label>
-          <input id="cTitle" type="text" placeholder="Example: MVC on County Rd 25" />
-        </div>
-        <div>
-          <label>Description (optional)</label>
-          <input id="cDesc" type="text" placeholder="Short note or training goal" />
-        </div>
+  <!-- RIGHT: Edit -->
+  <section class="card" id="editPane" style="display:none">
+    <h3>Edit Scenario</h3>
+    <label>Select a scenario</label>
+    <select id="eSelect"><option value="">Loading…</option></select>
+    <div class="row" style="margin-top:6px">
+      <button id="refreshBtn" class="btn">Refresh</button>
+      <span id="eStatus" class="tag">—</span>
+    </div>
+
+    <hr />
+    <div class="row">
+      <div style="flex:1">
+        <label>Title</label>
+        <input id="eTitle" class="input" />
       </div>
-      <div class="row" style="margin-top:10px">
-        <button id="createBtn" class="btn primary">Create</button>
-        <span id="createStatus" class="fine"></span>
+      <div>
+        <label>&nbsp;</label>
+        <button id="saveMeta" class="btn">Save Scenario</button>
       </div>
-      <div class="fine mono" style="margin-top:10px">
-        Writes to RTDB at <b>/scenarios/{id}</b>. Requires Anonymous Auth and rules permitting authenticated writes.
-      </div>
-    </section>
+    </div>
+    <label>Description</label>
+    <textarea id="eDesc"></textarea>
 
-    <!-- EDIT -->
-    <section id="paneEdit" class="card hidden">
-      <h2 style="margin-top:6px">Edit Scenario & Photos</h2>
+    <hr />
+    <h4>Add Photos</h4>
+    <input id="eFiles" type="file" accept="image/*" capture="environment" multiple />
+    <div id="eUploads" class="grid" style="margin-top:8px"></div>
 
-      <div class="grid">
-        <div>
-          <label>Select Scenario</label>
-          <div class="row" style="align-items:center">
-            <select id="eSelect"></select>
-            <button id="refreshList" class="btn">Refresh</button>
-          </div>
-        </div>
-        <div>
-          <label>Quick Actions</label>
-          <div class="row">
-            <button id="btnDeleteScenario" class="btn red">Delete Scenario</button>
-            <button id="btnOpenCreate" class="btn">New Scenario</button>
-          </div>
-        </div>
-      </div>
+    <hr />
+    <h4>Existing Stops</h4>
+    <div id="stopsGrid" class="grid"></div>
+  </section>
+</main>
 
-      <div class="grid" style="margin-top:12px">
-        <div>
-          <label>Title</label>
-          <input id="eTitle" type="text" placeholder="Scenario title" />
-        </div>
-        <div>
-          <label>Description</label>
-          <input id="eDesc" type="text" placeholder="Scenario description" />
-        </div>
-      </div>
-      <div class="row" style="margin-top:10px">
-        <button id="saveMeta" class="btn primary">Save Details</button>
-        <span id="metaStatus" class="fine"></span>
-      </div>
+<!-- Firebase (modules) -->
+<script type="module">
+/* ---------- UI helpers ---------- */
+const $ = (id)=>document.getElementById(id);
+const show = (id, on)=> $(id).style.display = on ? '' : 'none';
+const ok = (m)=>{ const b=$('okbar'); b.textContent=m; b.style.display='block'; setTimeout(()=>b.style.display='none', 2400); };
+const err= (m)=>{ const b=$('errbar'); b.textContent=m; b.style.display='block'; setTimeout(()=>b.style.display='none', 4200); };
+const loading = (on)=>{ $('loader').style.display = on ? 'grid' : 'none'; };
 
-      <hr style="margin:16px 0;border-color:var(--edge2)">
+/* ---------- Firebase ---------- */
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-app.js";
+import { getDatabase, ref as dbRef, set, push, get, onValue } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-database.js";
+import { getStorage, ref as stRef, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-storage.js";
+import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-auth.js";
 
-      <div class="uploader">
-        <label>Upload Photo (downscales on device for speed)</label>
-        <div class="row" style="align-items:flex-start">
-          <input id="file" type="file" accept="image/*" capture="environment" class="btn" />
-          <div class="preview">
-            <img id="thumb" alt="" class="hidden">
-            <div class="fine" id="imgInfo"></div>
-          </div>
-        </div>
-        <div style="margin-top:8px">
-          <progress id="prog" max="100" value="0" class="hidden"></progress>
-          <div id="upStatus" class="fine"></div>
-        </div>
-        <div class="row" style="margin-top:8px">
-          <button id="uploadBtn" class="btn primary" disabled>Save Photo</button>
-        </div>
-      </div>
+/* Keep your original config & custom bucket */
+const firebaseConfig = {
+  apiKey:"AIzaSyDM6DpRSeZueVKRpbyJyDmhf8WY66KyCDk",
+  authDomain:"dailyquiz-d5279.firebaseapp.com",
+  databaseURL:"https://dailyquiz-d5279-default-rtdb.firebaseio.com",
+  projectId:"dailyquiz-d5279",
+  storageBucket:"dailyquiz-d5279.firebasestorage.app",
+  appId:"1:94577748034:web:c032d3a1d72db1313de5db",
+  measurementId:"G-19DVN7NNH7"
+};
+const appFB = initializeApp(firebaseConfig);
+const db = getDatabase(appFB);
+const storage = getStorage(appFB, "gs://dailyquiz-d5279.firebasestorage.app");
+const auth = getAuth(appFB);
 
-      <div style="margin-top:12px">
-        <label>Photos in Scenario</label>
-        <div id="photoList" class="list"></div>
-      </div>
-
-      <div class="fine mono" style="margin-top:10px">
-        Storage path: <b>scenarios/{scenarioId}/{photoId}.jpg</b> • DB path: <b>/scenarios/{scenarioId}/photos/{photoId}</b>
-      </div>
-    </section>
-
-    <section class="diag">
-      <h3>Diagnostics</h3>
-      <pre id="diag">No messages yet.</pre>
-    </section>
-  </main>
-
-  <div class="toastz" id="toasts"></div>
-
-  <script>
-  // ======= UI helpers =======
-  const $ = (id)=>document.getElementById(id);
-  const show = (el, on)=>{ if(typeof el==='string') el=$(el); el.classList.toggle('hidden',!on); }
-  const setPill = (el, state, text) => { el.className = 'pill ' + (state||''); if(text) el.textContent = text; };
-  const toast = (msg, type='warn', ms=3500)=>{
-    const t = document.createElement('div'); t.className='toast '+(type||'warn'); t.textContent=msg;
-    $('toasts').appendChild(t); setTimeout(()=>t.remove(), ms);
-  };
-  const ok  = (m)=>toast(m,'ok',2500);
-  const err = (m)=>toast(m,'err',5000);
-  const log = (m)=>{ console.log('[admin]', m); const d=$('diag'); d.textContent = (d.textContent? d.textContent+'\n' : '') + m; };
-
-  const ROOT = '/scenarios';
-  const MAX_DIM = 1600;  // longest side for downscale
-  const JPEG_Q  = 0.82;
-
-  let app, auth, db, storage/*, appCheck*/;
-  let currentScenario = null;
-  let createdId = null;
-  let _authReady = false;
-
-  // ======= Status: booted =======
-  setPill($('stBoot'),'good','booted');
-
-  // ======= Global error handlers to surface issues (CSP, SDK, rules, etc.) =======
-  window.addEventListener('error', (e)=>{
-    log('Window error: ' + (e.message || e.error || e));
+/* Robust Anonymous auth (fixes {once:true} misuse) */
+async function ensureAuthed(){
+  if (auth.currentUser) return auth.currentUser;
+  await signInAnonymously(auth);
+  return await new Promise((resolve, reject)=>{
+    const unsub = onAuthStateChanged(auth, (u)=>{
+      if (u){ unsub(); resolve(u); }
+    }, reject);
   });
-  window.addEventListener('unhandledrejection', (e)=>{
-    log('Unhandled promise rejection: ' + (e.reason && (e.reason.message||e.reason.code) || e.reason));
+}
+
+/* ---------- Resize helpers ---------- */
+const ORIG_MAX_EDGE = 1600;  // longest side
+const THUMB_MAX_EDGE = 480;
+const JPEG_QUALITY   = 0.82;
+
+async function fileToBitmap(file){
+  if ('createImageBitmap' in window) {
+    try{ return await createImageBitmap(file, { imageOrientation: 'from-image' }); }catch(_){}
+  }
+  const url = URL.createObjectURL(file);
+  const img = new Image(); img.decoding='async'; img.src=url;
+  await img.decode(); URL.revokeObjectURL(url);
+  return img;
+}
+function scaleDims(w, h, maxEdge){
+  const s = Math.min(1, maxEdge / Math.max(w, h));
+  return { w: Math.round(w*s), h: Math.round(h*s) };
+}
+async function bitmapToBlob(bmp, maxEdge, quality=JPEG_QUALITY, type='image/jpeg'){
+  const { w, h } = scaleDims(bmp.width, bmp.height, maxEdge);
+  const c = ('OffscreenCanvas' in window) ? new OffscreenCanvas(w, h) : Object.assign(document.createElement('canvas'), { width:w, height:h });
+  if (!('width' in c)) { c.width = w; c.height = h; }
+  const ctx = c.getContext('2d');
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = 'high';
+  ctx.drawImage(bmp, 0, 0, w, h);
+  const blob = await (c.convertToBlob ? c.convertToBlob({ type, quality }) : new Promise(res => c.toBlob(res, type, quality)));
+  return { blob, width:w, height:h };
+}
+
+/* ---------- Data helpers ---------- */
+const ROOT='scenarios';
+let scenarios=[];
+function coerceStops(sc){
+  if (Array.isArray(sc?.stops)) return sc.stops;
+  if (Array.isArray(sc?.photos)) return sc.photos;
+  if (Array.isArray(sc?.images)) return sc.images;
+  return [];
+}
+function setStops(sc, stops){
+  if (Array.isArray(sc?.stops)) sc.stops = stops;
+  else if (Array.isArray(sc?.photos)) sc.photos = stops;
+  else if (Array.isArray(sc?.images)) sc.images = stops;
+  else sc.stops = stops;
+}
+function populateEditList(){
+  const sel=$('eSelect'); sel.innerHTML='<option value="">Select…</option>';
+  scenarios.forEach(s=>{
+    const o=document.createElement('option');
+    o.value=s.id; o.textContent=(s.title||'(untitled)') + (s.active?'':' (inactive)');
+    sel.appendChild(o);
   });
-
-  // ======= Firebase init =======
-  (function initFirebase(){
-    try{
-      if(!window.firebase || !firebase.initializeApp){
-        setPill($('stFB'),'bad','firebase missing');
-        log('Firebase SDK did not load. If you see "booting…" forever, your network/CSP may be blocking https://www.gstatic.com.');
-        return;
-      }
-      // ---- FILL THESE WITH YOUR REAL CONFIG ----
-      const firebaseConfig = {
-        apiKey: "YOUR_API_KEY",
-        authDomain: "YOUR_PROJECT.firebaseapp.com",
-        databaseURL: "https://YOUR_PROJECT-default-rtdb.firebaseio.com",
-        projectId: "YOUR_PROJECT",
-        storageBucket: "YOUR_PROJECT.appspot.com",
-        messagingSenderId: "YOUR_SENDER_ID",
-        appId: "YOUR_APP_ID"
-      };
-      const cfgOk = firebaseConfig.apiKey && !/YOUR_API_KEY/.test(firebaseConfig.apiKey);
-      if(!cfgOk){ setPill($('stFB'),'bad','config empty'); log('Missing Firebase config. Fill in apiKey/project/etc.'); return; }
-
-      app = firebase.initializeApp(firebaseConfig);
-      // If App Check is enforced, uncomment next lines and insert your site key:
-      /*
-      appCheck = firebase.appCheck();
-      appCheck.activate('YOUR_RECAPTCHA_SITE_KEY', true);
-      */
-      auth = firebase.auth();
-      db = firebase.database();
-      storage = firebase.storage();
-      setPill($('stFB'),'good','firebase ok');
-      log('Firebase initialized.');
-
-      ensureAuthed().then(()=>{
-        setPill($('stReady'),'good','ready');
-        activate('create');
-        // Quick healthcheck write (detect rules issues early)
-        healthCheck().catch((e)=>log('Healthcheck write failed: '+(e.code||e.message||e)));
-      }).catch((e)=>{
-        setPill($('stAuth'),'bad','auth error');
-        log('Auth failed: ' + (e.code || e.message || e));
-      });
-
-    }catch(e){
-      setPill($('stFB'),'bad','firebase error');
-      log('Firebase init exception: '+(e.message||e));
+}
+async function loadScenarios(){
+  try{
+    await ensureAuthed();
+    const snap = await get(dbRef(db, ROOT));
+    const obj = snap.exists() ? (snap.val()||{}) : {};
+    scenarios = Object.entries(obj).map(([id,s])=>({ id, _raw:s, _stops:coerceStops(s), ...s }))
+                .sort((a,b)=>(b.createdAt||0)-(a.createdAt||0));
+    populateEditList();
+  }catch(e){
+    if ((e.message||'').toLowerCase().includes('permission')) {
+      $('eSelect').innerHTML = '<option value="">(Permission denied)</option>';
+      err('DB rules are denying reads on "/scenarios".');
+    } else {
+      err('Load failed: ' + (e.message||e));
     }
-  })();
-
-  function ensureAuthed(){
-    return new Promise((resolve,reject)=>{
-      const unsub = auth.onAuthStateChanged((u)=>{
-        if(u){
-          _authReady = true;
-          setPill($('stAuth'),'good','authed');
-          resolve(u); unsub();
-        }
-      });
-      auth.signInAnonymously().catch((e)=>{
-        setPill($('stAuth'),'bad','auth error');
-        if((e.code||'').includes('operation-not-allowed')){
-          err('Anonymous Auth disabled (enable in Firebase Auth → Sign-in method).');
-        }
-        reject(e);
-      });
-    });
+    throw e;
   }
+}
 
-  function healthCheck(){
-    const ref = db.ref('/__healthcheck');
-    const id = 'hc_'+Date.now();
-    return ref.child(id).set({ at: Date.now(), ok:true }).then(()=>ref.child(id).remove());
-  }
+/* Keep live updates */
+onValue(dbRef(db, ROOT), snap=>{
+  const obj=snap.val()||{};
+  scenarios = Object.entries(obj).map(([id,s])=>({ id, _raw:s, _stops:coerceStops(s), ...s }))
+              .sort((a,b)=>(b.createdAt||0)-(a.createdAt||0));
+  populateEditList();
+  const cur = $('eSelect').value;
+  if (cur) renderScenario(cur);
+});
 
-  // ======= Tabs =======
-  function activate(tab){
-    $('tabCreate').classList.toggle('active', tab==='create');
-    $('tabEdit').classList.toggle('active', tab==='edit');
-    show('paneCreate', tab==='create');
-    show('paneEdit', tab==='edit');
-  }
-  $('tabCreate').onclick = ()=>activate('create');
-  $('tabEdit').onclick = ()=>{
-    activate('edit');
-    ensureAuthed().then(safeLoadScenarios).catch((e)=>err('Load failed: ' + (e.message||e)));
-  };
-  $('btnOpenCreate').onclick = ()=>{ activate('create'); };
+/* ---------- Pane toggles ---------- */
+$('showCreate').onclick=()=>{ show('createPane',true); show('editPane',false); };
+$('showEdit').onclick =async ()=>{ show('createPane',false); show('editPane',true); await loadScenarios(); };
 
-  // ======= Create Scenario =======
-  $('createBtn').onclick = function(){
+/* ---------- Create Scenario (now ensures auth first) ---------- */
+let createdId=null;
+$('createBtn').onclick = async ()=>{
+  try{
+    await ensureAuthed();
+    const title = $('cTitle').value.trim() || '(untitled)';
+    const desc  = $('cDesc').value.trim() || '';
     $('createBtn').disabled = true;
-    $('createStatus').textContent = 'Creating…';
-    ensureAuthed()
-      .then(function(){
-        const title = ($('cTitle').value||'').trim() || '(untitled)';
-        const desc  = ($('cDesc').value||'').trim() || '';
-        const ref   = db.ref(ROOT).push();
-        const id    = ref.key;
-        return ref.set({ id, title, description: desc, createdAt: Date.now(), active:true, photos:{} })
-          .then(function(){
-            createdId = id;
-            ok('Scenario created');
-            $('createStatus').textContent = 'Created ✓';
-            return safeLoadScenarios().then(function(){
-              activate('edit');
-              $('eSelect').value = id;
-              $('eTitle').value = title;
-              $('eDesc').value = desc;
-              currentScenario = id;
-              renderScenarioPhotos(id);
-            });
-          });
-      })
-      .catch(function(e){
-        const code = e && (e.code||e.message) || String(e);
-        if(String(code).includes('operation-not-allowed')){
-          err('Anonymous Auth disabled. Enable it.');
-          log('Create failed: Anonymous Auth Disabled.');
-        }else if(String(code).includes('PERMISSION_DENIED')){
-          err('DB rules block writes to "/scenarios".');
-          log('Create failed: DB rules denied write to /scenarios.');
-        }else{
-          err('Create failed: ' + code);
-          log('Create failed raw: ' + code);
-        }
-      })
-      .finally(function(){
-        $('createBtn').disabled = false;
-      });
-  };
-
-  // ======= Edit / List / Meta / Delete =======
-  function safeLoadScenarios(){
-    return db.ref(ROOT).orderByChild('createdAt').limitToLast(500).get().then(function(snap){
-      const sel = $('eSelect');
-      sel.innerHTML = '';
-      const list = [];
-      if(snap && snap.forEach){
-        snap.forEach(ch=>list.push(ch.val()));
-      }
-      list.sort((a,b)=> (a.createdAt||0)-(b.createdAt||0));
-
-      if(!list.length){
-        const opt=document.createElement('option'); opt.value=''; opt.textContent='(no scenarios)'; sel.appendChild(opt);
-        currentScenario=null; $('eTitle').value=''; $('eDesc').value=''; $('photoList').innerHTML='<div class="fine">(no photos yet)</div>';
-        return;
-      }
-      list.forEach(sc=>{
-        const opt=document.createElement('option');
-        opt.value=sc.id; opt.textContent=sc.title || ('(untitled) '+sc.id);
-        sel.appendChild(opt);
-      });
-      const keep = currentScenario || createdId || (list[list.length-1] && list[list.length-1].id);
-      sel.value = keep || '';
-      currentScenario = sel.value || null;
-      const sc = list.find(x=>x.id===currentScenario) || {};
-      $('eTitle').value = sc.title || '';
-      $('eDesc').value  = sc.description || '';
-      renderScenarioPhotos(currentScenario);
-    }).catch((e)=>{
-      const msg = e && (e.code||e.message) || String(e);
-      log('Load scenarios failed: ' + msg);
-      if(String(msg).includes('Permission denied')){
-        err('Cannot read /scenarios (DB read denied).');
-      }
-      throw e;
-    });
+    $('createStatus').textContent='Creating…';
+    const id = (push(dbRef(db, ROOT))).key;
+    const rec = { id, title, description: desc, createdAt: Date.now(), active:true, stops: [] };
+    await set(dbRef(db, `${ROOT}/${id}`), rec);
+    createdId = id;
+    $('createStatus').textContent='Created ✓';
+    ok('Scenario created');
+    await loadScenarios();
+    $('eSelect').value = id;
+    $('eTitle').value  = title;
+    $('eDesc').value   = desc;
+    renderScenario(id);
+    show('createPane',false); show('editPane',true);
+  }catch(e){
+    const msg = (e && (e.message||e.code)) || String(e);
+    if (/permission|denied/i.test(msg)) err('Create blocked: check DB rules for "/scenarios".');
+    else err('Create failed: '+ msg);
+  }finally{
+    $('createBtn').disabled = false;
   }
-  $('refreshList').onclick = ()=> ensureAuthed().then(safeLoadScenarios);
+};
 
-  $('eSelect').onchange = function(){
-    currentScenario = this.value || null;
-    renderScenarioPhotos(currentScenario);
+/* ---------- Upload helper (shared by create & edit) ---------- */
+async function uploadScenarioPhotoMinSize(file, scenarioId, onStatus){
+  if (!file || !scenarioId) throw new Error('Missing file or scenario ID');
+  await ensureAuthed();
+
+  onStatus?.('Decoding…');
+  const bmp = await fileToBitmap(file);
+
+  onStatus?.('Resizing…');
+  const { blob: fullBlob, width, height } = await bitmapToBlob(bmp, ORIG_MAX_EDGE, JPEG_QUALITY, 'image/jpeg');
+  const { blob: thumbBlob }               = await bitmapToBlob(bmp, THUMB_MAX_EDGE, 0.8, 'image/jpeg');
+
+  const ts = Date.now();
+  const basePath = `scenarios/${scenarioId}/${ts}`;
+  const fullRef  = stRef(storage, `${basePath}.jpg`);
+  const thumbRef = stRef(storage, `scenarios/${scenarioId}/thumbs/${ts}.jpg`);
+  const meta = { contentType: 'image/jpeg', cacheControl: 'public,max-age=31536000,immutable' };
+
+  onStatus?.('Uploading full…');
+  await uploadBytes(fullRef,  fullBlob,  meta);
+  onStatus?.('Uploading thumb…');
+  await uploadBytes(thumbRef, thumbBlob, meta);
+
+  onStatus?.('Finalizing…');
+  const imageURL = await getDownloadURL(fullRef);
+  const thumbURL = await getDownloadURL(thumbRef);
+
+  return {
+    imageURL, thumbURL,
+    storagePath: `${basePath}.jpg`,
+    thumbPath:   `scenarios/${scenarioId}/thumbs/${ts}.jpg`,
+    gsUri:       `gs://dailyquiz-d5279.firebasestorage.app/${basePath}.jpg`,
+    width, height
   };
+}
 
-  $('saveMeta').onclick = function(){
-    if(!currentScenario){ err('No scenario selected'); return; }
-    $('saveMeta').disabled = true;
-    $('metaStatus').textContent = 'Saving…';
-    const title = ($('eTitle').value||'').trim() || '(untitled)';
-    const desc  = ($('eDesc').value||'').trim() || '';
-    db.ref(`${ROOT}/${currentScenario}`).update({ title, description: desc })
-      .then(()=>{ ok('Saved'); $('metaStatus').textContent = 'Saved ✓'; })
-      .catch(e=>{ err('Save failed: ' + (e.message||e)); log('Save meta failed: '+(e.code||e.message||e)); })
-      .finally(()=>{ $('saveMeta').disabled = false; });
-  };
+/* ---------- Create pane: add photos ---------- */
+$('cFiles').addEventListener('change', async (e)=>{
+  try{
+    if (!createdId){ err('Create a scenario first.'); return; }
+    const files = Array.from(e.target.files||[]);
+    if (!files.length) return;
 
-  $('btnDeleteScenario').onclick = function(){
-    if(!currentScenario){ err('No scenario selected'); return; }
-    if(!confirm('Delete this scenario and all its photos?')) return;
-    const id = currentScenario;
-    $('btnDeleteScenario').disabled = true;
-    db.ref(`${ROOT}/${id}`).remove()
-      .then(function(){
-        // best-effort storage cleanup
-        const prefix = `scenarios/${id}/`;
-        storage.ref().child(prefix).listAll().then(res=>{
-          const del = [];
-          res.items.forEach(it=>del.push(it.delete().catch(()=>{})));
-          return Promise.all(del);
-        }).catch(()=>{});
-        ok('Scenario deleted');
-        currentScenario = null;
-        return safeLoadScenarios();
-      })
-      .catch(e=>{ err('Delete failed: ' + (e.message||e)); log('Delete failed: '+(e.code||e.message||e)); })
-      .finally(()=>{ $('btnDeleteScenario').disabled = false; });
-  };
+    loading(true);
+    for (const file of files){
+      const card = document.createElement('div');
+      card.innerHTML = `<div class="tag small">New photo</div>`;
+      $('cUploads').prepend(card);
+      const status = (t)=>{ card.querySelector('.tag').textContent=t; };
 
-  // ======= Photo upload (downscale + 120s timeout) =======
-  let pendingBlob = null;
-  let pendingMeta = null;
-
-  $('file').onchange = async function(){
-    resetUploadUI();
-    const f = this.files && this.files[0];
-    if(!f){ return; }
-    try{
-      const {blob, w, h, type} = await downscaleImageFile(f, MAX_DIM, JPEG_Q);
-      pendingBlob = blob;
-      pendingMeta = {contentType: type||'image/jpeg'};
-      $('thumb').src = URL.createObjectURL(blob);
-      show('thumb', true);
-      $('imgInfo').textContent = `${w}×${h} (compressed) • ${(blob.size/1024/1024).toFixed(2)} MB`;
-      $('uploadBtn').disabled = !currentScenario;
-      if(!currentScenario){ err('Select a scenario first.'); }
-    }catch(e){
-      err('Could not read image: ' + (e.message||e));
-      pendingBlob = null; pendingMeta=null;
-    }
-  };
-
-  $('uploadBtn').onclick = function(){
-    if(!currentScenario){ err('Select a scenario first'); return; }
-    if(!pendingBlob){ err('Choose a photo first'); return; }
-    $('uploadBtn').disabled = true;
-    $('upStatus').textContent = 'Uploading…';
-    show('prog', true); $('prog').value = 0;
-
-    const photoId = db.ref().push().key;
-    const path = `scenarios/${currentScenario}/${photoId}.jpg`;
-    const ref  = storage.ref().child(path);
-
-    uploadWithProgress(ref, pendingBlob, pendingMeta, function(pct){
-      $('prog').value = pct;
-      $('upStatus').textContent = `Uploading… ${pct}%`;
-    }).then(function(){
-      return ref.getDownloadURL().then(function(url){
-        const rec = { id: photoId, path, url, uploadedAt: Date.now() };
-        return db.ref(`${ROOT}/${currentScenario}/photos/${photoId}`).set(rec).then(function(){
-          ok('Photo saved');
-          resetUploadUI();
-          renderScenarioPhotos(currentScenario);
-        });
-      });
-    }).catch(function(e){
-      const msg = (e && (e.code||e.message)) || String(e);
-      if(String(msg).includes('app-check')){
-        err('Blocked by App Check (enable App Check in this page or disable enforcement).');
-        log('Upload blocked by App Check. Configure firebase-app-check.');
-      }else if(String(msg).includes('unauthorized') || String(msg).includes('permission')){
-        err('Storage rules rejected the write for "scenarios/**".');
-        log('Storage write denied: check Storage rules.');
-      }else{
-        err('Upload failed: ' + msg);
-        log('Upload failed raw: ' + msg);
-      }
-    }).finally(function(){
-      $('uploadBtn').disabled = false;
-    });
-  };
-
-  function resetUploadUI(){
-    show('prog', false); $('prog').value = 0;
-    $('upStatus').textContent = '';
-    $('imgInfo').textContent = '';
-    $('thumb').src = ''; show('thumb', false);
-  }
-
-  function renderScenarioPhotos(id){
-    const box = $('photoList');
-    box.innerHTML = '';
-    if(!id){ return; }
-    db.ref(`${ROOT}/${id}/photos`).get().then(function(snap){
-      if(!snap.exists()){ box.innerHTML = '<div class="fine">(no photos yet)</div>'; return; }
-      const all = snap.val()||{};
-      const arr = Object.values(all).sort((a,b)=>(a.uploadedAt||0)-(b.uploadedAt||0));
-      arr.forEach(p=>{
-        const div = document.createElement('div');
-        div.className='item';
-        div.innerHTML = `
-          <div class="row" style="align-items:center">
-            <img src="${p.url}" alt="" style="max-width:100px;max-height:80px;border-radius:8px;border:1px solid var(--edge)" />
-            <div class="fine mono" style="flex:1;word-break:break-all">${p.path}</div>
-          </div>
-          <div class="row" style="margin-top:6px">
-            <button class="btn red" data-del="${p.id}">Delete</button>
-            <a class="btn" href="${p.url}" target="_blank" rel="noopener">Open</a>
-          </div>
-        `;
-        box.appendChild(div);
-      });
-      // wire deletes
-      box.querySelectorAll('[data-del]').forEach(btn=>{
-        btn.onclick = function(){
-          const pid = this.getAttribute('data-del');
-          if(!confirm('Delete this photo?')) return;
-          const path = `scenarios/${id}/${pid}.jpg`;
-          storage.ref().child(path).delete().catch(()=>{});
-          db.ref(`${ROOT}/${id}/photos/${pid}`).remove().then(()=>{
-            ok('Photo deleted');
-            renderScenarioPhotos(id);
-          }).catch((e)=>{ err('DB delete failed: ' + (e.message||e)); });
+      try{
+        const saved = await uploadScenarioPhotoMinSize(file, createdId, status);
+        status('Saving to DB…');
+        // Append stop
+        const snap = await get(dbRef(db, `${ROOT}/${createdId}`));
+        const sc = snap.val();
+        const stops = coerceStops(sc);
+        const stop = {
+          type:'photo', title:'', caption:'', lat:null, lng:null, radiusMeters:50,
+          imageURL:saved.imageURL, thumbURL:saved.thumbURL,
+          storagePath:saved.storagePath, thumbPath:saved.thumbPath, gsUri:saved.gsUri,
+          width:saved.width, height:saved.height, overlays:[]
         };
-      });
-    }).catch((e)=>{
-      const msg = e && (e.code||e.message) || String(e);
-      log('Load photos failed: ' + msg);
-      if(String(msg).includes('Permission denied')){
-        err('Cannot read photos (DB read denied).');
+        stops.push(stop);
+        setStops(sc, stops);
+        await set(dbRef(db, `${ROOT}/${createdId}`), sc);
+        status('Uploaded ✓');
+      }catch(ex){
+        status('Failed'); err('Upload failed: '+(ex.message||ex));
       }
-    });
-  }
-
-  // ======= Utilities =======
-  function uploadWithProgress(storageRef, blob, metadata, onProgress){
-    return new Promise(function(resolve,reject){
-      const task = storageRef.put(blob, metadata);
-      const killer = setTimeout(function(){ try{ task.cancel(); }catch(e){} reject(new Error('Timed out while uploading')); }, 120000);
-      task.on('state_changed',
-        function(s){ try{ if (onProgress){ onProgress(Math.round((s.bytesTransferred/s.totalBytes)*100)); } }catch(_){ }
-        , function(e){ clearTimeout(killer); reject(e); }
-        , function(){ clearTimeout(killer); resolve(); }
-      );
-    });
-  }
-
-  function downscaleImageFile(file, maxDim, quality){
-    return new Promise((resolve,reject)=>{
-      const reader = new FileReader();
-      reader.onload = function(ev){
-        const img = new Image();
-        img.onload = function(){
-          let w = img.width, h = img.height;
-          const scale = Math.min(1, maxDim / Math.max(w,h));
-          const outW = Math.round(w*scale), outH = Math.round(h*scale);
-          const canvas = document.createElement('canvas');
-          canvas.width = outW; canvas.height = outH;
-          const ctx = canvas.getContext('2d', { alpha:false, desynchronized:true });
-          ctx.drawImage(img, 0, 0, outW, outH);
-          canvas.toBlob(function(blob){
-            if(!blob) return reject(new Error('Canvas toBlob failed'));
-            resolve({blob, w:outW, h:outH, type:'image/jpeg'});
-          }, 'image/jpeg', quality||0.82);
-        };
-        img.onerror = ()=>reject(new Error('Invalid image'));
-        img.src = ev.target.result;
-      };
-      reader.onerror = ()=>reject(new Error('Read failed'));
-      reader.readAsDataURL(file);
-    });
-  }
-
-  // ======= Kickoff =======
-  window.addEventListener('load', function(){
-    setPill($('stReady'),'warn','initializing…');
-    // If Firebase still missing here, surface it loudly
-    if(!window.firebase){
-      setPill($('stFB'),'bad','firebase missing');
-      log('Firebase SDK not found on window. Check network/CSP for https://www.gstatic.com.');
     }
+    ok('All selected photos processed.');
+  }finally{
+    loading(false);
+    e.target.value = '';
+  }
+});
+
+/* ---------- Edit pane ---------- */
+$('refreshBtn').onclick = ()=> loadScenarios().catch(()=>{});
+$('eSelect').onchange = ()=>{ const id=$('eSelect').value; if (id) renderScenario(id); };
+
+async function renderScenario(id){
+  const s = scenarios.find(x=>x.id===id); if (!s){ $('eStatus').textContent='Not found'; return; }
+  $('eTitle').value = s.title||'';
+  $('eDesc').value  = s.description||'';
+  $('eStatus').textContent = `${(s._stops||[]).length} photo(s)`;
+  // Render grid
+  const grid = $('stopsGrid'); grid.innerHTML='';
+  if (!s._stops?.length){ grid.innerHTML='<div class="small tag">No photos yet</div>'; return; }
+  s._stops.forEach((st, idx)=>{
+    const el = document.createElement('div');
+    const thumb = st.thumbURL || st.imageURL || '';
+    el.innerHTML = `
+      <img class="thumb" src="${thumb}" alt="thumb" />
+      <div class="small" style="margin-top:6px">${st.title||('Stop '+(idx+1))}</div>
+      <div class="row" style="margin-top:6px">
+        <button class="btn" data-del="${idx}" style="background:#2a0f14;border-color:#7a2b2b">Delete</button>
+      </div>
+    `;
+    el.querySelector('[data-del]').onclick = async ()=>{
+      try{
+        loading(true);
+        const snap = await get(dbRef(db, `${ROOT}/${id}`));
+        const sc = snap.val(); const arr = coerceStops(sc);
+        arr.splice(idx,1); setStops(sc, arr);
+        await set(dbRef(db, `${ROOT}/${id}`), sc);
+        ok('Stop deleted'); await loadScenarios(); $('eSelect').value=id; renderScenario(id);
+      }catch(e){ err('Delete failed: '+(e.message||e)); }
+      finally{ loading(false); }
+    };
+    grid.appendChild(el);
   });
-  </script>
+}
+
+$('saveMeta').onclick = async ()=>{
+  try{
+    const id=$('eSelect').value; if(!id) return;
+    loading(true);
+    const snap = await get(dbRef(db, `${ROOT}/${id}`));
+    const sc = snap.val()||{};
+    sc.title = $('eTitle').value.trim()||'(untitled)';
+    sc.description = $('eDesc').value.trim()||'';
+    await set(dbRef(db, `${ROOT}/${id}`), sc);
+    ok('Scenario saved');
+    await loadScenarios(); $('eSelect').value=id; renderScenario(id);
+  }catch(e){ err('Save failed: '+(e.message||e)); }
+  finally{ loading(false); }
+};
+
+/* Edit pane: add photos */
+$('eFiles').addEventListener('change', async (e)=>{
+  const id=$('eSelect').value; if(!id){ err('Select a scenario first.'); e.target.value=''; return; }
+  try{
+    const files = Array.from(e.target.files||[]);
+    if (!files.length) return;
+
+    loading(true);
+    for (const file of files){
+      const card = document.createElement('div');
+      card.innerHTML = `<div class="tag small">New photo</div>`;
+      $('eUploads').prepend(card);
+      const status = (t)=>{ card.querySelector('.tag').textContent=t; };
+
+      try{
+        const saved = await uploadScenarioPhotoMinSize(file, id, status);
+        status('Saving to DB…');
+        // Append stop
+        const snap = await get(dbRef(db, `${ROOT}/${id}`));
+        const sc = snap.val();
+        const stops = coerceStops(sc);
+        const stop = {
+          type:'photo', title:'', caption:'', lat:null, lng:null, radiusMeters:50,
+          imageURL:saved.imageURL, thumbURL:saved.thumbURL,
+          storagePath:saved.storagePath, thumbPath:saved.thumbPath, gsUri:saved.gsUri,
+          width:saved.width, height:saved.height, overlays:[]
+        };
+        stops.push(stop);
+        setStops(sc, stops);
+        await set(dbRef(db, `${ROOT}/${id}`), sc);
+        status('Uploaded ✓');
+      }catch(ex){
+        status('Failed'); err('Upload failed: '+(ex.message||ex));
+      }
+    }
+    await loadScenarios(); $('eSelect').value=id; renderScenario(id);
+    ok('Photos added.');
+  }finally{
+    loading(false);
+    e.target.value = '';
+  }
+});
+
+/* ---------- Initial load without top-level await (iPhone-safe) ---------- */
+(async ()=>{
+  try{
+    await ensureAuthed();
+    await loadScenarios();
+  }catch(_){}
+})();
+</script>
 </body>
 </html>
