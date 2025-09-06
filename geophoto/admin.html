@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <title>FireOps / EMS — Scenario Admin</title>
+  <title>Scenario Admin (Single File)</title>
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <meta name="theme-color" content="#0b0f14" />
   <style>
@@ -14,20 +14,17 @@
     *{box-sizing:border-box}
     html,body{margin:0;height:100%;background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,Segoe UI,Roboto,Inter,Arial,sans-serif}
     header{position:sticky;top:0;background:linear-gradient(180deg,#0b0f14,rgba(11,15,20,.8));border-bottom:1px solid var(--edge2);z-index:9}
-    .wrap{max-width:920px;margin:0 auto;padding:12px}
+    .wrap{max-width:980px;margin:0 auto;padding:12px}
     h1{font-size:20px;margin:6px 0 2px}
     .sub{color:var(--muted);font-size:12px}
-
-    .status{display:flex;gap:8px;align-items:center;margin-top:8px}
+    .status{display:flex;gap:8px;align-items:center;margin-top:8px;flex-wrap:wrap}
     .pill{padding:4px 8px;border-radius:999px;background:var(--edge2);color:var(--muted);font-size:12px}
     .pill.good{background:rgba(34,197,94,.1);color:var(--ok)}
     .pill.warn{background:rgba(245,158,11,.08);color:var(--warn)}
     .pill.bad{background:rgba(239,68,68,.08);color:var(--err)}
-
-    nav{display:flex;gap:8px;margin:12px 0 6px}
+    nav{display:flex;gap:8px;margin:12px 0 6px;flex-wrap:wrap}
     .tab{border:1px solid var(--edge2);background:var(--panel);padding:8px 10px;border-radius:10px;cursor:pointer}
     .tab.active{outline:2px solid var(--accent);}
-
     .card{border:1px solid var(--edge2);background:linear-gradient(180deg,rgba(255,255,255,.02),rgba(255,255,255,.00));padding:14px;border-radius:14px;box-shadow:0 0 0 1px var(--edge) inset}
     .row{display:flex;gap:10px;flex-wrap:wrap}
     label{font-size:12px;color:var(--muted);display:block;margin-bottom:4px}
@@ -40,38 +37,37 @@
     .fine{font-size:12px;color:var(--muted)}
     .grid{display:grid;grid-template-columns:1fr;gap:12px}
     @media(min-width:760px){ .grid{grid-template-columns:1fr 1fr} }
-
     .hidden{display:none!important}
-
     .toastz{position:fixed;right:10px;bottom:10px;display:flex;flex-direction:column;gap:8px;z-index:99}
     .toast{padding:10px 12px;background:#132031;border:1px solid var(--edge2);border-left:4px solid var(--edge2);border-radius:10px;max-width:72vw}
     .toast.ok{border-left-color:var(--ok)}
     .toast.err{border-left-color:var(--err)}
     .toast.warn{border-left-color:var(--warn)}
     .mono{font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,"Liberation Mono","Courier New",monospace;font-size:12px}
-
     .uploader{border:1px dashed var(--edge2);border-radius:12px;padding:12px}
     .preview{display:flex;gap:10px;align-items:center}
     .preview img{max-width:120px;max-height:90px;border-radius:8px;border:1px solid var(--edge)}
     progress{width:100%;height:10px}
     .list{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px}
     .item{border:1px solid var(--edge2);border-radius:10px;padding:8px}
+    .diag{margin-top:12px;padding:10px;border-radius:12px;background:#0c131f;border:1px solid var(--edge2)}
+    .diag h3{margin:0 0 6px;font-size:14px}
+    .diag pre{white-space:pre-wrap;word-break:break-word}
   </style>
 
-  <!-- Firebase SDKs (compat for simplest drop-in) -->
+  <!-- Firebase SDKs (compat) -->
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-storage-compat.js"></script>
-  <!-- Optional: App Check (uncomment + configure if enforcement is ON)
-  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-check-compat.js"></script>
-  -->
+  <!-- If App Check is enforced, uncomment the next line and configure in JS -->
+  <!-- <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-check-compat.js"></script> -->
 </head>
 <body>
   <header>
     <div class="wrap">
       <h1>Scenario Admin</h1>
-      <div class="sub">Create scenarios, upload photos, and edit details. Phone-friendly.</div>
+      <div class="sub">Create scenarios, upload photos, and edit details. (Single file)</div>
       <div class="status">
         <div id="stBoot" class="pill warn">booting…</div>
         <div id="stFB" class="pill">firebase</div>
@@ -96,7 +92,7 @@
         </div>
         <div>
           <label>Description (optional)</label>
-          <input id="cDesc" type="text" placeholder="Short note or goal for this scenario" />
+          <input id="cDesc" type="text" placeholder="Short note or training goal" />
         </div>
       </div>
       <div class="row" style="margin-top:10px">
@@ -104,7 +100,7 @@
         <span id="createStatus" class="fine"></span>
       </div>
       <div class="fine mono" style="margin-top:10px">
-        Writes to Realtime DB at <b>/scenarios/{id}</b>. Requires Anonymous Auth enabled and DB rules allowing authenticated writes.
+        Writes to RTDB at <b>/scenarios/{id}</b>. Requires Anonymous Auth and rules permitting authenticated writes.
       </div>
     </section>
 
@@ -170,82 +166,126 @@
       </div>
 
       <div class="fine mono" style="margin-top:10px">
-        Upload path: <b>storage: scenarios/{scenarioId}/{photoId}.jpg</b> and DB at <b>/scenarios/{scenarioId}/photos/{photoId}</b>.
+        Storage path: <b>scenarios/{scenarioId}/{photoId}.jpg</b> • DB path: <b>/scenarios/{scenarioId}/photos/{photoId}</b>
       </div>
+    </section>
+
+    <section class="diag">
+      <h3>Diagnostics</h3>
+      <pre id="diag">No messages yet.</pre>
     </section>
   </main>
 
   <div class="toastz" id="toasts"></div>
 
   <script>
-  // ---------- Small helpers ----------
+  // ======= UI helpers =======
   const $ = (id)=>document.getElementById(id);
   const show = (el, on)=>{ if(typeof el==='string') el=$(el); el.classList.toggle('hidden',!on); }
-  const setPill = (el, state, text) => {
-    el.className = 'pill ' + (state||'');
-    if(text) el.textContent = text;
-  };
+  const setPill = (el, state, text) => { el.className = 'pill ' + (state||''); if(text) el.textContent = text; };
   const toast = (msg, type='warn', ms=3500)=>{
-    const t = document.createElement('div');
-    t.className = 'toast ' + (type||'warn');
-    t.textContent = msg;
-    $('toasts').appendChild(t);
-    setTimeout(()=>t.remove(), ms);
+    const t = document.createElement('div'); t.className='toast '+(type||'warn'); t.textContent=msg;
+    $('toasts').appendChild(t); setTimeout(()=>t.remove(), ms);
   };
-  const ok = (m)=>toast(m,'ok',2500);
+  const ok  = (m)=>toast(m,'ok',2500);
   const err = (m)=>toast(m,'err',5000);
-  const diag = (m)=>console.log('[admin]', m);
+  const log = (m)=>{ console.log('[admin]', m); const d=$('diag'); d.textContent = (d.textContent? d.textContent+'\n' : '') + m; };
 
   const ROOT = '/scenarios';
+  const MAX_DIM = 1600;  // longest side for downscale
+  const JPEG_Q  = 0.82;
+
   let app, auth, db, storage/*, appCheck*/;
   let currentScenario = null;
   let createdId = null;
   let _authReady = false;
 
-  // ---------- Firebase init ----------
-  setPill($('stBoot'),'warn','booting…');
+  // ======= Status: booted =======
+  setPill($('stBoot'),'good','booted');
 
-  const firebaseConfig = {
-    apiKey: "YOUR_API_KEY",
-    authDomain: "YOUR_PROJECT.firebaseapp.com",
-    databaseURL: "https://YOUR_PROJECT-default-rtdb.firebaseio.com",
-    projectId: "YOUR_PROJECT",
-    storageBucket: "YOUR_PROJECT.appspot.com",
-    messagingSenderId: "YOUR_SENDER_ID",
-    appId: "YOUR_APP_ID"
-  };
+  // ======= Global error handlers to surface issues (CSP, SDK, rules, etc.) =======
+  window.addEventListener('error', (e)=>{
+    log('Window error: ' + (e.message || e.error || e));
+  });
+  window.addEventListener('unhandledrejection', (e)=>{
+    log('Unhandled promise rejection: ' + (e.reason && (e.reason.message||e.reason.code) || e.reason));
+  });
 
-  try{
-    app = firebase.initializeApp(firebaseConfig);
-    // Optional App Check (uncomment if enforced)
-    /*
-    appCheck = firebase.appCheck();
-    appCheck.activate('YOUR_RECAPTCHA_SITE_KEY', true); // true = auto-token refresh
-    */
-    auth = firebase.auth();
-    db = firebase.database();
-    storage = firebase.storage();
-    setPill($('stFB'),'good','firebase ok');
-  }catch(e){
-    setPill($('stFB'),'bad','firebase error');
-    err('Firebase init failed: ' + (e.message||e));
-  }
+  // ======= Firebase init =======
+  (function initFirebase(){
+    try{
+      if(!window.firebase || !firebase.initializeApp){
+        setPill($('stFB'),'bad','firebase missing');
+        log('Firebase SDK did not load. If you see "booting…" forever, your network/CSP may be blocking https://www.gstatic.com.');
+        return;
+      }
+      // ---- FILL THESE WITH YOUR REAL CONFIG ----
+      const firebaseConfig = {
+        apiKey: "YOUR_API_KEY",
+        authDomain: "YOUR_PROJECT.firebaseapp.com",
+        databaseURL: "https://YOUR_PROJECT-default-rtdb.firebaseio.com",
+        projectId: "YOUR_PROJECT",
+        storageBucket: "YOUR_PROJECT.appspot.com",
+        messagingSenderId: "YOUR_SENDER_ID",
+        appId: "YOUR_APP_ID"
+      };
+      const cfgOk = firebaseConfig.apiKey && !/YOUR_API_KEY/.test(firebaseConfig.apiKey);
+      if(!cfgOk){ setPill($('stFB'),'bad','config empty'); log('Missing Firebase config. Fill in apiKey/project/etc.'); return; }
 
-  // Anonymous auth (required for writes)
-  function ensureAuthed(){
-    if(_authReady && auth.currentUser) return Promise.resolve(auth.currentUser);
-    return new Promise(function(resolve,reject){
-      const unsub = auth.onAuthStateChanged(function(u){
-        if(u){ _authReady = true; setPill($('stAuth'),'good','authed'); setPill($('stReady'),'good','ready'); unsub(); resolve(u); }
-      });
-      auth.signInAnonymously().catch(function(e){
+      app = firebase.initializeApp(firebaseConfig);
+      // If App Check is enforced, uncomment next lines and insert your site key:
+      /*
+      appCheck = firebase.appCheck();
+      appCheck.activate('YOUR_RECAPTCHA_SITE_KEY', true);
+      */
+      auth = firebase.auth();
+      db = firebase.database();
+      storage = firebase.storage();
+      setPill($('stFB'),'good','firebase ok');
+      log('Firebase initialized.');
+
+      ensureAuthed().then(()=>{
+        setPill($('stReady'),'good','ready');
+        activate('create');
+        // Quick healthcheck write (detect rules issues early)
+        healthCheck().catch((e)=>log('Healthcheck write failed: '+(e.code||e.message||e)));
+      }).catch((e)=>{
         setPill($('stAuth'),'bad','auth error');
+        log('Auth failed: ' + (e.code || e.message || e));
+      });
+
+    }catch(e){
+      setPill($('stFB'),'bad','firebase error');
+      log('Firebase init exception: '+(e.message||e));
+    }
+  })();
+
+  function ensureAuthed(){
+    return new Promise((resolve,reject)=>{
+      const unsub = auth.onAuthStateChanged((u)=>{
+        if(u){
+          _authReady = true;
+          setPill($('stAuth'),'good','authed');
+          resolve(u); unsub();
+        }
+      });
+      auth.signInAnonymously().catch((e)=>{
+        setPill($('stAuth'),'bad','auth error');
+        if((e.code||'').includes('operation-not-allowed')){
+          err('Anonymous Auth disabled (enable in Firebase Auth → Sign-in method).');
+        }
         reject(e);
       });
     });
   }
 
-  // ---------- Tabs ----------
+  function healthCheck(){
+    const ref = db.ref('/__healthcheck');
+    const id = 'hc_'+Date.now();
+    return ref.child(id).set({ at: Date.now(), ok:true }).then(()=>ref.child(id).remove());
+  }
+
+  // ======= Tabs =======
   function activate(tab){
     $('tabCreate').classList.toggle('active', tab==='create');
     $('tabEdit').classList.toggle('active', tab==='edit');
@@ -255,13 +295,11 @@
   $('tabCreate').onclick = ()=>activate('create');
   $('tabEdit').onclick = ()=>{
     activate('edit');
-    // Always refresh scenarios when opening Edit
-    ensureAuthed().then(safeLoadScenarios).catch(e=>err('Load failed: ' + (e.message||e)));
+    ensureAuthed().then(safeLoadScenarios).catch((e)=>err('Load failed: ' + (e.message||e)));
   };
-
   $('btnOpenCreate').onclick = ()=>{ activate('create'); };
 
-  // ---------- Create Scenario ----------
+  // ======= Create Scenario =======
   $('createBtn').onclick = function(){
     $('createBtn').disabled = true;
     $('createStatus').textContent = 'Creating…';
@@ -276,7 +314,6 @@
             createdId = id;
             ok('Scenario created');
             $('createStatus').textContent = 'Created ✓';
-            // Jump to edit and prefill
             return safeLoadScenarios().then(function(){
               activate('edit');
               $('eSelect').value = id;
@@ -288,13 +325,16 @@
           });
       })
       .catch(function(e){
-        const msg = (e && (e.code||e.message)) || String(e);
-        if(String(msg).includes('operation-not-allowed')){
-          err('Anonymous Auth disabled. Enable in Firebase Auth → Sign-in method → Anonymous.');
-        }else if(String(msg).includes('PERMISSION_DENIED')){
+        const code = e && (e.code||e.message) || String(e);
+        if(String(code).includes('operation-not-allowed')){
+          err('Anonymous Auth disabled. Enable it.');
+          log('Create failed: Anonymous Auth Disabled.');
+        }else if(String(code).includes('PERMISSION_DENIED')){
           err('DB rules block writes to "/scenarios".');
+          log('Create failed: DB rules denied write to /scenarios.');
         }else{
-          err('Create failed: ' + msg);
+          err('Create failed: ' + code);
+          log('Create failed raw: ' + code);
         }
       })
       .finally(function(){
@@ -302,32 +342,43 @@
       });
   };
 
-  // ---------- Edit: load list, save meta, delete ----------
+  // ======= Edit / List / Meta / Delete =======
   function safeLoadScenarios(){
     return db.ref(ROOT).orderByChild('createdAt').limitToLast(500).get().then(function(snap){
       const sel = $('eSelect');
       sel.innerHTML = '';
       const list = [];
-      snap.forEach(ch=>list.push(ch.val()));
+      if(snap && snap.forEach){
+        snap.forEach(ch=>list.push(ch.val()));
+      }
       list.sort((a,b)=> (a.createdAt||0)-(b.createdAt||0));
-      if(!list.length){ const opt=document.createElement('option'); opt.value=''; opt.textContent='(no scenarios)'; sel.appendChild(opt); currentScenario=null; return; }
+
+      if(!list.length){
+        const opt=document.createElement('option'); opt.value=''; opt.textContent='(no scenarios)'; sel.appendChild(opt);
+        currentScenario=null; $('eTitle').value=''; $('eDesc').value=''; $('photoList').innerHTML='<div class="fine">(no photos yet)</div>';
+        return;
+      }
       list.forEach(sc=>{
         const opt=document.createElement('option');
         opt.value=sc.id; opt.textContent=sc.title || ('(untitled) '+sc.id);
         sel.appendChild(opt);
       });
-      // Keep selection if possible
-      const keep = currentScenario || (createdId) || (list[list.length-1].id);
-      sel.value = keep;
+      const keep = currentScenario || createdId || (list[list.length-1] && list[list.length-1].id);
+      sel.value = keep || '';
       currentScenario = sel.value || null;
-      // Fill meta fields
       const sc = list.find(x=>x.id===currentScenario) || {};
       $('eTitle').value = sc.title || '';
       $('eDesc').value  = sc.description || '';
       renderScenarioPhotos(currentScenario);
+    }).catch((e)=>{
+      const msg = e && (e.code||e.message) || String(e);
+      log('Load scenarios failed: ' + msg);
+      if(String(msg).includes('Permission denied')){
+        err('Cannot read /scenarios (DB read denied).');
+      }
+      throw e;
     });
   }
-
   $('refreshList').onclick = ()=> ensureAuthed().then(safeLoadScenarios);
 
   $('eSelect').onchange = function(){
@@ -343,7 +394,7 @@
     const desc  = ($('eDesc').value||'').trim() || '';
     db.ref(`${ROOT}/${currentScenario}`).update({ title, description: desc })
       .then(()=>{ ok('Saved'); $('metaStatus').textContent = 'Saved ✓'; })
-      .catch(e=>err('Save failed: ' + (e.message||e)))
+      .catch(e=>{ err('Save failed: ' + (e.message||e)); log('Save meta failed: '+(e.code||e.message||e)); })
       .finally(()=>{ $('saveMeta').disabled = false; });
   };
 
@@ -352,28 +403,24 @@
     if(!confirm('Delete this scenario and all its photos?')) return;
     const id = currentScenario;
     $('btnDeleteScenario').disabled = true;
-    // Delete DB branch then attempt storage folder cleanup (best-effort: list by prefix)
     db.ref(`${ROOT}/${id}`).remove()
       .then(function(){
-        // Try to delete storage files under scenarios/{id}/
+        // best-effort storage cleanup
         const prefix = `scenarios/${id}/`;
         storage.ref().child(prefix).listAll().then(res=>{
           const del = [];
           res.items.forEach(it=>del.push(it.delete().catch(()=>{})));
           return Promise.all(del);
-        }).catch(()=>{}); // ignore listing errors
+        }).catch(()=>{});
         ok('Scenario deleted');
         currentScenario = null;
         return safeLoadScenarios();
       })
-      .catch(e=>err('Delete failed: ' + (e.message||e)))
+      .catch(e=>{ err('Delete failed: ' + (e.message||e)); log('Delete failed: '+(e.code||e.message||e)); })
       .finally(()=>{ $('btnDeleteScenario').disabled = false; });
   };
 
-  // ---------- Photo handling ----------
-  const MAX_DIM = 1600;   // downscale longer side for speed/storage
-  const JPEG_Q  = 0.82;
-
+  // ======= Photo upload (downscale + 120s timeout) =======
   let pendingBlob = null;
   let pendingMeta = null;
 
@@ -421,12 +468,15 @@
       });
     }).catch(function(e){
       const msg = (e && (e.code||e.message)) || String(e);
-      if(String(msg).includes('app-check') || String(msg).includes('blocked by AppCheck')){
-        err('Blocked by App Check enforcement (enable App Check in this page or disable enforcement while testing).');
-      }else if(String(msg).includes('unauthorized')){
-        err('Storage rules rejected the write. Ensure authenticated write is allowed for "scenarios/**".');
+      if(String(msg).includes('app-check')){
+        err('Blocked by App Check (enable App Check in this page or disable enforcement).');
+        log('Upload blocked by App Check. Configure firebase-app-check.');
+      }else if(String(msg).includes('unauthorized') || String(msg).includes('permission')){
+        err('Storage rules rejected the write for "scenarios/**".');
+        log('Storage write denied: check Storage rules.');
       }else{
         err('Upload failed: ' + msg);
+        log('Upload failed raw: ' + msg);
       }
     }).finally(function(){
       $('uploadBtn').disabled = false;
@@ -473,13 +523,19 @@
           db.ref(`${ROOT}/${id}/photos/${pid}`).remove().then(()=>{
             ok('Photo deleted');
             renderScenarioPhotos(id);
-          });
+          }).catch((e)=>{ err('DB delete failed: ' + (e.message||e)); });
         };
       });
+    }).catch((e)=>{
+      const msg = e && (e.code||e.message) || String(e);
+      log('Load photos failed: ' + msg);
+      if(String(msg).includes('Permission denied')){
+        err('Cannot read photos (DB read denied).');
+      }
     });
   }
 
-  // Upload with 120s timeout + progress
+  // ======= Utilities =======
   function uploadWithProgress(storageRef, blob, metadata, onProgress){
     return new Promise(function(resolve,reject){
       const task = storageRef.put(blob, metadata);
@@ -492,14 +548,13 @@
     });
   }
 
-  // Downscale image file to max dimension, return blob+size
   function downscaleImageFile(file, maxDim, quality){
     return new Promise((resolve,reject)=>{
       const reader = new FileReader();
       reader.onload = function(ev){
         const img = new Image();
         img.onload = function(){
-          let {width:w, height:h} = img;
+          let w = img.width, h = img.height;
           const scale = Math.min(1, maxDim / Math.max(w,h));
           const outW = Math.round(w*scale), outH = Math.round(h*scale);
           const canvas = document.createElement('canvas');
@@ -508,7 +563,7 @@
           ctx.drawImage(img, 0, 0, outW, outH);
           canvas.toBlob(function(blob){
             if(!blob) return reject(new Error('Canvas toBlob failed'));
-            resolve({blob, w:outW, h:outH, type: 'image/jpeg'});
+            resolve({blob, w:outW, h:outH, type:'image/jpeg'});
           }, 'image/jpeg', quality||0.82);
         };
         img.onerror = ()=>reject(new Error('Invalid image'));
@@ -519,16 +574,14 @@
     });
   }
 
-  // ---------- Kick off ----------
+  // ======= Kickoff =======
   window.addEventListener('load', function(){
-    setPill($('stBoot'),'good','booted');
-    // Initial auth + prime UI
-    ensureAuthed().then(()=>{
-      // land on Create; user can switch
-      activate('create');
-    }).catch(e=>{
-      err('Auth failed: ' + (e.message||e));
-    });
+    setPill($('stReady'),'warn','initializing…');
+    // If Firebase still missing here, surface it loudly
+    if(!window.firebase){
+      setPill($('stFB'),'bad','firebase missing');
+      log('Firebase SDK not found on window. Check network/CSP for https://www.gstatic.com.');
+    }
   });
   </script>
 </body>
