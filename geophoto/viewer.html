@@ -8,7 +8,7 @@
   <style>
     :root{
       --bg:#0b0f14; --bar:#0e1421; --text:#eaf2ff; --muted:#9fb2d6;
-      --edge:rgba(255,255,255,.08); --accent1:#54a6ff; --accent2:#0a84ff;
+      --edge:rgba(255,255,255,.10); --accent1:#54a6ff; --accent2:#0a84ff;
     }
     *{box-sizing:border-box}
     html,body{margin:0;height:100%;background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,Segoe UI,Roboto,Inter,Arial,sans-serif}
@@ -25,10 +25,10 @@
     }
     .pill{font-size:12px;padding:6px 10px;border:1px solid var(--edge);border-radius:999px;color:var(--muted);white-space:nowrap}
     /* Viewer area */
-    #wrap{position:fixed;inset:60px 0 60px 0;display:flex;align-items:center;justify-content:center}
+    #wrap{position:fixed;inset:60px 0 52px 0;display:flex;align-items:center;justify-content:center}
     #img{width:100%;height:100%;object-fit:contain;background:#000}
     #cap{
-      position:fixed;left:0;right:0;bottom:60px;padding:10px 14px;text-align:center;
+      position:fixed;left:0;right:0;bottom:52px;padding:10px 14px;text-align:center;
       font-size:16px;background:linear-gradient(0deg,rgba(0,0,0,.65),transparent);display:none
     }
     /* Bottom bar */
@@ -37,7 +37,7 @@
     @media (max-width:700px){
       .bar{flex-wrap:wrap;gap:6px}
       select{min-width:140px}
-      #wrap{inset:110px 0 60px 0}
+      #wrap{inset:110px 0 52px 0}
     }
   </style>
 </head>
@@ -100,14 +100,21 @@
     const FORCE_BUCKET = "dailyquiz-d5279.appspot.com";
 
     // ---------- State ----------
-    let running = false, manualRef = null, watchId = null;
-    let current = null;          // {id,title,dispatch,stops:[]}
-    let cache = [];              // preloaded dataURLs by stop index
+    let running = false, manualRef = null, helloRef = null, watchId = null;
+    let current = null;   // {id,title,dispatch,stops:[]}
+    let cache = [];       // preloaded dataURLs by stop index
     let lastIdx = -1;
 
     // ---------- Helpers ----------
     const setStatus = (t)=> statusPill.textContent = t;
     const say = (t)=> hint.textContent = t || '';
+    const qs = new URLSearchParams(location.search);
+    if (qs.get('session')) sessionInput.value = qs.get('session');
+
+    function normSession(raw){ return (raw || 'default').trim().toLowerCase(); }
+    function manualPath(session){ return `geophoto/manual/${normSession(session)}/current`; }
+    function helloPath(session){ return `geophoto/manual/${normSession(session)}/hello`; }
+
     function showSlide(title, text, dataURL){
       img.src = dataURL || '';
       const s = (title? title + (text?' — ':'') : '') + (text||'');
@@ -170,6 +177,8 @@
         o.value=sc.id; o.textContent=sc.title || sc.name || '(untitled)';
         sel.appendChild(o);
       });
+
+      if (qs.get('id') && arr.some(s=>s.id===qs.get('id'))) sel.value = qs.get('id');
     }
 
     function normalizeStops(stopsLike){
@@ -191,18 +200,26 @@
     }
 
     // ---------- Manual mode ----------
-    function subscribeManual(session){
+    function subscribeManual(sessionRaw){
+      const s = normSession(sessionRaw);
       if (manualRef) try{ manualRef.off(); }catch{}; 
-      manualRef = db.ref(`geophoto/manual/${session}/current`);
+      if (helloRef)  try{ helloRef.off(); }catch{};
+      manualRef = db.ref(manualPath(s));
+      helloRef  = db.ref(helloPath(s));
+
+      helloRef.on('value', snap=>{
+        const v = snap.val();
+        const last = v?.instructorPing ? new Date(v.instructorPing).toLocaleTimeString() : '—';
+        say(`Connected to "${s}". Last instructor hello: ${last}`);
+      });
+
       manualRef.on('value', snap=>{
         const v = snap.val();
         if (!v || v.clear){ showSlide('', '', ''); say('Waiting for instructor…'); return; }
         const dataURL = v.image || v.imageURL || v.url || '';
         showSlide(v.title||'', v.caption||'', dataURL);
         say('Manual: ' + (v.title||'slide'));
-      }, err=>{
-        say('Read denied on manual path — rules'); console.error(err);
-      });
+      }, err=>{ say('Read denied on manual path — rules'); console.error(err); });
     }
 
     // ---------- GPS mode (simplified) ----------
@@ -247,7 +264,6 @@
 
     async function startGPS(){
       if (!current || !current.stops.length){ say('No stops'); return; }
-      // initial “dispatch” slide if present
       if (current.dispatch) showSlide('Dispatch', current.dispatch, '');
 
       if (watchId) { try{ navigator.geolocation.clearWatch(watchId); }catch{} watchId=null; }
@@ -273,19 +289,17 @@
       if (running) return;
       await ensureAuthed();
       running = true; startBtn.textContent = 'Stop';
-      const val = sel.value; const session = (sessionInput.value||'default').trim() || 'default';
 
+      const val = sel.value; const session = (sessionInput.value||'default').trim() || 'default';
       if (val === '__manual__'){
         setStatus('manual');
         subscribeManual(session);
-        say('Manual mode — connected');
         return;
       }
 
       setStatus('loading…');
       try{
         await loadScenario(val);             // pulls, normalizes, PRELOADS all photos
-        say('Scenario ready. Move toward a stop.');
         showSlide('Dispatch', current.dispatch||'', '');
         await startGPS();
       }catch(e){
@@ -295,6 +309,7 @@
     function stop(){
       running = false; startBtn.textContent = 'Start';
       if (manualRef) try{ manualRef.off(); }catch{}; manualRef = null;
+      if (helloRef)  try{ helloRef.off(); }catch{};
       if (watchId) { try{ navigator.geolocation.clearWatch(watchId); }catch{}; watchId = null; }
       current = null; cache = []; lastIdx = -1;
       img.src=''; cap.textContent=''; cap.style.display='none';
@@ -310,8 +325,6 @@
         await loadScenarios();
         setStatus('idle');
         say('Select Instructor-led or a scenario, then Start.');
-        const qs = new URLSearchParams(location.search);
-        if (qs.get('session')) sessionInput.value = qs.get('session');
         if (qs.get('id')){ sel.value = qs.get('id'); }
       }catch(e){
         setStatus('auth failed'); say('Viewer locked (auth).');
