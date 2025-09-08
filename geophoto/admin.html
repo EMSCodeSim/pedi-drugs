@@ -6,10 +6,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <meta name="theme-color" content="#0b0f14" />
   <style>
-    :root{
-      --bg:#0b0f14; --bg2:#0e1421; --card:#0f1624; --edge:rgba(255,255,255,.12);
-      --text:#eaf2ff; --muted:#9fb2d6; --a1:#54a6ff; --a2:#0a84ff; --ok:#16a34a; --err:#ef4444;
-    }
+    :root{ --bg:#0b0f14; --bg2:#0e1421; --card:#0f1624; --edge:rgba(255,255,255,.12);
+      --text:#eaf2ff; --muted:#9fb2d6; --ok:#16a34a; }
     *{box-sizing:border-box}
     html,body{margin:0;height:100%;color:var(--text);
       background:radial-gradient(1400px 700px at 15% -15%, rgba(10,132,255,.24), transparent 60%),
@@ -25,13 +23,10 @@
     .btn[disabled]{opacity:.6;cursor:not-allowed}
     .btn.ghost{background:transparent}
     .btn.ok{background:linear-gradient(180deg,#20c46b,#0fa36b);border-color:#178b56}
-    .pill{font-size:12px;padding:6px 10px;border:1px solid rgba(255,255,255,.16);border-radius:999px;color:var(--muted);
-      overflow-wrap:anywhere;white-space:normal}
     main{max-width:1000px;margin:16px auto 40px;padding:0 12px;display:grid;grid-template-columns:1fr 1fr;gap:12px}
     .card{background:var(--card);border:1px solid var(--edge);border-radius:16px;padding:12px}
     label{display:block;margin:10px 0 6px 2px;font-size:12px;color:var(--muted)}
-    input,select,textarea{width:100%;padding:10px;border-radius:10px;border:1px solid rgba(255,255,255,.14);background:#0c1322;color:#eaf2ff;
-      font-size:16px}
+    input,select,textarea{width:100%;padding:10px;border-radius:10px;border:1px solid rgba(255,255,255,.14);background:#0c1322;color:#eaf2ff;font-size:16px}
     textarea{min-height:90px}
     .row{display:flex;gap:8px;align-items:center;flex-wrap:wrap;min-width:0}
     .hint{font-size:12px;color:var(--muted);overflow-wrap:anywhere}
@@ -40,21 +35,14 @@
     .thumb.na{display:grid;place-items:center;font-size:12px;color:#9fb2d6}
     .section{padding:10px;border:1px dashed rgba(255,255,255,.14);border-radius:12px;background:rgba(255,255,255,.02)}
     .hidden{display:none !important}
-    #snack{position:fixed;left:12px;bottom:12px;z-index:99;display:none;padding:10px 12px;border-radius:12px;border:1px solid #2c7a4b;background:#0f2a19;color:#d8ffe2}
-    #errbar{position:fixed;left:12px;bottom:60px;z-index:99;display:none;padding:10px 12px;border-radius:12px;border:1px solid #7a2b2b;background:#2b0d0d;color:#ffd7d7}
-    #loader{position:fixed;inset:0;display:none;place-items:center;background:rgba(6,12,20,.55);backdrop-filter:blur(2px);z-index:98}
-    .spinner{width:44px;height:44px;border-radius:999px;border:4px solid rgba(255,255,255,.25);border-top-color:#fff;animation:spin 1s linear infinite}
-    @keyframes spin{to{transform:rotate(360deg)}}
-    @media (max-width:840px){ main{grid-template-columns:1fr} .grid{grid-template-columns:1fr} }
-    a[aria-disabled="true"]{pointer-events:none;opacity:.5}
     .bar{height:10px;border-radius:8px;background:#0d1727;border:1px solid rgba(255,255,255,.14);overflow:hidden}
     .bar>span{display:block;height:100%;width:0;background:linear-gradient(90deg,#2484ff,#63dbff)}
+    #errbar{position:fixed;left:12px;bottom:12px;z-index:99;display:none;padding:10px 12px;border-radius:12px;border:1px solid #7a2b2b;background:#2b0d0d;color:#ffd7d7}
+    #debugBox{margin-top:12px;border:1px solid rgba(255,255,255,.14);border-radius:10px;padding:8px;max-height:160px;overflow:auto;font:12px ui-monospace,Menlo,Consolas,monospace;background:#0c1322}
   </style>
 </head>
 <body>
-  <div id="loader"><div class="spinner"></div></div>
   <div id="errbar"></div>
-  <div id="snack"></div>
 
   <div class="topbar">
     <div class="topnav">
@@ -65,6 +53,7 @@
   </div>
 
   <main>
+    <!-- LEFT -->
     <section class="card">
       <h3 style="margin:0 0 8px">New Scenario</h3>
 
@@ -77,15 +66,14 @@
         <textarea id="sDispatch" placeholder="Engine 181, respond to MVC with injuries, 2 vehicles, fuel leak, WB lane blocked."></textarea>
         <div class="row" style="margin-top:8px">
           <button id="createBtn" class="btn">Create</button>
-          <span id="step1Status" class="pill">idle</span>
+          <span id="step1Status" class="hint">idle</span>
         </div>
       </div>
 
       <!-- Step 2 -->
       <div class="section hidden" id="step2" style="margin-top:12px">
         <b>Step 2 — Add a Photo</b>
-        <div class="hint" style="margin:4px 0 10px">Take a picture, choose from library, or upload a file.</div>
-        <div class="grid">
+        <div class="grid" style="margin:6px 0">
           <button id="btnCamera" class="btn">Take Photo</button>
           <button id="btnLibrary" class="btn">Choose from Library</button>
           <button id="btnUpload" class="btn">Upload File</button>
@@ -94,23 +82,25 @@
         <input id="inLibrary" class="hidden" type="file" accept="image/*">
         <input id="inUpload"  class="hidden" type="file" accept="image/*">
 
+        <div class="row" style="gap:6px">
+          <label for="sizePreset" class="hint">Save size</label>
+          <select id="sizePreset" style="width:auto">
+            <option value="800">Small (800px)</option>
+            <option value="1280" selected>Auto (1280px)</option>
+            <option value="1600">Large (1600px)</option>
+            <option value="1920">XL (1920px)</option>
+          </select>
+          <span class="hint">JPEG • q=0.75</span>
+        </div>
+
         <div id="previewWrap" class="row hidden" style="margin-top:10px;align-items:flex-start">
           <img id="thumb" class="thumb" alt="">
           <div style="min-width:200px;max-width:100%">
-            <div class="row" style="gap:6px">
-              <label for="sizePreset" class="hint">Save size</label>
-              <select id="sizePreset" style="width:auto">
-                <option value="800">Small (800px)</option>
-                <option value="1280" selected>Auto (1280px)</option>
-                <option value="1600">Large (1600px)</option>
-                <option value="1920">XL (1920px)</option>
-              </select>
-              <span class="hint">JPEG • quality 0.75</span>
-            </div>
-            <div id="imgInfo" class="hint" style="margin-top:4px">Image: —</div>
+            <div id="imgInfo" class="hint">Image: —</div>
             <hr style="border:none;height:1px;background:rgba(255,255,255,.08);margin:10px 0">
+
             <div id="locChoice" class="hidden">
-              <div class="hint" style="margin-bottom:6px">Set location for this stop:</div>
+              <div class="hint" style="margin-bottom:6px">Set location:</div>
               <div class="row">
                 <button id="btnUseGPS" class="btn">Use my current location</button>
                 <button id="btnManualLoc" class="btn ghost">Enter manually</button>
@@ -124,33 +114,29 @@
               </div>
             </div>
             <div id="locManual" class="hidden" style="margin-top:8px">
-              <label>Latitude</label><input id="latIn" inputmode="decimal" placeholder="e.g., 38.987654" autocomplete="off">
-              <label>Longitude</label><input id="lngIn" inputmode="decimal" placeholder="-104.876543" autocomplete="off">
-              <label>Accuracy (m) <span class="hint">(optional)</span></label><input id="accIn" inputmode="numeric" placeholder="e.g., 12" autocomplete="off">
+              <label>Latitude</label><input id="latIn" inputmode="decimal" placeholder="38.987654">
+              <label>Longitude</label><input id="lngIn" inputmode="decimal" placeholder="-104.876543">
+              <label>Accuracy (m)</label><input id="accIn" inputmode="numeric" placeholder="12">
               <div class="row" style="margin-top:6px">
                 <button id="btnSaveManual" class="btn ok">Save Location</button>
                 <button id="btnManualBack" class="btn ghost">Back</button>
               </div>
             </div>
 
-            <!-- Progress UI -->
-            <div id="progWrap" class="hidden" style="margin-top:10px">
+            <div style="margin-top:12px">
               <div class="row" style="justify-content:space-between">
-                <div class="hint">Upload progress (full)</div>
-                <div id="progPctFull" class="hint">0%</div>
+                <span class="hint">Upload progress (full)</span><span id="pctFull" class="hint">0%</span>
               </div>
-              <div class="bar"><span id="progBarFull"></span></div>
+              <div class="bar"><span id="barFull"></span></div>
               <div class="row" style="justify-content:space-between;margin-top:6px">
-                <div class="hint">Upload progress (thumb)</div>
-                <div id="progPctThumb" class="hint">0%</div>
+                <span class="hint">Upload progress (thumb)</span><span id="pctThumb" class="hint">0%</span>
               </div>
-              <div class="bar"><span id="progBarThumb"></span></div>
+              <div class="bar"><span id="barThumb"></span></div>
             </div>
 
-            <!-- Self-test -->
-            <div class="row" style="margin-top:12px">
+            <div class="row" style="margin-top:10px">
               <button id="btnSelfTest" class="btn ghost">Self-Test Upload</button>
-              <span id="selfTestOut" class="hint"></span>
+              <span id="selfOut" class="hint"></span>
             </div>
           </div>
         </div>
@@ -159,44 +145,34 @@
       <!-- Step 3 -->
       <div class="section hidden" id="step3" style="margin-top:12px">
         <b>Step 3 — Upload & Save</b>
-        <div class="hint" style="margin:4px 0 10px">We’ll upload the photo (full + thumbnail) and write the stop to the database.</div>
-        <div class="row">
-          <button id="saveBtn" class="btn" disabled>Save to Cloud</button>
-          <a id="openEditor" class="btn ghost" href="./advanced-editor.html" aria-disabled="true">Open in Advanced Editor</a>
-          <span id="saveStatus" class="pill">idle</span>
-        </div>
+        <div class="row"><button id="saveBtn" class="btn" disabled>Save to Cloud</button>
+          <span id="saveStatus" class="hint">idle</span></div>
       </div>
     </section>
 
+    <!-- RIGHT -->
     <section class="card">
-      <h3 style="margin:0 0 8px">Tips</h3>
-      <ul style="margin:8px 0 0 14px; padding:0 0 0 4px; line-height:1.5">
-        <li>Default save size is <b>1280px</b> max edge (good for phones & projectors).</li>
-        <li>If you see <code>storage/unauthorized</code> / <code>permission-denied</code>, fix Storage rules or enable App Check here.</li>
-        <li>HEIC: if the browser can’t decode, we’ll upload the original (no compression possible client-side).</li>
-      </ul>
-      <hr style="border:none;height:1px;background:rgba(255,255,255,.08);margin:12px 0">
-      <div id="debug" class="hint"></div>
+      <h3 style="margin:0 0 8px">Debug</h3>
+      <div class="hint" id="env"></div>
+      <div id="debugBox"></div>
     </section>
   </main>
 
   <script type="module">
-    // ---------- helpers ----------
-    const $ = (id)=>document.getElementById(id);
-    const show = (el, on)=> (typeof el==='string' ? $(el) : el).classList.toggle('hidden', !on);
-    const snack = (m)=>{ const b=$('snack'); b.textContent=m; b.style.display='block'; setTimeout(()=>b.style.display='none', 2400); };
-    const errBar= (m)=>{ const b=$('errbar'); b.textContent=m; b.style.display='block'; setTimeout(()=>b.style.display='none', 7000); };
-    const setKV = (id, t)=> $(id).textContent = t;
+    const $ = id => document.getElementById(id);
+    const show = (el, on)=> (typeof el==='string'?$(el):el).classList.toggle('hidden', !on);
+    const log = (m)=>{ const b=$('debugBox'); const t=new Date().toLocaleTimeString(); b.textContent += `[${t}] ${m}\n`; b.scrollTop=b.scrollHeight; };
+    const err = (m)=>{ $('errbar').textContent=m; $('errbar').style.display='block'; log('ERROR: '+m); };
 
-    // ---------- Firebase ----------
+    // Firebase
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-app.js";
-    // If App Check is enforced for Storage/DB, UNCOMMENT next lines and add your site key:
+    // If App Check ENFORCED for Storage, UNCOMMENT and set your site key:
     // import { initializeAppCheck, ReCaptchaV3Provider } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-app-check.js";
     import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-auth.js";
     import { getDatabase, ref as dbRef, get, push, update } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-database.js";
     import { getStorage, ref as stRef, uploadBytesResumable, getDownloadURL } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-storage.js";
 
-    const firebaseConfig = {
+    const cfg = {
       apiKey:"AIzaSyDM6DpRSeZueVKRpbyJyDmhf8WY66KyCDk",
       authDomain:"dailyquiz-d5279.firebaseapp.com",
       databaseURL:"https://dailyquiz-d5279-default-rtdb.firebaseio.com",
@@ -205,314 +181,209 @@
       appId:"1:94577748034:web:c032d3a1d72db1313de5db",
       measurementId:"G-19DVN7NNH7"
     };
-    const app = initializeApp(firebaseConfig);
-    // self.FIREBASE_APPCHECK_DEBUG_TOKEN = true; // dev only
+    const app = initializeApp(cfg);
+
+    // If ENFORCED:
+    // self.FIREBASE_APPCHECK_DEBUG_TOKEN = true; // dev only (remember to add this token in App Check → Debug)
     // initializeAppCheck(app, { provider: new ReCaptchaV3Provider('YOUR_RECAPTCHA_V3_SITE_KEY'), isTokenAutoRefreshEnabled: true });
 
     const auth = getAuth(app);
     const db = getDatabase(app);
-    const storage = getStorage(app);
+    // FORCE the exact bucket so rules line up:
+    const storage = getStorage(app, 'gs://dailyquiz-d5279.appspot.com');
+
+    $('env').textContent = `DB: ${cfg.databaseURL} • Bucket: gs://dailyquiz-d5279.appspot.com`;
 
     async function ensureAuthed(){
       if (auth.currentUser) return auth.currentUser;
       await signInAnonymously(auth);
-      return await new Promise((resolve,reject)=>{
-        const unsub = onAuthStateChanged(auth, (u)=>{ if (u){ unsub(); resolve(u);} }, reject);
+      return await new Promise((res,rej)=>{
+        const u = onAuthStateChanged(auth, (u)=>{ if(u){ res(u); } }, rej);
+        setTimeout(()=>rej(new Error('auth timeout')), 8000);
       });
     }
 
-    // ---------- image pipeline ----------
-    const QUALITY = 0.75; // slightly smaller by default
-    function getMaxEdge(){ return parseInt(($('sizePreset').value||'1280'),10) || 1280; }
-
+    // imaging
+    const QUALITY=0.75;
+    const scale=(w,h,max)=>{ const s=Math.min(1,max/Math.max(w,h)); return {w:Math.round(w*s),h:Math.round(h*s)}; };
     async function fileToBitmap(file){
-      try{
-        if ('createImageBitmap' in window){
-          return await createImageBitmap(file, { imageOrientation:'from-image' });
-        }
-      }catch{}
-      const url = URL.createObjectURL(file);
-      try{
-        const img = new Image(); img.decoding='async'; img.src=url; await img.decode();
-        img.width = img.naturalWidth; img.height = img.naturalHeight;
-        return img;
-      } finally { URL.revokeObjectURL(url); }
+      try{ if('createImageBitmap' in window){ return await createImageBitmap(file,{imageOrientation:'from-image'});} }catch{}
+      const url=URL.createObjectURL(file);
+      try{ const img=new Image(); img.decoding='async'; img.src=url; await img.decode(); img.width=img.naturalWidth; img.height=img.naturalHeight; return img; }
+      finally{ URL.revokeObjectURL(url); }
     }
-    const scale = (w,h,max)=>{ const s=Math.min(1,max/Math.max(w,h)); return {w:Math.round(w*s),h:Math.round(h*s)}; };
     async function toBlob(bmp,maxEdge,quality=QUALITY,type='image/jpeg'){
       const w0=bmp.width||bmp.naturalWidth, h0=bmp.height||bmp.naturalHeight;
       const {w,h}=scale(w0,h0,maxEdge);
-      const c=('OffscreenCanvas' in window) ? new OffscreenCanvas(w,h) : Object.assign(document.createElement('canvas'),{width:w,height:h});
+      const c=('OffscreenCanvas' in window)?new OffscreenCanvas(w,h):Object.assign(document.createElement('canvas'),{width:w,height:h});
       if(!('width' in c)){ c.width=w; c.height=h; }
-      const g=c.getContext('2d'); g.imageSmoothingEnabled=true; g.imageSmoothingQuality='high';
-      g.drawImage(bmp,0,0,w,h);
-      const blob = await (c.convertToBlob ? c.convertToBlob({type,quality}) : new Promise((res,rej)=>c.toBlob(b=>b?res(b):rej(new Error('toBlob failed')),type,quality)));
+      const g=c.getContext('2d'); g.imageSmoothingEnabled=true; g.imageSmoothingQuality='high'; g.drawImage(bmp,0,0,w,h);
+      const blob=await (c.convertToBlob?c.convertToBlob({type,quality}):new Promise((res,rej)=>c.toBlob(b=>b?res(b):rej(new Error('toBlob failed')),type,quality)));
       return {blob,width:w,height:h};
     }
 
-    // ---------- state ----------
-    let createdId=null, createdTitle='', createdDispatch='';
-    let pendingFile=null, pendingMeta=null;
-    let pendingGeo=null;
+    // state
+    let createdId=null, pendingFile=null, pendingGeo=null;
 
-    function gateSteps(){
-      const step2 = !!createdId;
-      const hasPhoto = !!pendingFile;
-      show('step2', step2);
-      show('previewWrap', hasPhoto);
-      show('locChoice', hasPhoto);
-      show('step3', !!createdId);
+    function gate(){
+      const step2=!!createdId, hasPhoto=!!pendingFile;
+      show('step2', step2); show('previewWrap', hasPhoto); show('locChoice', hasPhoto); show('step3', !!createdId);
       $('saveBtn').disabled = !(createdId && pendingFile);
-      $('openEditor').setAttribute('aria-disabled', createdId ? 'false':'true');
     }
 
-    // ---------- Step 1 ----------
+    // step 1
     $('createBtn').onclick = async ()=>{
       try{
         await ensureAuthed();
-        const title = $('sTitle').value.trim();
-        const dispatch = $('sDispatch').value.trim();
-        if (!title){ errBar('Please enter a scenario name.'); return; }
-
-        $('createBtn').disabled = true;
-        $('step1Status').textContent = 'creating…';
-
-        const id = (push(dbRef(db, 'scenarios'))).key;
-        const base = { id, title, description: dispatch || '', dispatch: dispatch || '', createdAt: Date.now(), active: true, stops: [] };
-
-        const multi = {};
-        multi[`scenarios/${id}`] = base;
-        multi[`geophoto/scenarios/${id}`] = base;
+        const title=$('sTitle').value.trim(); const dispatch=$('sDispatch').value.trim();
+        if(!title) return err('Enter a scenario name.');
+        $('step1Status').textContent='creating…';
+        const id=(push(dbRef(db,'scenarios'))).key;
+        const base={id,title,dispatch,description:dispatch||'',createdAt:Date.now(),active:true,stops:[]};
+        const multi={}; multi[`scenarios/${id}`]=base; multi[`geophoto/scenarios/${id}`]=base;
         await update(dbRef(db), multi);
-
-        createdId=id; createdTitle=title; createdDispatch=dispatch;
-        $('step1Status').textContent = 'created ✓';
-        snack('Scenario created — add a photo');
-      }catch(e){
-        const msg = e?.code || e?.message || String(e);
-        errBar(/permission|denied/i.test(msg)
-          ? 'DB rules are blocking creates. Allow admin writes to "/scenarios/**" & "/geophoto/scenarios/**".'
-          : 'Create failed: ' + msg);
-      }finally{
-        $('createBtn').disabled = false;
-        gateSteps();
-      }
+        createdId=id; $('step1Status').textContent='created ✓'; log('Scenario created: '+id);
+      }catch(e){ err('Create failed: '+(e.code||e.message)); }
+      finally{ gate(); }
     };
 
-    // ---------- Step 2: choose/take/upload ----------
-    const openInput = (id)=> $(id).click();
-    $('btnCamera').onclick = ()=> openInput('inCamera');
-    $('btnLibrary').onclick= ()=> openInput('inLibrary');
-    $('btnUpload').onclick = ()=> openInput('inUpload');
-
-    async function onFilePicked(file){
-      if (!file){ return; }
-      if (!createdId){ errBar('Create the scenario first.'); return; }
-
-      let bmp=null, previewOK=true;
-      try{ bmp = await fileToBitmap(file); }catch{ previewOK=false; }
-
-      pendingFile = file;
-      if (previewOK){
-        const obj = URL.createObjectURL(file);
-        $('thumb').classList.remove('na'); $('thumb').src = obj;
-        setTimeout(()=>URL.revokeObjectURL(obj), 60000);
-        const w=bmp.width||bmp.naturalWidth, h=bmp.height||bmp.naturalHeight;
-        setKV('imgInfo', `Original: ${w}×${h} • ${(file.size/1024/1024).toFixed(2)} MB • ${file.type||'image'}`);
+    // step 2 pick
+    const open=(id)=>$(id).click();
+    $('btnCamera').onclick = ()=>open('inCamera');
+    $('btnLibrary').onclick= ()=>open('inLibrary');
+    $('btnUpload').onclick = ()=>open('inUpload');
+    async function onPick(f){
+      if(!f) return; if(!createdId) return err('Create the scenario first.');
+      let bmp=null, ok=true;
+      try{ bmp=await fileToBitmap(f); }catch{ ok=false; }
+      pendingFile=f;
+      if(ok){
+        const o=URL.createObjectURL(f); $('thumb').classList.remove('na'); $('thumb').src=o; setTimeout(()=>URL.revokeObjectURL(o),60000);
+        const w=bmp.width||bmp.naturalWidth,h=bmp.height||bmp.naturalHeight, m=(f.size/1024/1024).toFixed(2);
+        const max=parseInt(($('sizePreset').value||'1280'),10)||1280;
+        const s=scale(w,h,max); const est=((w*h? (m*(s.w*s.h)/(w*h)) : m)).toFixed(2);
+        $('imgInfo').textContent=`Save as: ${s.w}×${s.h} • ~${est} MB (JPEG q=${QUALITY})`;
       }else{
         $('thumb').classList.add('na'); $('thumb').removeAttribute('src'); $('thumb').textContent='Preview not available';
-        setKV('imgInfo', `File: ${(file.size/1024/1024).toFixed(2)} MB • ${file.type||'file'} — preview not available; will upload original`);
+        $('imgInfo').textContent=`Saving original: ${(f.size/1024/1024).toFixed(2)} MB`;
       }
-
-      pendingGeo = null; setKV('gpsLine', 'GPS: waiting…');
-      show('previewWrap', true); show('locChoice', true); show('locGPS', false); show('locManual', false);
-      gateSteps();
+      $('gpsLine').textContent='GPS: waiting…';
+      show('locChoice',true); gate();
     }
+    $('inCamera').addEventListener('change',e=>onPick(e.target.files?.[0]));
+    $('inLibrary').addEventListener('change',e=>onPick(e.target.files?.[0]));
+    $('inUpload').addEventListener('change', e=>onPick(e.target.files?.[0]));
 
-    $('inCamera').addEventListener('change', (e)=> onFilePicked(e.target.files?.[0]));
-    $('inLibrary').addEventListener('change', (e)=> onFilePicked(e.target.files?.[0]));
-    $('inUpload').addEventListener('change', (e)=> onFilePicked(e.target.files?.[0]));
+    // location
+    $('btnUseGPS').onclick=()=>{ show('locManual',false); show('locGPS',true); getGPS(true); };
+    $('btnManualLoc').onclick=()=>{ show('locGPS',false); show('locManual',true); };
+    $('btnManualBack').onclick=()=>{ show('locManual',false); show('locChoice',true); };
+    $('btnSaveManual').onclick=()=>{ const lat=parseFloat(($('latIn').value||'').trim()); const lng=parseFloat(($('lngIn').value||'').trim()); const acc=parseInt(($('accIn').value||'').trim(),10);
+      if(!Number.isFinite(lat)||!Number.isFinite(lng)) return err('Enter valid latitude/longitude.');
+      pendingGeo={lat,lng,accuracy:Number.isFinite(acc)?acc:null,at:Date.now()}; $('gpsLine').textContent=`GPS (manual): ${lat.toFixed(6)}, ${lng.toFixed(6)}${Number.isFinite(acc)?' ±'+acc+'m':''}`; };
+    function getGPS(force){ if(!navigator.geolocation){ $('gpsLine').textContent='GPS not available'; return;}
+      $('gpsLine').textContent='Getting GPS…';
+      navigator.geolocation.getCurrentPosition(p=>{ const {latitude,longitude,accuracy}=p.coords; pendingGeo={lat:latitude,lng:longitude,accuracy:Math.round(accuracy||0),at:Date.now()};
+        $('gpsLine').textContent=`GPS: ${latitude.toFixed(6)}, ${longitude.toFixed(6)} ±${Math.round(accuracy||0)} m`; },
+        e=>{ $('gpsLine').textContent=`GPS failed (${e.code||''})`; },
+        {enableHighAccuracy:true,timeout:10000,maximumAge:force?0:60000}); }
+    $('btnRefreshGPS').onclick=()=>getGPS(true);
+    $('btnClearGPS').onclick=()=>{ pendingGeo=null; $('gpsLine').textContent='GPS: cleared'; };
 
-    // GPS / manual location
-    $('btnUseGPS').onclick = ()=>{ show('locManual', false); show('locGPS', true); getGPSFix(true); };
-    $('btnManualLoc').onclick = ()=>{ show('locGPS', false); show('locManual', true); };
-    $('btnManualBack').onclick = ()=>{ show('locManual', false); show('locChoice', true); };
-    $('btnSaveManual').onclick = ()=>{
-      const lat = parseFloat(($('latIn').value||'').trim());
-      const lng = parseFloat(($('lngIn').value||'').trim());
-      const acc = parseInt(($('accIn').value||'').trim(),10);
-      if (!Number.isFinite(lat) || !Number.isFinite(lng)){ errBar('Enter valid latitude & longitude.'); return; }
-      pendingGeo = { lat, lng, accuracy: Number.isFinite(acc)?acc:null, at: Date.now() };
-      snack('Manual location saved.');
-      show('locManual', false); show('locChoice', true);
-      setKV('gpsLine', `GPS (manual): ${lat.toFixed(6)}, ${lng.toFixed(6)}${Number.isFinite(acc)?' ±'+acc+'m':''}`);
-    };
-
-    function getGPSFix(force=false){
-      if (!navigator.geolocation){ setKV('gpsLine','GPS not available on this device/browser.'); return; }
-      setKV('gpsLine','Getting GPS fix…');
-      const opts={enableHighAccuracy:true,timeout:10000,maximumAge:force?0:60000};
-      navigator.geolocation.getCurrentPosition(
-        (p)=>{
-          const {latitude,longitude,accuracy}=p.coords||{};
-          pendingGeo={lat:latitude,lng:longitude,accuracy:Math.round(accuracy||0),at:Date.now()};
-          setKV('gpsLine',`GPS: ${latitude.toFixed(6)}, ${longitude.toFixed(6)} ±${Math.round(accuracy||0)} m`);
-        },
-        (e)=>{ setKV('gpsLine',`GPS failed (${e.code||''}) — you can enter manually`); },
-        opts
-      );
-    }
-    $('btnRefreshGPS').onclick = ()=> getGPSFix(true);
-    $('btnClearGPS').onclick   = ()=>{ pendingGeo=null; setKV('gpsLine','GPS: cleared'); };
-
-    // ---------- Self-test upload (rules/App Check quick check) ----------
-    $('btnSelfTest').onclick = async ()=>{
+    // self-test upload (tiny PNG) — should succeed in <1s if rules/app-check are OK
+    $('btnSelfTest').onclick=async ()=>{
       try{
         await ensureAuthed();
-        const png = await (async ()=>{
-          const c=document.createElement('canvas'); c.width=1; c.height=1;
-          const g=c.getContext('2d'); g.fillStyle='#fff'; g.fillRect(0,0,1,1);
-          const b = await new Promise(res=>c.toBlob(res,'image/png',1));
-          return b;
-        })();
-        const ts = Date.now();
-        const ref = stRef(storage, `scenarios/_selftest/selftest-${ts}.png`);
-        const task = uploadBytesResumable(ref, png, {contentType:'image/png',cacheControl:'public,max-age=60'});
-        const out=$('selfTestOut'); out.textContent='…';
-        task.on('state_changed', ()=>{}, (err)=>{
-          out.textContent = `Error: ${err.code} — ${err.message}`;
-          errBar(`Self-test failed: ${err.code} — ${err.message} (check Storage rules / App Check)`);
-        }, async ()=>{
-          const url = await getDownloadURL(ref);
-          out.textContent = 'OK ✓';
-          snack('Self-test upload success');
-          console.log('Self-test URL:', url);
-        });
-      }catch(e){ errBar(`Self-test threw: ${e.code||e.message}`); }
+        $('selfOut').textContent='…'; log('Self-test: starting');
+        const c=document.createElement('canvas'); c.width=1; c.height=1; const g=c.getContext('2d'); g.fillStyle='#fff'; g.fillRect(0,0,1,1);
+        const blob = await new Promise(res=>c.toBlob(res,'image/png',1));
+        const ref = stRef(storage, `scenarios/_selftest/selftest-${Date.now()}.png`);
+        const t = uploadBytesResumable(ref, blob, {contentType:'image/png',cacheControl:'public,max-age=60'});
+        const watchdog = setTimeout(()=>{ $('selfOut').textContent='stuck at 0% (likely App Check/rules)'; err('Self-test stuck at 0% — check App Check enforcement & Storage rules.'); }, 10000);
+        t.on('state_changed',
+          snap=>{},  // we only show final or error
+          e=>{ clearTimeout(watchdog); $('selfOut').textContent=`Error: ${e.code}`; err(`Self-test failed: ${e.code} — ${e.message}`); },
+          ()=>{ clearTimeout(watchdog); $('selfOut').textContent='OK ✓'; log('Self-test: success'); }
+        );
+      }catch(e){ err('Self-test threw: '+(e.code||e.message)); }
     };
 
-    // ---------- Step 3: upload + DB write ----------
+    // upload + DB write
     $('saveBtn').onclick = async ()=>{
-      if (!(createdId && pendingFile)){ errBar('Need a scenario and a photo.'); return; }
-
+      if(!(createdId && pendingFile)) return err('Need a scenario and a photo.');
       try{
         await ensureAuthed();
+        $('saveStatus').textContent='preparing…'; log('Upload: preparing blobs');
 
-        show('progWrap', true);
-        setKV('progPctFull','0%'); $('progBarFull').style.width='0%';
-        setKV('progPctThumb','0%'); $('progBarThumb').style.width='0%';
-        $('saveStatus').textContent='preparing image…';
-
-        // Prepare images (compress if possible, else upload original)
+        // prepare blobs (use JPEG at chosen size; fallback to original if conversion fails)
         let fullBlob=null, thumbBlob=null, imgW=null, imgH=null, usedOriginal=false;
-        const maxEdge = getMaxEdge(); // 800/1280/1600/1920
-
         try{
           const bmp = await fileToBitmap(pendingFile);
-          const full = await toBlob(bmp, maxEdge, QUALITY, 'image/jpeg');
-          const thmb = await toBlob(bmp, 320, 0.78, 'image/jpeg'); // smaller thumb for phones
-          fullBlob = full.blob; thumbBlob = thmb.blob; imgW=full.width; imgH=full.height;
-          const est = (fullBlob.size/1024/1024).toFixed(2);
-          setKV('imgInfo', `Save as: ${imgW}×${imgH} • ~${est} MB (JPEG q=${QUALITY})`);
-        }catch{
-          usedOriginal = true;
-          setKV('imgInfo', `Saving original (browser can’t convert). Size: ${(pendingFile.size/1024/1024).toFixed(2)} MB`);
-        }
+          const max = parseInt(($('sizePreset').value||'1280'),10)||1280;
+          const full = await toBlob(bmp, max, 0.75, 'image/jpeg');
+          const th   = await toBlob(bmp, 320, 0.78, 'image/jpeg');
+          fullBlob = full.blob; thumbBlob = th.blob; imgW=full.width; imgH=full.height;
+        }catch{ usedOriginal=true; }
 
         const ts = Date.now();
-        const basePath = `scenarios/${createdId}/${ts}`;
-        const fullRef  = stRef(storage, `${basePath}.jpg`);
+        const fullRef  = stRef(storage, `scenarios/${createdId}/${ts}.jpg`);
         const thumbRef = stRef(storage, `scenarios/${createdId}/thumbs/${ts}.jpg`);
         const metaJpg  = { contentType:'image/jpeg', cacheControl:'public,max-age=31536000,immutable' };
         const metaOrig = { contentType: pendingFile.type || 'application/octet-stream', cacheControl:'public,max-age=31536000,immutable' };
 
+        // start uploads
+        log('Upload: starting Storage tasks');
+        const fullTask  = uploadBytesResumable(fullRef,  usedOriginal?pendingFile:fullBlob,  usedOriginal?metaOrig:metaJpg);
+        let thumbTask=null;
+        if (!usedOriginal) thumbTask = uploadBytesResumable(thumbRef, thumbBlob, metaJpg);
+
+        // 10s watchdog for “0% forever”
+        let lastBytes = 0;
+        const dog = setInterval(()=>{
+          const b = fullTask.snapshot?.bytesTransferred||0;
+          if (b>lastBytes){ lastBytes=b; return; }
+          if (b===0){ // stuck
+            clearInterval(dog);
+            try{ fullTask.cancel(); }catch{}
+            err('Upload stuck at 0% — this is almost always **App Check enforcement** or **Storage rules**. Enable App Check in this page or relax rules temporarily.');
+          }
+        }, 10000);
+
         const watch = (task, which)=> new Promise((res,rej)=>{
-          if(!task){ res(); return; }
+          if(!task) return res();
           task.on('state_changed',
-            (snap)=>{
-              const pct = Math.round((snap.bytesTransferred/snap.totalBytes)*100);
-              if(which==='full'){ setKV('progPctFull', pct+'%'); $('progBarFull').style.width = pct+'%'; }
-              else { setKV('progPctThumb', pct+'%'); $('progBarThumb').style.width = pct+'%'; }
-            },
-            (err)=> rej(err),
-            ()=> res()
+            s=>{ const pct=Math.round((s.bytesTransferred/s.totalBytes)*100); if(which==='full'){ $('pctFull').textContent=pct+'%'; $('barFull').style.width=pct+'%'; } else { $('pctThumb').textContent=pct+'%'; $('barThumb').style.width=pct+'%'; } },
+            e=>{ clearInterval(dog); rej(e); },
+            ()=>{ if(which==='full'){ $('pctFull').textContent='100%'; $('barFull').style.width='100%'; } else { $('pctThumb').textContent='100%'; $('barThumb').style.width='100%'; } res(); }
           );
         });
 
         $('saveStatus').textContent='uploading…';
-        let fullTask, thumbTask;
-        if (usedOriginal){
-          fullTask = uploadBytesResumable(fullRef, pendingFile, metaOrig);
-          // best-effort thumb
-          try{
-            const bmp2 = await fileToBitmap(pendingFile);
-            const t2 = await toBlob(bmp2, 320, 0.78, 'image/jpeg');
-            thumbTask = uploadBytesResumable(thumbRef, t2.blob, metaJpg);
-          }catch{/* skip thumb */}
-        }else{
-          fullTask  = uploadBytesResumable(fullRef, fullBlob,  metaJpg);
-          thumbTask = uploadBytesResumable(thumbRef, thumbBlob, metaJpg);
-        }
-
-        await watch(fullTask,'full');
-        await watch(thumbTask,'thumb');
+        await watch(fullTask,'full'); await watch(thumbTask,'thumb'); clearInterval(dog);
 
         const imageURL = await getDownloadURL(fullRef);
-        let thumbURL=null; try{ thumbURL=await getDownloadURL(thumbRef);}catch{}
+        let thumbURL=null; try{ thumbURL = await getDownloadURL(thumbRef); }catch{}
 
-        $('saveStatus').textContent='saving…';
+        $('saveStatus').textContent='saving…'; log('Upload: writing DB');
         const snap = await get(dbRef(db, `scenarios/${createdId}`));
-        const sc = snap.exists() ? snap.val() : { id: createdId, title: createdTitle, dispatch: createdDispatch, createdAt: Date.now(), active:true, stops: [] };
-        const stops = Array.isArray(sc.stops) ? sc.stops : [];
-        stops.push({
-          type:'photo', title:'', caption:'',
-          imageURL, thumbURL,
-          storagePath:`${basePath}.jpg`, thumbPath: thumbURL ? `scenarios/${createdId}/thumbs/${ts}.jpg` : null,
-          width: imgW, height: imgH,
-          lat: pendingGeo?.lat ?? null, lng: pendingGeo?.lng ?? null, accuracy: pendingGeo?.accuracy ?? null,
-          at: ts, overlays:[]
-        });
+        const sc = snap.exists()?snap.val():{id:createdId,title:'',dispatch:'',createdAt:Date.now(),active:true,stops:[]};
+        const stops = Array.isArray(sc.stops)?sc.stops:[];
+        stops.push({type:'photo', title:'', caption:'', imageURL, thumbURL,
+          storagePath:`scenarios/${createdId}/${ts}.jpg`, thumbPath: thumbURL?`scenarios/${createdId}/thumbs/${ts}.jpg`:null,
+          width: imgW, height: imgH, lat: pendingGeo?.lat ?? null, lng: pendingGeo?.lng ?? null, accuracy: pendingGeo?.accuracy ?? null, at: ts, overlays:[]});
         sc.stops = stops;
-
-        const multi = {};
-        multi[`scenarios/${createdId}`] = sc;
-        multi[`geophoto/scenarios/${createdId}`] = sc;
+        const multi={}; multi[`scenarios/${createdId}`]=sc; multi[`geophoto/scenarios/${createdId}`]=sc;
         await update(dbRef(db), multi);
 
-        $('saveStatus').textContent='saved ✓';
-        snack('Photo saved to cloud.');
-        // reset for another
-        pendingFile=null; pendingGeo=null;
-        $('thumb').src=''; $('thumb').classList.remove('na'); setKV('gpsLine','GPS: —');
-        setKV('progPctFull','0%'); $('progBarFull').style.width = '0%';
-        setKV('progPctThumb','0%'); $('progBarThumb').style.width = '0%';
-        show('progWrap', false); show('previewWrap', false);
-        gateSteps();
+        $('saveStatus').textContent='saved ✓'; log('Upload: done');
+        $('pctFull').textContent='0%'; $('barFull').style.width='0%'; $('pctThumb').textContent='0%'; $('barThumb').style.width='0%';
+        $('thumb').src=''; $('thumb').classList.remove('na'); show('previewWrap',false);
+        pendingFile=null; gate();
       }catch(e){
-        const code = e?.code || '';
-        const msg  = e?.message || String(e);
-        $('saveStatus').textContent='error';
-        let hint = '';
-        if (/unauthorized|permission|denied/i.test(code+msg)) {
-          hint = ' — Check Storage rules for "scenarios/**" and App Check enforcement.';
-        } else if (/appcheck/i.test(msg)) {
-          hint = ' — App Check token missing/invalid; enable App Check here or disable enforcement temporarily.';
-        } else if (/quota|limit/i.test(code+msg)) {
-          hint = ' — Bucket quota exceeded; clear files or upgrade.';
-        }
-        errBar(`Upload failed: ${code || 'error'} — ${msg}${hint}`);
-        console.error('Upload error:', e);
+        const code=e?.code||'error', msg=e?.message||String(e);
+        err(`Upload failed: ${code} — ${msg}`);
       }
     };
-
-    // boot
-    (async ()=>{
-      try{
-        const u = await ensureAuthed();
-        $('debug').textContent = `Auth: ${u.uid.slice(0,8)} • DB: ${firebaseConfig.databaseURL} • Bucket: ${firebaseConfig.storageBucket}`;
-      }catch(_){}
-      gateSteps();
-    })();
   </script>
 </body>
 </html>
