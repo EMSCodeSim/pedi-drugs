@@ -9,7 +9,6 @@
     :root{
       --bg:#0b0f14;--bg2:#0d121c;--panel:#0f1624;
       --text:#eaf2ff;--muted:#9fb2d6;--edge:rgba(255,255,255,.14);
-      --ok:#16a34a;--warn:#f59e0b;--bad:#ef4444;
     }
     *{box-sizing:border-box}
     html,body{margin:0;height:100%;color:var(--text);font-family:system-ui,-apple-system,Segoe UI,Inter,Roboto,Arial,sans-serif;
@@ -140,7 +139,7 @@
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-app.js";
     import { getDatabase, ref as dbRef, push, update, get } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-database.js";
     import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-auth.js";
-    import { getStorage, ref as stRef, uploadBytesResumable, uploadBytes, getDownloadURL, deleteObject } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-storage.js";
+    import { getStorage, ref as stRef, uploadBytesResumable, getDownloadURL } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-storage.js";
 
     const cfg = {
       apiKey:"AIzaSyDM6DpRSeZueVKRpbyJyDmhf8WY66KyCDk",
@@ -165,6 +164,7 @@
       $('authPill').textContent = `Auth: anon ✔ ${auth.currentUser.uid.slice(0,8)}`;
       return auth.currentUser;
     }
+    // Try at load too
     ensureAuthed().catch(()=>{});
 
     /* ---------- Imaging ---------- */
@@ -232,12 +232,12 @@
         const dataURL = await readAsDataURL(file);
         const img = await loadImage(dataURL);
         pendingImg=img;
-        // Build reduced + thumb
+        // Reduced + thumb
         pendingFullDataURL  = downscale(img, FULL_EDGE,  FULL_Q);
         pendingThumbDataURL = downscale(img, THUMB_EDGE, THUMB_Q);
 
         $('previewImg').src = pendingFullDataURL;
-        $('imgInfo').textContent = `Will save ${img.width}×${img.height} → ${Math.round(Math.max(img.width,img.height)*Math.min(img.width,img.height)/(FULL_EDGE*FULL_EDGE)?(FULL_EDGE):img.width)} @ JPEG q=${FULL_Q}`;
+        $('imgInfo').textContent = `Original: ${img.width}×${img.height} → Save at ~${Math.round(Math.max(img.width,img.height) > FULL_EDGE ? FULL_EDGE : Math.max(img.width,img.height))}px`;
         show('workArea', true);
         $('saveStatus').textContent='ready';
         $('pctFull').textContent='0%'; $('barFull').style.width='0%';
@@ -266,48 +266,62 @@
     $('resetBtn').onclick = ()=>{
       pendingFile=pendingImg=pendingFullDataURL=pendingThumbDataURL=null;
       $('previewImg').src=''; show('workArea',false); show('afterSave',false);
+      $('pctFull').textContent='0%'; $('barFull').style.width='0%';
+      $('pctThumb').textContent='0%'; $('barThumb').style.width='0%';
+      $('radius').value='5';
     };
 
     /* ---------- Upload helpers ---------- */
     function watchTask(task, which){
       return new Promise((res,rej)=>{
+        const killer = setTimeout(()=>{ try{task.cancel();}catch{} rej(new Error('Upload timed out')); }, 60000);
         task.on('state_changed',
           s=>{
             const pct=Math.round(100*s.bytesTransferred/s.totalBytes);
             if(which==='full'){ $('pctFull').textContent=pct+'%'; $('barFull').style.width=pct+'%'; }
             else { $('pctThumb').textContent=pct+'%'; $('barThumb').style.width=pct+'%'; }
           },
-          rej,
-          ()=>res()
+          e=>{ clearTimeout(killer); rej(e); },
+          ()=>{ clearTimeout(killer); res(); }
         );
       });
     }
 
     async function uploadBlobs(ts, fullDataURL, thumbDataURL){
+      // Make sure we're authed at the moment of upload (fix)
+      await ensureAuthed();
+
       const fullRef  = stRef(storage, `scenarios/${scenarioId}/${ts}.jpg`);
       const thmbRef  = stRef(storage, `scenarios/${scenarioId}/thumbs/${ts}.jpg`);
       const meta     = { contentType:'image/jpeg', cacheControl:'public,max-age=31536000,immutable' };
 
       try{
         const fullTask  = uploadBytesResumable(fullRef,  dataURLtoBlob(fullDataURL), meta);
+        await watchTask(fullTask,'full');
+
+        // thumb after full to avoid double contention on weak networks
         const thumbTask = uploadBytesResumable(thmbRef,  dataURLtoBlob(thumbDataURL), meta);
-        await watchTask(fullTask,'full'); await watchTask(thumbTask,'thumb');
+        await watchTask(thumbTask,'thumb');
+
         const imageURL = await getDownloadURL(fullRef);
         const thumbURL = await getDownloadURL(thmbRef).catch(()=>imageURL);
-        return { imageURL, thumbURL, storagePath: fullRef.fullPath, gsUri:`gs://${cfg.storageBucket}/${fullRef.fullPath}` };
+        return { imageURL, thumbURL, storagePath: fullRef.fullPath, gsUri:`gs://${cfg.storageBucket}/${fullRef.fullPath}`, via:'storage' };
       }catch(e1){
         // Fallback: call your function with ID token (same as Advanced Editor flow)
         try{
-          const url='https://us-central1-dailyquiz-d5279.cloudfunctions.net/uploadScenarioImage';
-          const user = await ensureAuthed(); const token = user ? await user.getIdToken() : null;
-          const resp = await fetch(url, { method:'POST', headers:{'Content-Type':'application/json', ...(token?{Authorization:`Bearer ${token}`}:{})},
-            body: JSON.stringify({ scenarioId, fileName: `${ts}.jpg`, dataURL: fullDataURL }) });
+          const user = await ensureAuthed();
+          const token = user ? await user.getIdToken() : null;
+          const resp = await fetch('https://us-central1-dailyquiz-d5279.cloudfunctions.net/uploadScenarioImage', {
+            method:'POST',
+            headers:{ 'Content-Type':'application/json', ...(token?{Authorization:`Bearer ${token}`}:{}) },
+            body: JSON.stringify({ scenarioId, fileName: `${ts}.jpg`, dataURL: fullDataURL })
+          });
           if(!resp.ok) throw new Error('Function HTTP '+resp.status);
           const j = await resp.json(); if(!j.ok) throw new Error(j.error||'Function error');
-          return { imageURL:j.url, thumbURL:j.url, storagePath:j.path, gsUri:j.gsUri };
+          return { imageURL:j.url, thumbURL:j.url, storagePath:j.path, gsUri:j.gsUri, via:'function' };
         }catch(e2){
-          // Final fallback: inline (not ideal, but ensures progress)
-          return { imageData:{format:'jpeg', data: fullDataURL.split(',')[1]}, thumbURL: thumbDataURL };
+          // Final fallback: inline (ensures progress even if network rules block)
+          return { imageData:{format:'jpeg', data: fullDataURL.split(',')[1]}, thumbURL: thumbDataURL, via:'inline' };
         }
       }
     }
