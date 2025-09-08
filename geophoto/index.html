@@ -5,8 +5,24 @@
   <title>FireOps SIM — Home</title>
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <meta name="theme-color" content="#0b0f14" />
+
+  <!-- Instant redirect unless we're explicitly in admin mode -->
+  <script>
+    (function () {
+      var ADMIN_HASH = '#admin';
+      var VIEWER_URL = 'https://fireopssim.com/geophoto/viewer';
+      if (location.hash !== ADMIN_HASH) {
+        // No UI, just go straight to the viewer.
+        location.replace(VIEWER_URL);
+      }
+    })();
+  </script>
+
   <style>
-    :root{ --bg:#0b0f14; --bg2:#0e1421; --edge:rgba(255,255,255,.12); --text:#eaf2ff; --blue:#0a84ff; --blue2:#54a6ff; }
+    :root{
+      --bg:#0b0f14; --bg2:#0e1421; --card:#0f1624; --edge:rgba(255,255,255,.12);
+      --text:#eaf2ff; --muted:#93a0b5;
+    }
     *{box-sizing:border-box}
     html,body{
       margin:0;height:100%;color:var(--text);
@@ -16,28 +32,112 @@
         radial-gradient(1200px 600px at 110% 0%, rgba(255,59,48,.18), transparent 60%),
         linear-gradient(165deg, var(--bg2), var(--bg) 55%);
     }
+    .hidden{display:none !important}
     header{position:sticky;top:0;background:#0b0f14;border-bottom:1px solid var(--edge)}
-    .nav{max-width:900px;margin:0 auto;padding:14px 16px;text-align:center;font-weight:900}
-    main{min-height:calc(100vh - 60px);display:grid;place-items:center;padding:24px}
-    .card{max-width:560px;width:100%;background:#0f1624;border:1px solid var(--edge);border-radius:16px;padding:22px;text-align:center}
-    h1{margin:0 0 10px 0;font-size:28px}
-    p{margin:0 0 18px 0;color:#c9d6f3}
-    .btn{
-      display:inline-block;border:0;border-radius:14px;padding:16px 20px;
-      font-weight:900;background:linear-gradient(180deg,var(--blue2),var(--blue));
-      color:#03131b;text-decoration:none;box-shadow:0 6px 22px rgba(10,132,255,.25)
-    }
+    .nav{max-width:880px;margin:0 auto;padding:14px 16px;text-align:center;font-weight:900}
+    main{max-width:880px;margin:28px auto;padding:0 16px}
+    .card{background:var(--card);border:1px solid var(--edge);border-radius:16px;padding:18px}
+    h1{margin:0 0 8px 0}
+    p{margin:0 0 14px 0;color:#c9d6f3}
+    .links{display:flex;gap:12px;flex-wrap:wrap;justify-content:center}
+    .link{border:1px solid var(--edge);background:#132036;color:#fff;border-radius:12px;padding:10px 14px;font-weight:700;text-decoration:none}
+    .muted{color:var(--muted);font-size:13px;margin-top:10px;text-align:center}
+
+    /* Modal */
+    .modal{position:fixed;inset:0;background:rgba(5,10,18,.6);backdrop-filter:blur(2px);display:none;place-items:center;z-index:99}
+    .modalCard{background:#0f1624;border:1px solid var(--edge);border-radius:16px;padding:16px;width:min(92vw,420px)}
+    .modalCard h3{margin:0 0 10px 0}
+    input[type="password"]{width:100%;padding:10px 12px;border-radius:12px;background:#0b1322;color:#eaf2ff;border:1px solid var(--edge)}
+    .adminBar{display:flex;gap:10px;justify-content:center;flex-wrap:wrap;margin-top:10px}
   </style>
 </head>
 <body>
-  <header><div class="nav">FireOps SIM</div></header>
 
-  <main>
-    <section class="card">
-      <h1>Geo Photo Viewer</h1>
-      <p>Open the viewer for trainees.</p>
-      <a class="btn" href="https://fireopssim.com/geophoto/viewer">Open Geo Photo Viewer</a>
-    </section>
-  </main>
+  <!-- ADMIN MODE UI (only shown when visiting /#admin) -->
+  <div id="adminUI" class="hidden">
+    <header><div class="nav">FireOps SIM — Admin</div></header>
+    <main>
+      <section class="card" style="text-align:center">
+        <h1>Training Tools</h1>
+        <p>Unlock access with the admin password.</p>
+
+        <div id="locked">
+          <div class="adminBar">
+            <a id="openLogin" class="link" href="#">Admin Login</a>
+            <span class="muted">Password required</span>
+          </div>
+        </div>
+
+        <div id="unlocked" class="hidden">
+          <div class="links">
+            <a class="link" href="admin.html">Scenario Builder</a>
+            <a class="link" href="instructor-view.html">Instructor Controls</a>
+            <a class="link" href="advanced-editor.html">Advanced Editor</a>
+          </div>
+          <div class="adminBar">
+            <a id="logout" class="link" href="#" style="background:#2a3348">Log out</a>
+          </div>
+          <p class="muted">Tip: visit <code>/#admin</code> anytime to open this panel.</p>
+        </div>
+      </section>
+    </main>
+
+    <!-- Login modal -->
+    <div id="modal" class="modal">
+      <div class="modalCard">
+        <h3>Admin Login</h3>
+        <p class="muted" style="margin-top:-2px;margin-bottom:8px">Enter the admin password to unlock tools.</p>
+        <input id="pw" type="password" placeholder="Password" autocomplete="current-password" />
+        <div class="adminBar">
+          <a id="cancel" class="link" href="#" style="background:#2a3348">Cancel</a>
+          <a id="ok" class="link" href="#">Unlock</a>
+          <span id="msg" class="muted"></span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <noscript>
+    <!-- Fallback if JS is disabled -->
+    <div style="padding:1rem;color:#fff;background:#111">JavaScript is required. Go to
+      <a href="https://fireopssim.com/geophoto/viewer" style="color:#9cf">the Geo Photo Viewer</a>.
+    </div>
+  </noscript>
+
+  <script>
+    (function(){
+      // Only run admin UI when we're explicitly on /#admin
+      if (location.hash !== '#admin') return;
+
+      var KEY = 'fireops_admin_ok';
+      var $ = function(id){ return document.getElementById(id); };
+      var show = function(id, on){ $(id).classList.toggle('hidden', !on); };
+
+      $('adminUI').classList.remove('hidden');
+
+      function isAuthed(){ return sessionStorage.getItem(KEY) === '1'; }
+      function refresh(){
+        show('locked', !isAuthed());
+        show('unlocked', isAuthed());
+      }
+      refresh();
+
+      $('openLogin').onclick = function(e){ e.preventDefault(); $('pw').value=''; $('msg').textContent=''; $('modal').style.display='grid'; $('pw').focus(); };
+      $('cancel').onclick = function(e){ e.preventDefault(); $('modal').style.display='none'; };
+      $('ok').onclick = function(e){
+        e.preventDefault();
+        var val = ($('pw').value||'').trim();
+        if (val.toLowerCase() === 'franktown'.toLowerCase()){
+          sessionStorage.setItem(KEY, '1');
+          $('modal').style.display='none';
+          refresh();
+        }else{
+          $('msg').textContent = 'Incorrect password';
+        }
+      };
+      $('logout').onclick = function(e){ e.preventDefault(); sessionStorage.removeItem(KEY); refresh(); };
+      $('pw').addEventListener('keydown', function(e){ if(e.key==='Enter'){ $('ok').click(); }});
+    })();
+  </script>
 </body>
 </html>
