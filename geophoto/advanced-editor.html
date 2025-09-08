@@ -64,6 +64,7 @@ textarea{min-height:80px}
   <div class="topnav">
     <div class="brand">FireOps SIM — Advanced Editor</div>
     <div class="spacer"></div>
+    <span id="authPill" class="pill">Auth: connecting…</span>
     <button id="toggleTools" class="btn">Hide Tools</button>
   </div>
 </div>
@@ -82,6 +83,7 @@ textarea{min-height:80px}
             <button class="btn" id="refreshBtn">Refresh</button>
             <button class="btn" id="deleteScenario" style="background:#2a0f14;border-color:#7a2b2b">Delete Scenario</button>
             <span id="statusPill" class="pill">Loading…</span>
+            <span id="rootPill" class="pill small">root: …</span>
           </div>
 
           <div class="divider"></div>
@@ -178,6 +180,8 @@ const $ = (id)=>document.getElementById(id);
 const showErr = (m)=>{ const b=$('errbar'); b.textContent=m; b.style.display='block'; };
 const hideErr = ()=>{ $('errbar').style.display='none'; };
 const showLoad = (on)=>{ $('loader').style.display = on ? 'grid' : 'none'; };
+const status = (msg)=>{ $('statusPill').textContent=msg; };
+const setAuthPill = (t)=>{ $('authPill').textContent = `Auth: ${t}`; };
 
 /* collapse tools */
 $('toggleTools').onclick = ()=>{
@@ -205,29 +209,94 @@ const firebaseConfig = {
 };
 const appFB = initializeApp(firebaseConfig);
 
-/* ✅ Force real bucket */
+/* ✅ Force classic bucket to ensure SDK-auth reads/writes work even if public URLs are disabled */
 const FORCE_BUCKET = "dailyquiz-d5279.appspot.com";
 const storage = getStorage(appFB, `gs://${FORCE_BUCKET}`);
 
 const db = getDatabase(appFB);
 const auth = getAuth(appFB);
+
+/* ---------- Auth gate ---------- */
 async function ensureAuthed(){
   try{ await setPersistence(auth, browserLocalPersistence); }
   catch{ try{ await setPersistence(auth, browserSessionPersistence); }
   catch{ await setPersistence(auth, inMemoryPersistence); } }
-  if (auth.currentUser) return auth.currentUser;
-  await signInAnonymously(auth);
-  await new Promise(res => onAuthStateChanged(auth, u=>u && res(), { once:true }));
+
+  if (!auth.currentUser){
+    await signInAnonymously(auth).catch((e)=>{ setAuthPill('anonymous sign-in failed'); throw e; });
+    await new Promise(res=>{
+      const unsub = onAuthStateChanged(auth, u=>{ if(u){ unsub(); res(); } });
+    });
+  }
+  const uid = auth.currentUser.uid.slice(0,8);
+  setAuthPill(`anon ✔ (${uid})`);
   return auth.currentUser;
 }
-ensureAuthed().catch(()=>{});
+async function getIdToken(force=false){
+  try{
+    const u = auth.currentUser || await ensureAuthed();
+    return await u.getIdToken(force);
+  }catch{return null;}
+}
 
-/* ---------- Cloud Function (fallback upload) ---------- */
+/* ---------- Root detection (supports /geophoto/scenarios or /scenarios) ---------- */
+let ROOT = 'scenarios';
+async function detectRoot(){
+  const fromQS = new URLSearchParams(location.search).get('root');
+  if (fromQS) return fromQS;
+
+  // Prefer geophoto/scenarios if it exists
+  try{
+    const a = await get(dbRef(db, 'geophoto/scenarios'));
+    if (a.exists()) return 'geophoto/scenarios';
+  }catch{}
+  // Fallback to scenarios
+  return 'scenarios';
+}
+$('rootPill').textContent = 'root: …';
+
+/* ---------- Storage helpers with auth ---------- */
+function toStorageRefString(s){
+  if(!s) return s;
+  let v = s.trim();
+  try{ v = decodeURIComponent(v); }catch{}
+  if (v.startsWith('gs://')) return v;
+
+  // https://firebasestorage.googleapis.com/v0/b/<bucket>/o/<path>?...
+  let m = v.match(/^https?:\/\/firebasestorage\.googleapis\.com\/v0\/b\/([^/]+)\/o\/([^?]+)/i);
+  if (m) return `gs://${m[1]}/${m[2].replace(/\+/g,' ')}`;
+
+  // https://<bucket>.firebasestorage.app/o/<path>?...
+  m = v.match(/^https?:\/\/([^/]+)\.firebasestorage\.app\/o\/([^?]+)/i);
+  if (m) return `gs://${m[1]}/${m[2].replace(/\+/g,' ')}`;
+
+  // Plain path case
+  if (!/^https?:\/\//i.test(v)) return v;
+  return v; // unknown URL — caller can try fetch() as last resort
+}
+async function getBlobFromRefString(refStr){
+  await ensureAuthed();
+  const coerced = toStorageRefString(refStr);
+  if (/^https?:\/\//i.test(coerced)){
+    // As a last resort, try HTTP fetch (may fail if rules require auth)
+    const r = await fetch(coerced, { mode:'cors', credentials:'omit', cache:'no-store' });
+    if (!r.ok) throw new Error('HTTP '+r.status);
+    return await r.blob();
+  }
+  const ref = stRef(storage, coerced);
+  return await getBlob(ref);
+}
+
+/* ---------- Cloud Function (fallback upload) — now with ID token ---------- */
 const FUNCTION_UPLOAD_URL = 'https://us-central1-dailyquiz-d5279.cloudfunctions.net/uploadScenarioImage';
 async function uploadViaFunction(dataURL, scenarioId, fileName){
+  const idt = await getIdToken().catch(()=>null);
   const resp = await fetch(FUNCTION_UPLOAD_URL, {
     method:'POST',
-    headers:{ 'Content-Type':'application/json' },
+    headers:{
+      'Content-Type':'application/json',
+      ...(idt ? { 'Authorization': `Bearer ${idt}` } : {})
+    },
     body: JSON.stringify({ scenarioId, fileName, dataURL })
   });
   if (!resp.ok){
@@ -273,23 +342,22 @@ function candidateOriginals(pathOrUrl){
   variants.add(base.replace(/([-_])(thumb|small|preview|min|tiny)(\.[a-z0-9]+)$/i, '$3'));
   variants.forEach(v=> variants.add(v.replace(/(\.[a-z0-9]+)\1$/i, '$1')));
   for (const v of variants){
-    if (/^https?:\/\//i.test(s) && qs) out.add(v + '?' + qs);
-    out.add(v);
+    // also push gs:// variants so SDK can auth
+    const gs = toStorageRefString(v);
+    out.add(gs);
+    if (/^https?:\/\//i.test(s) && qs) out.add(`${v}?${qs}`);
   }
   return Array.from(out).filter(Boolean);
 }
 
 /* ---------- Image load pipeline ---------- */
-async function getBlobFromRefString(refStr){
-  await ensureAuthed();
-  const ref = stRef(storage, refStr);
-  return await getBlob(ref);
-}
 async function loadBlobForStop(stop){
   if (stop.gsUri)        return await getBlobFromRefString(stop.gsUri);
   if (stop.storagePath)  return await getBlobFromRefString(stop.storagePath);
   if (typeof stop.imageURL === 'string' && stop.imageURL){
+    // First try through SDK-auth via gs:// conversion
     try{ return await getBlobFromRefString(stop.imageURL); }catch(_e){}
+    // Final fallback: direct HTTP (may be blocked by rules)
     const r = await fetch(stop.imageURL, { mode:'cors', credentials:'omit', cache:'no-store' });
     if (!r.ok) throw new Error('HTTP '+r.status);
     return await r.blob();
@@ -349,7 +417,6 @@ async function persistStopSource(stop){
 }
 
 /* ---------- Data ---------- */
-const ROOT='scenarios';
 let scenarios=[], current=null, stopIndex=-1;
 
 function coerceStops(sc){
@@ -364,8 +431,6 @@ function setStops(sc, stops){
   else if (Array.isArray(sc?.images)) sc.images = stops;
   else sc.stops = stops;
 }
-function status(msg){ $('statusPill').textContent=msg; }
-
 function populateScenarios(){
   const sel=$('scenarioSel'); sel.innerHTML='<option value="">Select scenario…</option>';
   scenarios.forEach(sc=>{
@@ -374,7 +439,10 @@ function populateScenarios(){
     sel.appendChild(o);
   });
 }
+
 async function loadScenarios(){
+  await ensureAuthed();
+  status('Loading…');
   const snap = await get(dbRef(db, ROOT));
   const obj = snap.exists() ? (snap.val()||{}) : {};
   scenarios = Object.entries(obj).map(([id,s])=>({ id, _raw:s, _stops:coerceStops(s), ...s }))
@@ -382,18 +450,20 @@ async function loadScenarios(){
   populateScenarios();
   status(`${scenarios.length} scenario(s)`);
 }
-onValue(dbRef(db, ROOT), snap=>{
-  const v=snap.val()||{};
-  scenarios = Object.entries(v).map(([id,s])=>({ id, _raw:s, _stops:coerceStops(s), ...s }))
-              .sort((a,b)=>(b.createdAt||0)-(a.createdAt||0));
-  populateScenarios();
-  if (current){
-    const fresh=scenarios.find(x=>x.id===current.id);
-    if (fresh){ current=fresh; renderThumbs(); }
-  }
-});
-await loadScenarios();
-$('refreshBtn').onclick=loadScenarios;
+
+function subscribeScenarios(){
+  const ref = dbRef(db, ROOT);
+  onValue(ref, snap=>{
+    const v=snap.val()||{};
+    scenarios = Object.entries(v).map(([id,s])=>({ id, _raw:s, _stops:coerceStops(s), ...s }))
+                .sort((a,b)=>(b.createdAt||0)-(a.createdAt||0));
+    populateScenarios();
+    if (current){
+      const fresh=scenarios.find(x=>x.id===current.id);
+      if (fresh){ current=fresh; renderThumbs(); }
+    }
+  }, (err)=>{ showErr('Live updates blocked by rules: '+(err?.message||err)); });
+}
 
 /* ---------- Thumbnails row ---------- */
 function dataURLFromStored(stored){
@@ -446,6 +516,7 @@ async function loadStop(i){
 
   try{
     showLoad(true);
+    await ensureAuthed();
     const blob = await loadBlobForStop(s);
     const dims = await setBaseFromBlob(blob);
     const ok = await tryUpgradeIfTiny(s, dims);
@@ -453,7 +524,7 @@ async function loadStop(i){
       showErr('Loaded a small thumbnail. A higher-resolution original could not be found.');
     }
   }catch(e){
-    showErr('Image load failed: '+(e.message||e));
+    showErr('Image load failed (rules?): '+(e.message||e));
   }finally{
     showLoad(false);
   }
@@ -532,6 +603,7 @@ $('useGPS').onclick = ()=>{
 };
 $('saveMeta').onclick = async ()=>{
   try{
+    await ensureAuthed();
     if(!current || stopIndex<0) throw new Error('Select a stop first.');
     const s = Object.assign({}, current._stops[stopIndex]);
     s.title = $('stopTitle').value.trim();
@@ -591,7 +663,7 @@ async function uploadWithTimeout(ref, blob, metadata, onProgress){
     const task = uploadBytesResumable(ref, blob, metadata);
     const killer = setTimeout(()=>{ try{ task.cancel(); }catch{}; reject(Object.assign(new Error('Timed out while uploading'), { code:'save/timeout-upload' })); }, 45000);
     task.on('state_changed',
-      s=>{ if(onProgress){ onProgress(Math.round((s.bytesTransferred/s.totalBytes)*100)); } },
+      s=>{ /* optional progress */ },
       e=>{ clearTimeout(killer); reject(e); },
       ()=>{ clearTimeout(killer); resolve(); }
     );
@@ -625,7 +697,7 @@ $('saveImage').onclick = async ()=>{
     const metaThmb = { contentType:'image/jpeg', cacheControl:'public,max-age=31536000,immutable' };
 
     let cloud=null;
-    // Try direct Storage first
+    // Try direct Storage first (auth via SDK)
     try{
       await uploadWithTimeout(fullRef, fullBlob, metaFull);
       try{ await uploadBytes(thumbRef, thumbBlob, metaThmb); }catch(e){ /* thumb failure is non-fatal */ }
@@ -633,7 +705,7 @@ $('saveImage').onclick = async ()=>{
       const thumbURL = await getDownloadURL(thumbRef).catch(()=>fullURL);
       cloud = { url:fullURL, thumbURL, path:fullRef.fullPath, gsUri:`gs://${FORCE_BUCKET}/${fullRef.fullPath}`, via:'storage' };
     }catch(e1){
-      // Fallback to Cloud Function
+      // Fallback to Cloud Function (sends ID token)
       try{
         const res = await uploadViaFunction(dataURL, current.id, `${ts}_edited_${stopIndex}.jpg`);
         cloud = { url:res.url, thumbURL:res.url, path:res.path, gsUri:res.gsUri, via:'function' };
@@ -664,7 +736,7 @@ $('saveImage').onclick = async ()=>{
     renderThumbs();
     $('metaMsg').textContent = cloud ? 'Compressed image saved to Cloud.' : 'Saved inline (backup).';
   }catch(e){
-    $('metaMsg').textContent='Save failed: '+(e.message||e);
+    $('metaMsg').textContent='Save failed (rules?): '+(e.message||e);
   }finally{
     showLoad(false);
   }
@@ -685,16 +757,11 @@ $('deleteScenario').onclick = async ()=>{
       if (s.storagePath) paths.add(s.storagePath);
       if (s.thumbPath)   paths.add(s.thumbPath);
       if (s.gsUri)       paths.add(s.gsUri);
-      // Try to infer a thumb path if not present
-      if (!s.thumbPath && s.storagePath){
-        const guess = s.storagePath.replace(`/scenarios/${current.id}/`, `/scenarios/${current.id}/thumbs/`).replace(/\.jpg$/i,'');
-        // not pushing guess blindly
-      }
     });
 
     // Best-effort delete each
     for (const p of paths){
-      try{ await deleteObject(stRef(storage, p)); }catch(_e){ /* ignore */ }
+      try{ await deleteObject(stRef(storage, toStorageRefString(p))); }catch(_e){ /* ignore */ }
     }
 
     // Remove DB node
@@ -705,7 +772,7 @@ $('deleteScenario').onclick = async ()=>{
     f.clear(); baseImage=null; fitCanvas();
     status('Scenario deleted.');
   }catch(e){
-    showErr('Delete failed: '+(e.message||e));
+    showErr('Delete failed (rules?): '+(e.message||e));
   }finally{
     showLoad(false);
   }
@@ -837,6 +904,19 @@ $('sendBack').onclick  = ()=>{ const o=f.getActiveObject(); if(o && o!==baseImag
 $('deleteObj').onclick = ()=>{ const o=f.getActiveObject(); if(o && o!==baseImage){ f.remove(o); f.discardActiveObject(); f.requestRenderAll(); } };
 $('flipSelH').onclick  = ()=>{ const o=f.getActiveObject(); if(o && o!==baseImage){ o.set('flipX', !o.flipX); f.requestRenderAll(); } };
 $('flipSelV').onclick  = ()=>{ const o=f.getActiveObject(); if(o && o!==baseImage){ o.set('flipY', !o.flipY); f.requestRenderAll(); } };
+
+/* ---------- Boot: auth → root → data ---------- */
+(async ()=>{
+  try{
+    await ensureAuthed();
+    ROOT = await detectRoot();
+    $('rootPill').textContent = `root: ${ROOT}`;
+    await loadScenarios();
+    subscribeScenarios();
+  }catch(e){
+    showErr('Startup failed: '+(e.message||e));
+  }
+})();
 </script>
 </body>
 </html>
