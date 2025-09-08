@@ -53,10 +53,13 @@
     <span id="hint" class="pill"></span>
   </div>
 
+  <!-- Firebase compat SDKs -->
   <script src="https://www.gstatic.com/firebasejs/10.12.4/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.4/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.4/firebase-database-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.4/firebase-storage-compat.js"></script>
+  <!-- App Check (enable if Enforcement is ON) -->
+  <script src="https://www.gstatic.com/firebasejs/10.12.4/firebase-app-check-compat.js"></script>
 
   <script>
   (function(){
@@ -64,7 +67,7 @@
     const sel=$('#scenario'), startBtn=$('#start'), sessionInput=$('#session');
     const img=$('#img'), cap=$('#cap'), statusPill=$('#status'), hint=$('#hint'), authPill=$('#authPill'), pathPill=$('#pathPill');
 
-    // Firebase config (same as Instructor)
+    // Firebase (match Instructor)
     const config = {
       apiKey:"AIzaSyDM6DpRSeZueVKRpbyJyDmhf8WY66KyCDk",
       authDomain:"dailyquiz-d5279.firebaseapp.com",
@@ -75,6 +78,11 @@
       measurementId:"G-19DVN7NNH7"
     };
     firebase.initializeApp(config);
+
+    // App Check (uncomment + add your site key if App Check is enforced)
+    // self.FIREBASE_APPCHECK_DEBUG_TOKEN = true; // DEV only; remove in prod
+    // firebase.appCheck().activate('YOUR_RECAPTCHA_V3_SITE_KEY', true);
+
     const db=firebase.database(), auth=firebase.auth(), storage=firebase.storage();
     const FORCE_BUCKET="dailyquiz-d5279.appspot.com";
 
@@ -112,13 +120,14 @@
 
     async function loadScenarios(){
       const list=[];
-      try{const a=await fetchNode('geophoto/scenarios'); if(a) for(const [id,s] of Object.entries(a)) list.push({id,...(s||{})});}catch{}
-      try{const b=await fetchNode('scenarios');          if(b) for(const [id,s] of Object.entries(b)) list.push({id,...(s||{})});}catch{}
+      try{const a=await fetchNode('geophoto/scenarios'); if(a) for(const [id,s] of Object.entries(a)) list.push({id,...(s||{})});}catch(e){ say(`scenarios read err: ${e.code||e.message}`); }
+      try{const b=await fetchNode('scenarios');          if(b) for(const [id,s] of Object.entries(b)) list.push({id,...(s||{})});}catch(e){}
       const uniq=new Map(); list.forEach(x=>{if(!uniq.has(x.id)) uniq.set(x.id,x);});
       const arr=Array.from(uniq.values()).sort((a,b)=>(b.createdAt||0)-(a.createdAt||0));
       sel.innerHTML='<option value="__manual__">Instructor-led (Manual)</option>';
       arr.forEach(sc=>{const o=document.createElement('option');o.value=sc.id;o.textContent=sc.title||sc.name||'(untitled)';sel.appendChild(o);});
       if(qs.get('id')&&arr.some(s=>s.id===qs.get('id'))) sel.value=qs.get('id');
+      if(arr.length===0) say('No scenarios or read blocked by rules.');
     }
 
     // ---------- Manual mode (sticky, ignore stale/empty) ----------
@@ -220,7 +229,7 @@
       const val=sel.value, session=(sessionInput.value||'default').trim()||'default';
       if(val==='__manual__'){ setStatus('manual'); subscribeManual(session); return; }
       try{ setStatus('loading…'); await loadScenario(val); showSlide('Dispatch', current.dispatch||'', ''); await startGPS(); }
-      catch(e){ setStatus('error'); say(`Scenario load error: ${e.message}`); console.error(e); }
+      catch(e){ setStatus('error'); say(`Scenario load error: ${e.code||e.message||e}`); console.error(e); }
     }
     function stop(){
       running=false; startBtn.textContent='Start';
