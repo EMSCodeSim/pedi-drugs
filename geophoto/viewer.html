@@ -6,61 +6,72 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <meta name="theme-color" content="#0b0f14" />
   <style>
-    html,body{margin:0;padding:0;height:100%;background:#0b0f14;color:#eaf2ff;font-family:system-ui,-apple-system,Segoe UI,Roboto,Inter,Arial,sans-serif;overflow:hidden}
-    .topbar{position:sticky;top:0;z-index:50;background:rgba(12,15,22,.78);backdrop-filter:blur(6px);border-bottom:1px solid rgba(255,255,255,.07)}
-    .topnav{max-width:1100px;margin:0 auto;padding:10px 16px;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
-    .brand{display:flex;gap:12px;align-items:center;font-weight:900}
-    .pill{display:inline-flex;gap:8px;align-items:center;padding:6px 10px;border-radius:999px;border:1px solid rgba(255,255,255,.14);color:#c3d3ff;font-size:12px}
-    .ok{color:#9ff7c2;border-color:rgba(159,247,194,.35)}
-    .bad{color:#ffb3b3;border-color:rgba(255,179,179,.35)}
-    .input,select{min-width:180px;padding:9px 12px;border-radius:10px;border:1px solid rgba(255,255,255,.18);background:#0f1624;color:#eaf2ff;outline:none}
-    .btn{appearance:none;border:0;border-radius:12px;padding:10px 14px;font-weight:800;cursor:pointer;background:linear-gradient(180deg,#54a6ff,#0a84ff);color:#03131b}
-    .btn.secondary{background:transparent;color:#eaf2ff;border:1px solid rgba(255,255,255,.18)}
-    #viewerWrap{position:fixed;top:76px;left:0;width:100%;height:calc(100% - 136px);display:flex;justify-content:center;align-items:center}
-    #photo{width:100%;height:100%;object-fit:contain;background:#000}
-    #caption{position:absolute;left:0;right:0;bottom:60px;text-align:center;font-size:18px;padding:12px 16px;background:linear-gradient(0deg,rgba(0,0,0,.65),transparent);display:none}
-    #controlsBar{position:fixed;left:0;right:0;bottom:0;display:flex;gap:10px;align-items:center;justify-content:center;padding:10px;background:rgba(12,15,22,.8);backdrop-filter:blur(6px);border-top:1px solid rgba(255,255,255,.07)}
-    .hint{position:fixed;top:76px;left:0;right:0;text-align:center;font-size:12px;color:#a8c1ff;opacity:.95;padding:6px 10px}
-    .hint.bad{color:#ff9b9b}
+    :root{
+      --bg:#0b0f14; --bar:#0e1421; --text:#eaf2ff; --muted:#9fb2d6;
+      --edge:rgba(255,255,255,.08); --accent1:#54a6ff; --accent2:#0a84ff;
+    }
+    *{box-sizing:border-box}
+    html,body{margin:0;height:100%;background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,Segoe UI,Roboto,Inter,Arial,sans-serif}
+    /* Top bar */
+    .topbar{position:sticky;top:0;z-index:50;background:rgba(14,20,33,.88);backdrop-filter:blur(6px);border-bottom:1px solid var(--edge)}
+    .bar{display:flex;gap:8px;align-items:center;justify-content:space-between;padding:10px 12px}
+    .brand{font-weight:900}
+    .row{display:flex;gap:8px;align-items:center;min-width:0}
+    select,input{height:40px;padding:0 12px;border-radius:10px;border:1px solid var(--edge);background:#0f1624;color:var(--text);min-width:160px}
+    #session{width:120px}
+    button{
+      height:40px;padding:0 14px;border:0;border-radius:12px;font-weight:800;cursor:pointer;
+      background:linear-gradient(180deg,var(--accent1),var(--accent2));color:#03131b
+    }
+    .pill{font-size:12px;padding:6px 10px;border:1px solid var(--edge);border-radius:999px;color:var(--muted);white-space:nowrap}
+    /* Viewer area */
+    #wrap{position:fixed;inset:60px 0 60px 0;display:flex;align-items:center;justify-content:center}
+    #img{width:100%;height:100%;object-fit:contain;background:#000}
+    #cap{
+      position:fixed;left:0;right:0;bottom:60px;padding:10px 14px;text-align:center;
+      font-size:16px;background:linear-gradient(0deg,rgba(0,0,0,.65),transparent);display:none
+    }
+    /* Bottom bar */
+    #bottom{position:fixed;left:0;right:0;bottom:0;display:flex;gap:8px;align-items:center;justify-content:center;padding:10px;background:rgba(14,20,33,.88);border-top:1px solid var(--edge)}
+    /* Mobile tweaks */
+    @media (max-width:700px){
+      .bar{flex-wrap:wrap;gap:6px}
+      select{min-width:140px}
+      #wrap{inset:110px 0 60px 0}
+    }
   </style>
 </head>
 <body>
+  <!-- Top bar -->
   <div class="topbar">
-    <div class="topnav">
+    <div class="bar">
       <div class="brand">FireOps SIM — Viewer</div>
-
-      <select id="modeSel" class="input" aria-label="Mode">
-        <option value="manual">Manual Mode (Instructor)</option>
-        <option value="gps">GPS Mode (Geofenced)</option>
-      </select>
-
-      <input id="sessionInput" class="input" placeholder="Session (default)" />
-      <select id="scenarioSel" class="input" aria-label="Scenario for GPS Mode">
-        <option value="">Select scenario…</option>
-      </select>
-
-      <button id="startBtn" class="btn">Start</button>
-      <button id="readBtn" class="btn secondary">🔊 Read Text</button>
-
-      <span id="authPill" class="pill">auth: …</span>
-      <span id="pathPill" class="pill">path: …</span>
-      <span id="statusPill" class="pill">status: idle</span>
+      <div class="row" style="flex:1;min-width:0">
+        <select id="scenario" title="Choose scenario">
+          <option value="__manual__">Instructor-led (Manual)</option>
+          <option disabled>Loading scenarios…</option>
+        </select>
+        <input id="session" placeholder="Session" value="default" />
+        <button id="start">Start</button>
+      </div>
+      <div class="row">
+        <span id="status" class="pill">idle</span>
+      </div>
     </div>
   </div>
 
-  <div id="status" class="hint" role="status" aria-live="polite"></div>
-
-  <div id="viewerWrap" aria-live="polite">
-    <img id="photo" alt="Scenario Photo" decoding="async" loading="eager" fetchpriority="high">
-    <div id="caption"></div>
+  <!-- Viewer -->
+  <div id="wrap" aria-live="polite">
+    <img id="img" alt="Scenario" decoding="async" loading="eager" fetchpriority="high">
+    <div id="cap"></div>
   </div>
 
-  <div id="controlsBar">
-    <button id="clearBtn" class="btn secondary" type="button">Clear Screen</button>
-    <button id="testBtn" class="btn secondary" type="button">Test Slide (manual)</button>
+  <!-- Bottom (tiny helpers) -->
+  <div id="bottom">
+    <span id="hint" class="pill" style="max-width:92%;overflow:hidden;text-overflow:ellipsis"></span>
   </div>
 
-  <!-- Firebase (compat SDKs) -->
+  <!-- Firebase compat SDKs -->
   <script src="https://www.gstatic.com/firebasejs/10.12.4/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.4/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.4/firebase-database-compat.js"></script>
@@ -68,27 +79,12 @@
 
   <script>
   (function(){
-    const $ = id => document.getElementById(id);
-    const photo = $('photo');
-    const caption = $('caption');
-    const startBtn = $('startBtn');
-    const readBtn = $('readBtn');
-    const clearBtn = $('clearBtn');
-    const testBtn = $('testBtn');
-    const modeSel = $('modeSel');
-    const sessionInput = $('sessionInput');
-    const scenarioSel = $('scenarioSel');
-    const authPill = $('authPill');
-    const pathPill = $('pathPill');
-    const statusPill = $('statusPill');
-    const statusEl = $('status');
+    const $ = s => document.querySelector(s);
+    const sel = $('#scenario'), startBtn = $('#start'), sessionInput = $('#session');
+    const img = $('#img'), cap = $('#cap'), statusPill = $('#status'), hint = $('#hint');
 
-    const qs = new URLSearchParams(location.search);
-    if (qs.get('mode')) modeSel.value = (qs.get('mode')||'').toLowerCase()==='gps' ? 'gps' : 'manual';
-    sessionInput.value = qs.get('session') || 'default';
-
-    // Firebase init
-    const firebaseConfig = {
+    // ---------- Firebase ----------
+    const config = {
       apiKey:"AIzaSyDM6DpRSeZueVKRpbyJyDmhf8WY66KyCDk",
       authDomain:"dailyquiz-d5279.firebaseapp.com",
       databaseURL:"https://dailyquiz-d5279-default-rtdb.firebaseio.com",
@@ -97,66 +93,27 @@
       appId:"1:94577748034:web:c032d3a1d72db1313de5db",
       measurementId:"G-19DVN7NNH7"
     };
-    firebase.initializeApp(firebaseConfig);
+    firebase.initializeApp(config);
     const db = firebase.database();
     const auth = firebase.auth();
     const storage = firebase.storage();
     const FORCE_BUCKET = "dailyquiz-d5279.appspot.com";
 
-    // ---- UI helpers ----
-    const setStatus = (msg, bad=false)=>{ statusEl.textContent = msg||''; statusEl.className='hint'+(bad?' bad':''); };
-    const setPill = (el, text, good=null)=>{ el.textContent=text; el.className='pill'+(good===true?' ok':good===false?' bad':''); };
-    const synthOK = ('speechSynthesis' in window); let lastSpeech = '';
-    function speak(t){ if(!synthOK || !t) return; try{ speechSynthesis.cancel(); const u=new SpeechSynthesisUtterance(t); speechSynthesis.speak(u);}catch{} }
+    // ---------- State ----------
+    let running = false, manualRef = null, watchId = null;
+    let current = null;          // {id,title,dispatch,stops:[]}
+    let cache = [];              // preloaded dataURLs by stop index
+    let lastIdx = -1;
+
+    // ---------- Helpers ----------
+    const setStatus = (t)=> statusPill.textContent = t;
+    const say = (t)=> hint.textContent = t || '';
     function showSlide(title, text, dataURL){
-      if(dataURL){ photo.src=dataURL; } else { photo.src=''; }
-      const cap = (title ? title + (text ? ' — ' : '') : '') + (text||'');
-      caption.textContent = cap;
-      caption.style.display = cap ? 'block' : 'none';
-      lastSpeech = (title ? (title + '. ') : '') + (text || '');
-    }
-    function clearScreenUI(){ photo.src=''; caption.textContent=''; caption.style.display='none'; }
-
-    // ---- Auth gate (required under new rules) ----
-    async function ensureAuthed(){
-      return new Promise((resolve,reject)=>{
-        const unsub = auth.onAuthStateChanged(async (u)=>{
-          if (u){ setPill(authPill, 'auth: anon ✓ '+u.uid.slice(0,8), true); unsub(); resolve(u); }
-          else{
-            try{ await auth.signInAnonymously(); }
-            catch(e){ setPill(authPill, 'auth: failed', false); unsub(); reject(e); }
-          }
-        });
-      });
+      img.src = dataURL || '';
+      const s = (title? title + (text?' — ':'') : '') + (text||'');
+      cap.textContent = s; cap.style.display = s ? 'block' : 'none';
     }
 
-    // ---- Data helpers ----
-    function toDataURL(stored){
-      if (!stored) return '';
-      if (typeof stored === 'string') return stored;
-      if (stored.data){
-        const fmt = (stored.format==='jpeg'||stored.format==='jpg') ? 'jpeg' : 'png';
-        return `data:image/${fmt};base64,${stored.data}`;
-      }
-      return '';
-    }
-    function normalizeStops(stopsLike){
-      if(!stopsLike) return [];
-      const arr = Array.isArray(stopsLike) ? stopsLike : Object.values(stopsLike);
-      return arr.map(s=>{
-        const num=v=> (v===0||v===null||v===undefined) ? v : parseFloat(v);
-        return {
-          title: s.title || s.name || '',
-          caption: s.caption || s.text || '',
-          lat: num(s.lat ?? s.latitude ?? s.latDeg),
-          lng: num(s.lng ?? s.lon ?? s.long ?? s.longitude ?? s.lngDeg),
-          radiusMeters: num(s.radiusMeters ?? s.radius ?? s.r) || 40,
-          image: toDataURL(s.imageData || s.imageURL || s.imageUrl || s.url || s.photoURL || s.photo),
-          storagePath: s.storagePath || s.thumbPath || '',
-          gsUri: s.gsUri || ''
-        };
-      }).filter(s => typeof s.lat==='number' && typeof s.lng==='number');
-    }
     function toStorageRefString(v){
       if(!v) return '';
       let s = (v+'').trim();
@@ -170,11 +127,28 @@
       return '';
     }
     async function blobToDataURLViaStorage(pathOrGs){
-      const refStr = toStorageRefString(pathOrGs);
-      if (!refStr) return '';
+      const refStr = toStorageRefString(pathOrGs); if(!refStr) return '';
       const ref = storage.refFromURL(refStr);
       const blob = await ref.getBlob();
       return await new Promise((res,rej)=>{ const fr=new FileReader(); fr.onload=()=>res(fr.result); fr.onerror=rej; fr.readAsDataURL(blob); });
+    }
+    function toDataURLFromStored(stored){
+      if (!stored) return '';
+      if (typeof stored === 'string') return stored;
+      if (stored.data){
+        const fmt = (stored.format==='jpeg'||stored.format==='jpg') ? 'jpeg' : 'png';
+        return `data:image/${fmt};base64,${stored.data}`;
+      }
+      return '';
+    }
+
+    async function ensureAuthed(){
+      return new Promise((resolve,reject)=>{
+        const unsub = auth.onAuthStateChanged(u=>{
+          if(u){ unsub(); resolve(u); }
+          else auth.signInAnonymously().catch(e=>{ unsub(); reject(e); });
+        });
+      });
     }
 
     async function fetchNode(path){
@@ -182,66 +156,56 @@
       return snap.exists() ? snap.val() : null;
     }
 
-    async function loadAllScenarios(){
-      const out=[];
-      try{
-        const a = await fetchNode('geophoto/scenarios'); if (a) for (const [id,s] of Object.entries(a)) out.push({ id, ...(s||{}) });
-      }catch{}
-      try{
-        const b = await fetchNode('scenarios'); if (b) for (const [id,s] of Object.entries(b)) out.push({ id, ...(s||{}) });
-      }catch{}
-      // de-dupe
-      const map=new Map(); out.forEach(s=>{ if(!map.has(s.id)) map.set(s.id,s); });
-      return Array.from(map.values()).sort((a,b)=>(b.createdAt||0)-(a.createdAt||0));
-    }
-    async function populateScenarioDropdown(){
-      const list = await loadAllScenarios();
-      scenarioSel.innerHTML = '<option value="">Select scenario…</option>';
-      list.forEach(sc=>{
+    async function loadScenarios(){
+      const list=[];
+      try{ const a=await fetchNode('geophoto/scenarios'); if(a) for(const [id,s] of Object.entries(a)) list.push({id,...(s||{})}); }catch{}
+      try{ const b=await fetchNode('scenarios');          if(b) for(const [id,s] of Object.entries(b)) list.push({id,...(s||{})}); }catch{}
+      const uniq = new Map(); list.forEach(x=>{ if(!uniq.has(x.id)) uniq.set(x.id, x); });
+      const arr = Array.from(uniq.values()).sort((a,b)=>(b.createdAt||0)-(a.createdAt||0));
+
+      // fill dropdown
+      sel.innerHTML = '<option value="__manual__">Instructor-led (Manual)</option>';
+      arr.forEach(sc=>{
         const o=document.createElement('option');
         o.value=sc.id; o.textContent=sc.title || sc.name || '(untitled)';
-        scenarioSel.appendChild(o);
+        sel.appendChild(o);
       });
-      const pre = qs.get('id');
-      if (pre && list.some(s=>s.id===pre)) scenarioSel.value = pre;
     }
 
-    // ---- Manual mode ----
-    let manualRef=null;
+    function normalizeStops(stopsLike){
+      if(!stopsLike) return [];
+      const arr = Array.isArray(stopsLike) ? stopsLike : Object.values(stopsLike);
+      return arr.map(s=>{
+        const num=v=> (v===0||v===null||v===undefined) ? v : parseFloat(v);
+        return {
+          title: s.title || s.name || '',
+          caption: s.caption || s.text || '',
+          lat: num(s.lat ?? s.latitude ?? s.latDeg),
+          lng: num(s.lng ?? s.lon ?? s.long ?? s.longitude ?? s.lngDeg),
+          radiusMeters: num(s.radiusMeters ?? s.radius ?? s.r) || 40,
+          imageDataURL: toDataURLFromStored(s.imageData || s.imageURL || s.imageUrl || s.url || s.photoURL || s.photo),
+          storagePath: s.storagePath || s.thumbPath || '',
+          gsUri: s.gsUri || ''
+        };
+      });
+    }
+
+    // ---------- Manual mode ----------
     function subscribeManual(session){
-      if (manualRef) try{ manualRef.off(); }catch{}
-      const path = `geophoto/manual/${session}/current`;
-      setPill(pathPill, 'path: '+path);
-      manualRef = db.ref(path);
+      if (manualRef) try{ manualRef.off(); }catch{}; 
+      manualRef = db.ref(`geophoto/manual/${session}/current`);
       manualRef.on('value', snap=>{
         const v = snap.val();
-        if (!v || v.clear){
-          clearScreenUI();
-          setStatus('Waiting for instructor…');
-          setPill(statusPill, 'status: waiting');
-          return;
-        }
-        const img = v.image || v.imageURL || v.url || '';
-        showSlide(v.title||'', v.caption||'', img||'');
-        setStatus('Showing: '+(v.title || 'slide'));
-        setPill(statusPill, 'status: playing', true);
+        if (!v || v.clear){ showSlide('', '', ''); say('Waiting for instructor…'); return; }
+        const dataURL = v.image || v.imageURL || v.url || '';
+        showSlide(v.title||'', v.caption||'', dataURL);
+        say('Manual: ' + (v.title||'slide'));
       }, err=>{
-        setStatus('Read denied on manual path — check rules', true);
-        setPill(statusPill, 'status: error', false);
-        console.error('[viewer] manual subscribe error', err);
+        say('Read denied on manual path — rules'); console.error(err);
       });
     }
-    async function clearManual(session){
-      try{ await db.ref(`geophoto/manual/${session}/current`).set({ clear:true }); setStatus('Cleared'); }
-      catch(e){ setStatus('Clear failed — rules?', true); }
-    }
-    async function testManual(session){
-      const sample = { title:'Test', caption:'If you see this, manual pipe works.', image:'' };
-      try{ await db.ref(`geophoto/manual/${session}/current`).set(sample); setStatus('Test sent'); }
-      catch(e){ setStatus('Test failed — rules?', true); }
-    }
 
-    // ---- GPS mode ----
+    // ---------- GPS mode (simplified) ----------
     const toRad = x => x*Math.PI/180;
     const hav=(aLat,aLng,bLat,bLng)=>{ const R=6371000, dLat=toRad(bLat-aLat), dLng=toRad(bLng-aLng); const A=Math.sin(dLat/2)**2 + Math.cos(toRad(aLat))*Math.cos(toRad(bLat))*Math.sin(dLng/2)**2; return 2*R*Math.asin(Math.sqrt(A)); };
     function inside(stop, la, ln, acc){
@@ -250,135 +214,107 @@
       return d <= (Number(stop.radiusMeters)||0) + pad;
     }
 
-    let running=false, watchId=null, current=null, lastStopIndex=-1;
-    async function loadScenarioById(id){
+    async function preloadScenario(stops){
+      cache = new Array(stops.length).fill('');
+      let done = 0;
+      for (let i=0;i<stops.length;i++){
+        const s = stops[i];
+        try{
+          if (s.imageDataURL){
+            cache[i] = s.imageDataURL;
+          } else if (s.gsUri){
+            cache[i] = await blobToDataURLViaStorage(s.gsUri);
+          } else if (s.storagePath){
+            cache[i] = await blobToDataURLViaStorage(s.storagePath);
+          } else {
+            cache[i] = ''; // text-only slide
+          }
+        }catch{ cache[i] = ''; }
+        done++;
+        setStatus(`preloading ${done}/${stops.length}`);
+      }
+      setStatus('ready');
+    }
+
+    async function loadScenario(id){
       let sc = await fetchNode(`geophoto/scenarios/${id}`);
       if(!sc) sc = await fetchNode(`scenarios/${id}`);
-      if (!sc) return null;
-      const stops = normalizeStops(sc.stops);
-      return { id, title: sc.title||sc.name||'', dispatch: sc.dispatch||sc.notes||'', stops, _raw:sc };
-    }
-    async function resolveStopImage(stop){
-      if (stop.image) return stop.image;
-      if (stop.gsUri)  { try{ return await blobToDataURLViaStorage(stop.gsUri); }catch{} }
-      if (stop.storagePath){ try{ return await blobToDataURLViaStorage(stop.storagePath); }catch{} }
-      return '';
+      if (!sc) throw new Error('Scenario not found');
+      const stops = normalizeStops(sc.stops).filter(s=> typeof s.lat==='number' && typeof s.lng==='number');
+      current = { id, title: sc.title||sc.name||'', dispatch: (sc.dispatch||sc.notes||'').toString(), stops };
+      await preloadScenario(stops);
     }
 
     async function startGPS(){
-      const id = scenarioSel.value;
-      if (!id){ alert('Select a scenario first (GPS mode).'); return; }
-      current = await loadScenarioById(id);
-      if (!current || !current.stops.length){ alert('Scenario not found or has no stops.'); return; }
-      setPill(statusPill, 'status: gps watching');
-      setStatus(current.dispatch ? ('Dispatch: '+current.dispatch) : 'GPS mode — move toward a stop.');
-      showSlide('Dispatch', current.dispatch||'', '');
+      if (!current || !current.stops.length){ say('No stops'); return; }
+      // initial “dispatch” slide if present
+      if (current.dispatch) showSlide('Dispatch', current.dispatch, '');
 
       if (watchId) { try{ navigator.geolocation.clearWatch(watchId); }catch{} watchId=null; }
-      try{
-        watchId = navigator.geolocation.watchPosition(async p=>{
-          if (!running || !current) return;
-          const { latitude:la, longitude:ln, accuracy:acc } = p.coords;
-          const hits = current.stops
-            .map((st, i) => ({i, st, dist: hav(la, ln, st.lat, st.lng)}))
-            .filter(obj => inside(obj.st, la, ln, acc))
-            .sort((a,b)=> a.dist - b.dist);
-          if (hits.length === 0) return;
-          const best = hits[0];
-          if (best.i !== lastStopIndex){
-            lastStopIndex = best.i;
-            const img = await resolveStopImage(best.st);
-            showSlide(best.st.title||'', best.st.caption||'', img);
-            setStatus('Unlocked: '+(best.st.title || `Stop ${best.i+1}`));
-          }
-        }, err=>{ setStatus('GPS error: '+err.message, true); }, { enableHighAccuracy:true, maximumAge:0, timeout:20000 });
-      }catch(e){ setStatus('GPS not permitted', true); }
+      lastIdx = -1;
+      watchId = navigator.geolocation.watchPosition(p=>{
+        const { latitude:la, longitude:ln, accuracy:acc } = p.coords;
+        const hits = current.stops
+          .map((st,i)=> ({i, st, dist:hav(la,ln,st.lat,st.lng)}))
+          .filter(o=> inside(o.st, la, ln, acc))
+          .sort((a,b)=> a.dist - b.dist);
+        if (!hits.length) return;
+        const best = hits[0];
+        if (best.i !== lastIdx){
+          lastIdx = best.i;
+          showSlide(best.st.title||'', best.st.caption||'', cache[best.i] || '');
+          say(`Unlocked: ${best.st.title||('Stop '+(best.i+1))}`);
+        }
+      }, err=>{ say('GPS error: '+err.message); }, { enableHighAccuracy:true, maximumAge:0, timeout:20000 });
     }
 
-    // Wake Lock fallback (optional)
-    let wakeLock=null, keepAliveVideo=null;
-    async function acquireWakeLock(){
-      try{ if ('wakeLock' in navigator) { wakeLock = await navigator.wakeLock.request('screen'); wakeLock.addEventListener('release', ()=>{ wakeLock=null; }); return; } }catch{}
-      if (!keepAliveVideo) {
-        keepAliveVideo = document.createElement('video');
-        keepAliveVideo.setAttribute('playsinline',''); keepAliveVideo.muted = true; keepAliveVideo.loop = true;
-        keepAliveVideo.src = 'data:video/mp4;base64,AAAAIGZ0eXBpc29tAAAAAGlzb21pc28yYXZjMW1wNDEAAAAIZnJlZQA=';
-        keepAliveVideo.style.cssText='position:fixed;width:1px;height:1px;opacity:0;pointer-events:none';
-        document.body.appendChild(keepAliveVideo);
-      }
-      try{ await keepAliveVideo.play(); }catch{}
-    }
-    async function releaseWakeLock(){
-      try{ if (wakeLock) { await wakeLock.release(); wakeLock=null; } }catch{}
-      try{ if (keepAliveVideo){ await keepAliveVideo.pause(); } }catch{}
-    }
-
-    // ---- Start/Stop wiring ----
-    function subscribeMode(){
-      const mode = modeSel.value;
-      if (mode === 'manual'){
-        const session = (sessionInput.value || 'default').trim() || 'default';
-        subscribeManual(session);
-      } else {
-        // GPS — subscription is the geolocation watcher started later
-        if (manualRef) try{ manualRef.off(); }catch{} manualRef=null;
-      }
-    }
+    // ---------- Start/Stop ----------
     async function start(){
       if (running) return;
       await ensureAuthed();
-      running = true; startBtn.textContent='Stop';
-      setPill(statusPill, 'status: starting');
-      await acquireWakeLock();
+      running = true; startBtn.textContent = 'Stop';
+      const val = sel.value; const session = (sessionInput.value||'default').trim() || 'default';
 
-      if (modeSel.value === 'manual'){
-        subscribeMode();
-        setStatus('Manual mode — connected');
-      } else {
+      if (val === '__manual__'){
+        setStatus('manual');
+        subscribeManual(session);
+        say('Manual mode — connected');
+        return;
+      }
+
+      setStatus('loading…');
+      try{
+        await loadScenario(val);             // pulls, normalizes, PRELOADS all photos
+        say('Scenario ready. Move toward a stop.');
+        showSlide('Dispatch', current.dispatch||'', '');
         await startGPS();
+      }catch(e){
+        say('Load failed'); console.error(e);
       }
     }
-    async function stop(){
-      running=false; startBtn.textContent='Start';
-      setPill(statusPill, 'status: idle');
-      if (manualRef) try{ manualRef.off(); }catch{} manualRef=null;
-      if (watchId) { try{ navigator.geolocation.clearWatch(watchId); }catch{} watchId=null; }
-      await releaseWakeLock();
-      clearScreenUI(); setStatus('Stopped.');
+    function stop(){
+      running = false; startBtn.textContent = 'Start';
+      if (manualRef) try{ manualRef.off(); }catch{}; manualRef = null;
+      if (watchId) { try{ navigator.geolocation.clearWatch(watchId); }catch{}; watchId = null; }
+      current = null; cache = []; lastIdx = -1;
+      img.src=''; cap.textContent=''; cap.style.display='none';
+      setStatus('idle'); say('');
     }
 
     startBtn.addEventListener('click', ()=> running ? stop() : start());
-    readBtn.addEventListener('click', ()=> speak(lastSpeech||'Ready.'));
-    clearBtn.addEventListener('click', async ()=>{
-      await ensureAuthed();
-      const session = (sessionInput.value || 'default').trim() || 'default';
-      clearManual(session);
-    });
-    testBtn.addEventListener('click', async ()=>{
-      await ensureAuthed();
-      const session = (sessionInput.value || 'default').trim() || 'default';
-      testManual(session);
-    });
-    modeSel.addEventListener('change', ()=> {
-      setStatus('');
-      setPill(pathPill, 'path: …');
-      if (modeSel.value === 'manual'){ scenarioSel.disabled = true; }
-      else { scenarioSel.disabled = false; }
-    });
 
-    // ---- Boot ----
+    // ---------- Boot ----------
     (async ()=>{
-      setStatus('Connecting…');
       try{
         await ensureAuthed();
-        await populateScenarioDropdown();
-        scenarioSel.disabled = (modeSel.value==='manual');
-        // auto-start if requested
-        const auto = (qs.get('autostart')||'').toLowerCase()==='1';
-        if (auto){ start(); }
-        setStatus('Ready.');
+        await loadScenarios();
+        setStatus('idle');
+        say('Select Instructor-led or a scenario, then Start.');
+        const qs = new URLSearchParams(location.search);
+        if (qs.get('session')) sessionInput.value = qs.get('session');
+        if (qs.get('id')){ sel.value = qs.get('id'); }
       }catch(e){
-        setStatus('Auth failed — viewer locked', true);
+        setStatus('auth failed'); say('Viewer locked (auth).');
       }
     })();
   })();
