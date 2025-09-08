@@ -2,570 +2,311 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <title>FireOps SIM — Admin (Geo-Photo)</title>
+  <title>FireOps SIM — Admin</title>
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="theme-color" content="#0b0f14">
   <style>
     :root{
       --bg:#0b0f14;--bg2:#0d121c;--panel:#0f1624;--text:#eaf2ff;--muted:#94a3b8;
-      --edge:rgba(255,255,255,.08);--edge2:rgba(255,255,255,.14)
+      --edge:rgba(255,255,255,.10);--edge2:rgba(255,255,255,.18)
     }
     *{box-sizing:border-box}
     html,body{
       margin:0;height:100%;color:var(--text);
       font-family:system-ui,-apple-system,Segoe UI,Roboto,Inter,Arial,sans-serif;
-      background:
-       radial-gradient(1400px 700px at 15% -15%, rgba(10,132,255,.28), transparent 60%),
-       radial-gradient(1200px 600px at 110% 0%, rgba(255,59,48,.22), transparent 60%),
-       linear-gradient(165deg, var(--bg2), var(--bg) 55%)
+      background:radial-gradient(1200px 600px at 15% -10%, rgba(10,132,255,.25), transparent 60%),
+                 radial-gradient(1200px 600px at 110% 0%, rgba(255,59,48,.17), transparent 60%),
+                 linear-gradient(165deg,var(--bg2),var(--bg) 55%);
     }
-    .topbar{position:sticky;top:0;z-index:20;background:rgba(12,15,22,.75);backdrop-filter:saturate(180%) blur(8px);border-bottom:1px solid var(--edge2)}
-    .wrap{max-width:1100px;margin:0 auto;padding:14px 16px;display:flex;align-items:center;gap:12px}
-    .logo{display:flex;align-items:center;gap:12px;font-weight:800;font-size:18px}
-    .badge{width:34px;height:34px;border-radius:9px;background:linear-gradient(135deg,#0a84ff,#54a6ff);display:grid;place-items:center;color:#fff;font-weight:900}
+    .top{position:sticky;top:0;z-index:10;background:rgba(12,15,22,.78);backdrop-filter:blur(8px);border-bottom:1px solid var(--edge2)}
+    .row{max-width:1100px;margin:0 auto;padding:12px 14px;display:flex;align-items:center;gap:10px}
+    .brand{font-weight:900}
     .spacer{flex:1}
-    .btn{appearance:none;border:1px solid var(--edge2);background:linear-gradient(180deg,#122036,#0f1a2e);color:#fff;border-radius:12px;padding:10px 14px;font-weight:700;cursor:pointer;display:inline-flex;align-items:center;gap:8px}
-    .btn.secondary{background:linear-gradient(180deg,#0f1a2e,#0e1829)}
-    .btn.danger{background:linear-gradient(180deg,#2a0f14,#1f0f12);border-color:rgba(255,71,71,.25)}
+    .btn{appearance:none;border:1px solid var(--edge2);background:linear-gradient(180deg,#122036,#0f1a2e);color:#fff;border-radius:12px;padding:10px 14px;font-weight:700;cursor:pointer}
+    .btn.secondary{background:linear-gradient(180deg,#0f1a2e,#0d1627)}
     .btn[disabled]{opacity:.6;cursor:not-allowed}
-    .spinner{width:14px;height:14px;border:2px solid rgba(255,255,255,.25);border-top-color:#fff;border-radius:50%;display:none;animation:spin 1s linear infinite}
-    .btn.saving .spinner{display:inline-block}
-    @keyframes spin{to{transform:rotate(360deg)}}
-    .panel{background:linear-gradient(180deg,rgba(255,255,255,.02),transparent 26%),linear-gradient(180deg,#0e1524,#0e131e);border:1px solid var(--edge);border-radius:18px;box-shadow:0 10px 40px rgba(0,0,0,.25);padding:16px;margin:16px}
-    .hidden{display:none}
-    .grid{display:grid;gap:14px}
-    @media(min-width:900px){.grid{grid-template-columns:1.25fr .75fr}}
+    main{max-width:1100px;margin:16px auto;padding:0 12px}
+    .card{background:linear-gradient(180deg,rgba(255,255,255,.02),transparent 26%),linear-gradient(180deg,#0e1524,#0e131e);border:1px solid var(--edge);border-radius:18px;padding:14px}
+    .grid{display:grid;gap:12px}
+    @media(min-width:900px){.grid{grid-template-columns:1.2fr .8fr}}
     label{font-weight:700}
-    .input,textarea{width:100%;padding:10px 12px;border-radius:12px;background:#0c1322;color:#eaf2ff;border:1px solid var(--edge2)}
+    .input, textarea{width:100%;padding:10px 12px;border-radius:12px;background:#0c1322;color:#eaf2ff;border:1px solid var(--edge2)}
     textarea{min-height:86px}
     .thumbs{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:12px}
     .thumbWrap{position:relative;border:1px solid var(--edge2);border-radius:12px;overflow:hidden;background:#0e1624}
     .thumb{width:100%}
     .del{position:absolute;right:8px;bottom:8px}
     .tag{color:var(--muted);font-size:12px}
-    .listItem{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 10px;border-radius:12px;border:1px solid var(--edge)}
-    #errbar{position:fixed;left:10px;bottom:10px;background:#2b0d0d;color:#ffd7d7;border:1px solid #7a2b2b;border-radius:12px;padding:8px 12px;display:none;z-index:9999}
-    .statusLine{margin-top:6px;padding:8px 10px;border-radius:10px;font-size:13px;background:rgba(255,255,255,.04);border:1px solid var(--edge2)}
-    .statusLine.good{border-color:rgba(16,185,129,.35);background:rgba(16,185,129,.08)}
-    .statusLine.warn{border-color:rgba(234,179,8,.35);background:rgba(234,179,8,.08)}
-    .statusLine.bad{border-color:rgba(239,68,68,.35);background:rgba(239,68,68,.10)}
-    .small{font-size:12px;opacity:.85}
-    code.inline{background:#0d1424;border:1px solid var(--edge2);padding:2px 6px;border-radius:6px}
+    .status{margin-top:8px;padding:8px 10px;border-radius:10px;border:1px solid var(--edge2);background:rgba(255,255,255,.04);font-size:13px}
+    #errbar{position:fixed;left:12px;bottom:12px;z-index:99;display:none;padding:10px 12px;border-radius:12px;border:1px solid #7a2b2b;background:#2b0d0d;color:#ffd7d7}
   </style>
 </head>
 <body>
   <div id="errbar"></div>
-
-  <div class="topbar">
-    <div class="wrap">
-      <div class="logo"><div class="badge">F</div><div>FireOps SIM — Admin</div></div>
-      <div class="spacer"></div>
-      <button class="btn" id="goCreate">Create</button>
-      <button class="btn secondary" id="goEdit">Edit</button>
-      <button class="btn secondary" id="goDiag">Diagnostics</button>
-    </div>
-  </div>
+  <div class="top"><div class="row"><div class="brand">FireOps SIM — Admin</div><div class="spacer"></div></div></div>
 
   <main class="grid">
-    <!-- Create -->
-    <section class="panel hidden" id="createPanel">
-      <div style="display:flex;align-items:center;justify-content:space-between">
-        <h3 style="margin:0">Create Scenario</h3>
-        <button class="btn secondary" id="backFromCreate">Back</button>
-      </div>
-      <div class="tag">Enter name/dispatch, then create now or save a photo (we’ll create the scenario for you).</div>
+    <!-- Create / Add Photo -->
+    <section class="card">
+      <h3 style="margin:0">Create Scenario</h3>
+      <div class="tag">Old flow: you can <b>Create</b> first or just <b>pick a photo</b> and we’ll create the scenario automatically.</div>
 
       <div style="margin-top:10px">
         <label>Scenario Name</label>
         <input class="input" id="scenarioName" placeholder="e.g., House Fire — Elm St.">
       </div>
       <div style="margin-top:10px">
-        <label>Dispatch Information</label>
-        <textarea id="dispatchInfo" placeholder="Engine 1, Engine 2, Medic 1 to..."></textarea>
+        <label>Dispatch (optional)</label>
+        <textarea id="dispatchInfo" placeholder="Engine 1, Engine 2, Medic 1…"></textarea>
       </div>
 
-      <div style="margin-top:12px;display:flex;gap:10px;flex-wrap:wrap;align-items:center">
-        <button class="btn" id="createNow"><span class="spinner"></span><span>Create Scenario Now</span></button>
-        <div id="createStatus" class="tag">Ready</div>
+      <div style="margin-top:10px;display:flex;gap:10px;flex-wrap:wrap;align-items:center">
+        <button class="btn" id="createNow">Create Scenario</button>
+        <span id="createStatus" class="tag">idle</span>
       </div>
 
       <hr style="border-color:rgba(255,255,255,.08)">
 
       <div style="margin-top:6px">
         <label>Add Photo Stop</label>
-        <!-- fixed: proper capture attribute -->
         <input type="file" id="photoInput" accept="image/*" capture="environment">
       </div>
       <div style="display:grid;gap:10px;grid-template-columns:1fr 1fr;margin-top:8px">
         <div><label>Caption (optional)</label><input class="input" id="caption" placeholder="e.g., Alpha side"></div>
-        <div><label>Radius (meters)</label><input class="input" id="radius" type="number" min="5" max="1000" value="50"></div>
+        <div><label>Radius (m)</label><input class="input" id="radius" type="number" min="5" max="1000" value="50"></div>
       </div>
       <div style="margin-top:10px;display:flex;gap:10px;flex-wrap:wrap;align-items:center">
-        <button class="btn" id="savePhoto"><span class="spinner" id="saveSpin"></span><span id="saveLabel">Save Photo</span></button>
-        <button class="btn secondary" id="finishAndReturn">Done</button>
+        <button class="btn" id="savePhoto">Save Photo</button>
+        <span id="saveStatus" class="tag">waiting</span>
       </div>
 
-      <div id="saveSteps" class="statusLine small">Waiting to save…</div>
+      <div id="steps" class="status">—</div>
       <div class="thumbs" id="thumbs" style="margin-top:10px"></div>
     </section>
 
-    <!-- Edit -->
-    <section class="panel hidden" id="editPanel">
-      <div style="display:flex;align-items:center;justify-content:space-between">
-        <h3 style="margin:0">Edit Existing</h3>
-        <div style="display:flex;gap:8px">
-          <button class="btn" id="quickNew">➕ New Scenario</button>
-          <button class="btn secondary" id="backFromEdit">Back</button>
-        </div>
-      </div>
-      <div class="tag" id="editStatus">Loading…</div>
+    <!-- Existing scenarios (lightweight) -->
+    <section class="card">
+      <h3 style="margin:0">Existing</h3>
+      <div id="listStatus" class="tag">Loading…</div>
       <div id="scenarioList" style="margin-top:8px"></div>
-    </section>
-
-    <!-- Diagnostics -->
-    <section class="panel hidden" id="diagPanel">
-      <div style="display:flex;align-items:center;justify-content:space-between">
-        <h3 style="margin:0">Diagnostics</h3>
-        <button class="btn secondary" id="backFromDiag">Back</button>
-      </div>
-      <div class="tag">Connectivity checks and a tiny real upload to Cloud Storage.</div>
-      <div style="display:flex;gap:10px;margin-top:10px;flex-wrap:wrap">
-        <button class="btn" id="runDiag"><span class="spinner"></span><span>Run Cloud Test</span></button>
-        <div id="diagStatus" class="tag">Idle</div>
-      </div>
-      <div id="diagLog" class="statusLine small" style="margin-top:8px">—</div>
-    </section>
-
-    <!-- Landing -->
-    <section class="panel" id="landing">
-      <h3 style="margin:0 0 6px 0">Manage Scenarios</h3>
-      <div class="tag">Choose an action:</div>
-      <div style="display:flex;gap:10px;margin-top:10px">
-        <button class="btn" id="landingCreate">Create</button>
-        <button class="btn secondary" id="landingEdit">Edit</button>
-        <button class="btn secondary" id="landingDiag">Diagnostics</button>
-      </div>
     </section>
   </main>
 
-  <!-- Boot: wire buttons early -->
-  <script>
-  (function(){
-    var errbar=document.getElementById('errbar');
-    function showErr(m){ try{errbar.textContent=m;errbar.style.display='block';}catch(e){} }
-
-    var landing=document.getElementById('landing');
-    var createPanel=document.getElementById('createPanel');
-    var editPanel=document.getElementById('editPanel');
-    var diagPanel=document.getElementById('diagPanel');
-    var editStatus=document.getElementById('editStatus');
-
-    function uiShow(el){ el.classList.remove('hidden'); el.style.display=''; }
-    function uiHide(el){ el.classList.add('hidden'); el.style.display='none'; }
-
-    function goCreate(){ uiHide(landing); uiHide(editPanel); uiHide(diagPanel); uiShow(createPanel); }
-    function goEdit(){ uiHide(landing); uiHide(createPanel); uiHide(diagPanel); uiShow(editPanel); (window.loadForEdit||function(){ if(editStatus) editStatus.textContent='Firebase not initialized yet.'; })(); }
-    function goDiag(){ uiHide(landing); uiHide(createPanel); uiHide(editPanel); uiShow(diagPanel); }
-
-    function bind(id,fn){ var el=document.getElementById(id); if(el) el.addEventListener('click',fn,false); }
-    bind('goCreate',goCreate); bind('landingCreate',goCreate);
-    bind('goEdit',goEdit);     bind('landingEdit',goEdit);
-    bind('goDiag',goDiag);     bind('landingDiag',goDiag);
-    bind('backFromCreate',function(){ uiHide(createPanel); uiHide(editPanel); uiHide(diagPanel); uiShow(landing); });
-    bind('backFromEdit',function(){ uiHide(editPanel); uiHide(createPanel); uiHide(diagPanel); uiShow(landing); if(editStatus) editStatus.textContent='Ready'; });
-    bind('backFromDiag',function(){ uiHide(diagPanel); uiHide(createPanel); uiHide(editPanel); uiShow(landing); var s=document.getElementById('diagStatus'); var l=document.getElementById('diagLog'); if(s) s.textContent='Idle'; if(l) l.textContent='—'; });
-
-    window.addEventListener('error', function(e){ showErr('JS error: '+(e.message||e.error)); });
-    window.addEventListener('unhandledrejection', function(e){ var r=e.reason||{}; showErr('Promise error: '+(r.message||r.toString())); });
-  })();
-  </script>
-
-  <!-- Firebase compat -->
+  <!-- Firebase compat SDKs -->
   <script src="https://www.gstatic.com/firebasejs/10.12.4/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.4/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.4/firebase-database-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.4/firebase-storage-compat.js"></script>
 
-  <!-- App (ES5 only) -->
   <script>
   (function(){
-    var FUNCTION_UPLOAD_URL = 'https://us-central1-dailyquiz-d5279.cloudfunctions.net/uploadScenarioImage';
-
-    var errbar=document.getElementById('errbar');
-    function showErr(m){ try{errbar.textContent=m;errbar.style.display='block';}catch(e){} }
-
-    var saveSteps=document.getElementById('saveSteps');
-    var createStatus=document.getElementById('createStatus');
-    var scenarioList=document.getElementById('scenarioList');
-
-    function step(msg, cls){
-      if(!saveSteps) return;
-      saveSteps.className='statusLine small'+(cls?' '+cls:'');
-      saveSteps.innerHTML=msg;
-    }
-
-    if (typeof firebase === 'undefined' || !firebase.initializeApp) {
-      showErr('Firebase SDK not loaded');
-      window.loadForEdit = function(){ var el=document.getElementById('editStatus'); if(el) el.textContent='Firebase not loaded.'; };
-      return;
-    }
-
-    /* ---------- Firebase config (FIXED BUCKET) ---------- */
+    /* ---------------- Firebase config (bucket fixed) ---------------- */
     var firebaseConfig = {
       apiKey:"AIzaSyDM6DpRSeZueVKRpbyJyDmhf8WY66KyCDk",
       authDomain:"dailyquiz-d5279.firebaseapp.com",
       databaseURL:"https://dailyquiz-d5279-default-rtdb.firebaseio.com",
       projectId:"dailyquiz-d5279",
-      storageBucket:"dailyquiz-d5279.appspot.com", /* FIXED */
+      storageBucket:"dailyquiz-d5279.appspot.com",   // IMPORTANT
       appId:"1:94577748034:web:c032d3a1d72db1313de5db",
       measurementId:"G-19DVN7NNH7"
     };
-
-    try{ firebase.initializeApp(firebaseConfig); }
-    catch(e){ showErr('Firebase init failed: ' + (e && e.message || e)); return; }
+    firebase.initializeApp(firebaseConfig);
 
     var db = firebase.database();
-    var storage = firebase.storage();      // uses the default (fixed) bucket above
+    var storage = firebase.storage(); // uses fixed bucket above
     var auth = firebase.auth();
-    var BUCKET = firebaseConfig.storageBucket || (firebaseConfig.projectId + '.appspot.com'); // FIXED
+    var BUCKET = firebaseConfig.storageBucket || (firebaseConfig.projectId + '.appspot.com');
+
+    /* ---------------- small helpers ---------------- */
+    var $ = function(id){ return document.getElementById(id); };
+    var steps = $('steps'), errbar = $('errbar');
+    function setStep(m){ steps.textContent = m; }
+    function setErr(m){ errbar.textContent=m; errbar.style.display='block'; }
+    function ok(x){ return (x===0 || !!x); }
 
     function ensureAuthed(){
       if (auth.currentUser) return Promise.resolve(auth.currentUser);
       return auth.signInAnonymously().then(function(){
         return new Promise(function(resolve){
-          var off = auth.onAuthStateChanged(function(u){ if(u){ off(); resolve(u); } });
+          var off = auth.onAuthStateChanged(function(u){ if (u){ off(); resolve(u); } });
         });
-      })["catch"](function(){ return null; });
-    }
-
-    var scenarioName=document.getElementById('scenarioName');
-    var dispatchInfo=document.getElementById('dispatchInfo');
-    var photoInput=document.getElementById('photoInput');
-    var caption=document.getElementById('caption');
-    var radius=document.getElementById('radius');
-    var thumbs=document.getElementById('thumbs');
-    var createNowBtn=document.getElementById('createNow');
-    var savePhotoBtn=document.getElementById('savePhoto');
-    var saveLabel=document.getElementById('saveLabel');
-    var runDiagBtn=document.getElementById('runDiag');
-    var diagStatus=document.getElementById('diagStatus');
-    var diagLog=document.getElementById('diagLog');
-
-    var currentScenarioId=null;
-    var localStops=[];
-
-    function setSaving(isSaving,label){
-      if(savePhotoBtn) savePhotoBtn.disabled=!!isSaving;
-      if(createNowBtn)  createNowBtn.disabled=!!isSaving;
-      var e1=document.getElementById('goEdit'), e2=document.getElementById('goDiag');
-      if(e1) e1.disabled=!!isSaving; if(e2) e2.disabled=!!isSaving;
-      if(savePhotoBtn){ if(isSaving){ savePhotoBtn.classList.add('saving'); } else { savePhotoBtn.classList.remove('saving'); } }
-      if(saveLabel) saveLabel.textContent = label || (isSaving ? 'Saving…' : 'Save Photo');
-    }
-
-    function withTimeout(promise, ms, code){
-      return Promise.race([
-        promise,
-        new Promise(function(_, reject){
-          setTimeout(function(){ var e=new Error('Timed out after '+ms+'ms'); e.code=code||'timeout'; reject(e); }, ms);
-        })
-      ]);
-    }
-    function readFileAsDataURL(f){ return new Promise(function(res,rej){ var r=new FileReader(); r.onload=function(){res(r.result)}; r.onerror=rej; r.readAsDataURL(f); }); }
-    function loadImage(src){ return new Promise(function(res,rej){ var i=new Image(); i.onload=function(){res(i)}; i.onerror=rej; i.crossOrigin='anonymous'; i.src=src; }); }
-
-    /* smaller, phone-friendly: 1280px @ q=0.75 */
-    function toCanvas(img,maxW,maxH){
-      maxW=maxW||1280; maxH=maxH||1280;
-      var c=document.createElement('canvas');
-      var s=Math.min(maxW/img.width,maxH/img.height,1);
-      c.width=Math.round(img.width*s); c.height=Math.round(img.height*s);
-      c.getContext('2d').drawImage(img,0,0,c.width,c.height);
-      return c;
-    }
-    function encodeSmart(c){
-      var url=c.toDataURL('image/jpeg',0.75);
-      return 'data:image/jpeg;base64,'+url.split(',')[1];
-    }
-    function dataURLFromStored(v){ return (typeof v==='string') ? v : (v && v.data ? 'data:image/'+(v.format||'jpeg')+';base64,'+v.data : ''); }
-
-    function getGPS(){
-      return new Promise(function(resolve){
-        if (!navigator.geolocation) return resolve({lat:null,lng:null,note:'no-geolocation'});
-        var done=false; function finish(v){ if(!done){ done=true; resolve(v);} }
-        navigator.geolocation.getCurrentPosition(
-          function(p){ finish({lat:p.coords.latitude,lng:p.coords.longitude}); },
-          function(){ finish({lat:null,lng:null,note:'denied-or-error'}); },
-          {enableHighAccuracy:true,timeout:3000,maximumAge:0}
-        );
-        setTimeout(function(){ finish({lat:null,lng:null,note:'timeout'}); }, 3000);
       });
     }
-    function explainError(e){
-      var code=(e&&e.code)||'';
-      if ((code||'').indexOf('timeout')>=0) return 'Network/device took too long to respond.';
-      if (code.indexOf('auth/configuration-not-found')>=0 || code.indexOf('auth/operation-not-allowed')>=0) return 'Anonymous Auth not enabled.';
-      if (code.indexOf('storage/unauthorized')>=0 || code.indexOf('permission-denied')>=0) return 'Storage rules or App Check denied the write.';
-      if (code.indexOf('storage/quota-exceeded')>=0) return 'Bucket quota exceeded.';
-      if (code.indexOf('save/function-')>=0) return 'Server upload failed.';
-      return 'Unexpected error while saving photo.';
+
+    /* ---------------- old image pipeline (smaller) ---------------- */
+    // 1280px max edge, JPEG q=0.75 → fast + phone friendly
+    function readAsDataURL(file){ return new Promise(function(res,rej){ var r=new FileReader(); r.onload=function(){res(r.result)}; r.onerror=rej; r.readAsDataURL(file); }); }
+    function loadImage(src){ return new Promise(function(res,rej){ var i=new Image(); i.onload=function(){res(i)}; i.onerror=rej; i.src=src; }); }
+    function toCanvas(img,max){ max=max||1280; var c=document.createElement('canvas');
+      var s=Math.min(max/img.width, max/img.height, 1); c.width=Math.round(img.width*s); c.height=Math.round(img.height*s);
+      c.getContext('2d').drawImage(img,0,0,c.width,c.height); return c; }
+    function canvasToDataURL(c){ return c.toDataURL('image/jpeg',0.75); }
+    function dataURLtoBlob(u){ var p=u.split(','), b64=p[1]; var mime=(/data:(.*?);base64/).exec(p[0])[1]; var bin=atob(b64), len=bin.length, a=new Uint8Array(len); for(var i=0;i<len;i++) a[i]=bin.charCodeAt(i); return new Blob([a],{type:mime}); }
+
+    /* ---------------- scenario state ---------------- */
+    var scenarioName=$('scenarioName'), dispatchInfo=$('dispatchInfo');
+    var photoInput=$('photoInput'), caption=$('caption'), radius=$('radius');
+    var createNow=$('createNow'), createStatus=$('createStatus');
+    var savePhoto=$('savePhoto'), saveStatus=$('saveStatus');
+    var thumbs=$('thumbs'), scenarioList=$('scenarioList'), listStatus=$('listStatus');
+
+    var currentScenarioId=null, localStops=[];
+
+    /* ---------------- create record (old logic, but safer) ---------------- */
+    function createScenarioRecord(){
+      var name=(scenarioName && scenarioName.value||'').trim();
+      var dispatch=(dispatchInfo && dispatchInfo.value||'').trim();
+      if(!name){ return Promise.reject(new Error('Please enter a Scenario Name')); }
+      return ensureAuthed().then(function(){
+        var id = db.ref('scenarios').push().key;
+        var base = { id:id, title:name, dispatch: dispatch, description: dispatch, createdAt: Date.now(), active:true, stops:[] };
+        var multi={}; multi['scenarios/'+id]=base; multi['geophoto/scenarios/'+id]=base;   // mirror for viewers
+        return db.ref().update(multi).then(function(){ currentScenarioId=id; return id; });
+      });
     }
+
+    createNow.addEventListener('click', function(){
+      createStatus.textContent='creating…';
+      createScenarioRecord()
+        .then(function(){ createStatus.textContent='created ✓'; setStep('Scenario created. You can now add photos.'); })
+        .catch(function(e){ createStatus.textContent='error'; setErr(e && e.message || String(e)); setStep('Create failed.'); });
+    }, false);
+
+    /* ---------------- save photo (auto-create if needed) ---------------- */
+    savePhoto.addEventListener('click', function(){
+      saveStatus.textContent='preparing…'; setStep('Checking selection…');
+      var file = photoInput && photoInput.files && photoInput.files[0];
+      if(!file){ saveStatus.textContent='no file'; setStep('Pick a photo first.'); return; }
+
+      var ensureScenario = currentScenarioId ? Promise.resolve(currentScenarioId) : (function(){
+        if (!scenarioName || !scenarioName.value.trim()){
+          scenarioName.value = 'New Scenario ' + new Date().toLocaleString();
+        }
+        createStatus.textContent='creating…';
+        return createScenarioRecord().then(function(id){ createStatus.textContent='created ✓'; return id; });
+      })();
+
+      ensureScenario
+      .then(function(){
+        setStep('Compressing photo…');
+        return readAsDataURL(file).then(loadImage).then(function(img){ return canvasToDataURL(toCanvas(img,1280)); });
+      })
+      .then(function(dataURL){
+        setStep('Uploading to Cloud Storage…');
+        return ensureAuthed().then(function(){
+          var path='scenarios/'+currentScenarioId+'/'+Date.now()+'.jpg';
+          var ref=storage.ref(path); var blob=dataURLtoBlob(dataURL);
+          var meta={ contentType:'image/jpeg', cacheControl:'public,max-age=31536000,immutable' };
+          return new Promise(function(resolve,reject){
+            var task = ref.put(blob, meta);
+            var timeout = setTimeout(function(){ try{task.cancel();}catch(_){ } reject(new Error('Upload timeout')); }, 60000);
+            task.on('state_changed',
+              function(s){ var pct=Math.round(100*s.bytesTransferred/s.totalBytes); saveStatus.textContent='upload '+pct+'%'; },
+              function(err){ clearTimeout(timeout); reject(err); },
+              function(){ clearTimeout(timeout); ref.getDownloadURL().then(function(url){ resolve({url:url,path:path});},reject); }
+            );
+          });
+        })
+        .then(function(payload){
+          setStep('Saving to database…');
+          // append to stops and mirror to both trees
+          var r = Math.max(5, Math.min(1000, parseInt((radius && radius.value)||'50',10) || 50));
+          var stop = { type:'photo', title:'', caption:(caption && caption.value)||'', imageURL:payload.url, storagePath:payload.path, at: Date.now(), overlays:[], radiusMeters:r };
+          localStops.push(stop);
+          var multi={};
+          multi['scenarios/'+currentScenarioId+'/stops'] = localStops;
+          multi['geophoto/scenarios/'+currentScenarioId+'/stops'] = localStops;
+          return db.ref().update(multi).then(function(){ return stop; });
+        })
+        .then(function(){
+          saveStatus.textContent='saved ✓'; setStep('Photo saved.');
+          if(caption) caption.value=''; if(radius) radius.value=50; if(photoInput) photoInput.value='';
+          renderThumbs();
+          // keep list in sync
+          loadList();
+        })
+        .catch(function(e){
+          saveStatus.textContent='error'; setStep('Save failed.'); setErr(e && e.message || String(e));
+        });
+      });
+    }, false);
+
     function renderThumbs(){
       if(!thumbs) return;
       thumbs.innerHTML='';
       for(var i=0;i<localStops.length;i++){
         var s=localStops[i];
-        var wrap=document.createElement('div'); wrap.className='thumbWrap';
-        var img=document.createElement('img'); img.className='thumb'; img.src=s.imageURL || dataURLFromStored(s.imageData) || ''; img.title=s.caption||('Stop '+(i+1));
-        var del=document.createElement('button'); del.className='btn danger del'; del.textContent='Delete';
-        (function(idx){ del.onclick=function(){ deleteStopAt(idx); }; })(i);
-        wrap.appendChild(img); wrap.appendChild(del); thumbs.appendChild(wrap);
+        var w=document.createElement('div'); w.className='thumbWrap';
+        var img=document.createElement('img'); img.className='thumb'; img.src=s.imageURL || ''; img.alt=s.caption||('Stop '+(i+1));
+        var del=document.createElement('button'); del.className='btn del'; del.textContent='Delete';
+        (function(idx,stop){
+          del.onclick=function(){
+            if(!confirm('Delete this photo?')) return;
+            ensureAuthed()
+              .then(function(){ if(stop && stop.storagePath){ return storage.ref(stop.storagePath).delete()["catch"](function(){}); }})
+              .then(function(){
+                localStops.splice(idx,1);
+                var multi={};
+                multi['scenarios/'+currentScenarioId+'/stops'] = localStops;
+                multi['geophoto/scenarios/'+currentScenarioId+'/stops'] = localStops;
+                return db.ref().update(multi);
+              })
+              .then(renderThumbs)
+              .catch(function(e){ setErr(e && e.message || String(e)); });
+          };
+        })(i,s);
+        w.appendChild(img); w.appendChild(del); thumbs.appendChild(w);
       }
     }
 
-    function createScenarioRecord(){
-      var name=(scenarioName && scenarioName.value||'').trim();
-      if(!name) return Promise.reject(new Error('Please enter a Scenario Name'));
-      var dispatch=(dispatchInfo && dispatchInfo.value||'').trim();
-      var newRef=db.ref('scenarios').push();
-      currentScenarioId=newRef.key;
-      return newRef.set({ id:currentScenarioId, title:name, dispatch:dispatch, createdAt:Date.now(), active:true, stops:[] })
-        .then(function(){ if(createStatus) createStatus.textContent='Scenario created.'; return currentScenarioId; });
-    }
-
-    var createNowBtnEl=document.getElementById('createNow');
-    if (createNowBtnEl){
-      createNowBtnEl.addEventListener('click', function(){
-        setSaving(true,'Creating…');
-        createScenarioRecord().then(function(){ step('Scenario created. You can now add photos.','good'); })
-        .catch(function(e){ step('Could not create scenario: '+(e&&e.message||e),'bad'); showErr(e&&e.message||String(e)); })
-        .then(function(){ setSaving(false,'Create Scenario Now'); });
-      }, false);
-    }
-
-    var quickNew=document.getElementById('quickNew');
-    if (quickNew){
-      quickNew.addEventListener('click', function(){
-        setTimeout(function(){
-          try{ if(scenarioName && !scenarioName.value) scenarioName.value='New Scenario'; }catch(e){}
-          setSaving(true,'Creating…');
-          createScenarioRecord().then(function(){ step('Scenario created.','good'); })
-          .catch(function(e){ step('Could not create scenario: '+(e&&e.message||e),'bad'); showErr(e&&e.message||String(e)); })
-          .then(function(){ setSaving(false,'Create Scenario Now'); });
-        },0);
-      }, false);
-    }
-
-    function dataURLtoBlob(dataURL){
-      var parts=dataURL.split(','), head=parts[0], b64=parts[1];
-      var mime=(/data:(.*?);base64/.exec(head)||[, 'application/octet-stream'])[1];
-      var bin=atob(b64), len=bin.length, buf=new Uint8Array(len);
-      for(var i=0;i<len;i++) buf[i]=bin.charCodeAt(i);
-      return new Blob([buf], {type:mime});
-    }
-
-    function uploadToStorage(dataURL, scenarioId){
-      return ensureAuthed().then(function(){
-        var path='scenarios/'+scenarioId+'/'+Date.now()+'.jpg';
-        var refObj=storage.ref(path);
-        var blob=dataURLtoBlob(dataURL);
-        var metadata={ contentType:'image/jpeg', cacheControl:'public,max-age=31536000,immutable' };
-        var task=refObj.put(blob, metadata);
-
-        return new Promise(function(resolve,reject){
-          var killer=setTimeout(function(){ try{ task.cancel(); }catch(_){ } var e=new Error('Timed out while uploading'); e.code='save/timeout-upload'; reject(e); }, 45000);
-          task.on('state_changed',
-            function(snap){ var pct=Math.round(100*snap.bytesTransferred/snap.totalBytes); step('Uploading to Cloud Storage… '+pct+'%'); },
-            function(err){ clearTimeout(killer); reject(err); },
-            function(){ clearTimeout(killer);
-              withTimeout(refObj.getDownloadURL(), 6000, 'save/timeout-url')
-                .then(function(url){ resolve({ url:url, path:path, gsUri:'gs://'+BUCKET+'/'+path }); })
-                .catch(function(e){ reject(e); });
-            }
-          );
-        });
-      });
-    }
-
-    function uploadViaFunction(dataURL, scenarioId){
-      var payload = { scenarioId: scenarioId, fileName: Date.now() + '.jpg', dataURL: dataURL };
-      return withTimeout(fetch(FUNCTION_UPLOAD_URL, {
-        method:'POST', headers:{ 'Content-Type':'application/json' }, body: JSON.stringify(payload)
-      }), 25000, 'save/timeout-fn')
-      .then(function(resp){
-        if (!resp.ok) { return resp.text().then(function(txt){ var e=new Error('Function HTTP '+resp.status+' '+txt); e.code='save/function-http'; throw e; }); }
-        return resp.json();
-      })
-      .then(function(json){
-        if (!json.ok) { var e2=new Error('Function error: '+(json.error||'unknown')); e2.code='save/function-error'; throw e2; }
-        return { url: json.url, path: json.path, gsUri: json.gsUri, via: 'function' };
-      });
-    }
-
-    var savePhotoEl=document.getElementById('savePhoto');
-    if (savePhotoEl){
-      savePhotoEl.addEventListener('click', function(){
-        var killTimer=setTimeout(function(){ setSaving(false); }, 25000);
-        setSaving(true);
-        (function(){
-          step('Checking selected file…');
-          var file=photoInput && photoInput.files && photoInput.files[0];
-          if(!file){ step('Please choose a photo first.','warn'); setSaving(false); clearTimeout(killTimer); return Promise.reject('no-file'); }
-          if(!currentScenarioId){
-            step('Creating scenario record…');
-            return createScenarioRecord();
-          }
-          return Promise.resolve(currentScenarioId);
-        })()
-        .then(function(){ step('Compressing photo…'); return readFileAsDataURL(photoInput.files[0]); })
-        .then(function(raw){ return loadImage(raw).then(function(img){ var c=toCanvas(img); return encodeSmart(c); }); })
-        .then(function(dataURL){
-          step('Uploading to Cloud Storage…');
-          return uploadToStorage(dataURL, currentScenarioId)["catch"](function(e1){
-            step('Direct upload failed ('+(e1.code||e1)+'). Trying server upload…');
-            return uploadViaFunction(dataURL, currentScenarioId)["catch"](function(e2){ e2._first=e1; throw e2; });
-          }).then(function(cloud){ return {cloud:cloud, dataURL:dataURL}; });
-        })
-        .then(function(pack){
-          step('Saving metadata to database…');
-          return getGPS().then(function(gps){
-            var r=Math.max(5, Math.min(1000, Math.round(parseInt((radius && radius.value)||'50',10))));
-            var stop={ caption:(caption && caption.value||'').trim(), lat:gps.lat, lng:gps.lng, radiusMeters:r };
-            if (pack.cloud){
-              stop.imageURL=pack.cloud.url; stop.storagePath=pack.cloud.path; stop.gsUri=pack.cloud.gsUri;
-              step('Photo saved'+(pack.cloud.via==='function'?' via server':'')+' and metadata written.','good');
-            } else {
-              stop.imageData={ format:'jpeg', data:pack.dataURL.split(',')[1] };
-              step('Saved photo inline. <b>Queued for server upload</b>.','warn');
-            }
-            localStops.push(stop);
-            return withTimeout(db.ref('scenarios/'+currentScenarioId+'/stops').set(localStops), 8000, 'save/timeout-db');
-          });
-        })
-        .then(function(){
-          if(caption) caption.value=''; if(radius) radius.value=50; if(photoInput) photoInput.value='';
-          renderThumbs();
-        })
-        .catch(function(e){
-          if(e==='no-file') return;
-          step('Save failed: '+(e && e.message || e),'bad'); showErr(e && e.message || String(e));
-        })
-        .then(function(){ clearTimeout(killTimer); setSaving(false); });
-      }, false);
-    }
-
-    var finishBtn=document.getElementById('finishAndReturn');
-    if (finishBtn){
-      finishBtn.addEventListener('click', function(){
-        var landing=document.getElementById('landing'), createPanel=document.getElementById('createPanel');
-        if(landing&&createPanel){ createPanel.classList.add('hidden'); landing.classList.remove('hidden'); landing.style.display=''; }
-      }, false);
-    }
-
-    function deleteStopAt(i){
-      if(i<0||i>=localStops.length) return;
-      if(!confirm('Delete this photo?')) return;
-      var s=localStops[i];
-      (ensureAuthed().then(function(){
-        if (s && (s.gsUri || s.storagePath)){
-          var refObj = s.gsUri ? storage.refFromURL(s.gsUri) : storage.ref(s.storagePath);
-          return refObj.delete();
-        }
-      })["catch"](function(){})).then(function(){
-        localStops.splice(i,1);
-        return db.ref('scenarios/'+currentScenarioId+'/stops').set(localStops);
-      }).then(renderThumbs);
-    }
-
-    window.loadForEdit = function(){
-      var editStatus=document.getElementById('editStatus');
-      if(editStatus) editStatus.textContent='Loading…';
-      db.ref('scenarios').get().then(function(snap){
-        if(!snap.exists()){ scenarioList.innerHTML=''; if(editStatus) editStatus.textContent='No scenarios found.'; return; }
-        var obj=snap.val()||{};
-        var arr=[], k;
-        for(k in obj){ if(obj.hasOwnProperty(k)){ var item=obj[k]; item.id=k; arr.push(item); } }
+    /* ---------------- lightweight list ---------------- */
+    function loadList(){
+      listStatus.textContent='Loading…';
+      ensureAuthed().then(function(){
+        return db.ref('scenarios').get();
+      }).then(function(snap){
+        if(!snap.exists()){ listStatus.textContent='No scenarios yet.'; scenarioList.innerHTML=''; return; }
+        var obj=snap.val()||{}, arr=[], k; for(k in obj){ if(obj.hasOwnProperty(k)) arr.push(obj[k]); }
         arr.sort(function(a,b){ return (b.createdAt||0)-(a.createdAt||0); });
-        if(editStatus) editStatus.textContent=arr.length+' scenario(s)';
+        listStatus.textContent=arr.length+' scenario(s)';
         scenarioList.innerHTML='';
         arr.forEach(function(sc){
-          var row=document.createElement('div'); row.className='listItem';
-          var left=document.createElement('div');
-          var stopsCount=(Object.prototype.toString.call(sc.stops)==='[object Array]')? sc.stops.length : 0;
-          left.innerHTML='<div style="font-weight:800">'+(sc.title||'(untitled)')+'</div>'+
-            '<div class="tag">Stops: '+stopsCount+' • '+new Date(sc.createdAt||Date.now()).toLocaleString()+'</div>';
-          var right=document.createElement('div');
-
-          var open=document.createElement('button'); open.className='btn'; open.textContent='Open';
+          var row=document.createElement('div'); row.style.cssText='display:flex;align-items:center;justify-content:space-between;padding:10px;border:1px solid var(--edge);border-radius:12px;margin-bottom:8px';
+          var L=document.createElement('div');
+          L.innerHTML='<div style="font-weight:800">'+(sc.title||'(untitled)')+'</div><div class="tag">Stops: '+((sc.stops&&sc.stops.length)||0)+'</div>';
+          var R=document.createElement('div');
+          var open=document.createElement('button'); open.className='btn secondary'; open.textContent='Open';
           open.onclick=function(){
-            var landing=document.getElementById('landing'), editPanel=document.getElementById('editPanel'), createPanel=document.getElementById('createPanel');
-            currentScenarioId=sc.id; localStops=(Object.prototype.toString.call(sc.stops)==='[object Array]')? sc.stops : [];
-            if(scenarioName) scenarioName.value=sc.title||''; if(dispatchInfo) dispatchInfo.value=sc.dispatch||'';
-            if(landing&&editPanel&&createPanel){ landing.classList.add('hidden'); editPanel.classList.add('hidden'); createPanel.classList.remove('hidden'); createPanel.style.display=''; }
-            renderThumbs(); step('Editing existing scenario.');
+            currentScenarioId=sc.id;
+            scenarioName.value=sc.title||''; dispatchInfo.value=sc.dispatch||'';
+            localStops = Array.isArray(sc.stops)? sc.stops : [];
+            renderThumbs(); window.scrollTo({top:0,behavior:'smooth'});
           };
-
           var toggle=document.createElement('button'); toggle.className='btn secondary'; toggle.style.marginLeft='8px'; toggle.textContent=sc.active?'Deactivate':'Activate';
-          toggle.onclick=function(){ db.ref('scenarios/'+sc.id).update({active:!sc.active}); };
-
-          var del=document.createElement('button'); del.className='btn danger'; del.style.marginLeft='8px'; del.textContent='Delete';
+          toggle.onclick=function(){ ensureAuthed().then(function(){ db.ref('scenarios/'+sc.id).update({active:!sc.active}); db.ref('geophoto/scenarios/'+sc.id).update({active:!sc.active}); }); };
+          var del=document.createElement('button'); del.className='btn'; del.style.marginLeft='8px'; del.textContent='Delete';
           del.onclick=function(){
             if(!confirm('Delete this scenario?')) return;
-            ensureAuthed().then(function(){})
-            .then(function(){
-              if(Object.prototype.toString.call(sc.stops)==='[object Array]'){
-                var p=Promise.resolve();
-                for(var i=0;i<sc.stops.length;i++){
-                  (function(s){
-                    p=p.then(function(){
-                      try{
-                        var refObj = s && s.gsUri ? storage.refFromURL(s.gsUri) : (s && s.storagePath ? storage.ref(s.storagePath) : null);
-                        if(refObj) return refObj.delete();
-                      }catch(_){}
-                    });
-                  })(sc.stops[i]);
-                }
-                return p;
+            ensureAuthed().then(function(){
+              // best-effort delete storage files
+              var p=Promise.resolve();
+              if(Array.isArray(sc.stops)){
+                sc.stops.forEach(function(s){ if(s && s.storagePath){ p=p.then(function(){ return storage.ref(s.storagePath).delete()["catch"](function(){}); }); }});
               }
-            }).then(function(){ return db.ref('scenarios/'+sc.id).set(null); })
-            .then(function(){ row.remove(); });
+              return p.then(function(){
+                var multi={}; multi['scenarios/'+sc.id]=null; multi['geophoto/scenarios/'+sc.id]=null;
+                return db.ref().update(multi);
+              }).then(loadList);
+            });
           };
-
-          right.appendChild(open); right.appendChild(toggle); right.appendChild(del);
-          row.appendChild(left); row.appendChild(right); scenarioList.appendChild(row);
+          R.appendChild(open); R.appendChild(toggle); R.appendChild(del);
+          row.appendChild(L); row.appendChild(R); scenarioList.appendChild(row);
         });
-      })["catch"](function(e){
-        var es=document.getElementById('editStatus'); if(es) es.textContent='Error: '+(e&&e.message||e);
-        showErr(e && e.message || String(e));
-      });
-    };
+      })["catch"](function(e){ listStatus.textContent='Error'; setErr(e && e.message || String(e)); });
+    }
 
-    function setDiagSaving(is,label){
-      var b=runDiagBtn; if(!b) return;
-      b.disabled=!!is; if(is){ b.classList.add('saving'); } else { b.classList.remove('saving'); }
-      var last=b.querySelector('span:last-child'); if(last) last.textContent = label || (is ? 'Running…' : 'Run Cloud Test');
-    }
-    function logDiag(line, cls){ if(!diagLog) return; diagLog.className='statusLine small'+(cls?' '+cls:''); diagLog.innerHTML=(diagLog.innerHTML==='—'?'':diagLog.innerHTML+'<br>')+line; }
-    function runDiagnostics(){
-      if(!runDiagBtn) return;
-      setDiagSaving(true); if(diagStatus) diagStatus.textContent='Running…'; if(diagLog) diagLog.textContent='—';
-      withTimeout(fetch('https://firebasestorage.googleapis.com/generate_204', {cache:'no-store'}), 6000, 'diag/timeout-generate204')
-      .then(function(){ logDiag('1) Reachability (generate_204): <b>OK</b>','good'); })
-      .catch(function(e){ logDiag('1) Reachability (generate_204): <b>FAILED</b> — '+(e.code||e),'bad'); })
-      .then(function(){
-        return withTimeout(fetch('https://firebasestorage.googleapis.com/v0/b/'+BUCKET+'/o?maxResults=1', {cache:'no-store'}), 8000, 'diag/timeout-bucket')
-        .then(function(r){ logDiag('2) Bucket endpoint: <b>HTTP '+r.status+'</b> (401/403 is OK for reachability)', (r.ok||r.status===401||r.status===403)?'good':'warn'); })
-        .catch(function(e){ logDiag('2) Bucket endpoint: <b>FAILED</b> — '+(e.code||e),'bad'); });
-      })
-      .then(function(){
-        var png1x1='data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwoB9oPy2kAAAAAASUVORK5CYII=';
-        return uploadViaFunction(png1x1, 'diagnostics')
-          .then(function(result){ logDiag('3) Tiny upload (server): <b>SUCCESS</b> → <code class="inline">'+result.path+'</code>','good'); })
-          .catch(function(e){ logDiag('3) Tiny upload (server): <b>FAILED</b> — '+explainError(e)+' <span class="small">(code: '+(e.code||'n/a')+')</span>','bad'); });
-      })
-      .then(function(){ setDiagSaving(false); if(diagStatus) diagStatus.textContent='Done'; });
-    }
-    if (runDiagBtn) runDiagBtn.addEventListener('click', runDiagnostics, false);
+    // boot
+    loadList();
   })();
   </script>
 </body>
