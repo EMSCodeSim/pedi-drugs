@@ -2,416 +2,77 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <title>FireOps SIM — Viewer</title>
+  <title>FireOps SIM — Home</title>
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <meta name="theme-color" content="#0b0f14" />
   <style>
-    html,body{margin:0;padding:0;height:100%;background:#0b0f14;color:#eaf2ff;font-family:system-ui,-apple-system,Segoe UI,Roboto,Inter,Arial,sans-serif;overflow:hidden}
-    .topbar{position:sticky;top:0;z-index:50;background:rgba(12,15,22,.78);backdrop-filter:blur(6px);border-bottom:1px solid rgba(255,255,255,.07)}
-    .topnav{max-width:1100px;margin:0 auto;padding:10px 20px;display:flex;align-items:center;gap:12px;justify-content:space-between}
-    .brandmini{display:flex;align-items:center;gap:12px;font-weight:800}
-    .logo img{width:40px;height:40px;border-radius:10px;box-shadow:0 12px 34px rgba(0,0,0,.38);background:#0f1624}
-    .header-actions{display:flex;gap:10px;align-items:center}
-    #backBtn{appearance:none;border:0;border-radius:10px;padding:8px 12px;font-weight:800;cursor:pointer;background:linear-gradient(180deg,#54a6ff,#0a84ff);color:#03131b}
-    #scenarioSelect{min-width:240px;padding:10px 12px;border-radius:10px;border:1px solid rgba(255,255,255,.18);background:#0f1624;color:#eaf2ff;outline:none}
-
-    /* Viewer area */
-    #viewerWrap{position:fixed;top:60px;left:0;width:100%;height:calc(100% - 120px);display:flex;justify-content:center;align-items:center}
-    #photo{width:100%;height:100%;object-fit:cover;background:#000}
-    #caption{
-      position:absolute;left:0;right:0;bottom:60px;
-      text-align:center;font-size:18px;padding:12px 16px;
-      background:linear-gradient(0deg,rgba(0,0,0,.65),transparent);
-      display:none
-    }
-
-    /* Controls (bottom bar) */
-    #controlsBar{position:fixed;left:0;right:0;bottom:0;display:flex;gap:10px;align-items:center;justify-content:center;padding:10px;background:rgba(12,15,22,.8);backdrop-filter:blur(6px);border-top:1px solid rgba(255,255,255,.07)}
-    .btn{appearance:none;border:0;border-radius:12px;padding:12px 16px;font-weight:800;cursor:pointer;background:linear-gradient(180deg,#54a6ff,#0a84ff);color:#03131b;box-shadow:0 12px 34px rgba(0,0,0,.38)}
-    .btn.secondary{background:transparent;color:#eaf2ff;border:1px solid rgba(255,255,255,.18)}
-    .btn[disabled]{opacity:.6;cursor:not-allowed}
-
-    /* Small status to surface auth / rule errors */
-    #status{position:fixed;top:60px;left:0;right:0;text-align:center;font-size:13px;color:#a8c1ff;opacity:.9;padding:6px 10px;pointer-events:none}
-    #status.error{color:#ff9b9b}
-
-    @media (max-width:640px){ #caption{font-size:15px} }
+    :root{ --bg:#0b0f14; --bg2:#0e1421; --card:#0f1624; --edge:rgba(255,255,255,.10); --text:#eaf2ff; --muted:#93a0b5; --blue:#0a84ff; }
+    *{box-sizing:border-box}
+    html,body{margin:0;height:100%;color:var(--text);font-family:system-ui,-apple-system,Segoe UI,Roboto,Inter,Arial,sans-serif;background:
+      radial-gradient(1400px 700px at 15% -15%, rgba(10,132,255,.28), transparent 60%),
+      radial-gradient(1200px 600px at 110% 0%, rgba(255,59,48,.22), transparent 60%),
+      linear-gradient(165deg, var(--bg2), var(--bg) 55%)}
+    a{color:inherit;text-decoration:none}
+    .topbar{position:sticky;top:0;z-index:40;background:rgba(12,15,22,.78);backdrop-filter:blur(6px) saturate(120%);border-bottom:1px solid rgba(255,255,255,.08)}
+    .topnav{max-width:1100px;margin:0 auto;padding:10px 16px;display:flex;gap:12px;align-items:center}
+    .brand{display:flex;gap:12px;align-items:center;font-weight:900}
+    .logo{width:40px;height:40px;border-radius:10px;background:#0f1624;box-shadow:0 12px 34px rgba(0,0,0,.38)}
+    .spacer{flex:1}
+    .btn{appearance:none;border:1px solid rgba(255,255,255,.16);background:linear-gradient(180deg,#142238,#0f1930);color:#fff;border-radius:12px;padding:10px 14px;font-weight:800;cursor:pointer}
+    .btn.primary{background:linear-gradient(180deg,#54a6ff,#0a84ff);color:#03131b;border:0}
+    main{max-width:1100px;margin:20px auto 60px;padding:0 16px}
+    .hero{display:grid;grid-template-columns:1.2fr 1fr;gap:20px;align-items:center}
+    .card{background:var(--card);border:1px solid var(--edge);border-radius:16px;padding:16px}
+    .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px}
+    @media (max-width:900px){ .hero{grid-template-columns:1fr} }
   </style>
 </head>
 <body>
   <div class="topbar">
     <div class="topnav">
-      <div class="brandmini">
-        <div class="logo"><img src="/assets/logo/fire-ops-sim.png" alt="FireOps SIM"></div>
+      <div class="brand">
+        <div class="logo"></div>
         <div>FireOps SIM</div>
       </div>
-      <div class="header-actions">
-        <select id="scenarioSelect" aria-label="Choose a scenario">
-          <option value="__manual__">Manual — Instructor Controlled</option>
-          <option value="">Loading scenarios…</option>
-        </select>
-        <button id="backBtn" type="button">Back</button>
-      </div>
+      <div class="spacer"></div>
+      <a class="btn" href="viewer.html">Open Viewer</a>
+      <a class="btn" href="instructor-view.html">Instructor</a>
+      <a class="btn" href="advanced-editor.html">Advanced Editor</a>
     </div>
   </div>
 
-  <div id="status" role="status" aria-live="polite"></div>
+  <main>
+    <section class="hero">
+      <div class="card">
+        <h1 style="margin:0 0 8px 0">Train where it matters.</h1>
+        <p style="color:#c9d6f3;line-height:1.5">
+          Scenario-based fire/EMS training using real scene photos, overlays, and GPS geofences.
+          Run instructor-controlled slides in Manual Mode, or let students unlock slides by arriving on scene in GPS Mode.
+        </p>
+        <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:12px">
+          <a class="btn primary" href="viewer.html">Launch Viewer</a>
+          <a class="btn" href="instructor-view.html">Instructor Controls</a>
+        </div>
+      </div>
+      <div class="card">
+        <h2 style="margin-top:0">Quick Links</h2>
+        <div class="grid">
+          <a class="btn" href="viewer.html?mode=manual&session=alpha">Viewer (Manual, session=alpha)</a>
+          <a class="btn" href="viewer.html?mode=gps">Viewer (GPS Mode)</a>
+          <a class="btn" href="advanced-editor.html">Advanced Editor</a>
+          <a class="btn" href="/">EMSCodeSim.com</a>
+        </div>
+      </div>
+    </section>
 
-  <div id="viewerWrap" aria-live="polite">
-    <img id="photo" alt="Scenario Photo" decoding="async" loading="eager" fetchpriority="high">
-    <div id="caption"></div>
-  </div>
-
-  <div id="controlsBar">
-    <button id="startBtn" class="btn" type="button">Start</button>
-    <button id="readBtn" class="btn secondary" type="button">🔊 Read Text</button>
-  </div>
-
-  <!-- Firebase (compat) -->
-  <script src="https://www.gstatic.com/firebasejs/10.12.4/firebase-app-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.12.4/firebase-auth-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.12.4/firebase-database-compat.js"></script>
-
-  <script>
-  (function(){
-    const $ = id => document.getElementById(id);
-    const photo = $('photo');
-    const caption = $('caption');
-    const startBtn = $('startBtn');
-    const readBtn = $('readBtn');
-    const backBtn = $('backBtn');
-    const select = $('scenarioSelect');
-    const statusEl = $('status');
-
-    const setStatus = (msg, isError=false) => {
-      statusEl.textContent = msg || '';
-      statusEl.className = isError ? 'error' : '';
-    };
-
-    // Back button
-    backBtn.addEventListener('click', ()=>{
-      if (document.referrer) history.back();
-      else window.location.href = '/';
-    });
-
-    // Device / TTS policy
-    const isIOS = /iP(hone|ad|od)/i.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
-    const synthOK = ('speechSynthesis' in window) && ('SpeechSynthesisUtterance' in window);
-    const autoSpeak = !isIOS && synthOK;
-    let lastSpeech = '';
-
-    // Wake Lock
-    let wakeLock = null, keepAliveVideo = null;
-    async function acquireWakeLock(){
-      try{
-        if ('wakeLock' in navigator) {
-          wakeLock = await navigator.wakeLock.request('screen');
-          wakeLock.addEventListener('release', ()=>{ wakeLock=null; });
-          return;
-        }
-      }catch{}
-      if (!keepAliveVideo) {
-        keepAliveVideo = document.createElement('video');
-        keepAliveVideo.setAttribute('playsinline','');
-        keepAliveVideo.muted = true; keepAliveVideo.loop = true;
-        keepAliveVideo.src = 'data:video/mp4;base64,AAAAIGZ0eXBpc29tAAAAAGlzb21pc28yYXZjMW1wNDEAAAAIZnJlZQA=';
-        keepAliveVideo.style.position='fixed'; keepAliveVideo.style.width='1px'; keepAliveVideo.style.height='1px';
-        keepAliveVideo.style.opacity='0'; keepAliveVideo.style.pointerEvents='none';
-        document.body.appendChild(keepAliveVideo);
-      }
-      try{ await keepAliveVideo.play(); }catch{}
-    }
-    async function releaseWakeLock(){
-      try{ if (wakeLock) { await wakeLock.release(); wakeLock=null; } }catch{}
-      try{ if (keepAliveVideo){ await keepAliveVideo.pause(); } }catch{}
-    }
-
-    // Firebase
-    const firebaseConfig = {
-      apiKey:"AIzaSyDM6DpRSeZueVKRpbyJyDmhf8WY66KyCDk",
-      authDomain:"dailyquiz-d5279.firebaseapp.com",
-      databaseURL:"https://dailyquiz-d5279-default-rtdb.firebaseio.com",
-      projectId:"dailyquiz-d5279",
-      appId:"1:94577748034:web:c032d3a1d72db1313de5db",
-      measurementId:"G-19DVN7NNH7"
-    };
-    firebase.initializeApp(firebaseConfig);
-    const db = firebase.database();
-    const auth = firebase.auth();
-
-    // Helpers: {format,data} OR legacy string -> data URL
-    function toDataURL(stored){
-      if (!stored) return '';
-      if (typeof stored === 'string') return stored;
-      if (stored.data){
-        const fmt = (stored.format === 'jpeg' || stored.format === 'jpg') ? 'jpeg' : 'png';
-        return `data:image/${fmt};base64,${stored.data}`;
-      }
-      return '';
-    }
-
-    function normalizeStops(stopsLike){
-      if(!stopsLike) return [];
-      const arr = Array.isArray(stopsLike) ? stopsLike : Object.values(stopsLike);
-      return arr.map(s=>{
-        const num=v=> (v===0||v===null) ? v : parseFloat(v);
-        return {
-          title: s.title || s.name || '',
-          caption: s.caption || s.text || '',
-          lat: num(s.lat ?? s.latitude ?? s.latDeg),
-          lng: num(s.lng ?? s.lon ?? s.long ?? s.longitude ?? s.lngDeg),
-          radiusMeters: num(s.radiusMeters ?? s.radius ?? s.r) || 40,
-          image: toDataURL(s.imageData || s.imageURL || s.imageUrl || s.url || s.photoURL || s.photo)
-        };
-      }).filter(s => typeof s.lat==='number' && typeof s.lng==='number');
-    }
-
-    function populateDropdown(list){
-      const manualOpt = '<option value="__manual__">Manual — Instructor Controlled</option>';
-      select.innerHTML = manualOpt + '<option value="" disabled>──────────</option>';
-      list.sort((a,b)=> (b.createdAt||0)-(a.createdAt||0));
-      list.forEach(sc=>{
-        const o=document.createElement('option');
-        o.value=sc.id;
-        o.textContent=sc.title || sc.name || '(untitled)';
-        select.appendChild(o);
-      });
-    }
-
-    async function loadAllScenarios(){
-      const out=[];
-      try{
-        const snapA = await db.ref('geophoto/scenarios').get();
-        const a = snapA.exists() ? snapA.val() : {};
-        for (const [id, s] of Object.entries(a)) {
-          out.push({ id, ...(s||{}), stops: normalizeStops(s?.stops) });
-        }
-      }catch(e){ /* permission or path missing */ }
-      try{
-        const snapB = await db.ref('scenarios').get();
-        const b = snapB.exists() ? snapB.val() : {};
-        for (const [id, s] of Object.entries(b)) {
-          if (!out.some(x=>x.id===id)) {
-            out.push({ id, ...(s||{}), stops: normalizeStops(s?.stops) });
-          }
-        }
-      }catch(e){ /* permission or path missing */ }
-      return out;
-    }
-
-    // Haversine + tight padding (≤ 3 m)
-    const toRad = x => x*Math.PI/180;
-    const havDistance=(aLat,aLng,bLat,bLng)=>{
-      const R=6371000;
-      const dLat=toRad(bLat-aLat), dLng=toRad(bLng-aLng);
-      const A=Math.sin(dLat/2)**2 + Math.cos(toRad(aLat))*Math.cos(toRad(bLat))*Math.sin(dLng/2)**2;
-      return 2*R*Math.asin(Math.sqrt(A));
-    };
-    function inside(stop, la, ln, acc){
-      const d = havDistance(la, ln, stop.lat, stop.lng);
-      const pad = Math.min(Math.max(Number(acc)||0, 0), 3);
-      return d <= (Number(stop.radiusMeters)||0) + pad;
-    }
-
-    // Beep + vibrate
-    function buzz(){ if ('vibrate' in navigator) { try { navigator.vibrate([220,80,140]); } catch {} } }
-    let audioCtx=null;
-    function ensureAudioUnlocked(){
-      try{
-        audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
-        if (audioCtx.state === 'suspended') { audioCtx.resume(); }
-      }catch{}
-    }
-    function beep(){
-      try{
-        audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
-        if (audioCtx.state === 'suspended') return;
-        const o = audioCtx.createOscillator();
-        const g = audioCtx.createGain();
-        o.type='square'; o.frequency.value=880;
-        g.gain.setValueAtTime(0.001, audioCtx.currentTime);
-        g.gain.exponentialRampToValueAtTime(0.6, audioCtx.currentTime + 0.02);
-        g.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.25);
-        o.connect(g).connect(audioCtx.destination);
-        o.start(); o.stop(audioCtx.currentTime + 0.26);
-      }catch{}
-    }
-    function notifyNewPhoto(){ beep(); buzz(); }
-
-    // TTS
-    function speak(text){
-      if (!synthOK || !text) return;
-      try { speechSynthesis.cancel(); } catch {}
-      const u = new SpeechSynthesisUtterance(text);
-      u.rate = 1; u.pitch = 1; u.volume = 1;
-      try { speechSynthesis.speak(u); } catch {}
-    }
-
-    // UI helpers
-    function clearPhoto(){ photo.src=''; caption.style.display='none'; caption.textContent=''; }
-    function showStop(stop){
-      photo.src = stop.image || '';
-      const cap = (stop.title ? stop.title + ' — ' : '') + (stop.caption || '');
-      caption.textContent = cap;
-      caption.style.display = cap ? 'block' : 'none';
-      lastSpeech = (stop.title ? stop.title + '. ' : '') + (stop.caption || '');
-      if (autoSpeak && lastSpeech) speak(lastSpeech);
-      notifyNewPhoto();
-    }
-
-    // Start / Stop logic
-    let running=false, current=null, watchId=null, lastStopIndex=-1;
-
-    // Manual mode subscription
-    let manualRef = null;
-    const session = new URLSearchParams(location.search).get('session') || 'default';
-    const manualPath = `geophoto/manual/${session}/current`;
-
-    function startManual(){
-      ensureAudioUnlocked();
-      const intro = 'Manual mode. Awaiting instructor.';
-      lastSpeech = intro;
-      caption.textContent = intro;
-      caption.style.display = 'block';
-      notifyNewPhoto();
-
-      manualRef = db.ref(manualPath);
-      manualRef.on('value', snap=>{
-        const v = snap.val();
-        if (!v || v.clear){
-          clearPhoto();
-          lastSpeech = 'Cleared.';
-          return;
-        }
-        const stop = {
-          title: v.title || '',
-          caption: v.caption || '',
-          image: toDataURL(v.image || v.imageURL || v.imageUrl || v.url || v.photoURL || v.photo || '')
-        };
-        showStop(stop);
-      }, err=>{
-        setStatus('Permission denied reading manual control. Check database rules for geophoto/manual/*.', true);
-      });
-    }
-    function stopManual(){
-      try{ if (manualRef){ manualRef.off(); manualRef=null; } }catch{}
-    }
-
-    async function startScenario(){
-      if (running) return;
-      const id = select.value;
-      if (!id){ alert('Select a scenario first.'); return; }
-      running = true;
-      startBtn.textContent='Stop';
-      await acquireWakeLock();
-      ensureAudioUnlocked();
-
-      if (id === '__manual__'){
-        stopManual();
-        if (watchId) { try{ navigator.geolocation.clearWatch(watchId); }catch{} watchId=null; }
-        clearPhoto(); lastStopIndex = -1;
-        current = { id: '__manual__', title: 'Manual', stops: [] };
-        startManual();
-        return;
-      }
-
-      stopManual();
-
-      // Load scenario via SDK (auth-aware)
-      let sc=null;
-      try {
-        const a = await db.ref(`geophoto/scenarios/${id}`).get();
-        if (a.exists()) sc = a.val();
-      } catch(e){}
-      if(!sc){
-        try {
-          const b = await db.ref(`scenarios/${id}`).get();
-          if (b.exists()) sc = b.val();
-        } catch(e){}
-      }
-      if (!sc || !sc.stops){ alert('Scenario not found or has no stops, or you lack permission.'); stopScenario(); return; }
-
-      current = {
-        id,
-        title: sc.title || sc.name || '',
-        dispatch: sc.dispatch || sc.notes || '',
-        stops: normalizeStops(sc.stops)
-      };
-
-      const intro = (current.dispatch || current.title || '').toString().trim();
-      clearPhoto(); lastStopIndex = -1;
-      if (intro) {
-        showStop({ title: 'Dispatch', caption: intro, image: '' });
-        speak(intro); lastSpeech = intro;
-      }
-
-      if (watchId) { try{ navigator.geolocation.clearWatch(watchId); }catch{} watchId=null; }
-      try{
-        watchId = navigator.geolocation.watchPosition(p=>{
-          if (!running || !current) return;
-          const { latitude:la, longitude:ln, accuracy:acc } = p.coords;
-          const hits = (current.stops||[])
-            .map((st, i) => ({i, st, dist: havDistance(la, ln, st.lat, st.lng)}))
-            .filter(obj => inside(obj.st, la, ln, acc))
-            .sort((a,b)=> a.dist - b.dist);
-          if (hits.length === 0) return;
-          const best = hits[0];
-          if (best.i !== lastStopIndex){
-            lastStopIndex = best.i;
-            showStop(best.st);
-          }
-        }, err=>{}, { enableHighAccuracy:true, maximumAge:0, timeout:20000 });
-      }catch(e){}
-    }
-
-    async function stopScenario(){
-      running = false;
-      startBtn.textContent='Start';
-      stopManual();
-      try{ if (watchId) navigator.geolocation.clearWatch(watchId); }catch{}
-      watchId=null;
-      await releaseWakeLock();
-      try{ if (synthOK) speechSynthesis.cancel(); }catch{}
-      clearPhoto();
-    }
-
-    startBtn.addEventListener('click', ()=> running ? stopScenario() : startScenario());
-    readBtn.addEventListener('click', ()=>{
-      try{
-        ensureAudioUnlocked();
-        speak(lastSpeech || 'Ready.');
-      }catch{}
-    });
-
-    // ---------- Auth gate then boot ----------
-    setStatus('Connecting…');
-    auth.onAuthStateChanged(async (user) => {
-      if (user) {
-        setStatus('Connected');
-        try {
-          const list = await loadAllScenarios();
-          populateDropdown(list);
-          const qs = new URLSearchParams(location.search);
-          const pre = qs.get('id');
-          const mode = qs.get('mode');
-          if (mode === 'manual' || pre === '__manual__') {
-            select.value='__manual__';
-          } else if (pre && list.some(s=>s.id===pre)) {
-            select.value = pre;
-          }
-        } catch (e) {
-          setStatus('Failed to load scenarios. Check read rules on /geophoto/scenarios and /scenarios.', true);
-        }
-      } else {
-        try {
-          await auth.signInAnonymously();
-        } catch (e) {
-          console.error(e);
-          setStatus('Anonymous sign-in failed. Update rules to allow anonymous read or enable another provider.', true);
-        }
-      }
-    });
-  })();
-  </script>
+    <!-- OPTIONAL: Put your existing homepage content below -->
+    <section class="card" style="margin-top:16px">
+      <h2 style="margin-top:0">About</h2>
+      <p style="color:#c9d6f3;line-height:1.6">
+        Replace this section with your existing homepage content that used to live in index.html.
+        This file intentionally contains <em>no viewer logic</em> to keep it fast and clean.
+      </p>
+    </section>
+  </main>
 </body>
 </html>
