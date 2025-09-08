@@ -31,6 +31,10 @@
     .btn.secondary{background:transparent;color:#eaf2ff;border:1px solid rgba(255,255,255,.18)}
     .btn[disabled]{opacity:.6;cursor:not-allowed}
 
+    /* Small status to surface auth / rule errors */
+    #status{position:fixed;top:60px;left:0;right:0;text-align:center;font-size:13px;color:#a8c1ff;opacity:.9;padding:6px 10px;pointer-events:none}
+    #status.error{color:#ff9b9b}
+
     @media (max-width:640px){ #caption{font-size:15px} }
   </style>
 </head>
@@ -43,7 +47,6 @@
       </div>
       <div class="header-actions">
         <select id="scenarioSelect" aria-label="Choose a scenario">
-          <!-- Permanent manual option -->
           <option value="__manual__">Manual — Instructor Controlled</option>
           <option value="">Loading scenarios…</option>
         </select>
@@ -52,12 +55,13 @@
     </div>
   </div>
 
+  <div id="status" role="status" aria-live="polite"></div>
+
   <div id="viewerWrap" aria-live="polite">
     <img id="photo" alt="Scenario Photo" decoding="async" loading="eager" fetchpriority="high">
     <div id="caption"></div>
   </div>
 
-  <!-- Scenario Controls: Start/Stop + Read Text -->
   <div id="controlsBar">
     <button id="startBtn" class="btn" type="button">Start</button>
     <button id="readBtn" class="btn secondary" type="button">🔊 Read Text</button>
@@ -65,6 +69,7 @@
 
   <!-- Firebase (compat) -->
   <script src="https://www.gstatic.com/firebasejs/10.12.4/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.4/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.4/firebase-database-compat.js"></script>
 
   <script>
@@ -76,8 +81,14 @@
     const readBtn = $('readBtn');
     const backBtn = $('backBtn');
     const select = $('scenarioSelect');
+    const statusEl = $('status');
 
-    // Back button to main page
+    const setStatus = (msg, isError=false) => {
+      statusEl.textContent = msg || '';
+      statusEl.className = isError ? 'error' : '';
+    };
+
+    // Back button
     backBtn.addEventListener('click', ()=>{
       if (document.referrer) history.back();
       else window.location.href = '/';
@@ -86,10 +97,10 @@
     // Device / TTS policy
     const isIOS = /iP(hone|ad|od)/i.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
     const synthOK = ('speechSynthesis' in window) && ('SpeechSynthesisUtterance' in window);
-    const autoSpeak = !isIOS && synthOK;   // Android/Desktop autoplay on entry; iOS needs a gesture
+    const autoSpeak = !isIOS && synthOK;
     let lastSpeech = '';
 
-    // Wake Lock (prevent sleep)
+    // Wake Lock
     let wakeLock = null, keepAliveVideo = null;
     async function acquireWakeLock(){
       try{
@@ -99,7 +110,6 @@
           return;
         }
       }catch{}
-      // iOS fallback: tiny hidden looping video (no sound)
       if (!keepAliveVideo) {
         keepAliveVideo = document.createElement('video');
         keepAliveVideo.setAttribute('playsinline','');
@@ -127,6 +137,7 @@
     };
     firebase.initializeApp(firebaseConfig);
     const db = firebase.database();
+    const auth = firebase.auth();
 
     // Helpers: {format,data} OR legacy string -> data URL
     function toDataURL(stored){
@@ -139,7 +150,6 @@
       return '';
     }
 
-    // Load scenarios into dropdown (from geophoto/scenarios then scenarios)
     function normalizeStops(stopsLike){
       if(!stopsLike) return [];
       const arr = Array.isArray(stopsLike) ? stopsLike : Object.values(stopsLike);
@@ -155,8 +165,8 @@
         };
       }).filter(s => typeof s.lat==='number' && typeof s.lng==='number');
     }
+
     function populateDropdown(list){
-      // Keep the permanent Manual option, then add a divider-like disabled option (optional), then others.
       const manualOpt = '<option value="__manual__">Manual — Instructor Controlled</option>';
       select.innerHTML = manualOpt + '<option value="" disabled>──────────</option>';
       list.sort((a,b)=> (b.createdAt||0)-(a.createdAt||0));
@@ -167,18 +177,26 @@
         select.appendChild(o);
       });
     }
+
     async function loadAllScenarios(){
       const out=[];
       try{
-        const a = await fetch('https://dailyquiz-d5279-default-rtdb.firebaseio.com/geophoto/scenarios.json',{cache:'no-store'});
-        if(a.ok){ const ja=await a.json()||{}; for(const [id,s] of Object.entries(ja)){ out.push({ id, ...(s||{}), stops: normalizeStops(s?.stops) }); } }
-      }catch{}
+        const snapA = await db.ref('geophoto/scenarios').get();
+        const a = snapA.exists() ? snapA.val() : {};
+        for (const [id, s] of Object.entries(a)) {
+          out.push({ id, ...(s||{}), stops: normalizeStops(s?.stops) });
+        }
+      }catch(e){ /* permission or path missing */ }
       try{
-        const b = await fetch('https://dailyquiz-d5279-default-rtdb.firebaseio.com/scenarios.json',{cache:'no-store'});
-        if(b.ok){ const jb=await b.json()||{}; for(const [id,s] of Object.entries(jb)){ out.push({ id, ...(s||{}), stops: normalizeStops(s?.stops) }); } }
-      }catch{}
-      const map=new Map(); out.forEach(s=>{ if(!map.has(s.id)) map.set(s.id, s); });
-      return Array.from(map.values());
+        const snapB = await db.ref('scenarios').get();
+        const b = snapB.exists() ? snapB.val() : {};
+        for (const [id, s] of Object.entries(b)) {
+          if (!out.some(x=>x.id===id)) {
+            out.push({ id, ...(s||{}), stops: normalizeStops(s?.stops) });
+          }
+        }
+      }catch(e){ /* permission or path missing */ }
+      return out;
     }
 
     // Haversine + tight padding (≤ 3 m)
@@ -195,7 +213,7 @@
       return d <= (Number(stop.radiusMeters)||0) + pad;
     }
 
-    // Beep + vibrate when showing a new photo
+    // Beep + vibrate
     function buzz(){ if ('vibrate' in navigator) { try { navigator.vibrate([220,80,140]); } catch {} } }
     let audioCtx=null;
     function ensureAudioUnlocked(){
@@ -206,9 +224,8 @@
     }
     function beep(){
       try{
-        // Audio must be unlocked by a user gesture first (Start button); ensure once.
         audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
-        if (audioCtx.state === 'suspended') return; // not unlocked yet (iOS) — Start button will unlock
+        if (audioCtx.state === 'suspended') return;
         const o = audioCtx.createOscillator();
         const g = audioCtx.createGain();
         o.type='square'; o.frequency.value=880;
@@ -248,10 +265,9 @@
     // Manual mode subscription
     let manualRef = null;
     const session = new URLSearchParams(location.search).get('session') || 'default';
-    const manualPath = `geophoto/manual/${session}/current`; // instructor will write here
+    const manualPath = `geophoto/manual/${session}/current`;
 
     function startManual(){
-      // Show a visible "awaiting instructor" slide and unlock audio/TTS on the tap
       ensureAudioUnlocked();
       const intro = 'Manual mode. Awaiting instructor.';
       lastSpeech = intro;
@@ -259,7 +275,6 @@
       caption.style.display = 'block';
       notifyNewPhoto();
 
-      // Subscribe to instructor-controlled node (low-latency stream)
       manualRef = db.ref(manualPath);
       manualRef.on('value', snap=>{
         const v = snap.val();
@@ -274,6 +289,8 @@
           image: toDataURL(v.image || v.imageURL || v.imageUrl || v.url || v.photoURL || v.photo || '')
         };
         showStop(stop);
+      }, err=>{
+        setStatus('Permission denied reading manual control. Check database rules for geophoto/manual/*.', true);
       });
     }
     function stopManual(){
@@ -287,13 +304,10 @@
       running = true;
       startBtn.textContent='Stop';
       await acquireWakeLock();
-
-      // Unlock AudioContext on the Start tap so iPhone beeps later without extra taps
       ensureAudioUnlocked();
 
-      // Manual mode path — no GPS watcher
       if (id === '__manual__'){
-        stopManual(); // safety
+        stopManual();
         if (watchId) { try{ navigator.geolocation.clearWatch(watchId); }catch{} watchId=null; }
         clearPhoto(); lastStopIndex = -1;
         current = { id: '__manual__', title: 'Manual', stops: [] };
@@ -301,22 +315,21 @@
         return;
       }
 
-      // GPS mode (existing logic)
-      stopManual(); // ensure no manual listener
+      stopManual();
 
-      // Load scenario (prefer geophoto path, then fallback)
+      // Load scenario via SDK (auth-aware)
       let sc=null;
-      try{
-        const rA = await fetch(`https://dailyquiz-d5279-default-rtdb.firebaseio.com/geophoto/scenarios/${id}.json`,{cache:'no-store'});
-        if(rA.ok){ sc = await rA.json(); }
-      }catch{}
+      try {
+        const a = await db.ref(`geophoto/scenarios/${id}`).get();
+        if (a.exists()) sc = a.val();
+      } catch(e){}
       if(!sc){
-        try{
-          const rB = await fetch(`https://dailyquiz-d5279-default-rtdb.firebaseio.com/scenarios/${id}.json`,{cache:'no-store'});
-          if(rB.ok){ sc = await rB.json(); }
-        }catch{}
+        try {
+          const b = await db.ref(`scenarios/${id}`).get();
+          if (b.exists()) sc = b.val();
+        } catch(e){}
       }
-      if (!sc || !sc.stops){ alert('Scenario not found or has no stops.'); stopScenario(); return; }
+      if (!sc || !sc.stops){ alert('Scenario not found or has no stops, or you lack permission.'); stopScenario(); return; }
 
       current = {
         id,
@@ -325,32 +338,23 @@
         stops: normalizeStops(sc.stops)
       };
 
-      // Dispatch as FIRST visible slide (not just TTS)
       const intro = (current.dispatch || current.title || '').toString().trim();
       clearPhoto(); lastStopIndex = -1;
       if (intro) {
-        // Show dispatch slide immediately
         showStop({ title: 'Dispatch', caption: intro, image: '' });
+        speak(intro); lastSpeech = intro;
       }
-      // Speak dispatch/title first (kept as-is)
-      if (intro) { speak(intro); lastSpeech = intro; }
 
       if (watchId) { try{ navigator.geolocation.clearWatch(watchId); }catch{} watchId=null; }
       try{
         watchId = navigator.geolocation.watchPosition(p=>{
           if (!running || !current) return;
           const { latitude:la, longitude:ln, accuracy:acc } = p.coords;
-
-          // Collect all geofence matches, choose closest
           const hits = (current.stops||[])
             .map((st, i) => ({i, st, dist: havDistance(la, ln, st.lat, st.lng)}))
             .filter(obj => inside(obj.st, la, ln, acc))
             .sort((a,b)=> a.dist - b.dist);
-
-          if (hits.length === 0) {
-            // Keep the dispatch slide visible until first hit (lastStopIndex stays -1)
-            return;
-          }
+          if (hits.length === 0) return;
           const best = hits[0];
           if (best.i !== lastStopIndex){
             lastStopIndex = best.i;
@@ -372,26 +376,41 @@
     }
 
     startBtn.addEventListener('click', ()=> running ? stopScenario() : startScenario());
-    readBtn.addEventListener('click', ()=>{ // Repeat or manual trigger on iPhone
+    readBtn.addEventListener('click', ()=>{
       try{
-        ensureAudioUnlocked(); // resume if user taps Read
+        ensureAudioUnlocked();
         speak(lastSpeech || 'Ready.');
       }catch{}
     });
 
-    // Boot: load scenarios into dropdown (+ preselect ?id= or ?mode=manual)
-    loadAllScenarios().then(list => {
-      populateDropdown(list);
-      const qs = new URLSearchParams(location.search);
-      const pre = qs.get('id');
-      const mode = qs.get('mode');
-      if (mode === 'manual' || pre === '__manual__') {
-        select.value='__manual__';
-      } else if (pre && list.some(s=>s.id===pre)) {
-        select.value = pre;
+    // ---------- Auth gate then boot ----------
+    setStatus('Connecting…');
+    auth.onAuthStateChanged(async (user) => {
+      if (user) {
+        setStatus('Connected');
+        try {
+          const list = await loadAllScenarios();
+          populateDropdown(list);
+          const qs = new URLSearchParams(location.search);
+          const pre = qs.get('id');
+          const mode = qs.get('mode');
+          if (mode === 'manual' || pre === '__manual__') {
+            select.value='__manual__';
+          } else if (pre && list.some(s=>s.id===pre)) {
+            select.value = pre;
+          }
+        } catch (e) {
+          setStatus('Failed to load scenarios. Check read rules on /geophoto/scenarios and /scenarios.', true);
+        }
+      } else {
+        try {
+          await auth.signInAnonymously();
+        } catch (e) {
+          console.error(e);
+          setStatus('Anonymous sign-in failed. Update rules to allow anonymous read or enable another provider.', true);
+        }
       }
     });
-
   })();
   </script>
 </body>
