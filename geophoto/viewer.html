@@ -33,7 +33,7 @@
     }
     /* Bottom bar */
     #bottom{position:fixed;left:0;right:0;bottom:0;display:flex;gap:8px;align-items:center;justify-content:center;padding:10px;background:rgba(14,20,33,.88);border-top:1px solid var(--edge)}
-    /* Mobile tweaks */
+    /* Mobile */
     @media (max-width:700px){
       .bar{flex-wrap:wrap;gap:6px}
       select{min-width:140px}
@@ -104,6 +104,7 @@
     let current = null;   // {id,title,dispatch,stops:[]}
     let cache = [];       // preloaded dataURLs by stop index
     let lastIdx = -1;
+    let lastSlide = { ts: 0 }; // prevents older/empty overwrites
 
     // ---------- Helpers ----------
     const setStatus = (t)=> statusPill.textContent = t;
@@ -170,14 +171,12 @@
       const uniq = new Map(); list.forEach(x=>{ if(!uniq.has(x.id)) uniq.set(x.id, x); });
       const arr = Array.from(uniq.values()).sort((a,b)=>(b.createdAt||0)-(a.createdAt||0));
 
-      // fill dropdown
       sel.innerHTML = '<option value="__manual__">Instructor-led (Manual)</option>';
       arr.forEach(sc=>{
         const o=document.createElement('option');
         o.value=sc.id; o.textContent=sc.title || sc.name || '(untitled)';
         sel.appendChild(o);
       });
-
       if (qs.get('id') && arr.some(s=>s.id===qs.get('id'))) sel.value = qs.get('id');
     }
 
@@ -199,7 +198,7 @@
       });
     }
 
-    // ---------- Manual mode ----------
+    // ---------- Manual mode (ignore stale/empty writes) ----------
     function subscribeManual(sessionRaw){
       const s = normSession(sessionRaw);
       if (manualRef) try{ manualRef.off(); }catch{}; 
@@ -215,14 +214,37 @@
 
       manualRef.on('value', snap=>{
         const v = snap.val();
-        if (!v || v.clear){ showSlide('', '', ''); say('Waiting for instructor…'); return; }
+
+        // Only explicitly clear on {clear:true}
+        if (v && v.clear === true){
+          lastSlide = { ts: Date.now() };
+          showSlide('', '', '');
+          setStatus('waiting…');
+          say('Instructor cleared the screen');
+          return;
+        }
+
+        // Null/empty objects: do NOT wipe the current slide
+        if (!v || (typeof v === 'object' && !('image' in v) && !('title' in v) && !('caption' in v))){
+          say('Manual path has no slide; keeping previous');
+          return;
+        }
+
+        const ts = Number(v.ts || 0);
+        if (lastSlide.ts && ts && ts <= lastSlide.ts){
+          // Older or same slide — ignore
+          return;
+        }
+
         const dataURL = v.image || v.imageURL || v.url || '';
         showSlide(v.title||'', v.caption||'', dataURL);
+        lastSlide = { ts: ts || Date.now() };
+        setStatus('manual');
         say('Manual: ' + (v.title||'slide'));
       }, err=>{ say('Read denied on manual path — rules'); console.error(err); });
     }
 
-    // ---------- GPS mode (simplified) ----------
+    // ---------- GPS mode ----------
     const toRad = x => x*Math.PI/180;
     const hav=(aLat,aLng,bLat,bLng)=>{ const R=6371000, dLat=toRad(bLat-aLat), dLng=toRad(bLng-aLng); const A=Math.sin(dLat/2)**2 + Math.cos(toRad(aLat))*Math.cos(toRad(bLat))*Math.sin(dLng/2)**2; return 2*R*Math.asin(Math.sqrt(A)); };
     function inside(stop, la, ln, acc){
@@ -311,7 +333,7 @@
       if (manualRef) try{ manualRef.off(); }catch{}; manualRef = null;
       if (helloRef)  try{ helloRef.off(); }catch{};
       if (watchId) { try{ navigator.geolocation.clearWatch(watchId); }catch{}; watchId = null; }
-      current = null; cache = []; lastIdx = -1;
+      current = null; cache = []; lastIdx = -1; lastSlide = { ts: 0 };
       img.src=''; cap.textContent=''; cap.style.display='none';
       setStatus('idle'); say('');
     }
