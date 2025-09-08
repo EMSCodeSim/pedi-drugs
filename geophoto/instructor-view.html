@@ -2,112 +2,77 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <title>FireOps SIM — Instructor Controller</title>
+  <title>FireOps SIM — Instructor</title>
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <meta name="theme-color" content="#0b0f14" />
   <style>
     :root{
       --bg:#0b0f14; --panel:#0f1624; --text:#eaf2ff; --muted:#94a3b8;
-      --edge: rgba(255,255,255,.08); --edge2: rgba(255,255,255,.14);
+      --edge: rgba(255,255,255,.10); --edge2: rgba(255,255,255,.16);
       --grad1:#54a6ff; --grad2:#0a84ff;
     }
     *{box-sizing:border-box}
     html,body{margin:0;height:100%;background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,Segoe UI,Roboto,Inter,Arial,sans-serif}
-    a{color:inherit}
     .topbar{position:sticky;top:0;z-index:40;background:rgba(12,15,22,.78);backdrop-filter:blur(6px);border-bottom:1px solid var(--edge)}
-    .topnav{max-width:1200px;margin:0 auto;padding:10px 16px;display:flex;align-items:center;gap:12px;justify-content:space-between}
-    .brandmini{display:flex;align-items:center;gap:12px;font-weight:800}
-    .logo img{width:40px;height:40px;border-radius:10px;box-shadow:0 12px 34px rgba(0,0,0,.38);background:#0f1624}
-    .controls{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
-    .input, select{
-      background:var(--panel); color:var(--text); border:1px solid var(--edge2); border-radius:10px;
-      padding:10px 12px; outline:none; min-width:180px
-    }
+    .topnav{max-width:1200px;margin:0 auto;padding:10px 12px;display:flex;gap:8px;align-items:center;justify-content:space-between}
+    .row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+    .input, select{height:40px;padding:0 12px;border-radius:10px;border:1px solid var(--edge2);background:#0f1624;color:var(--text);min-width:160px}
     .btn{
-      appearance:none;border:0;border-radius:12px;padding:12px 16px;font-weight:800;cursor:pointer;
-      background:linear-gradient(180deg,var(--grad1),var(--grad2));color:#03131b;box-shadow:0 12px 34px rgba(0,0,0,.38)
+      height:40px;padding:0 14px;border:0;border-radius:12px;font-weight:800;cursor:pointer;
+      background:linear-gradient(180deg,var(--grad1),var(--grad2));color:#03131b
     }
     .btn.secondary{background:transparent;color:var(--text);border:1px solid var(--edge2)}
-    .btn.small{padding:8px 12px;border-radius:10px}
-    main{max-width:1200px;margin:16px auto;padding:0 16px 40px;display:grid;grid-template-columns:1.1fr 1.2fr;gap:16px}
-    @media (max-width:980px){ main{grid-template-columns:1fr;}}
-    .panel{
-      background:var(--panel); border:1px solid var(--edge); border-radius:16px; overflow:hidden
-    }
-    .panel h2{margin:0;padding:12px 14px;border-bottom:1px solid var(--edge);font-size:16px}
-    .current-wrap{position:relative;aspect-ratio:16/9;background:#000}
-    .current-wrap img{width:100%;height:100%;object-fit:contain;background:#000}
-    .current-caption{
-      position:absolute;left:0;right:0;bottom:0;padding:10px 14px;
-      background:linear-gradient(0deg,rgba(0,0,0,.65),transparent);font-size:14px
-    }
-    .meta{display:flex;gap:8px;align-items:center;justify-content:space-between;padding:10px 14px;border-top:1px solid var(--edge);color:var(--muted);font-size:13px}
-    .thumbs{
-      display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:10px;padding:10px
-    }
-    .thumb{
-      border:1px solid var(--edge);border-radius:12px;overflow:hidden;background:#0a0f18;cursor:pointer;display:flex;flex-direction:column;min-height:170px
-    }
-    .thumb .img{aspect-ratio:16/10;background:#000;position:relative;display:block}
+    .badge{font-size:12px;padding:6px 10px;border:1px solid var(--edge2);border-radius:999px;color:var(--muted)}
+    main{max-width:1200px;margin:16px auto;padding:0 12px;display:grid;grid-template-columns:1.05fr 1fr;gap:14px}
+    @media (max-width:980px){ main{grid-template-columns:1fr} }
+    .panel{background:var(--panel);border:1px solid var(--edge);border-radius:16px;overflow:hidden}
+    .panel h2{margin:0;padding:10px 12px;border-bottom:1px solid var(--edge);font-size:16px}
+    .current{position:relative;aspect-ratio:16/9;background:#000}
+    .current img{width:100%;height:100%;object-fit:contain}
+    .caption{position:absolute;left:0;right:0;bottom:0;padding:10px 12px;background:linear-gradient(0deg,rgba(0,0,0,.65),transparent)}
+    .thumbs{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px;padding:10px}
+    .thumb{border:1px solid var(--edge);border-radius:12px;background:#0a0f18;cursor:pointer;overflow:hidden}
+    .thumb .img{aspect-ratio:16/10;background:#000}
     .thumb .img img{width:100%;height:100%;object-fit:cover}
-    .thumb .img.noimg{
-      background:linear-gradient(180deg,rgba(84,166,255,.25),rgba(10,132,255,.12));
-      display:grid;place-items:center;
-    }
-    .thumb .img.noimg .label{
-      font-weight:900; letter-spacing:.6px; text-transform:uppercase; opacity:.9;
-      padding:6px 10px; border:1px solid var(--edge2); border-radius:999px; backdrop-filter:blur(2px);
-    }
-    .thumb .tcap{padding:8px 10px;font-size:13px;color:var(--muted)}
-    .row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
-    .badge{font-size:12px;padding:4px 8px;border:1px solid var(--edge2);border-radius:999px;color:var(--muted)}
-    #status{min-height:22px}
+    .thumb .cap{padding:8px 10px;font-size:13px;color:var(--muted)}
   </style>
 </head>
 <body>
   <div class="topbar">
     <div class="topnav">
-      <div class="brandmini">
-        <div class="logo"><img src="/assets/logo/fire-ops-sim.png" alt="FireOps SIM"></div>
-        <div>FireOps SIM — Instructor</div>
+      <div class="row">
+        <strong>FireOps SIM — Instructor</strong>
+        <span id="authPill" class="badge">auth: …</span>
       </div>
-      <div class="controls">
-        <input id="sessionInput" class="input" placeholder="Session (e.g., alpha)" />
-        <select id="scenarioSelect" aria-label="Scenario">
+      <div class="row">
+        <input id="sessionInput" class="input" placeholder="Session" value="default" />
+        <select id="scenarioSelect" class="input">
           <option value="">Loading scenarios…</option>
         </select>
-        <button id="loadBtn" class="btn small" type="button">Load</button>
-        <button id="clearBtn" class="btn secondary small" type="button">Clear Screen</button>
-        <span id="authPill" class="badge">auth: …</span>
+        <button id="loadBtn" class="btn">Load</button>
+        <button id="clearBtn" class="btn secondary">Clear</button>
+        <button id="helloBtn" class="btn secondary">Announce (Hello)</button>
+        <button id="testBtn" class="btn secondary">Send Test Slide</button>
+        <span id="status" class="badge">idle</span>
       </div>
     </div>
   </div>
 
   <main>
-    <!-- Left: Current Users View -->
     <section class="panel">
       <h2>Current Users View</h2>
-      <div class="current-wrap">
-        <img id="currentImg" alt="Current user image">
-        <div id="currentCaption" class="current-caption"></div>
-      </div>
-      <div class="meta">
-        <div class="row">
-          <span class="badge" id="sessionBadge">session: default</span>
-          <span class="badge" id="modeBadge">manual</span>
-        </div>
-        <div id="status" class="row">Waiting…</div>
+      <div class="current">
+        <img id="currentImg" alt="Current">
+        <div id="currentCap" class="caption"></div>
       </div>
     </section>
-
-    <!-- Right: Thumbnails -->
     <section class="panel">
-      <h2>Scenario Thumbnails</h2>
-      <div id="thumbs" class="thumbs" aria-live="polite"></div>
+      <h2>Scenario Thumbnails (click to send)</h2>
+      <div id="thumbs" class="thumbs"></div>
     </section>
   </main>
 
-  <!-- Firebase (compat) -->
+  <!-- Firebase compat SDKs -->
   <script src="https://www.gstatic.com/firebasejs/10.12.4/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.4/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.4/firebase-database-compat.js"></script>
@@ -115,22 +80,10 @@
 
   <script>
   (function(){
-    const $  = s => document.querySelector(s);
-    const qs = new URLSearchParams(location.search);
+    const $ = s => document.querySelector(s);
 
-    const sessionInput    = $('#sessionInput');
-    const scenarioSelect  = $('#scenarioSelect');
-    const loadBtn         = $('#loadBtn');
-    const clearBtn        = $('#clearBtn');
-    const currentImg      = $('#currentImg');
-    const currentCaption  = $('#currentCaption');
-    const statusEl        = $('#status');
-    const sessionBadge    = $('#sessionBadge');
-    const authPill        = $('#authPill');
-    const thumbsEl        = $('#thumbs');
-
-    // Firebase init (same project as viewer)
-    const firebaseConfig = {
+    // Firebase init (match viewer)
+    const config = {
       apiKey:"AIzaSyDM6DpRSeZueVKRpbyJyDmhf8WY66KyCDk",
       authDomain:"dailyquiz-d5279.firebaseapp.com",
       databaseURL:"https://dailyquiz-d5279-default-rtdb.firebaseio.com",
@@ -139,319 +92,214 @@
       appId:"1:94577748034:web:c032d3a1d72db1313de5db",
       measurementId:"G-19DVN7NNH7"
     };
-    firebase.initializeApp(firebaseConfig);
-    const db      = firebase.database();
-    const auth    = firebase.auth();
-    // Force classic bucket for SDK refs even if public URLs disabled
+    firebase.initializeApp(config);
+    const db = firebase.database();
+    const auth = firebase.auth();
+    const storage = firebase.storage();
     const FORCE_BUCKET = "dailyquiz-d5279.appspot.com";
-    const storage = firebase.storage(); // compat; we'll use refFromURL with gs://
 
-    // ---------- Auth gate ----------
+    // UI
+    const authPill = $('#authPill'), statusEl = $('#status');
+    const sessionInput = $('#sessionInput'), scenarioSelect = $('#scenarioSelect');
+    const loadBtn = $('#loadBtn'), clearBtn = $('#clearBtn'), helloBtn = $('#helloBtn'), testBtn = $('#testBtn');
+    const thumbs = $('#thumbs'), currentImg = $('#currentImg'), currentCap = $('#currentCap');
+
+    // Helpers
+    function normSession(raw){ return (raw || 'default').trim().toLowerCase(); }
+    function manualPath(session){ return `geophoto/manual/${normSession(session)}/current`; }
+    function helloPath(session){ return `geophoto/manual/${normSession(session)}/hello`; }
+    const setStatus = t => statusEl.textContent = t;
+
     async function ensureAuthed(){
       return new Promise((resolve,reject)=>{
-        const unsub = auth.onAuthStateChanged(async (u)=>{
-          if (u){
-            authPill.textContent = 'auth: anon ✓ ' + u.uid.slice(0,8);
-            unsub(); resolve(u);
-          }else{
-            try{
-              await auth.signInAnonymously();
-            }catch(e){
-              authPill.textContent = 'auth: failed';
-              unsub(); reject(e);
-            }
-          }
+        const unsub = auth.onAuthStateChanged(u=>{
+          if(u){ authPill.textContent = 'auth: anon ✓ ' + u.uid.slice(0,8); unsub(); resolve(u); }
+          else auth.signInAnonymously().catch(e=>{ authPill.textContent='auth: failed'; unsub(); reject(e); });
         });
       });
     }
 
-    // ---------- Helpers ----------
-    function toDataURL(stored){
+    async function fetchNode(path){
+      const snap = await db.ref(path).get();
+      return snap.exists() ? snap.val() : null;
+    }
+
+    async function loadScenarios(){
+      const list=[];
+      try{ const a=await fetchNode('geophoto/scenarios'); if(a) for(const [id,s] of Object.entries(a)) list.push({id,...(s||{})}); }catch{}
+      try{ const b=await fetchNode('scenarios');          if(b) for(const [id,s] of Object.entries(b)) list.push({id,...(s||{})}); }catch{}
+      const uniq = new Map(); list.forEach(x=>{ if(!uniq.has(x.id)) uniq.set(x.id, x); });
+      const arr = Array.from(uniq.values()).sort((a,b)=>(b.createdAt||0)-(a.createdAt||0));
+      scenarioSelect.innerHTML = '<option value="">Select a scenario…</option>';
+      arr.forEach(sc=>{
+        const o=document.createElement('option');
+        o.value=sc.id; o.textContent=sc.title || sc.name || '(untitled)';
+        scenarioSelect.appendChild(o);
+      });
+      return arr;
+    }
+
+    function toDataURLFromStored(stored){
       if (!stored) return '';
       if (typeof stored === 'string') return stored;
       if (stored.data){
-        const fmt = (stored.format === 'jpeg' || stored.format === 'jpg') ? 'jpeg' : 'png';
+        const fmt = (stored.format==='jpeg'||stored.format==='jpg') ? 'jpeg' : 'png';
         return `data:image/${fmt};base64,${stored.data}`;
       }
       return '';
-    }
-    function normalizeStops(stopsLike){
-      if(!stopsLike) return [];
-      const arr = Array.isArray(stopsLike) ? stopsLike : Object.values(stopsLike);
-      return arr.map(s=>{
-        const num=v=> (v===0||v===null) ? v : parseFloat(v);
-        return {
-          title: s.title || s.name || '',
-          caption: s.caption || s.text || '',
-          lat: num(s.lat ?? s.latitude ?? s.latDeg),
-          lng: num(s.lng ?? s.lon ?? s.long ?? s.longitude ?? s.lngDeg),
-          radiusMeters: num(s.radiusMeters ?? s.radius ?? s.r) || 40,
-          // Prefer explicit fields, but keep originals for fallback lookups
-          image: toDataURL(s.imageData || s.imageURL || s.imageUrl || s.url || s.photoURL || s.photo),
-          storagePath: s.storagePath || s.thumbPath || '',
-          gsUri: s.gsUri || ''
-        };
-      });
     }
     function toStorageRefString(v){
       if(!v) return '';
       let s = (v+'').trim();
       try{ s = decodeURIComponent(s); }catch{}
       if (s.startsWith('gs://')) return s;
-      // firebase storage REST url
       let m = s.match(/^https?:\/\/firebasestorage\.googleapis\.com\/v0\/b\/([^/]+)\/o\/([^?]+)/i);
       if (m) return `gs://${m[1]}/${m[2].replace(/\+/g,' ')}`;
-      // new firebasestorage.app url
       m = s.match(/^https?:\/\/([^/]+)\.firebasestorage\.app\/o\/([^?]+)/i);
       if (m) return `gs://${m[1]}/${m[2].replace(/\+/g,' ')}`;
-      // plain path
       if (!/^https?:\/\//i.test(s)) return `gs://${FORCE_BUCKET}/${s}`;
       return '';
     }
-    async function getDownloadURLAuth(pathOrGs){
-      const refStr = toStorageRefString(pathOrGs);
-      if (!refStr) throw new Error('no storage ref');
-      const ref = storage.refFromURL(refStr);
-      return await ref.getDownloadURL();
-    }
     async function blobToDataURLViaStorage(pathOrGs){
-      const refStr = toStorageRefString(pathOrGs);
+      const refStr = toStorageRefString(pathOrGs); if(!refStr) return '';
       const ref = storage.refFromURL(refStr);
       const blob = await ref.getBlob();
-      return await new Promise((res,rej)=>{
-        const fr = new FileReader();
-        fr.onload = ()=>res(fr.result);
-        fr.onerror= rej;
-        fr.readAsDataURL(blob);
-      });
+      return await new Promise((res,rej)=>{ const fr=new FileReader(); fr.onload=()=>res(fr.result); fr.onerror=rej; fr.readAsDataURL(blob); });
+    }
+    async function getStopDataURL(stop){
+      // Prefer inline data first; then fetch from Storage if private
+      const inline = toDataURLFromStored(stop.imageData || stop.imageURL || stop.imageUrl || stop.url || stop.photoURL || stop.photo);
+      if (inline) return inline;
+      if (stop.gsUri)      try{ return await blobToDataURLViaStorage(stop.gsUri); }catch{}
+      if (stop.storagePath)try{ return await blobToDataURLViaStorage(stop.storagePath); }catch{}
+      return '';
     }
 
-    // ---------- Data access (SDK; honors rules) ----------
-    async function fetchNode(path){
-      const snap = await db.ref(path).get();
-      return snap.exists() ? snap.val() : null;
-    }
-    async function loadAllScenarios(){
-      const list=[];
-      try{
-        const a = await fetchNode('geophoto/scenarios');
-        if (a) for (const [id,s] of Object.entries(a)) list.push({ id, ...(s||{}), stops: normalizeStops(s?.stops) });
-      }catch(e){
-        console.warn('read geophoto/scenarios denied or missing', e);
-      }
-      try{
-        const b = await fetchNode('scenarios');
-        if (b) for (const [id,s] of Object.entries(b)) list.push({ id, ...(s||{}), stops: normalizeStops(s?.stops) });
-      }catch(e){
-        console.warn('read scenarios denied or missing', e);
-      }
-      // de-dup
-      const map=new Map(); list.forEach(s=>{ if(!map.has(s.id)) map.set(s.id, s); });
-      return Array.from(map.values());
+    function normalizeStops(stopsLike){
+      if(!stopsLike) return [];
+      const arr = Array.isArray(stopsLike) ? stopsLike : Object.values(stopsLike);
+      return arr.map(s=>({
+        title: s.title || s.name || '',
+        caption: s.caption || s.text || '',
+        storagePath: s.storagePath || s.thumbPath || '',
+        gsUri: s.gsUri || '',
+        imageData: s.imageData,
+        imageURL: s.imageURL || s.imageUrl || s.url || s.photoURL || s.photo || ''
+      }));
     }
 
-    function populateDropdown(list){
-      scenarioSelect.innerHTML = '<option value="">Select a scenario…</option>';
-      list.sort((a,b)=> (b.createdAt||0)-(a.createdAt||0));
-      list.forEach(sc=>{
-        const o=document.createElement('option');
-        o.value=sc.id;
-        o.textContent=sc.title || sc.name || '(untitled)';
-        scenarioSelect.appendChild(o);
-      });
-      const pre = qs.get('id');
-      if (pre && list.some(s=>s.id===pre)) scenarioSelect.value = pre;
-    }
-
-    // Live subscription to current users view
+    // Live preview of what users see (subscribe to manual path)
     let currentRef = null;
-    function subscribeCurrent(session){
-      if (currentRef) currentRef.off();
-      const path = `geophoto/manual/${session}/current`;
-      currentRef = db.ref(path);
-      $('#sessionBadge').textContent = 'session: ' + session;
-
+    function subscribeCurrent(sessionRaw){
+      const s = normSession(sessionRaw);
+      if (currentRef) try{ currentRef.off(); }catch{};
+      currentRef = db.ref(manualPath(s));
       currentRef.on('value', snap=>{
-        const v = snap.val();
-        if (!v || v.clear){
-          currentImg.src = '';
-          currentCaption.textContent = '';
-          statusEl.textContent = 'Waiting…';
-          return;
-        }
-        const image = toDataURL(v.image || v.imageURL || v.imageUrl || v.url || v.photoURL || v.photo || '');
-        currentImg.src = image || '';
-        const capText = (v.title ? (v.title + ' — ') : '') + (v.caption || '');
-        currentCaption.textContent = capText;
-        statusEl.textContent = 'Showing: ' + (v.title || '(untitled)');
-      }, err=>{
-        statusEl.textContent = 'Live read denied — check rules for /geophoto/manual/*';
-        console.error(err);
-      });
+        const v=snap.val();
+        if (!v || v.clear){ currentImg.src=''; currentCap.textContent=''; setStatus('preview waiting…'); return; }
+        currentImg.src = v.image || v.imageURL || v.url || '';
+        currentCap.textContent = (v.title? v.title+' — ' : '') + (v.caption||'');
+        setStatus('preview: '+(v.title||'slide'));
+      }, err=>{ setStatus('preview denied — rules'); console.error(err); });
     }
 
-    // Pick best display URL for a stop (thumbnail display for instructor)
-    async function resolveThumbURL(stop){
-      if (stop.image) return stop.image; // already data URL or http(s)
-      if (stop.storagePath) {
-        try{ return await getDownloadURLAuth(stop.storagePath); }catch{}
-      }
-      if (stop.gsUri){
-        try{ return await getDownloadURLAuth(stop.gsUri); }catch{}
-      }
-      return ''; // will render a label card
-    }
+    async function renderThumbsForScenario(id){
+      thumbs.innerHTML = '';
+      let sc = await fetchNode(`geophoto/scenarios/${id}`);
+      if(!sc) sc = await fetchNode(`scenarios/${id}`);
+      if (!sc){ thumbs.innerHTML = '<div class="badge">Scenario not found</div>'; return; }
 
-    // Push a frame to users (send data URL when storage is private)
-    async function pushFrame(session, stop){
-      const path = `geophoto/manual/${session}/current`;
-      let imgToSend = stop.image || '';
-
-      // If no inline/URL image, try to fetch blob from Storage and convert to data URL
-      if (!imgToSend){
-        const refStr = stop.gsUri || stop.storagePath || '';
-        if (refStr){
-          try{ imgToSend = await blobToDataURLViaStorage(refStr); }catch{}
-        }
-      }
-
-      const payload = {
-        title: stop.title || '',
-        caption: stop.caption || '',
-        image: imgToSend || '' // empty => viewer shows caption-only slide
-      };
-      try{
-        await db.ref(path).set(payload);
-        statusEl.textContent = 'Sent: ' + (stop.title || '(untitled)');
-      }catch(e){
-        statusEl.textContent = 'Error sending frame (rules?)';
-        console.error(e);
-      }
-    }
-    async function clearScreen(session){
-      const path = `geophoto/manual/${session}/current`;
-      try{
-        await db.ref(path).set({ clear:true });
-        statusEl.textContent = 'Cleared';
-      }catch(e){
-        statusEl.textContent = 'Error clearing (rules?)';
-        console.error(e);
-      }
-    }
-
-    // Build thumbnails grid (adds Dispatch slide first when available)
-    async function renderThumbs(stops, session, dispatchText){
-      thumbsEl.innerHTML = '';
-
-      // Dispatch slide
-      if (dispatchText){
-        const dCard = document.createElement('div');
-        dCard.className = 'thumb';
-        dCard.title = 'Dispatch — ' + dispatchText;
-
-        const dImgWrap = document.createElement('div');
-        dImgWrap.className = 'img noimg';
-        const label = document.createElement('div');
-        label.className = 'label';
-        label.textContent = 'Dispatch';
-        dImgWrap.appendChild(label);
-
-        const dCap = document.createElement('div');
-        dCap.className = 'tcap';
-        dCap.innerHTML = `<strong>Dispatch</strong><br>${dispatchText}`;
-
-        dCard.appendChild(dImgWrap);
-        dCard.appendChild(dCap);
-        dCard.addEventListener('click', ()=> pushFrame(session, { title:'Dispatch', caption: dispatchText, image:'' }));
-        thumbsEl.appendChild(dCard);
-      }
-
-      if (!stops || !stops.length){
-        if (!dispatchText){
-          const empty = document.createElement('div');
-          empty.style.cssText = 'padding:12px;color:#94a3b8';
-          empty.textContent = 'No stops found for this scenario or you lack read permission.';
-          thumbsEl.appendChild(empty);
-        }
-        return;
+      const stops = normalizeStops(sc.stops || []);
+      // Optional dispatch tile
+      if ((sc.dispatch||sc.notes||'').toString().trim()){
+        const card = document.createElement('div'); card.className='thumb';
+        const imgWrap = document.createElement('div'); imgWrap.className='img'; imgWrap.style.display='grid'; imgWrap.style.placeItems='center'; imgWrap.style.color='#cbd5e1';
+        imgWrap.textContent = 'Dispatch';
+        const cap = document.createElement('div'); cap.className='cap'; cap.style.padding='8px 10px'; cap.style.color='#9fb2d6';
+        cap.textContent = (sc.dispatch||sc.notes||'').toString();
+        card.appendChild(imgWrap); card.appendChild(cap);
+        card.onclick = async ()=>{
+          const session = normSession(sessionInput.value);
+          await db.ref(manualPath(session)).set({ title:'Dispatch', caption:String(sc.dispatch||sc.notes||''), image:'' });
+          setStatus('Sent: Dispatch');
+        };
+        thumbs.appendChild(card);
       }
 
       for (const st of stops){
-        const card = document.createElement('div');
-        card.className = 'thumb';
-        card.title = (st.title || 'Untitled') + (st.caption ? (' — ' + st.caption) : '');
+        const card = document.createElement('div'); card.className='thumb';
+        const imgWrap = document.createElement('div'); imgWrap.className='img';
+        const cap = document.createElement('div'); cap.className='cap'; cap.style.padding='8px 10px';
+        cap.textContent = (st.title||'') + (st.caption ? (' — ' + st.caption) : '');
 
-        const imgWrap = document.createElement('div');
-        imgWrap.className = 'img';
-
-        const url = await resolveThumbURL(st);
-        if (url){
-          const img = document.createElement('img');
-          img.loading = 'lazy'; img.decoding = 'async';
-          img.src = url; img.alt = st.title || 'Scenario image';
-          imgWrap.appendChild(img);
-        }else{
-          imgWrap.classList.add('noimg');
-          const label = document.createElement('div');
-          label.className = 'label';
-          label.textContent = (st.title || 'Slide');
-          imgWrap.appendChild(label);
+        try{
+          const url = await getStopDataURL(st);
+          if (url){
+            const im = document.createElement('img'); im.src=url; im.alt=st.title||'';
+            imgWrap.appendChild(im);
+          }else{
+            imgWrap.style.display='grid'; imgWrap.style.placeItems='center'; imgWrap.style.color='#cbd5e1';
+            imgWrap.textContent = st.title || 'Slide';
+          }
+        }catch{
+          imgWrap.style.display='grid'; imgWrap.style.placeItems='center'; imgWrap.style.color='#cbd5e1';
+          imgWrap.textContent = st.title || 'Slide';
         }
 
-        const cap = document.createElement('div');
-        cap.className = 'tcap';
-        cap.innerHTML = `<strong>${st.title || 'Untitled'}</strong><br>${st.caption || ''}`;
-
         card.appendChild(imgWrap);
-        card.appendChild(cap);
-        card.addEventListener('click', ()=> pushFrame(session, st));
-        thumbsEl.appendChild(card);
+        const capDiv = document.createElement('div'); capDiv.className='cap'; capDiv.textContent = st.caption||''; capDiv.style.color='#9fb2d6'; capDiv.style.padding='8px 10px';
+        card.appendChild(capDiv);
+
+        card.onclick = async ()=>{
+          const session = normSession(sessionInput.value);
+          const dataURL = await getStopDataURL(st);
+          await db.ref(manualPath(session)).set({
+            title: st.title || '',
+            caption: st.caption || '',
+            image: dataURL || ''  // data URL avoids Storage permissions on viewer
+          });
+          setStatus('Sent: ' + (st.title || 'slide'));
+        };
+
+        thumbs.appendChild(card);
       }
     }
 
-    // Wire UI
-    loadBtn.addEventListener('click', async ()=>{
-      const session = (sessionInput.value || 'default').trim();
-      const scenarioId = scenarioSelect.value;
-      if (!scenarioId){ alert('Select a scenario.'); return; }
+    // Buttons
+    loadBtn.onclick = async ()=>{
+      const id = scenarioSelect.value;
+      if (!id){ setStatus('pick scenario'); return; }
+      await renderThumbsForScenario(id);
+      subscribeCurrent(sessionInput.value);
+      setStatus('loaded');
+    };
 
-      // subscribe to current users view for this session
-      subscribeCurrent(session);
+    clearBtn.onclick = async ()=>{
+      const s = normSession(sessionInput.value);
+      await db.ref(manualPath(s)).set({ clear:true });
+      setStatus('cleared');
+    };
 
-      // fetch scenario via SDK
-      let sc = await fetchNode(`geophoto/scenarios/${scenarioId}`);
-      if(!sc) sc = await fetchNode(`scenarios/${scenarioId}`);
+    helloBtn.onclick = async ()=>{
+      const s = normSession(sessionInput.value);
+      const u = auth.currentUser || await ensureAuthed();
+      await db.ref(helloPath(s)).update({ instructorPing: Date.now(), from: u.uid });
+      setStatus('announced');
+    };
 
-      const stops = normalizeStops(sc?.stops) || [];
-      const dispatchText = ((sc?.dispatch || sc?.notes || '') + '').trim();
-      await renderThumbs(stops, session, dispatchText);
-      statusEl.textContent = 'Loaded scenario: ' + (sc?.title || sc?.name || scenarioId);
-    });
+    testBtn.onclick = async ()=>{
+      const s = normSession(sessionInput.value);
+      await db.ref(manualPath(s)).set({ title:'Test', caption:'If viewers see this, we are connected.', image:'' });
+      setStatus('test sent');
+    };
 
-    clearBtn.addEventListener('click', ()=>{
-      const session = (sessionInput.value || 'default').trim();
-      clearScreen(session);
-    });
-
-    // ---------- Boot ----------
-    (async function boot(){
-      sessionInput.value = qs.get('session') || 'default';
-      try{
-        await ensureAuthed();
-        const list = await loadAllScenarios();
-        populateDropdown(list);
-        // Auto-subscribe and preselect if provided
-        const autoId = qs.get('id');
-        if (autoId && list.some(s=>s.id===autoId)){
-          scenarioSelect.value = autoId;
-        }
-        subscribeCurrent(sessionInput.value || 'default');
-      }catch(e){
-        statusEl.textContent = 'Startup failed: auth/rules';
-        console.error(e);
-      }
+    // Boot
+    (async ()=>{
+      await ensureAuthed();
+      await loadScenarios();
+      subscribeCurrent(sessionInput.value);
+      setStatus('idle');
     })();
-
   })();
   </script>
 </body>
