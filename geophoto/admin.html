@@ -1,511 +1,412 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="utf-8" />
-<title>FireOps SIM — Admin (Create → GPS → Save)</title>
-<meta name="viewport" content="width=device-width, initial-scale=1" />
-<meta name="theme-color" content="#0b0f14" />
-<style>
-:root{ --bg:#0b0f14; --bg2:#0e1421; --card:#0f1624; --edge:rgba(255,255,255,.10); --text:#eaf2ff; --muted:#93a0b5; --blue:#0a84ff; }
-*{ box-sizing:border-box }
-html,body{ margin:0; height:100%; font-family:system-ui,-apple-system,Segoe UI,Roboto,Inter,Arial,sans-serif; color:var(--text); background:
-  radial-gradient(1400px 700px at 15% -15%, rgba(10,132,255,.28), transparent 60%),
-  radial-gradient(1200px 600px at 110% 0%, rgba(255,59,48,.22), transparent 60%),
-  linear-gradient(165deg, var(--bg2), var(--bg) 55%) }
-.topbar{ position:sticky; top:0; z-index:20; background:rgba(12,15,22,.78); backdrop-filter:blur(6px) saturate(120%); border-bottom:1px solid rgba(255,255,255,.08) }
-.topnav{ max-width:1200px; margin:0 auto; padding:10px 16px; display:flex; gap:10px; align-items:center }
-.brand{ font-weight:900 }
-.spacer{ flex:1 }
-.btn{ appearance:none; border:1px solid rgba(255,255,255,.18); background:linear-gradient(180deg,#142238,#0f1930); color:#fff; border-radius:12px; padding:9px 12px; font-weight:800; cursor:pointer }
-.btn[disabled]{ opacity:.6; cursor:not-allowed }
-.tag{ display:inline-flex; align-items:center; gap:8px; padding:6px 10px; border-radius:999px; border:1px solid rgba(255,255,255,.16); color:var(--muted) }
-
-main{ max-width:1200px; margin:16px auto 40px; padding:0 16px; display:grid; grid-template-columns:420px 1fr; gap:12px }
-.card{ background:var(--card); border:1px solid var(--edge); border-radius:16px; padding:12px; min-height:120px }
-label{ display:block; margin:8px 0 6px 2px; font-size:12px; color:var(--muted) }
-.input, select, textarea{ width:100%; padding:10px; border-radius:10px; border:1px solid rgba(255,255,255,.14); background:#0c1322; color:#eaf2ff }
-textarea{ min-height:80px }
-.row{ display:flex; gap:8px; align-items:center; flex-wrap:wrap }
-.grid{ display:grid; grid-template-columns:repeat(auto-fill, minmax(120px,1fr)); gap:10px }
-.thumb{ width:100%; height:110px; object-fit:cover; border-radius:10px; background:#0a1a2a; border:1px solid rgba(255,255,255,.14) }
-.small{ font-size:12px; opacity:.85 }
-hr{ border:none; height:1px; background:rgba(255,255,255,.08); margin:12px 0 }
-
-#errbar{ position:fixed; left:10px; bottom:10px; background:#2b0d0d; color:#ffd7d7; border:1px solid #7a2b2b; border-radius:12px; padding:8px 12px; display:none; z-index:9999 }
-#okbar{ position:fixed; left:10px; bottom:56px; background:#0f2a19; color:#d8ffe2; border:1px solid #2c7a4b; border-radius:12px; padding:8px 12px; display:none; z-index:9999 }
-
-/* loading overlay */
-#loader{ position:fixed; inset:0; display:none; place-items:center; z-index:99; background:rgba(6,12,20,.55); backdrop-filter:blur(2px) }
-.spinner{ width:42px; height:42px; border-radius:999px; border:4px solid rgba(255,255,255,.25); border-top-color:#fff; animation:spin 1s linear infinite }
-@keyframes spin{ to{ transform:rotate(360deg) } }
-
-.step{ padding:10px; border:1px dashed rgba(255,255,255,.14); border-radius:12px; background:rgba(255,255,255,.02) }
-.kv{ font-size:12px; color:var(--muted) }
-</style>
+  <meta charset="utf-8" />
+  <title>FireOps SIM — Create Scenario</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#0b0f14" />
+  <style>
+    :root{
+      --bg:#0b0f14; --bg2:#0e1421; --card:#0f1624; --edge:rgba(255,255,255,.12);
+      --text:#eaf2ff; --muted:#9fb2d6; --a1:#54a6ff; --a2:#0a84ff; --ok:#16a34a; --warn:#f59e0b; --err:#ef4444;
+    }
+    *{box-sizing:border-box}
+    html,body{margin:0;height:100%;color:var(--text);background:
+      radial-gradient(1400px 700px at 15% -15%, rgba(10,132,255,.24), transparent 60%),
+      radial-gradient(1200px 600px at 110% 0%, rgba(255,59,48,.15), transparent 60%),
+      linear-gradient(165deg,var(--bg2),var(--bg) 55%);font-family:system-ui,-apple-system,Segoe UI,Roboto,Inter,Arial,sans-serif}
+    .topbar{position:sticky;top:0;z-index:40;background:rgba(12,15,22,.78);backdrop-filter:blur(6px);border-bottom:1px solid rgba(255,255,255,.08)}
+    .topnav{max-width:1000px;margin:0 auto;padding:10px 12px;display:flex;gap:10px;align-items:center}
+    .brand{font-weight:900}
+    .spacer{flex:1}
+    .btn{appearance:none;border:1px solid rgba(255,255,255,.2);background:linear-gradient(180deg,#15233a,#0f1930);
+      color:#fff;border-radius:12px;padding:10px 14px;font-weight:800;cursor:pointer}
+    .btn[disabled]{opacity:.6;cursor:not-allowed}
+    .btn.ghost{background:transparent}
+    .btn.ok{background:linear-gradient(180deg,#20c46b,#0fa36b);border-color:#178b56}
+    .pill{font-size:12px;padding:6px 10px;border:1px solid rgba(255,255,255,.16);border-radius:999px;color:var(--muted);white-space:nowrap}
+    main{max-width:1000px;margin:16px auto 40px;padding:0 12px;display:grid;grid-template-columns:1fr 1fr;gap:12px}
+    .card{background:var(--card);border:1px solid var(--edge);border-radius:16px;padding:12px}
+    label{display:block;margin:10px 0 6px 2px;font-size:12px;color:var(--muted)}
+    input,select,textarea{width:100%;padding:10px;border-radius:10px;border:1px solid rgba(255,255,255,.14);background:#0c1322;color:#eaf2ff}
+    textarea{min-height:90px}
+    .row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+    .hint{font-size:12px;color:var(--muted)}
+    .grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+    .thumb{width:100%;aspect-ratio:16/10;object-fit:cover;border-radius:12px;border:1px solid rgba(255,255,255,.14);background:#0a1727}
+    .section{padding:10px;border:1px dashed rgba(255,255,255,.14);border-radius:12px;background:rgba(255,255,255,.02)}
+    .hidden{display:none !important}
+    #snack{position:fixed;left:12px;bottom:12px;z-index:99;display:none;padding:10px 12px;border-radius:12px;border:1px solid #2c7a4b;background:#0f2a19;color:#d8ffe2}
+    #errbar{position:fixed;left:12px;bottom:60px;z-index:99;display:none;padding:10px 12px;border-radius:12px;border:1px solid #7a2b2b;background:#2b0d0d;color:#ffd7d7}
+    #loader{position:fixed;inset:0;display:none;place-items:center;background:rgba(6,12,20,.55);backdrop-filter:blur(2px);z-index:98}
+    .spinner{width:44px;height:44px;border-radius:999px;border:4px solid rgba(255,255,255,.25);border-top-color:#fff;animation:spin 1s linear infinite}
+    @keyframes spin{to{transform:rotate(360deg)}}
+    /* Phone-first stack */
+    @media (max-width:840px){ main{grid-template-columns:1fr} }
+  </style>
 </head>
 <body>
-<div id="errbar"></div><div id="okbar"></div>
-<div id="loader"><div class="spinner"></div></div>
+  <div id="loader"><div class="spinner"></div></div>
+  <div id="errbar"></div>
+  <div id="snack"></div>
 
-<div class="topbar">
-  <div class="topnav">
-    <div class="brand">FireOps SIM — Admin</div>
-    <div class="spacer"></div>
-    <button id="showCreate" class="btn">Create Scenario</button>
-    <button id="showEdit" class="btn">Edit Scenario</button>
-    <a class="btn" href="./advanced-editor.html">Open Advanced Editor</a>
-  </div>
-</div>
-
-<main>
-  <!-- LEFT: Create (new guided flow) -->
-  <section class="card" id="createPane">
-    <h3>Create Scenario</h3>
-    <div class="step">
-      <b>Step 1 — Name & Dispatch</b>
-      <label>Scenario Name <span class="small" style="opacity:.7">(required)</span></label>
-      <input id="cTitle" class="input" placeholder="e.g., MVC — County Rd 25 & Ridgeview" />
-      <label>Dispatch Info <span class="small" style="opacity:.7">(optional)</span></label>
-      <textarea id="cDispatch" placeholder="Example: 'Engine 181, respond to MVC with injuries, 2 vehicles, fuel leak, WB lane blocked.'"></textarea>
-      <div class="row" style="margin-top:8px">
-        <button id="createBtn" class="btn">Create Scenario</button>
-        <span id="createStatus" class="tag">Ready</span>
-      </div>
+  <div class="topbar">
+    <div class="topnav">
+      <div class="brand">FireOps SIM — Create Scenario</div>
+      <div class="spacer"></div>
+      <a class="btn" href="./advanced-editor.html">Open Advanced Editor</a>
     </div>
+  </div>
 
-    <div class="step" style="margin-top:12px">
-      <b>Step 2 — Photo + GPS</b>
-      <div class="small" style="margin:4px 0 8px">Upload or take a photo. We’ll automatically capture GPS for this stop.</div>
-      <input id="cOneFile" type="file" accept="image/*" capture="environment" />
-      <div id="cPreviewBox" class="row" style="margin-top:8px; align-items:flex-start; display:none">
-        <img id="cThumb" class="thumb" alt="">
-        <div>
-          <div id="cImgInfo" class="kv">Image: —</div>
-          <div id="cGpsInfo" class="kv">GPS: waiting…</div>
-          <div class="row" style="margin-top:6px">
-            <button id="cRefreshGPS" class="btn">Refresh Location</button>
+  <main>
+    <!-- LEFT: the 3-step guided flow -->
+    <section class="card">
+      <h3 style="margin:0 0 8px">New Scenario</h3>
+
+      <!-- Step 1 -->
+      <div class="section" id="step1">
+        <b>Step 1 — Name & Dispatch</b>
+        <label>Scenario Name <span class="hint">(required)</span></label>
+        <input id="sTitle" placeholder="e.g., MVC — Ridgeview & Co Rd 25" />
+        <label>Dispatch (optional)</label>
+        <textarea id="sDispatch" placeholder="Engine 181, respond to MVC with injuries, 2 vehicles, fuel leak, WB lane blocked."></textarea>
+        <div class="row" style="margin-top:8px">
+          <button id="createBtn" class="btn">Create</button>
+          <span id="step1Status" class="pill">idle</span>
+        </div>
+      </div>
+
+      <!-- Step 2 -->
+      <div class="section hidden" id="step2" style="margin-top:12px">
+        <b>Step 2 — Add a Photo</b>
+        <div class="hint" style="margin:4px 0 10px">Take a picture, choose from your library, or upload a file.</div>
+        <div class="grid">
+          <button id="btnCamera" class="btn">Take Photo</button>
+          <button id="btnLibrary" class="btn">Choose from Library</button>
+          <button id="btnUpload" class="btn">Upload File</button>
+        </div>
+        <!-- three hidden inputs so phones get the right UX -->
+        <input id="inCamera"  class="hidden" type="file" accept="image/*" capture="environment">
+        <input id="inLibrary" class="hidden" type="file" accept="image/*">
+        <input id="inUpload"  class="hidden" type="file" accept="image/*">
+
+        <!-- Preview + location choice -->
+        <div id="previewWrap" class="row hidden" style="margin-top:10px;align-items:flex-start">
+          <img id="thumb" class="thumb" alt="">
+          <div style="min-width:200px">
+            <div id="imgInfo" class="hint">Image: —</div>
+            <hr style="border:none;height:1px;background:rgba(255,255,255,.08);margin:10px 0">
+            <div id="locChoice" class="hidden">
+              <div class="hint" style="margin-bottom:6px">Set location for this stop:</div>
+              <div class="row">
+                <button id="btnUseGPS" class="btn">Use my current location</button>
+                <button id="btnManualLoc" class="btn ghost">Enter manually</button>
+              </div>
+            </div>
+            <div id="locGPS" class="hidden" style="margin-top:8px">
+              <div id="gpsLine" class="hint">GPS: waiting…</div>
+              <div class="row" style="margin-top:6px">
+                <button id="btnRefreshGPS" class="btn">Refresh</button>
+                <button id="btnClearGPS" class="btn ghost">Clear</button>
+              </div>
+            </div>
+            <div id="locManual" class="hidden" style="margin-top:8px">
+              <label>Latitude</label><input id="latIn" inputmode="decimal" placeholder="e.g., 38.987654">
+              <label>Longitude</label><input id="lngIn" inputmode="decimal" placeholder="-104.876543">
+              <label>Accuracy (m) <span class="hint">(optional)</span></label><input id="accIn" inputmode="numeric" placeholder="e.g., 12">
+              <div class="row" style="margin-top:6px">
+                <button id="btnSaveManual" class="btn ok">Save Location</button>
+                <button id="btnManualBack" class="btn ghost">Back</button>
+              </div>
+            </div>
           </div>
         </div>
       </div>
-    </div>
 
-    <div class="step" style="margin-top:12px">
-      <b>Step 3 — Save</b>
-      <div class="small" style="margin:4px 0 8px">Uploads the photo (full + thumb), saves GPS on the stop, and writes to the database.</div>
-      <div class="row">
-        <button id="saveToCloud" class="btn" disabled>Save to Cloud</button>
-        <button id="openEditAfter" class="btn" disabled>Open in Edit</button>
+      <!-- Step 3 -->
+      <div class="section hidden" id="step3" style="margin-top:12px">
+        <b>Step 3 — Upload & Save</b>
+        <div class="hint" style="margin:4px 0 10px">We’ll upload the photo (full + thumbnail) and write the stop to the database.</div>
+        <div class="row">
+          <button id="saveBtn" class="btn" disabled>Save to Cloud</button>
+          <a id="openEditor" class="btn ghost" href="./advanced-editor.html" aria-disabled="true">Open in Advanced Editor</a>
+          <span id="saveStatus" class="pill">idle</span>
+        </div>
       </div>
-    </div>
-  </section>
+    </section>
 
-  <!-- RIGHT: Edit (unchanged from older version) -->
-  <section class="card" id="editPane" style="display:none">
-    <h3>Edit Scenario</h3>
-    <label>Select a scenario</label>
-    <select id="eSelect"><option value="">Loading…</option></select>
-    <div class="row" style="margin-top:6px">
-      <button id="refreshBtn" class="btn">Refresh</button>
-      <span id="eStatus" class="tag">—</span>
-    </div>
+    <!-- RIGHT: helpful tips -->
+    <section class="card">
+      <h3 style="margin:0 0 8px">Tips</h3>
+      <ul style="margin:8px 0 0 14px; padding:0 0 0 4px; line-height:1.5">
+        <li>Step 2 stays hidden until you create the scenario in Step 1.</li>
+        <li>After choosing a photo, pick **Use my location** or **Enter manually**.</li>
+        <li>Photos are compressed to speed up viewing; originals aren’t needed.</li>
+        <li>Edits (titles, captions, overlays, ordering) are in the **Advanced Editor**.</li>
+      </ul>
+      <hr style="border:none;height:1px;background:rgba(255,255,255,.08);margin:12px 0">
+      <div id="debug" class="hint"></div>
+    </section>
+  </main>
 
-    <hr />
-    <div class="row">
-      <div style="flex:1">
-        <label>Title</label>
-        <input id="eTitle" class="input" />
-      </div>
-      <div>
-        <label>&nbsp;</label>
-        <button id="saveMeta" class="btn">Save Scenario</button>
-      </div>
-    </div>
-    <label>Description / Dispatch</label>
-    <textarea id="eDesc" placeholder="Edit dispatch or notes"></textarea>
+  <!-- Firebase (ES Modules) -->
+  <script type="module">
+    // ---------- small helpers ----------
+    const $ = (id)=>document.getElementById(id);
+    const show = (el, on)=> (typeof el==='string' ? $(el) : el).classList.toggle('hidden', !on);
+    const snack = (m)=>{ const b=$('snack'); b.textContent=m; b.style.display='block'; setTimeout(()=>b.style.display='none', 2400); };
+    const errBar= (m)=>{ const b=$('errbar'); b.textContent=m; b.style.display='block'; setTimeout(()=>b.style.display='none', 4200); };
+    const loading = (on)=>{ $('loader').style.display = on ? 'grid' : 'none'; };
+    const setKV = (id, t)=> $(id).textContent = t;
 
-    <hr />
-    <h4>Add Photos</h4>
-    <input id="eFiles" type="file" accept="image/*" capture="environment" multiple />
-    <div id="eUploads" class="grid" style="margin-top:8px"></div>
+    // ---------- Firebase ----------
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-app.js";
+    import { getDatabase, ref as dbRef, set, get, push, update } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-database.js";
+    import { getStorage, ref as stRef, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-storage.js";
+    import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-auth.js";
+    // App Check (optional; enable if Enforcement is ON)
+    // import { initializeAppCheck, ReCaptchaV3Provider } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-app-check.js";
 
-    <hr />
-    <h4>Existing Stops</h4>
-    <div id="stopsGrid" class="grid"></div>
-  </section>
-</main>
-
-<!-- Firebase (modules) -->
-<script type="module">
-/* ---------- UI helpers ---------- */
-const $ = (id)=>document.getElementById(id);
-const show = (id, on)=> $(id).style.display = on ? '' : 'none';
-const ok = (m)=>{ const b=$('okbar'); b.textContent=m; b.style.display='block'; setTimeout(()=>b.style.display='none', 2400); };
-const err= (m)=>{ const b=$('errbar'); b.textContent=m; b.style.display='block'; setTimeout(()=>b.style.display='none', 4200); };
-const loading = (on)=>{ $('loader').style.display = on ? 'grid' : 'none'; };
-
-function setKV(id, text){ $(id).textContent = text; }
-
-/* ---------- Firebase ---------- */
-import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-app.js";
-import { getDatabase, ref as dbRef, set, push, get, onValue } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-database.js";
-import { getStorage, ref as stRef, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-storage.js";
-import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-auth.js";
-
-/* Your project config (kept from the older version) */
-const firebaseConfig = {
-  apiKey:"AIzaSyDM6DpRSeZueVKRpbyJyDmhf8WY66KyCDk",
-  authDomain:"dailyquiz-d5279.firebaseapp.com",
-  databaseURL:"https://dailyquiz-d5279-default-rtdb.firebaseio.com",
-  projectId:"dailyquiz-d5279",
-  storageBucket:"dailyquiz-d5279.firebasestorage.app",
-  appId:"1:94577748034:web:c032d3a1d72db1313de5db",
-  measurementId:"G-19DVN7NNH7"
-};
-const appFB = initializeApp(firebaseConfig);
-const db = getDatabase(appFB);
-const storage = getStorage(appFB, "gs://dailyquiz-d5279.firebasestorage.app");
-const auth = getAuth(appFB);
-
-/* Robust Anonymous auth */
-async function ensureAuthed(){
-  if (auth.currentUser) return auth.currentUser;
-  await signInAnonymously(auth);
-  return await new Promise((resolve, reject)=>{
-    const unsub = onAuthStateChanged(auth, (u)=>{ if (u){ unsub(); resolve(u); } }, reject);
-  });
-}
-
-/* ---------- Resize helpers ---------- */
-const ORIG_MAX_EDGE = 1600;   // full image longest side
-const THUMB_MAX_EDGE = 480;   // thumb longest side
-const JPEG_QUALITY   = 0.82;
-
-async function fileToBitmap(file){
-  if ('createImageBitmap' in window) {
-    try{ return await createImageBitmap(file, { imageOrientation: 'from-image' }); }catch(_){}
-  }
-  const url = URL.createObjectURL(file);
-  const img = new Image(); img.decoding='async'; img.src=url;
-  await img.decode(); URL.revokeObjectURL(url);
-  return img;
-}
-function scaleDims(w, h, maxEdge){
-  const s = Math.min(1, maxEdge / Math.max(w, h));
-  return { w: Math.round(w*s), h: Math.round(h*s) };
-}
-async function bitmapToBlob(bmp, maxEdge, quality=JPEG_QUALITY, type='image/jpeg'){
-  const { w, h } = scaleDims(bmp.width, bmp.height, maxEdge);
-  const c = ('OffscreenCanvas' in window) ? new OffscreenCanvas(w, h) : Object.assign(document.createElement('canvas'), { width:w, height:h });
-  if (!('width' in c)) { c.width = w; c.height = h; }
-  const ctx = c.getContext('2d');
-  ctx.imageSmoothingEnabled = true;
-  ctx.imageSmoothingQuality = 'high';
-  ctx.drawImage(bmp, 0, 0, w, h);
-  const blob = await (c.convertToBlob ? c.convertToBlob({ type, quality }) : new Promise(res => c.toBlob(res, type, quality)));
-  return { blob, width:w, height:h };
-}
-
-/* ---------- Data helpers ---------- */
-const ROOT='scenarios';
-let scenarios=[];
-function coerceStops(sc){
-  if (Array.isArray(sc?.stops)) return sc.stops;
-  if (Array.isArray(sc?.photos)) return sc.photos;
-  if (Array.isArray(sc?.images)) return sc.images;
-  return [];
-}
-function setStops(sc, stops){
-  if (Array.isArray(sc?.stops)) sc.stops = stops;
-  else if (Array.isArray(sc?.photos)) sc.photos = stops;
-  else if (Array.isArray(sc?.images)) sc.images = stops;
-  else sc.stops = stops;
-}
-function populateEditList(){
-  const sel=$('eSelect'); sel.innerHTML='<option value="">Select…</option>';
-  scenarios.forEach(s=>{
-    const o=document.createElement('option');
-    o.value=s.id; o.textContent=(s.title||'(untitled)') + (s.active?'':' (inactive)');
-    sel.appendChild(o);
-  });
-}
-async function loadScenarios(){
-  await ensureAuthed();
-  const snap = await get(dbRef(db, ROOT));
-  const obj = snap.exists() ? (snap.val()||{}) : {};
-  scenarios = Object.entries(obj).map(([id,s])=>({ id, _raw:s, _stops:coerceStops(s), ...s }))
-              .sort((a,b)=>(b.createdAt||0)-(a.createdAt||0));
-  populateEditList();
-}
-onValue(dbRef(db, ROOT), snap=>{
-  const obj=snap.val()||{};
-  scenarios = Object.entries(obj).map(([id,s])=>({ id, _raw:s, _stops:coerceStops(s), ...s }))
-              .sort((a,b)=>(b.createdAt||0)-(a.createdAt||0));
-  populateEditList();
-  const cur = $('eSelect').value;
-  if (cur) renderScenario(cur);
-});
-
-/* ---------- Pane toggles ---------- */
-$('showCreate').onclick=()=>{ show('createPane',true); show('editPane',false); };
-$('showEdit').onclick =async ()=>{ show('createPane',false); show('editPane',true); await loadScenarios(); };
-
-/* ---------- Create Scenario: new guided flow ---------- */
-let createdId=null;
-let createdTitle='';
-let createdDispatch='';
-let pendingFile=null;        // File selected/taken (one at a time per your flow)
-let pendingImageMeta=null;   // {w,h, sizeMB}
-let pendingGeo=null;         // {lat, lng, accuracy, at}
-
-function updateCreateButtons(){
-  const canSave = Boolean(createdId && pendingFile);
-  $('saveToCloud').disabled = !canSave;
-  $('openEditAfter').disabled = !createdId;
-  $('createBtn').disabled = false;
-}
-function showPreviewSection(on){
-  $('cPreviewBox').style.display = on ? '' : 'none';
-}
-
-$('createBtn').onclick = async ()=>{
-  try{
-    await ensureAuthed();
-    const title = $('cTitle').value.trim();
-    const dispatch = $('cDispatch').value.trim();
-    if (!title){ err('Please enter a scenario name.'); return; }
-
-    $('createBtn').disabled = true;
-    $('createStatus').textContent='Creating…';
-
-    const id = (push(dbRef(db, ROOT))).key;
-    const rec = {
-      id, title, description: dispatch || '', // store dispatch in description (keeps backwards-compatible)
-      dispatch: dispatch || '',               // also store under dispatch (new field)
-      createdAt: Date.now(), active:true, stops: []
+    const firebaseConfig = {
+      apiKey:"AIzaSyDM6DpRSeZueVKRpbyJyDmhf8WY66KyCDk",
+      authDomain:"dailyquiz-d5279.firebaseapp.com",
+      databaseURL:"https://dailyquiz-d5279-default-rtdb.firebaseio.com",
+      projectId:"dailyquiz-d5279",
+      storageBucket:"dailyquiz-d5279.appspot.com", // ← corrected bucket for Storage SDK
+      appId:"1:94577748034:web:c032d3a1d72db1313de5db",
+      measurementId:"G-19DVN7NNH7"
     };
-    await set(dbRef(db, `${ROOT}/${id}`), rec);
-    createdId = id; createdTitle = title; createdDispatch = dispatch;
-    $('createStatus').textContent='Created ✓';
-    ok('Scenario created — now add a photo');
-    updateCreateButtons();
-  }catch(e){
-    const msg = (e && (e.message||e.code)) || String(e);
-    if (/permission|denied/i.test(msg)) err('Create blocked: check DB rules for "/scenarios".');
-    else err('Create failed: '+ msg);
-  }finally{
-    $('createBtn').disabled = false;
-  }
-};
+    const appFB = initializeApp(firebaseConfig);
+    // const appCheck = initializeAppCheck(appFB, { provider: new ReCaptchaV3Provider('YOUR_RECAPTCHA_V3_SITE_KEY'), isTokenAutoRefreshEnabled: true });
 
-$('cOneFile').addEventListener('change', async (e)=>{
-  try{
-    const f = e.target.files && e.target.files[0];
-    if (!f){ showPreviewSection(false); pendingFile=null; updateCreateButtons(); return; }
-    if (!createdId){ err('Create a scenario first.'); e.target.value=''; return; }
+    const db = getDatabase(appFB);
+    const storage = getStorage(appFB); // uses bucket above
+    const auth = getAuth(appFB);
 
-    // Preview + downscale (we downscale at save time; here we just show a local preview)
-    const bmp = await fileToBitmap(f);
-    const { w, h } = { w: bmp.width, h: bmp.height };
-    $('cThumb').src = URL.createObjectURL(f);
-    setKV('cImgInfo', `Image: ${w}×${h} • ${(f.size/1024/1024).toFixed(2)} MB`);
-    showPreviewSection(true);
-    pendingFile = f;
-    pendingImageMeta = {w, h, sizeMB: (f.size/1024/1024)};
+    async function ensureAuthed(){
+      if (auth.currentUser) return auth.currentUser;
+      await signInAnonymously(auth);
+      return await new Promise((resolve,reject)=>{
+        const unsub = onAuthStateChanged(auth, (u)=>{ if (u){ unsub(); resolve(u);} }, reject);
+      });
+    }
 
-    // Kick off GPS capture automatically
-    getGeoFix();
-    updateCreateButtons();
-  }catch(ex){
-    err('Could not read image: ' + (ex.message||ex));
-    showPreviewSection(false); pendingFile=null; updateCreateButtons();
-  }
-});
-$('cRefreshGPS').onclick = ()=> getGeoFix(true);
+    // ---------- image pipeline ----------
+    const FULL_MAX = 1600, THUMB_MAX = 480, QUALITY = 0.82;
+    async function fileToBitmap(file){
+      if ('createImageBitmap' in window){ try{ return await createImageBitmap(file, { imageOrientation: 'from-image' }); }catch{} }
+      const url = URL.createObjectURL(file);
+      const img = new Image(); img.decoding='async'; img.src=url; await img.decode(); URL.revokeObjectURL(url);
+      return img;
+    }
+    const scale = (w,h,max)=>{ const s=Math.min(1,max/Math.max(w,h)); return {w:Math.round(w*s),h:Math.round(h*s)}; };
+    async function toBlob(bmp,maxEdge,quality=QUALITY,type='image/jpeg'){
+      const {w,h}=scale(bmp.width,bmp.height,maxEdge);
+      const c=('OffscreenCanvas' in window) ? new OffscreenCanvas(w,h) : Object.assign(document.createElement('canvas'),{width:w,height:h});
+      if(!('width' in c)){ c.width=w; c.height=h; }
+      const g=c.getContext('2d'); g.imageSmoothingEnabled=true; g.imageSmoothingQuality='high'; g.drawImage(bmp,0,0,w,h);
+      const blob = await (c.convertToBlob ? c.convertToBlob({type,quality}) : new Promise(res=>c.toBlob(res,type,quality)));
+      return {blob,width:w,height:h};
+    }
 
-function getGeoFix(force=false){
-  if (!navigator.geolocation){
-    setKV('cGpsInfo', 'GPS: not available on this device/browser.');
-    pendingGeo = null; return;
-  }
-  setKV('cGpsInfo', 'GPS: getting fix…');
-  const opts = { enableHighAccuracy: true, timeout: 10000, maximumAge: force ? 0 : 60000 };
-  navigator.geolocation.getCurrentPosition(
-    (pos)=>{
-      const { latitude, longitude, accuracy } = pos.coords||{};
-      pendingGeo = { lat: latitude, lng: longitude, accuracy: Math.round(accuracy||0), at: Date.now() };
-      setKV('cGpsInfo', `GPS: ${latitude.toFixed(6)}, ${longitude.toFixed(6)} ±${Math.round(accuracy||0)} m`);
-    },
-    (e)=>{
-      pendingGeo = null;
-      setKV('cGpsInfo', `GPS: failed (${e.code||''}) — you can still Save`);
-    },
-    opts
-  );
-}
+    // ---------- state ----------
+    let createdId=null, createdTitle='', createdDispatch='';
+    let pendingFile=null, pendingMeta=null;
+    let pendingGeo=null; // {lat,lng,accuracy,at}
 
-/* ---------- Save to Cloud (one photo per your flow) ---------- */
-$('saveToCloud').onclick = async ()=>{
-  if (!createdId || !pendingFile){ err('Need a scenario and a photo.'); return; }
-  loading(true);
-  try{
-    await ensureAuthed();
-    // Downscale to full & thumb
-    setKV('cImgInfo', 'Image: processing…');
-    const bmp = await fileToBitmap(pendingFile);
-    const full = await bitmapToBlob(bmp, ORIG_MAX_EDGE, JPEG_QUALITY, 'image/jpeg');
-    const thmb = await bitmapToBlob(bmp, THUMB_MAX_EDGE, 0.8, 'image/jpeg');
+    function gateSteps(){
+      // Step 2 only after Step 1 (createdId), Step 3 only after photo chosen
+      show('step2', !!createdId);
+      const hasPhoto = !!pendingFile;
+      show('previewWrap', hasPhoto);
+      show('locChoice', hasPhoto);
+      show('step3', !!createdId);
+      $('saveBtn').disabled = !(createdId && pendingFile);
+      $('openEditor').setAttribute('aria-disabled', createdId ? 'false':'true');
+    }
 
-    const ts = Date.now();
-    const basePath = `scenarios/${createdId}/${ts}`;
-    const fullRef  = stRef(storage, `${basePath}.jpg`);
-    const thumbRef = stRef(storage, `scenarios/${createdId}/thumbs/${ts}.jpg`);
-    const meta = { contentType: 'image/jpeg', cacheControl: 'public,max-age=31536000,immutable' };
-
-    setKV('cImgInfo', `Uploading… ${full.width}×${full.height}`);
-    await uploadBytes(fullRef,  full.blob,  meta);
-    await uploadBytes(thumbRef, thmb.blob, meta);
-
-    const imageURL = await getDownloadURL(fullRef);
-    const thumbURL = await getDownloadURL(thumbRef);
-
-    // Append stop with GPS (if available)
-    const snap = await get(dbRef(db, `${ROOT}/${createdId}`));
-    const sc = snap.val()||{};
-    const stops = coerceStops(sc);
-    const stop = {
-      type:'photo', title:'', caption:'',
-      imageURL, thumbURL,
-      storagePath:`${basePath}.jpg`,
-      thumbPath:`scenarios/${createdId}/thumbs/${ts}.jpg`,
-      width: full.width, height: full.height,
-      lat: pendingGeo?.lat ?? null,
-      lng: pendingGeo?.lng ?? null,
-      accuracy: pendingGeo?.accuracy ?? null,
-      at: ts,
-      overlays:[]
-    };
-    stops.push(stop);
-    setStops(sc, stops);
-    await set(dbRef(db, `${ROOT}/${createdId}`), sc);
-
-    ok('Saved to cloud ✓');
-    $('openEditAfter').disabled = false;
-    // Reset photo picker, keep scenario to allow another photo if desired
-    $('cOneFile').value = '';
-    showPreviewSection(false);
-    pendingFile=null; pendingImageMeta=null; pendingGeo=null;
-    updateCreateButtons();
-  }catch(e){
-    err('Save failed: ' + (e.message||e));
-  }finally{
-    loading(false);
-  }
-};
-
-$('openEditAfter').onclick = async ()=>{
-  await loadScenarios();
-  $('eSelect').value = createdId || '';
-  renderScenario(createdId);
-  show('createPane',false); show('editPane',true);
-};
-
-/* ---------- Edit pane (unchanged core) ---------- */
-$('refreshBtn').onclick = ()=> loadScenarios().catch(()=>{});
-$('eSelect').onchange = ()=>{ const id=$('eSelect').value; if (id) renderScenario(id); };
-
-async function renderScenario(id){
-  const s = scenarios.find(x=>x.id===id); if (!s){ $('eStatus').textContent='Not found'; return; }
-  $('eTitle').value = s.title||'';
-  $('eDesc').value  = (s.dispatch || s.description || '');
-  $('eStatus').textContent = `${(s._stops||[]).length} stop(s)`;
-  const grid = $('stopsGrid'); grid.innerHTML='';
-  if (!s._stops?.length){ grid.innerHTML='<div class="small tag">No photos yet</div>'; return; }
-  s._stops.forEach((st, idx)=>{
-    const el = document.createElement('div');
-    const thumb = st.thumbURL || st.imageURL || '';
-    el.innerHTML = `
-      <img class="thumb" src="${thumb}" alt="thumb" />
-      <div class="small" style="margin-top:6px">${st.title||('Stop '+(idx+1))}</div>
-      <div class="small" style="opacity:.75">${st.lat!=null && st.lng!=null ? `${st.lat.toFixed(5)}, ${st.lng.toFixed(5)}${st.accuracy? ' ±'+st.accuracy+'m':''}` : 'No GPS'}</div>
-    `;
-    grid.appendChild(el);
-  });
-}
-
-$('saveMeta').onclick = async ()=>{
-  try{
-    const id=$('eSelect').value; if(!id) return;
-    loading(true);
-    const snap = await get(dbRef(db, `${ROOT}/${id}`));
-    const sc = snap.val()||{};
-    sc.title = $('eTitle').value.trim()||'(untitled)';
-    const d  = $('eDesc').value.trim()||'';
-    sc.description = d; sc.dispatch = d;
-    await set(dbRef(db, `${ROOT}/${id}`), sc);
-    ok('Scenario saved');
-    await loadScenarios(); $('eSelect').value=id; renderScenario(id);
-  }catch(e){ err('Save failed: '+(e.message||e)); }
-  finally{ loading(false); }
-};
-
-/* Edit pane: add photos (kept, optional multi) */
-$('eFiles').addEventListener('change', async (e)=>{
-  const id=$('eSelect').value; if(!id){ err('Select a scenario first.'); e.target.value=''; return; }
-  try{
-    const files = Array.from(e.target.files||[]);
-    if (!files.length) return;
-
-    loading(true);
-    for (const file of files){
+    // ---------- Step 1 ----------
+    $('createBtn').onclick = async ()=>{
       try{
-        const bmp = await fileToBitmap(file);
-        const full = await bitmapToBlob(bmp, ORIG_MAX_EDGE, JPEG_QUALITY, 'image/jpeg');
-        const thmb = await bitmapToBlob(bmp, THUMB_MAX_EDGE, 0.8, 'image/jpeg');
+        await ensureAuthed();
+        const title = $('sTitle').value.trim();
+        const dispatch = $('sDispatch').value.trim();
+        if (!title){ errBar('Please enter a scenario name.'); return; }
+
+        $('createBtn').disabled = true;
+        $('step1Status').textContent = 'creating…';
+
+        // canonical node
+        const id = (push(dbRef(db, 'scenarios'))).key;
+        const base = {
+          id, title, description: dispatch || '', dispatch: dispatch || '',
+          createdAt: Date.now(), active: true, stops: []
+        };
+
+        // Write to both locations to match viewer reads (scenarios & geophoto/scenarios)
+        const multi = {};
+        multi[`scenarios/${id}`] = base;
+        multi[`geophoto/scenarios/${id}`] = base;
+        await update(dbRef(db), multi);
+
+        createdId=id; createdTitle=title; createdDispatch=dispatch;
+        $('step1Status').textContent = 'created ✓';
+        snack('Scenario created — add a photo');
+      }catch(e){
+        const msg = e?.code || e?.message || String(e);
+        errBar(/permission|denied/i.test(msg)
+          ? 'Create blocked by rules. Allow authenticated writes to "/scenarios".'
+          : 'Create failed: ' + msg);
+      }finally{
+        $('createBtn').disabled = false;
+        gateSteps();
+      }
+    };
+
+    // ---------- Step 2: image choose/take/upload ----------
+    const openInput = (id)=> $(id).click();
+    $('btnCamera').onclick = ()=> openInput('inCamera');
+    $('btnLibrary').onclick= ()=> openInput('inLibrary');
+    $('btnUpload').onclick = ()=> openInput('inUpload');
+
+    async function onFilePicked(file){
+      if (!file){ return; }
+      if (!createdId){ errBar('Create the scenario first.'); return; }
+
+      const bmp = await fileToBitmap(file);
+      $('thumb').src = URL.createObjectURL(file);
+      pendingFile = file;
+      pendingMeta = { w:bmp.width, h:bmp.height, mb:(file.size/1024/1024).toFixed(2) };
+      setKV('imgInfo', `Image: ${pendingMeta.w}×${pendingMeta.h} • ${pendingMeta.mb} MB`);
+      pendingGeo = null; // reset any prior choice
+      setKV('gpsLine', 'GPS: waiting…');
+
+      show('previewWrap', true);
+      show('locChoice', true);
+      show('locGPS', false);
+      show('locManual', false);
+      gateSteps();
+    }
+
+    $('inCamera').addEventListener('change', (e)=> onFilePicked(e.target.files?.[0]));
+    $('inLibrary').addEventListener('change', (e)=> onFilePicked(e.target.files?.[0]));
+    $('inUpload').addEventListener('change', (e)=> onFilePicked(e.target.files?.[0]));
+
+    // After image: prompt to use GPS or manual
+    $('btnUseGPS').onclick = ()=>{
+      show('locManual', false);
+      show('locGPS', true);
+      getGPSFix(true);
+    };
+    $('btnManualLoc').onclick = ()=>{
+      show('locGPS', false);
+      show('locManual', true);
+    };
+    $('btnManualBack').onclick = ()=>{
+      show('locManual', false);
+      show('locChoice', true);
+    };
+    $('btnSaveManual').onclick = ()=>{
+      const lat = parseFloat(($('latIn').value||'').trim());
+      const lng = parseFloat(($('lngIn').value||'').trim());
+      const acc = parseInt(($('accIn').value||'').trim(),10);
+      if (!Number.isFinite(lat) || !Number.isFinite(lng)){
+        errBar('Enter valid latitude & longitude.'); return;
+      }
+      pendingGeo = { lat, lng, accuracy: Number.isFinite(acc)?acc:null, at: Date.now() };
+      snack('Manual location saved.');
+      show('locManual', false);
+      show('locChoice', true);
+      setKV('gpsLine', `GPS (manual): ${lat.toFixed(6)}, ${lng.toFixed(6)}${Number.isFinite(acc)?' ±'+acc+'m':''}`);
+    };
+
+    function getGPSFix(force=false){
+      if (!navigator.geolocation){
+        setKV('gpsLine','GPS not available on this device/browser.');
+        return;
+      }
+      setKV('gpsLine','Getting GPS fix…');
+      const opts={enableHighAccuracy:true,timeout:10000,maximumAge:force?0:60000};
+      navigator.geolocation.getCurrentPosition(
+        (p)=>{
+          const {latitude,longitude,accuracy}=p.coords||{};
+          pendingGeo={lat:latitude,lng:longitude,accuracy:Math.round(accuracy||0),at:Date.now()};
+          setKV('gpsLine',`GPS: ${latitude.toFixed(6)}, ${longitude.toFixed(6)} ±${Math.round(accuracy||0)} m`);
+        },
+        (e)=>{
+          setKV('gpsLine',`GPS failed (${e.code||''}) — you can enter manually`);
+        },
+        opts
+      );
+    }
+    $('btnRefreshGPS').onclick = ()=> getGPSFix(true);
+    $('btnClearGPS').onclick   = ()=>{ pendingGeo=null; setKV('gpsLine','GPS: cleared'); };
+
+    // ---------- Step 3: upload + DB write ----------
+    $('saveBtn').onclick = async ()=>{
+      if (!(createdId && pendingFile)){ errBar('Need a scenario and a photo.'); return; }
+      loading(true);
+      $('saveStatus').textContent='uploading…';
+      try{
+        await ensureAuthed();
+        const bmp = await fileToBitmap(pendingFile);
+        const full = await toBlob(bmp, FULL_MAX, QUALITY, 'image/jpeg');
+        const thmb = await toBlob(bmp, THUMB_MAX, 0.8,       'image/jpeg');
 
         const ts = Date.now();
-        const basePath = `scenarios/${id}/${ts}`;
+        const basePath = `scenarios/${createdId}/${ts}`;
         const fullRef  = stRef(storage, `${basePath}.jpg`);
-        const thumbRef = stRef(storage, `scenarios/${id}/thumbs/${ts}.jpg`);
-        const meta = { contentType: 'image/jpeg', cacheControl: 'public,max-age=31536000,immutable' };
+        const thumbRef = stRef(storage, `scenarios/${createdId}/thumbs/${ts}.jpg`);
+        const meta = { contentType:'image/jpeg', cacheControl:'public,max-age=31536000,immutable' };
 
         await uploadBytes(fullRef,  full.blob,  meta);
         await uploadBytes(thumbRef, thmb.blob, meta);
-
         const imageURL = await getDownloadURL(fullRef);
         const thumbURL = await getDownloadURL(thumbRef);
 
-        const snap = await get(dbRef(db, `${ROOT}/${id}`));
-        const sc = snap.val();
-        const stops = coerceStops(sc);
+        // Pull current scenario (canonical), append stop, then mirror to geophoto
+        const snap = await get(dbRef(db, `scenarios/${createdId}`));
+        const sc = snap.exists() ? snap.val() : { id: createdId, title: createdTitle, dispatch: createdDispatch, createdAt: Date.now(), active:true, stops: [] };
+        const stops = Array.isArray(sc.stops) ? sc.stops : [];
         const stop = {
           type:'photo', title:'', caption:'',
-          imageURL, thumbURL, storagePath:`${basePath}.jpg`,
-          thumbPath:`scenarios/${id}/thumbs/${ts}.jpg`,
+          imageURL, thumbURL, storagePath:`${basePath}.jpg`, thumbPath:`scenarios/${createdId}/thumbs/${ts}.jpg`,
           width: full.width, height: full.height,
-          lat:null, lng:null, accuracy:null, at: ts, overlays:[]
+          lat: pendingGeo?.lat ?? null, lng: pendingGeo?.lng ?? null, accuracy: pendingGeo?.accuracy ?? null,
+          at: ts, overlays:[]
         };
         stops.push(stop);
-        setStops(sc, stops);
-        await set(dbRef(db, `${ROOT}/${id}`), sc);
-      }catch(ex){
-        err('Upload failed: '+(ex.message||ex));
-      }
-    }
-    await loadScenarios(); $('eSelect').value=id; renderScenario(id);
-    ok('Photos added.');
-  }finally{
-    loading(false);
-    e.target.value = '';
-  }
-});
+        sc.stops = stops;
 
-/* ---------- Initial load ---------- */
-(async ()=>{
-  try{
-    await ensureAuthed();
-    await loadScenarios();
-  }catch(_){}
-})();
-</script>
+        // Write to both locations
+        const multi = {};
+        multi[`scenarios/${createdId}`] = sc;
+        multi[`geophoto/scenarios/${createdId}`] = sc;
+        await update(dbRef(db), multi);
+
+        $('saveStatus').textContent='saved ✓';
+        snack('Photo saved to cloud.');
+        // ready for another photo if desired
+        pendingFile=null; pendingMeta=null; pendingGeo=null;
+        $('thumb').src=''; setKV('imgInfo','Image: —'); setKV('gpsLine','GPS: —');
+        show('previewWrap', false);
+        gateSteps();
+      }catch(e){
+        $('saveStatus').textContent='error';
+        errBar('Save failed: ' + (e?.code || e?.message || String(e)));
+      }finally{
+        loading(false);
+      }
+    };
+
+    // boot
+    (async ()=>{
+      try{
+        const u = await ensureAuthed();
+        document.getElementById('debug').textContent = `Auth: ${u.uid.slice(0,8)} • DB: ${firebaseConfig.databaseURL}`;
+      }catch(_){}
+      gateSteps();
+    })();
+  </script>
 </body>
 </html>
