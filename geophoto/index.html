@@ -6,7 +6,10 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <meta name="theme-color" content="#0b0f14" />
   <style>
-    :root{ --bg:#0b0f14; --bg2:#0e1421; --card:#0f1624; --edge:rgba(255,255,255,.12); --text:#eaf2ff; --muted:#93a0b5; --blue:#0a84ff; }
+    :root{
+      --bg:#0b0f14; --bg2:#0e1421; --card:#0f1624; --edge:rgba(255,255,255,.12);
+      --text:#eaf2ff; --muted:#93a0b5; --blue:#0a84ff; --blue2:#54a6ff;
+    }
     *{box-sizing:border-box}
     html,body{
       margin:0;height:100%;color:var(--text);
@@ -17,23 +20,30 @@
         linear-gradient(165deg, var(--bg2), var(--bg) 55%);
     }
     a{color:inherit;text-decoration:none}
-    header{
-      position:sticky;top:0;z-index:10;background:#0b0f14;
-      border-bottom:1px solid var(--edge)
-    }
-    .nav{max-width:900px;margin:0 auto;padding:12px 16px;display:flex;align-items:center;justify-content:center;font-weight:900}
-    main{max-width:900px;margin:28px auto;padding:0 16px}
+    header{position:sticky;top:0;z-index:10;background:#0b0f14;border-bottom:1px solid var(--edge)}
+    .nav{max-width:880px;margin:0 auto;padding:12px 16px;display:flex;align-items:center;justify-content:center;font-weight:900}
+    main{max-width:880px;margin:28px auto;padding:0 16px;display:grid;gap:16px}
     .card{background:var(--card);border:1px solid var(--edge);border-radius:16px;padding:18px}
-    .title{margin:0 0 6px 0;font-size:28px;font-weight:900}
-    .lead{color:#c9d6f3;margin:0 0 14px 0;line-height:1.5}
+    .title{margin:0 0 6px 0;font-size:28px;font-weight:900;text-align:center}
+    .lead{color:#c9d6f3;margin:0 0 14px 0;line-height:1.5;text-align:center}
     .btn{
       appearance:none;display:inline-block;border:0;border-radius:14px;
       padding:14px 18px;font-weight:900;cursor:pointer;text-align:center;
-      background:linear-gradient(180deg,#54a6ff,#0a84ff);color:#03131b;box-shadow:0 6px 22px rgba(10,132,255,.25)
+      background:linear-gradient(180deg,var(--blue2),var(--blue));
+      color:#03131b;box-shadow:0 6px 22px rgba(10,132,255,.25)
     }
-    .links{display:flex;gap:10px;flex-wrap:wrap;margin-top:14px}
+    .btnRow{display:flex;gap:12px;flex-wrap:wrap;justify-content:center}
     .link{border:1px solid var(--edge);background:#132036;color:#fff;border-radius:12px;padding:10px 14px;font-weight:700}
-    .muted{color:var(--muted);font-size:13px;margin-top:10px}
+    .muted{color:var(--muted);font-size:13px;margin-top:10px;text-align:center}
+    /* Admin area */
+    .adminBar{display:flex;gap:10px;justify-content:center;flex-wrap:wrap;margin-top:8px}
+    .pill{font-size:12px;color:var(--muted)}
+    .hidden{display:none !important}
+    /* Modal */
+    .modal{position:fixed;inset:0;background:rgba(5,10,18,.6);backdrop-filter:blur(2px);display:none;place-items:center;z-index:99}
+    .modalCard{background:#0f1624;border:1px solid var(--edge);border-radius:16px;padding:16px;width:min(92vw,420px)}
+    .modalCard h3{margin:0 0 10px 0}
+    input[type="password"]{width:100%;padding:10px 12px;border-radius:12px;background:#0b1322;color:#eaf2ff;border:1px solid var(--edge)}
   </style>
 </head>
 <body>
@@ -42,20 +52,79 @@
   </header>
 
   <main>
+    <!-- Primary: User Viewer only -->
     <section class="card" style="text-align:center">
-      <h1 class="title">Welcome</h1>
-      <p class="lead">Open the photo viewer for trainees, or jump to instructor controls.</p>
-
-      <!-- BIG PRIMARY BUTTON: goes straight to the user viewer -->
+      <h1 class="title">Geo Photo Viewer</h1>
+      <p class="lead">Open the photo viewer used by trainees.</p>
       <a class="btn" href="viewer.html">Open Geo Photo Viewer</a>
-
-      <div class="links" style="justify-content:center">
-        <a class="link" href="instructor-view.html">Instructor Controls</a>
-        <a class="link" href="advanced-editor.html">Advanced Editor</a>
-      </div>
-
       <div class="muted">Direct link: <code>viewer.html</code></div>
     </section>
+
+    <!-- Admin / Tools (hidden until login) -->
+    <section class="card">
+      <h2 class="title" style="font-size:22px">Training Tools</h2>
+      <p class="lead" style="margin-bottom:10px">Instructor Controls & Editors (Admin only)</p>
+
+      <div id="adminLocked" class="adminBar">
+        <button id="loginBtn" class="link">Admin Login</button>
+        <span class="pill">Password required</span>
+      </div>
+
+      <div id="adminLinks" class="adminBar hidden">
+        <a class="link" href="instructor-view.html">Instructor Controls</a>
+        <a class="link" href="advanced-editor.html">Advanced Editor</a>
+        <a class="link" href="admin.html">Scenario Builder</a>
+        <button id="logoutBtn" class="link" style="background:#2a3348">Log out</button>
+      </div>
+    </section>
   </main>
+
+  <!-- Simple password modal -->
+  <div id="modal" class="modal">
+    <div class="modalCard">
+      <h3>Admin Login</h3>
+      <p class="pill" style="margin-top:-2px;margin-bottom:8px">Enter the admin password to unlock Instructor & Editors.</p>
+      <input id="pw" type="password" placeholder="Password" autocomplete="current-password" />
+      <div class="adminBar" style="margin-top:10px">
+        <button id="cancelBtn" class="link" style="background:#2a3348">Cancel</button>
+        <button id="okBtn" class="link">Unlock</button>
+        <span id="msg" class="pill"></span>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    (function(){
+      const KEY = 'fireops_admin_ok';
+      const $ = id => document.getElementById(id);
+      const show = (el, on) => (typeof el==='string'?$(el):el).classList.toggle('hidden', !on);
+
+      // Initial state
+      const isAuthed = () => sessionStorage.getItem(KEY) === '1';
+      const refresh = () => {
+        show('adminLinks', isAuthed());
+        show('adminLocked', !isAuthed());
+      };
+      refresh();
+
+      // Modal controls
+      $('loginBtn').onclick = ()=>{ $('pw').value=''; $('msg').textContent=''; $('modal').style.display='grid'; $('pw').focus(); };
+      $('cancelBtn').onclick = ()=>{ $('modal').style.display='none'; };
+      $('okBtn').onclick = ()=>{
+        const val = ($('pw').value||'').trim();
+        if(val.toLowerCase() === 'franktown'.toLowerCase()){
+          sessionStorage.setItem(KEY, '1');
+          $('modal').style.display='none';
+          refresh();
+        }else{
+          $('msg').textContent = 'Incorrect password';
+        }
+      };
+      $('logoutBtn').onclick = ()=>{ sessionStorage.removeItem(KEY); refresh(); };
+
+      // Enter key in password field
+      $('pw').addEventListener('keydown', (e)=>{ if(e.key==='Enter'){ $('okBtn').click(); }});
+    })();
+  </script>
 </body>
 </html>
