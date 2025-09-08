@@ -6,23 +6,16 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <meta name="theme-color" content="#0b0f14" />
   <style>
-    :root{
-      --bg:#0b0f14; --panel:#0f1624; --text:#eaf2ff; --muted:#94a3b8;
-      --edge: rgba(255,255,255,.10); --edge2: rgba(255,255,255,.16);
-      --grad1:#54a6ff; --grad2:#0a84ff;
-    }
+    :root{ --bg:#0b0f14; --panel:#0f1624; --text:#eaf2ff; --muted:#94a3b8; --edge:rgba(255,255,255,.12); --a1:#54a6ff; --a2:#0a84ff; }
     *{box-sizing:border-box}
     html,body{margin:0;height:100%;background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,Segoe UI,Roboto,Inter,Arial,sans-serif}
-    .topbar{position:sticky;top:0;z-index:40;background:rgba(12,15,22,.78);backdrop-filter:blur(6px);border-bottom:1px solid var(--edge)}
-    .topnav{max-width:1200px;margin:0 auto;padding:10px 12px;display:flex;gap:8px;align-items:center;justify-content:space-between}
+    .topbar{position:sticky;top:0;z-index:40;background:rgba(12,15,22,.9);backdrop-filter:blur(6px);border-bottom:1px solid var(--edge)}
+    .topnav{max-width:1200px;margin:0 auto;padding:10px 12px;display:flex;gap:8px;align-items:center;justify-content:space-between;flex-wrap:wrap}
     .row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
-    .input, select{height:40px;padding:0 12px;border-radius:10px;border:1px solid var(--edge2);background:#0f1624;color:var(--text);min-width:160px}
-    .btn{
-      height:40px;padding:0 14px;border:0;border-radius:12px;font-weight:800;cursor:pointer;
-      background:linear-gradient(180deg,var(--grad1),var(--grad2));color:#03131b
-    }
-    .btn.secondary{background:transparent;color:var(--text);border:1px solid var(--edge2)}
-    .badge{font-size:12px;padding:6px 10px;border:1px solid var(--edge2);border-radius:999px;color:var(--muted)}
+    .input, select{height:40px;padding:0 12px;border-radius:10px;border:1px solid var(--edge);background:#0f1624;color:var(--text);min-width:160px}
+    .btn{height:40px;padding:0 14px;border:0;border-radius:12px;font-weight:800;cursor:pointer;background:linear-gradient(180deg,var(--a1),var(--a2));color:#03131b}
+    .btn.secondary{background:transparent;color:var(--text);border:1px solid var(--edge)}
+    .pill{font-size:12px;padding:6px 10px;border:1px solid var(--edge);border-radius:999px;color:var(--muted);white-space:nowrap;max-width:100%;overflow:hidden;text-overflow:ellipsis}
     main{max-width:1200px;margin:16px auto;padding:0 12px;display:grid;grid-template-columns:1.05fr 1fr;gap:14px}
     @media (max-width:980px){ main{grid-template-columns:1fr} }
     .panel{background:var(--panel);border:1px solid var(--edge);border-radius:16px;overflow:hidden}
@@ -32,7 +25,7 @@
     .caption{position:absolute;left:0;right:0;bottom:0;padding:10px 12px;background:linear-gradient(0deg,rgba(0,0,0,.65),transparent)}
     .thumbs{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px;padding:10px}
     .thumb{border:1px solid var(--edge);border-radius:12px;background:#0a0f18;cursor:pointer;overflow:hidden}
-    .thumb .img{aspect-ratio:16/10;background:#000}
+    .thumb .img{aspect-ratio:16/10;background:#000;display:grid;place-items:center;color:#cbd5e1}
     .thumb .img img{width:100%;height:100%;object-fit:cover}
     .thumb .cap{padding:8px 10px;font-size:13px;color:var(--muted)}
   </style>
@@ -42,18 +35,18 @@
     <div class="topnav">
       <div class="row">
         <strong>FireOps SIM — Instructor</strong>
-        <span id="authPill" class="badge">auth: …</span>
+        <span id="authPill" class="pill">auth: …</span>
+        <span id="dbPill" class="pill">db: …</span>
+        <span id="pathPill" class="pill">path: …</span>
       </div>
       <div class="row">
         <input id="sessionInput" class="input" placeholder="Session" value="default" />
-        <select id="scenarioSelect" class="input">
-          <option value="">Loading scenarios…</option>
-        </select>
+        <select id="scenarioSelect" class="input"><option value="">Loading scenarios…</option></select>
         <button id="loadBtn" class="btn">Load</button>
         <button id="clearBtn" class="btn secondary">Clear</button>
-        <button id="helloBtn" class="btn secondary">Announce (Hello)</button>
+        <button id="helloBtn" class="btn secondary">Hello</button>
         <button id="testBtn" class="btn secondary">Send Test</button>
-        <span id="status" class="badge">idle</span>
+        <span id="status" class="pill">idle</span>
       </div>
     </div>
   </div>
@@ -72,7 +65,6 @@
     </section>
   </main>
 
-  <!-- Firebase compat SDKs -->
   <script src="https://www.gstatic.com/firebasejs/10.12.4/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.4/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.4/firebase-database-compat.js"></script>
@@ -80,9 +72,7 @@
 
   <script>
   (function(){
-    const $ = s => document.querySelector(s);
-
-    // Firebase init (match viewer)
+    const $=s=>document.querySelector(s);
     const config = {
       apiKey:"AIzaSyDM6DpRSeZueVKRpbyJyDmhf8WY66KyCDk",
       authDomain:"dailyquiz-d5279.firebaseapp.com",
@@ -93,231 +83,173 @@
       measurementId:"G-19DVN7NNH7"
     };
     firebase.initializeApp(config);
-    const db = firebase.database();
-    const auth = firebase.auth();
-    const storage = firebase.storage();
-    const FORCE_BUCKET = "dailyquiz-d5279.appspot.com";
+    const db=firebase.database(), auth=firebase.auth(), storage=firebase.storage();
+    const FORCE_BUCKET="dailyquiz-d5279.appspot.com";
 
     // UI
-    const authPill = $('#authPill'), statusEl = $('#status');
-    const sessionInput = $('#sessionInput'), scenarioSelect = $('#scenarioSelect');
-    const loadBtn = $('#loadBtn'), clearBtn = $('#clearBtn'), helloBtn = $('#helloBtn'), testBtn = $('#testBtn');
-    const thumbs = $('#thumbs'), currentImg = $('#currentImg'), currentCap = $('#currentCap');
+    const authPill=$('#authPill'), dbPill=$('#dbPill'), pathPill=$('#pathPill'), statusEl=$('#status');
+    const sessionInput=$('#sessionInput'), scenarioSelect=$('#scenarioSelect');
+    const loadBtn=$('#loadBtn'), clearBtn=$('#clearBtn'), helloBtn=$('#helloBtn'), testBtn=$('#testBtn');
+    const thumbs=$('#thumbs'), currentImg=$('#currentImg'), currentCap=$('#currentCap');
 
-    // Helpers
-    function normSession(raw){ return (raw || 'default').trim().toLowerCase(); }
-    function manualPath(session){ return `geophoto/manual/${normSession(session)}/current`; }
-    function helloPath(session){ return `geophoto/manual/${normSession(session)}/hello`; }
-    const setStatus = t => statusEl.textContent = t;
+    const setStatus=t=> statusEl.textContent=t;
+
+    function normSession(raw){return (raw||'default').trim().toLowerCase();}
+    function manualPath(s){return `geophoto/manual/${normSession(s)}/current`;}
+    function helloPath(s){return `geophoto/manual/${normSession(s)}/hello`;}
 
     async function ensureAuthed(){
       return new Promise((resolve,reject)=>{
-        const unsub = auth.onAuthStateChanged(u=>{
-          if(u){ authPill.textContent = 'auth: anon ✓ ' + u.uid.slice(0,8); unsub(); resolve(u); }
-          else auth.signInAnonymously().catch(e=>{ authPill.textContent='auth: failed'; unsub(); reject(e); });
+        const unsub=auth.onAuthStateChanged(u=>{
+          if(u){ authPill.textContent=`auth: anon ✓ ${u.uid.slice(0,8)}`; unsub(); resolve(u); }
+          else auth.signInAnonymously().catch(e=>{ authPill.textContent=`auth: failed (${e.code||e.message})`; unsub(); reject(e); });
         });
       });
     }
 
     async function fetchNode(path){
-      const snap = await db.ref(path).get();
-      return snap.exists() ? snap.val() : null;
+      const snap=await db.ref(path).get();
+      return snap.exists()?snap.val():null;
     }
 
     async function loadScenarios(){
       const list=[];
-      try{ const a=await fetchNode('geophoto/scenarios'); if(a) for(const [id,s] of Object.entries(a)) list.push({id,...(s||{})}); }catch{}
-      try{ const b=await fetchNode('scenarios');          if(b) for(const [id,s] of Object.entries(b)) list.push({id,...(s||{})}); }catch{}
-      const uniq = new Map(); list.forEach(x=>{ if(!uniq.has(x.id)) uniq.set(x.id, x); });
-      const arr = Array.from(uniq.values()).sort((a,b)=>(b.createdAt||0)-(a.createdAt||0));
-      scenarioSelect.innerHTML = '<option value="">Select a scenario…</option>';
-      arr.forEach(sc=>{
-        const o=document.createElement('option');
-        o.value=sc.id; o.textContent=sc.title || sc.name || '(untitled)';
-        scenarioSelect.appendChild(o);
-      });
+      try{const a=await fetchNode('geophoto/scenarios'); if(a) for(const [id,s] of Object.entries(a)) list.push({id,...(s||{})});}catch(e){}
+      try{const b=await fetchNode('scenarios');          if(b) for(const [id,s] of Object.entries(b)) list.push({id,...(s||{})});}catch(e){}
+      const uniq=new Map(); list.forEach(x=>{if(!uniq.has(x.id)) uniq.set(x.id,x);});
+      const arr=Array.from(uniq.values()).sort((a,b)=>(b.createdAt||0)-(a.createdAt||0));
+      scenarioSelect.innerHTML='<option value="">Select a scenario…</option>';
+      arr.forEach(sc=>{const o=document.createElement('option');o.value=sc.id;o.textContent=sc.title||sc.name||'(untitled)';scenarioSelect.appendChild(o);});
       return arr;
     }
 
     function toDataURLFromStored(stored){
-      if (!stored) return '';
-      if (typeof stored === 'string') return stored;
-      if (stored.data){
-        const fmt = (stored.format==='jpeg'||stored.format==='jpg') ? 'jpeg' : 'png';
-        return `data:image/${fmt};base64,${stored.data}`;
-      }
+      if(!stored) return ''; if(typeof stored==='string') return stored;
+      if(stored.data){ const fmt=(stored.format==='jpeg'||stored.format==='jpg')?'jpeg':'png'; return `data:image/${fmt};base64,${stored.data}`;}
       return '';
     }
     function toStorageRefString(v){
-      if(!v) return '';
-      let s = (v+'').trim();
-      try{ s = decodeURIComponent(s); }catch{}
-      if (s.startsWith('gs://')) return s;
-      let m = s.match(/^https?:\/\/firebasestorage\.googleapis\.com\/v0\/b\/([^/]+)\/o\/([^?]+)/i);
-      if (m) return `gs://${m[1]}/${m[2].replace(/\+/g,' ')}`;
-      m = s.match(/^https?:\/\/([^/]+)\.firebasestorage\.app\/o\/([^?]+)/i);
-      if (m) return `gs://${m[1]}/${m[2].replace(/\+/g,' ')}`;
-      if (!/^https?:\/\//i.test(s)) return `gs://${FORCE_BUCKET}/${s}`;
-      return '';
+      if(!v) return ''; let s=(v+'').trim(); try{s=decodeURIComponent(s);}catch{}
+      if(s.startsWith('gs://')) return s;
+      let m=s.match(/^https?:\/\/firebasestorage\.googleapis\.com\/v0\/b\/([^/]+)\/o\/([^?]+)/i); if(m) return `gs://${m[1]}/${m[2].replace(/\+/g,' ')}`;
+      m=s.match(/^https?:\/\/([^/]+)\.firebasestorage\.app\/o\/([^?]+)/i); if(m) return `gs://${m[1]}/${m[2].replace(/\+/g,' ')}`;
+      if(!/^https?:\/\//i.test(s)) return `gs://${FORCE_BUCKET}/${s}`; return '';
     }
     async function blobToDataURLViaStorage(pathOrGs){
-      const refStr = toStorageRefString(pathOrGs); if(!refStr) return '';
-      const ref = storage.refFromURL(refStr);
-      const blob = await ref.getBlob();
+      const refStr=toStorageRefString(pathOrGs); if(!refStr) return '';
+      const ref=storage.refFromURL(refStr); const blob=await ref.getBlob();
       return await new Promise((res,rej)=>{ const fr=new FileReader(); fr.onload=()=>res(fr.result); fr.onerror=rej; fr.readAsDataURL(blob); });
     }
-
-    // Resize/compress any image/dataURL to ~1600px max edge JPEG (85%)
-    async function compressDataURL(dataURL, maxEdge=1600, quality=0.85){
-      if (!dataURL) return '';
-      // Non-data URLs (http/https): just pass through (usually download URLs already small)
-      if (!/^data:image\//i.test(dataURL)) return dataURL;
-      const img = new Image(); img.decoding='async'; img.src=dataURL; await img.decode();
-      const w=img.naturalWidth, h=img.naturalHeight;
-      const s=Math.min(1, maxEdge/Math.max(w,h));
-      if (s===1) return dataURL;
-      const cw=Math.round(w*s), ch=Math.round(h*s);
-      const c=document.createElement('canvas'); c.width=cw; c.height=ch;
-      const ctx=c.getContext('2d'); ctx.imageSmoothingEnabled=true; ctx.imageSmoothingQuality='high';
-      ctx.drawImage(img,0,0,cw,ch);
-      return c.toDataURL('image/jpeg', quality);
-    }
-
-    async function getStopDataURL(stop){
-      // Prefer inline data first; then fetch from Storage if private
-      const inline = toDataURLFromStored(stop.imageData || stop.imageURL || stop.imageUrl || stop.url || stop.photoURL || stop.photo);
-      if (inline) return inline;
-      if (stop.gsUri)      try{ return await blobToDataURLViaStorage(stop.gsUri); }catch{}
-      if (stop.storagePath)try{ return await blobToDataURLViaStorage(stop.storagePath); }catch{}
+    async function getStopDataURL(st){
+      const inline=toDataURLFromStored(st.imageData||st.imageURL||st.imageUrl||st.url||st.photoURL||st.photo);
+      if(inline) return inline;
+      if(st.gsUri) try{return await blobToDataURLViaStorage(st.gsUri);}catch(e){}
+      if(st.storagePath) try{return await blobToDataURLViaStorage(st.storagePath);}catch(e){}
       return '';
     }
-
-    function normalizeStops(stopsLike){
-      if(!stopsLike) return [];
-      const arr = Array.isArray(stopsLike) ? stopsLike : Object.values(stopsLike);
-      return arr.map(s=>({
-        title: s.title || s.name || '',
-        caption: s.caption || s.text || '',
-        storagePath: s.storagePath || s.thumbPath || '',
-        gsUri: s.gsUri || '',
-        imageData: s.imageData,
-        imageURL: s.imageURL || s.imageUrl || s.url || s.photoURL || s.photo || ''
-      }));
+    async function compressDataURL(dataURL, maxEdge=1600, q=0.85){
+      if(!dataURL) return ''; if(!/^data:image\//i.test(dataURL)) return dataURL;
+      const img=new Image(); img.decoding='async'; img.src=dataURL; await img.decode();
+      const w=img.naturalWidth,h=img.naturalHeight,s=Math.min(1,maxEdge/Math.max(w,h));
+      if(s===1) return dataURL;
+      const c=document.createElement('canvas'); c.width=Math.round(w*s); c.height=Math.round(h*s);
+      const ctx=c.getContext('2d'); ctx.imageSmoothingEnabled=true; ctx.imageSmoothingQuality='high';
+      ctx.drawImage(img,0,0,c.width,c.height); return c.toDataURL('image/jpeg', q);
     }
 
-    // Live preview of what users see
-    let currentRef = null;
+    // Live preview
+    let currentRef=null;
     function subscribeCurrent(sessionRaw){
-      const s = normSession(sessionRaw);
-      if (currentRef) try{ currentRef.off(); }catch{};
-      currentRef = db.ref(manualPath(s));
+      const s=normSession(sessionRaw); pathPill.textContent=`path: ${manualPath(s)}`;
+      if(currentRef) try{currentRef.off();}catch{}; currentRef=db.ref(manualPath(s));
       currentRef.on('value', snap=>{
         const v=snap.val();
-        if (!v || v.clear){ currentImg.src=''; currentCap.textContent=''; setStatus('preview waiting…'); return; }
-        currentImg.src = v.image || v.imageURL || v.url || '';
-        currentCap.textContent = (v.title? v.title+' — ' : '') + (v.caption||'');
+        if(!v||v.clear){ currentImg.src=''; currentCap.textContent=''; setStatus('preview waiting…'); return; }
+        currentImg.src=v.image||v.imageURL||v.url||''; currentCap.textContent=(v.title? v.title+' — ':'')+(v.caption||'');
         setStatus('preview: '+(v.title||'slide'));
-      }, err=>{ setStatus('preview denied — rules'); console.error(err); });
+      }, err=>{ setStatus(`preview read error: ${err.code||err.message}`); console.error(err); });
     }
 
     async function renderThumbsForScenario(id){
-      thumbs.innerHTML = '';
-      let sc = await fetchNode(`geophoto/scenarios/${id}`);
-      if(!sc) sc = await fetchNode(`scenarios/${id}`);
-      if (!sc){ thumbs.innerHTML = '<div class="badge">Scenario not found</div>'; return; }
-
-      const stops = normalizeStops(sc.stops || []);
-      // Optional dispatch tile
-      if ((sc.dispatch||sc.notes||'').toString().trim()){
-        const card = document.createElement('div'); card.className='thumb';
-        const imgWrap = document.createElement('div'); imgWrap.className='img'; imgWrap.style.display='grid'; imgWrap.style.placeItems='center'; imgWrap.style.color='#cbd5e1';
-        imgWrap.textContent = 'Dispatch';
-        const cap = document.createElement('div'); cap.className='cap'; cap.style.padding='8px 10px'; cap.style.color='#9fb2d6';
-        cap.textContent = (sc.dispatch||sc.notes||'').toString();
+      thumbs.innerHTML='';
+      let sc=await fetchNode(`geophoto/scenarios/${id}`); if(!sc) sc=await fetchNode(`scenarios/${id}`);
+      if(!sc){ thumbs.innerHTML='<div class="pill">Scenario not found</div>'; return; }
+      const stops=(Array.isArray(sc.stops)?sc.stops:Object.values(sc.stops||{}))||[];
+      // dispatch
+      const dispatch=String(sc.dispatch||sc.notes||'').trim();
+      if(dispatch){
+        const card=document.createElement('div'); card.className='thumb';
+        const imgWrap=document.createElement('div'); imgWrap.className='img'; imgWrap.textContent='Dispatch';
+        const cap=document.createElement('div'); cap.className='cap'; cap.textContent=dispatch;
         card.appendChild(imgWrap); card.appendChild(cap);
-        card.onclick = async ()=>{
-          const session = normSession(sessionInput.value);
-          await db.ref(manualPath(session)).set({ ts: Date.now(), title:'Dispatch', caption:String(sc.dispatch||sc.notes||''), image:'' });
-          setStatus('Sent: Dispatch');
+        card.onclick=()=> sendSlide({title:'Dispatch', caption:dispatch, image:''});
+        thumbs.appendChild(card);
+      }
+      for(const raw of stops){
+        const st={ title:raw.title||raw.name||'', caption:raw.caption||raw.text||'', storagePath:raw.storagePath||raw.thumbPath||'', gsUri:raw.gsUri||'', imageData:raw.imageData, imageURL:raw.imageURL||raw.imageUrl||raw.url||raw.photoURL||raw.photo||'' };
+        const card=document.createElement('div'); card.className='thumb';
+        const imgWrap=document.createElement('div'); imgWrap.className='img';
+        const cap=document.createElement('div'); cap.className='cap'; cap.textContent=(st.title||'')+(st.caption?(' — '+st.caption):'');
+        try{
+          const url=await getStopDataURL(st);
+          if(url){ const im=document.createElement('img'); im.src=url; im.alt=st.title||''; imgWrap.innerHTML=''; imgWrap.appendChild(im); }
+        }catch{}
+        card.appendChild(imgWrap); card.appendChild(cap);
+        card.onclick=async ()=>{
+          let dataURL=''; try{ dataURL=await getStopDataURL(st); dataURL=await compressDataURL(dataURL,1600,0.85);}catch{}
+          await sendSlide({title:st.title||'', caption:st.caption||'', image:dataURL||''});
         };
         thumbs.appendChild(card);
       }
+    }
 
-      for (const st of stops){
-        const card = document.createElement('div'); card.className='thumb';
-        const imgWrap = document.createElement('div'); imgWrap.className='img';
-        const cap = document.createElement('div'); cap.className='cap'; cap.style.padding='8px 10px';
-        cap.textContent = (st.title||'') + (st.caption ? (' — ' + st.caption) : '');
+    function sessionPath(){ return manualPath(sessionInput.value); }
 
-        try{
-          const url = await getStopDataURL(st);
-          if (url){
-            const im = document.createElement('img'); im.src=url; im.alt=st.title||'';
-            imgWrap.appendChild(im);
-          }else{
-            imgWrap.style.display='grid'; imgWrap.style.placeItems='center'; imgWrap.style.color='#cbd5e1';
-            imgWrap.textContent = st.title || 'Slide';
-          }
-        }catch{
-          imgWrap.style.display='grid'; imgWrap.style.placeItems='center'; imgWrap.style.color='#cbd5e1';
-          imgWrap.textContent = st.title || 'Slide';
-        }
-
-        card.appendChild(imgWrap);
-        const capDiv = document.createElement('div'); capDiv.className='cap'; capDiv.textContent = st.caption||''; capDiv.style.color='#9fb2d6'; capDiv.style.padding='8px 10px';
-        card.appendChild(capDiv);
-
-        card.onclick = async ()=>{
-          const session = normSession(sessionInput.value);
-          let dataURL = await getStopDataURL(st);
-          dataURL = await compressDataURL(dataURL, 1600, 0.85); // smaller + faster
-          await db.ref(manualPath(session)).set({
-            ts: Date.now(),
-            title: st.title || '',
-            caption: st.caption || '',
-            image: dataURL || ''  // Viewer accepts URL or dataURL; prefers dataURL
-          });
-          setStatus('Sent: ' + (st.title || 'slide'));
-        };
-
-        thumbs.appendChild(card);
+    async function sendSlide(payload){
+      const p=sessionPath(); setStatus('sending…');
+      try{
+        await db.ref(p).set({ ts: Date.now(), ...payload });
+        setStatus('sent');
+      }catch(e){
+        setStatus(`write error: ${e.code||e.message}`);
+        console.error('[sendSlide]', e);
       }
     }
 
     // Buttons
-    loadBtn.onclick = async ()=>{
-      const id = scenarioSelect.value;
-      if (!id){ setStatus('pick scenario'); return; }
-      await renderThumbsForScenario(id);
-      subscribeCurrent(sessionInput.value);
-      setStatus('loaded');
+    loadBtn.onclick=async ()=>{
+      try{
+        await renderThumbsForScenario(scenarioSelect.value);
+        subscribeCurrent(sessionInput.value);
+        setStatus('loaded');
+      }catch(e){
+        setStatus(`load error: ${e.code||e.message}`); console.error(e);
+      }
     };
-
-    clearBtn.onclick = async ()=>{
-      const s = normSession(sessionInput.value);
-      await db.ref(manualPath(s)).set({ clear:true, ts: Date.now() });
-      setStatus('cleared');
+    clearBtn.onclick=async ()=>{
+      try{ await db.ref(sessionPath()).set({ clear:true, ts: Date.now() }); setStatus('cleared'); }
+      catch(e){ setStatus(`clear error: ${e.code||e.message}`); console.error(e); }
     };
-
-    helloBtn.onclick = async ()=>{
-      const s = normSession(sessionInput.value);
-      const u = auth.currentUser || await ensureAuthed();
-      await db.ref(helloPath(s)).update({ instructorPing: Date.now(), from: u.uid });
-      setStatus('announced');
+    helloBtn.onclick=async ()=>{
+      try{
+        const u=auth.currentUser || await ensureAuthed();
+        await db.ref(helloPath(sessionInput.value)).update({ instructorPing: Date.now(), from: u.uid });
+        setStatus('hello sent');
+      }catch(e){ setStatus(`hello error: ${e.code||e.message}`); console.error(e); }
     };
-
-    testBtn.onclick = async ()=>{
-      const s = normSession(sessionInput.value);
-      await db.ref(manualPath(s)).set({ ts: Date.now(), title:'Test', caption:'If viewers see this, we are connected.', image:'' });
-      setStatus('test sent');
-    };
+    testBtn.onclick=async ()=>{ await sendSlide({ title:'Test', caption:'If viewers see this, we are connected.', image:'' }); };
 
     // Boot
     (async ()=>{
-      await ensureAuthed();
-      await loadScenarios();
-      subscribeCurrent(sessionInput.value);
-      setStatus('idle');
+      try{
+        await ensureAuthed();
+        dbPill.textContent=`db: ${config.databaseURL}`;
+        await loadScenarios();
+        subscribeCurrent(sessionInput.value);
+        setStatus('idle');
+      }catch(e){
+        setStatus(`auth/load error: ${e.code||e.message}`); console.error(e);
+      }
     })();
   })();
   </script>
