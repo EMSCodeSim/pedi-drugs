@@ -36,16 +36,16 @@
       <div class="row">
         <strong>FireOps SIM — Instructor</strong>
         <span id="authPill" class="pill">auth: …</span>
-        <span id="dbPill" class="pill">db: …</span>
+        <span id="dbPill"   class="pill">db: …</span>
         <span id="pathPill" class="pill">path: …</span>
       </div>
       <div class="row">
         <input id="sessionInput" class="input" placeholder="Session" value="default" />
         <select id="scenarioSelect" class="input"><option value="">Loading scenarios…</option></select>
-        <button id="loadBtn" class="btn">Load</button>
+        <button id="loadBtn"  class="btn">Load</button>
         <button id="clearBtn" class="btn secondary">Clear</button>
         <button id="helloBtn" class="btn secondary">Hello</button>
-        <button id="testBtn" class="btn secondary">Send Test</button>
+        <button id="testBtn"  class="btn secondary">Send Test</button>
         <span id="status" class="pill">idle</span>
       </div>
     </div>
@@ -65,10 +65,13 @@
     </section>
   </main>
 
+  <!-- Firebase compat SDKs -->
   <script src="https://www.gstatic.com/firebasejs/10.12.4/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.4/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.4/firebase-database-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.4/firebase-storage-compat.js"></script>
+  <!-- App Check (enable if Enforcement is ON) -->
+  <script src="https://www.gstatic.com/firebasejs/10.12.4/firebase-app-check-compat.js"></script>
 
   <script>
   (function(){
@@ -83,6 +86,11 @@
       measurementId:"G-19DVN7NNH7"
     };
     firebase.initializeApp(config);
+
+    // App Check (uncomment + add your site key if App Check is enforced)
+    // self.FIREBASE_APPCHECK_DEBUG_TOKEN = true; // DEV only; remove in prod
+    // firebase.appCheck().activate('YOUR_RECAPTCHA_V3_SITE_KEY', true);
+
     const db=firebase.database(), auth=firebase.auth(), storage=firebase.storage();
     const FORCE_BUCKET="dailyquiz-d5279.appspot.com";
 
@@ -112,12 +120,13 @@
     async function fetchNode(path){ const snap=await db.ref(path).get(); return snap.exists()?snap.val():null; }
     async function loadScenarios(){
       const list=[];
-      try{const a=await fetchNode('geophoto/scenarios'); if(a) for(const [id,s] of Object.entries(a)) list.push({id,...(s||{})});}catch{}
-      try{const b=await fetchNode('scenarios');          if(b) for(const [id,s] of Object.entries(b)) list.push({id,...(s||{})});}catch{}
+      try{const a=await fetchNode('geophoto/scenarios'); if(a) for(const [id,s] of Object.entries(a)) list.push({id,...(s||{})});}catch(e){ setStatus(`scenarios read err: ${e.code||e.message}`); }
+      try{const b=await fetchNode('scenarios');          if(b) for(const [id,s] of Object.entries(b)) list.push({id,...(s||{})});}catch(e){}
       const uniq=new Map(); list.forEach(x=>{if(!uniq.has(x.id))uniq.set(x.id,x);});
       const arr=Array.from(uniq.values()).sort((a,b)=>(b.createdAt||0)-(a.createdAt||0));
       scenarioSelect.innerHTML='<option value="">Select a scenario…</option>';
       arr.forEach(sc=>{const o=document.createElement('option');o.value=sc.id;o.textContent=sc.title||sc.name||'(untitled)';scenarioSelect.appendChild(o);});
+      if(arr.length===0) setStatus('no scenarios / rules?');
       return arr;
     }
     function toDataURLFromStored(stored){
@@ -155,7 +164,7 @@
       ctx.drawImage(img,0,0,c.width,c.height); return c.toDataURL('image/jpeg', q);
     }
 
-    // Preview current frame (what viewers see)
+    // Preview current frame
     let currentRef=null;
     function subscribeCurrent(sessionRaw){
       const s=normSession(sessionRaw); const p=manualPath(s); pathPill.textContent=`path: ${p}`;
@@ -168,7 +177,7 @@
       }, err=>{ setStatus(`preview read error: ${err.code||err.message}`); console.error(err); });
     }
 
-    // Send slide (UPDATE with ts/kind/by, also removes any lingering "clear")
+    // Send slide (UPDATE with ts/kind/by; remove any lingering clear)
     async function sendSlide(payload){
       const p = manualPath(sessionInput.value);
       setStatus('sending…');
@@ -181,9 +190,9 @@
           title: payload.title || '',
           caption: payload.caption || '',
           image: payload.image || '',
-          clear: null   // remove any previous clear flag
+          clear: null
         };
-        await db.ref(p).update(frame); // update avoids full-node wipes
+        await db.ref(p).update(frame); // update avoids wiping node
         setStatus('sent');
       }catch(e){
         setStatus(`write error: ${e.code||e.message}`);
@@ -191,7 +200,7 @@
       }
     }
 
-    // Render scenario thumbnails
+    // Thumbnails
     async function renderThumbsForScenario(id){
       thumbs.innerHTML='';
       let sc=await fetchNode(`geophoto/scenarios/${id}`); if(!sc) sc=await fetchNode(`scenarios/${id}`);
@@ -241,7 +250,6 @@
       const p = manualPath(sessionInput.value);
       setStatus('clearing…');
       try{
-        // Set clear flag and remove slide fields to avoid stale data
         await db.ref(p).update({ clear:true, ts: Date.now(), title:null, caption:null, image:null, kind:null, by:null });
         setStatus('cleared');
       }catch(e){ setStatus(`clear error: ${e.code||e.message}`); console.error(e); }
