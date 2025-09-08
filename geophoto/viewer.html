@@ -53,7 +53,6 @@
     <span id="hint" class="pill"></span>
   </div>
 
-  <!-- Firebase compat SDKs -->
   <script src="https://www.gstatic.com/firebasejs/10.12.4/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.4/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.4/firebase-database-compat.js"></script>
@@ -65,6 +64,7 @@
     const sel=$('#scenario'), startBtn=$('#start'), sessionInput=$('#session');
     const img=$('#img'), cap=$('#cap'), statusPill=$('#status'), hint=$('#hint'), authPill=$('#authPill'), pathPill=$('#pathPill');
 
+    // Firebase config (same as Instructor)
     const config = {
       apiKey:"AIzaSyDM6DpRSeZueVKRpbyJyDmhf8WY66KyCDk",
       authDomain:"dailyquiz-d5279.firebaseapp.com",
@@ -78,20 +78,24 @@
     const db=firebase.database(), auth=firebase.auth(), storage=firebase.storage();
     const FORCE_BUCKET="dailyquiz-d5279.appspot.com";
 
+    // State
     let running=false, manualRef=null, helloRef=null, watchId=null;
-    let current=null, cache=[], lastIdx=-1, lastSlideTs=0;
+    let current=null, cache=[], lastIdx=-1, lastTs=0;
 
+    // UI helpers
     const setStatus=t=> statusPill.textContent=t;
     const say=t=> hint.textContent=t||'';
     const qs=new URLSearchParams(location.search);
     if(qs.get('session')) sessionInput.value=qs.get('session');
 
+    // Paths
     function normSession(raw){return (raw||'default').trim().toLowerCase();}
     function manualPath(s){return `geophoto/manual/${normSession(s)}/current`;}
     function helloPath(s){return `geophoto/manual/${normSession(s)}/hello`;}
 
     function showSlide(title,text,dataURL){
-      img.src=dataURL||''; const s=(title?title+(text?' — ':''):'')+(text||'');
+      img.src=dataURL||'';
+      const s=(title?title+(text?' — ':''):'')+(text||'');
       cap.textContent=s; cap.style.display=s?'block':'none';
     }
 
@@ -104,13 +108,12 @@
       });
     }
 
-    async function fetchNode(path){
-      const snap=await db.ref(path).get(); return snap.exists()?snap.val():null;
-    }
+    async function fetchNode(path){ const snap=await db.ref(path).get(); return snap.exists()?snap.val():null; }
+
     async function loadScenarios(){
       const list=[];
-      try{const a=await fetchNode('geophoto/scenarios'); if(a) for(const [id,s] of Object.entries(a)) list.push({id,...(s||{})});}catch(e){}
-      try{const b=await fetchNode('scenarios');          if(b) for(const [id,s] of Object.entries(b)) list.push({id,...(s||{})});}catch(e){}
+      try{const a=await fetchNode('geophoto/scenarios'); if(a) for(const [id,s] of Object.entries(a)) list.push({id,...(s||{})});}catch{}
+      try{const b=await fetchNode('scenarios');          if(b) for(const [id,s] of Object.entries(b)) list.push({id,...(s||{})});}catch{}
       const uniq=new Map(); list.forEach(x=>{if(!uniq.has(x.id)) uniq.set(x.id,x);});
       const arr=Array.from(uniq.values()).sort((a,b)=>(b.createdAt||0)-(a.createdAt||0));
       sel.innerHTML='<option value="__manual__">Instructor-led (Manual)</option>';
@@ -118,46 +121,60 @@
       if(qs.get('id')&&arr.some(s=>s.id===qs.get('id'))) sel.value=qs.get('id');
     }
 
-    // MANUAL MODE (with error visibility and ts gating)
+    // ---------- Manual mode (sticky, ignore stale/empty) ----------
     function subscribeManual(sessionRaw){
       const s=normSession(sessionRaw);
       pathPill.textContent=`path: ${manualPath(s)}`;
-      if(manualRef) try{manualRef.off();}catch{}; if(helloRef) try{helloRef.off();}catch{};
-      manualRef=db.ref(manualPath(s)); helloRef=db.ref(helloPath(s));
+      if(manualRef) try{ manualRef.off(); }catch{}; 
+      if(helloRef)  try{ helloRef.off(); }catch{};
+      manualRef=db.ref(manualPath(s));
+      helloRef =db.ref(helloPath(s));
 
       helloRef.on('value', snap=>{
         const v=snap.val(); const last=v?.instructorPing? new Date(v.instructorPing).toLocaleTimeString():'—';
         say(`Connected: "${s}". Last hello: ${last}`);
-      }, err=>{
-        say(`Hello read error: ${err.code||err.message}`); console.error(err);
       });
 
       manualRef.on('value', snap=>{
         const v=snap.val();
-        if(v && v.clear===true){ lastSlideTs=Date.now(); showSlide('','',''); setStatus('waiting…'); return; }
-        if(!v){ setStatus('waiting…'); return; }
-        const ts=Number(v.ts||0);
-        if(lastSlideTs && ts && ts<=lastSlideTs) return; // ignore stale
-        const dataURL=v.image||v.imageURL||v.url||'';
-        showSlide(v.title||'', v.caption||'', dataURL); lastSlideTs=ts||Date.now();
+
+        // 1) Only explicit clear blanks the screen
+        if (v && v.clear===true){
+          lastTs = Date.now();
+          showSlide('','',''); setStatus('waiting…'); say('Instructor cleared'); return;
+        }
+
+        // 2) Null/empty object: ignore (keep last slide)
+        if (!v || (typeof v==='object' && !v.kind && !v.image && !v.title && !v.caption)){
+          return;
+        }
+
+        // 3) Only accept newer frames with kind:'slide'
+        const ts = Number(v.ts||0);
+        if (v.kind!=='slide' || (lastTs && ts && ts<=lastTs)) return;
+
+        lastTs = ts || Date.now();
+        showSlide(v.title||'', v.caption||'', v.image||v.imageURL||v.url||'');
         setStatus('manual'); say(`Slide: ${v.title||'untitled'}`);
       }, err=>{
-        setStatus('read error'); say(`Manual read error: ${err.code||err.message}`); console.error(err);
+        setStatus('read error'); say(`Manual read error: ${err.code||err.message}`);
+        console.error('[viewer] manual subscribe error', err);
       });
     }
 
-    // GPS (unchanged logic; omitted for brevity except preload helpers)
+    // ---------- GPS mode (minimal + preloading) ----------
     function toStorageRefString(v){
       if(!v) return ''; let s=(v+'').trim(); try{s=decodeURIComponent(s);}catch{}
       if(s.startsWith('gs://')) return s;
       let m=s.match(/^https?:\/\/firebasestorage\.googleapis\.com\/v0\/b\/([^/]+)\/o\/([^?]+)/i); if(m) return `gs://${m[1]}/${m[2].replace(/\+/g,' ')}`;
       m=s.match(/^https?:\/\/([^/]+)\.firebasestorage\.app\/o\/([^?]+)/i); if(m) return `gs://${m[1]}/${m[2].replace(/\+/g,' ')}`;
-      if(!/^https?:\/\//i.test(s)) return `gs://${FORCE_BUCKET}/${s}`; return '';
+      if(!/^https?:\/\//i.test(s)) return `gs://${FORCE_BUCKET}/${s}`;
+      return '';
     }
     async function blobToDataURLViaStorage(pathOrGs){
       const refStr=toStorageRefString(pathOrGs); if(!refStr) return '';
       const ref=storage.refFromURL(refStr); const blob=await ref.getBlob();
-      return await new Promise((res,rej)=>{const fr=new FileReader();fr.onload=()=>res(fr.result);fr.onerror=rej;fr.readAsDataURL(blob);});
+      return await new Promise((res,rej)=>{ const fr=new FileReader(); fr.onload=()=>res(fr.result); fr.onerror=rej; fr.readAsDataURL(blob); });
     }
     function toDataURLFromStored(stored){
       if(!stored) return ''; if(typeof stored==='string') return stored;
@@ -168,7 +185,8 @@
       if(!stopsLike) return []; const arr=Array.isArray(stopsLike)?stopsLike:Object.values(stopsLike);
       return arr.map(s=>({title:s.title||s.name||'',caption:s.caption||s.text||'',lat:+(s.lat??s.latitude??s.latDeg),lng:+(s.lng??s.lon??s.long??s.longitude??s.lngDeg),radiusMeters:+(s.radiusMeters??s.radius??s.r)||40,imageDataURL:toDataURLFromStored(s.imageData||s.imageURL||s.imageUrl||s.url||s.photoURL||s.photo),storagePath:s.storagePath||s.thumbPath||'',gsUri:s.gsUri||''}));
     }
-    const toRad=x=>x*Math.PI/180; const hav=(aLat,aLng,bLat,bLng)=>{const R=6371000,dLat=toRad(bLat-aLat),dLng=toRad(bLng-aLng);const A=Math.sin(dLat/2)**2+Math.cos(toRad(aLat))*Math.cos(toRad(bLat))*Math.sin(dLng/2)**2;return 2*R*Math.asin(Math.sqrt(A));};
+    const toRad=x=>x*Math.PI/180; 
+    const hav=(aLat,aLng,bLat,bLng)=>{const R=6371000,dLat=toRad(bLat-aLat),dLng=toRad(bLng-aLng);const A=Math.sin(dLat/2)**2+Math.cos(toRad(aLat))*Math.cos(toRad(bLat))*Math.sin(dLng/2)**2;return 2*R*Math.asin(Math.sqrt(A));};
     function inside(stop,la,ln,acc){const d=hav(la,ln,stop.lat,stop.lng);const pad=Math.min(Math.max(+acc||0,0),3);return d<=((+stop.radiusMeters)||0)+pad;}
     async function preloadScenario(stops){
       cache=new Array(stops.length).fill(''); let done=0;
@@ -196,6 +214,7 @@
       }, err=>{ say(`GPS error: ${err.message}`); }, {enableHighAccuracy:true,maximumAge:0,timeout:20000});
     }
 
+    // Start/Stop
     async function start(){
       if(running) return; await ensureAuthed(); running=true; startBtn.textContent='Stop';
       const val=sel.value, session=(sessionInput.value||'default').trim()||'default';
@@ -208,12 +227,12 @@
       if(manualRef) try{manualRef.off();}catch{}; manualRef=null;
       if(helloRef) try{helloRef.off();}catch{}; helloRef=null;
       if(watchId){try{navigator.geolocation.clearWatch(watchId);}catch{}; watchId=null;}
-      current=null; cache=[]; lastIdx=-1; lastSlideTs=0;
+      current=null; cache=[]; lastIdx=-1; lastTs=0;
       img.src=''; cap.textContent=''; cap.style.display='none'; setStatus('idle'); say('');
     }
-
     startBtn.addEventListener('click', ()=> running?stop():start());
 
+    // Boot
     (async ()=>{
       try{
         await ensureAuthed();
