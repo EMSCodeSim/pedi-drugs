@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <title>FireOps SIM — Admin (fixed Firebase paths)</title>
+  <title>FireOps SIM — Admin (Editor-style Cloud Save)</title>
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="theme-color" content="#0b0f14">
   <style>
@@ -33,15 +33,21 @@
     .del{position:absolute;right:8px;bottom:8px}
     .tag{color:var(--muted);font-size:12px}
     #errbar{position:fixed;left:12px;bottom:12px;z-index:99;display:none;padding:10px 12px;border-radius:12px;border:1px solid #7a2b2b;background:#2b0d0d;color:#ffd7d7}
+    #loader{position:fixed;inset:0;display:none;place-items:center;background:rgba(6,12,20,.55);backdrop-filter:blur(2px);z-index:99}
+    .spinner{width:42px;height:42px;border-radius:999px;border:4px solid rgba(255,255,255,.25);border-top-color:#fff;animation:spin 1s linear infinite}
+    @keyframes spin{to{transform:rotate(360deg)}}
   </style>
 </head>
 <body>
   <div id="errbar"></div>
+  <div id="loader"><div class="spinner"></div></div>
+
   <header>
     <div class="bar">
       <div class="brand">FireOps SIM — Admin</div>
       <div class="spacer"></div>
-      <div id="env" class="tag"></div>
+      <span id="authPill" class="tag">Auth: connecting…</span>
+      <span id="env" class="tag"></span>
     </div>
   </header>
 
@@ -49,7 +55,7 @@
     <!-- Create / Add Photo -->
     <section class="card">
       <h3 style="margin:0">Create Scenario</h3>
-      <div class="tag">Writes to <code>scenarios/**</code> and <code>geophoto/scenarios/**</code>. Photos saved under <code>scenarios/&lt;id&gt;/&lt;ts&gt;.jpg</code>.</div>
+      <div class="tag">Writes to <code>scenarios/**</code> and <code>geophoto/scenarios/**</code>. Photos go to <code>scenarios/&lt;id&gt;/&lt;ts&gt;.jpg</code>.</div>
 
       <div style="margin-top:10px">
         <label>Scenario Name</label>
@@ -92,273 +98,236 @@
     </section>
   </main>
 
-  <!-- Firebase compat SDKs -->
-  <script src="https://www.gstatic.com/firebasejs/10.12.4/firebase-app-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.12.4/firebase-auth-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.12.4/firebase-database-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.12.4/firebase-storage-compat.js"></script>
+  <!-- Firebase (modules, same family as Advanced Editor) -->
+  <script type="module">
+    const $=id=>document.getElementById(id);
+    const showErr=m=>{ const b=$('errbar'); b.textContent=m; b.style.display='block'; };
+    const showLoad=on=>{ $('loader').style.display=on?'grid':'none'; };
+    const setStep=m=>{ $('steps').textContent=m; };
 
-  <script>
-  (function(){
-    /* ---------------- Firebase config & constants ---------------- */
-    var firebaseConfig = {
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-app.js";
+    import { getDatabase, ref as dbRef, get, set, update } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-database.js";
+    import { getAuth, signInAnonymously, onAuthStateChanged, setPersistence, browserLocalPersistence, browserSessionPersistence, inMemoryPersistence } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-auth.js";
+    import { getStorage, ref as stRef, uploadBytesResumable, uploadBytes, getDownloadURL, deleteObject } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-storage.js";
+
+    /* ---- Config (bucket forced to appspot) ---- */
+    const firebaseConfig = {
       apiKey:"AIzaSyDM6DpRSeZueVKRpbyJyDmhf8WY66KyCDk",
       authDomain:"dailyquiz-d5279.firebaseapp.com",
       databaseURL:"https://dailyquiz-d5279-default-rtdb.firebaseio.com",
       projectId:"dailyquiz-d5279",
-      storageBucket:"dailyquiz-d5279.appspot.com",  // must match viewer bucket
+      storageBucket:"dailyquiz-d5279.appspot.com",
       appId:"1:94577748034:web:c032d3a1d72db1313de5db",
       measurementId:"G-19DVN7NNH7"
     };
-    firebase.initializeApp(firebaseConfig);
+    const appFB = initializeApp(firebaseConfig);
+    const db = getDatabase(appFB);
+    const FORCE_BUCKET = "dailyquiz-d5279.appspot.com";
+    const storage = getStorage(appFB, `gs://${FORCE_BUCKET}`);
+    const auth = getAuth(appFB);
+    $('env').textContent = `DB ok • Bucket: ${FORCE_BUCKET}`;
 
-    var db = firebase.database();
-    var storage = firebase.storage(); // uses fixed bucket above
-    var auth = firebase.auth();
-    var FORCE_BUCKET = firebaseConfig.storageBucket || (firebaseConfig.projectId + '.appspot.com');
+    /* ---- Auth: same robust flow as Advanced Editor ---- */
+    async function ensureAuthed(){
+      try{ await setPersistence(auth, browserLocalPersistence); }
+      catch{ try{ await setPersistence(auth, browserSessionPersistence); }
+      catch{ await setPersistence(auth, inMemoryPersistence); } }
+      if (!auth.currentUser){
+        await signInAnonymously(auth);
+        await new Promise(res=>{ const u=onAuthStateChanged(auth, x=>x && (u(), res())); });
+      }
+      $('authPill').textContent = `Auth: anon ✔ (${auth.currentUser.uid.slice(0,8)})`;
+      return auth.currentUser;
+    }
+    async function getIdToken(force=false){
+      try{ const u=auth.currentUser||await ensureAuthed(); return await u.getIdToken(force); }
+      catch{return null;}
+    }
 
-    document.getElementById('env').textContent = 'DB: ' + firebaseConfig.databaseURL + ' • Bucket: ' + FORCE_BUCKET;
-
-    /* ---------------- DOM helpers ---------------- */
-    var $ = function(id){ return document.getElementById(id); };
-    var steps = $('steps'), errbar=$('errbar');
-    function setStep(m){ steps.textContent = m; }
-    function setErr(m){ errbar.textContent=m; errbar.style.display='block'; }
-
-    /* ---------------- Auth ---------------- */
-    function ensureAuthed(){
-      if (auth.currentUser) return Promise.resolve(auth.currentUser);
-      return auth.signInAnonymously().then(function(){
-        return new Promise(function(resolve){
-          var off = auth.onAuthStateChanged(function(u){ if(u){ off(); resolve(u); } });
-        });
+    /* ---- Cloud Function fallback (with ID token) ---- */
+    const FUNCTION_UPLOAD_URL = 'https://us-central1-dailyquiz-d5279.cloudfunctions.net/uploadScenarioImage';
+    async function uploadViaFunction(dataURL, scenarioId, fileName){
+      const idt = await getIdToken().catch(()=>null);
+      const resp = await fetch(FUNCTION_UPLOAD_URL, {
+        method:'POST',
+        headers:{ 'Content-Type':'application/json', ...(idt?{Authorization:`Bearer ${idt}`}:{}) },
+        body: JSON.stringify({ scenarioId, fileName, dataURL })
       });
+      if(!resp.ok){ throw new Error(`Function HTTP ${resp.status}`); }
+      const j=await resp.json();
+      if(!j.ok){ throw new Error(`Function error: ${j.error||'unknown'}`); }
+      return { url:j.url, path:j.path, gsUri:j.gsUri, via:'function' };
     }
 
-    /* ---------------- Image pipeline (phone-friendly) ---------------- */
-    // 1280px max edge, JPEG q=0.75
-    function readAsDataURL(file){ return new Promise(function(res,rej){ var r=new FileReader(); r.onload=function(){res(r.result)}; r.onerror=rej; r.readAsDataURL(file); }); }
-    function loadImage(src){ return new Promise(function(res,rej){ var i=new Image(); i.onload=function(){res(i)}; i.onerror=rej; i.src=src; }); }
-    function toCanvas(img,max){ max=max||1280; var c=document.createElement('canvas'); var s=Math.min(max/img.width,max/img.height,1); c.width=Math.round(img.width*s); c.height=Math.round(img.height*s); c.getContext('2d').drawImage(img,0,0,c.width,c.height); return c; }
-    function canvasToDataURL(c){ return c.toDataURL('image/jpeg',0.75); }
-    function dataURLtoBlob(u){ var p=u.split(','), b64=p[1]; var mime=(/data:(.*?);base64/).exec(p[0])[1]; var bin=atob(b64), len=bin.length, a=new Uint8Array(len); for(var i=0;i<len;i++) a[i]=bin.charCodeAt(i); return new Blob([a],{type:mime}); }
+    /* ---- Image utilities (phone-friendly) ---- */
+    const MAX_EDGE=1280, JPEG_Q=0.75, THUMB_EDGE=480;
+    const readAsDataURL=f=>new Promise((res,rej)=>{ const r=new FileReader(); r.onload=()=>res(r.result); r.onerror=rej; r.readAsDataURL(f); });
+    const loadImage=src=>new Promise((res,rej)=>{ const i=new Image(); i.onload=()=>res(i); i.onerror=rej; i.src=src; });
+    function toCanvas(img,max=MAX_EDGE){ const c=document.createElement('canvas'); const s=Math.min(1,max/Math.max(img.width,img.height)); c.width=Math.round(img.width*s); c.height=Math.round(img.height*s); c.getContext('2d').drawImage(img,0,0,c.width,c.height); return c; }
+    const canvasToDataURL=c=>c.toDataURL('image/jpeg',JPEG_Q);
+    function makeThumb(dataURL){ return new Promise(async res=>{ const i=new Image(); i.onload=()=>{ const s=Math.min(1,THUMB_EDGE/Math.max(i.width,i.height)); const c=document.createElement('canvas'); c.width=i.width*s; c.height=i.height*s; c.getContext('2d').drawImage(i,0,0,c.width,c.height); res(c.toDataURL('image/jpeg',0.8)); }; i.src=dataURL; }); }
+    function dataURLtoBlob(u){ const [h,b64]=u.split(','); const mime=(/data:(.*?);base64/).exec(h)[1]; const bin=atob(b64), a=new Uint8Array(bin.length); for(let i=0;i<bin.length;i++) a[i]=bin.charCodeAt(i); return new Blob([a],{type:mime}); }
+    function uploadWithTimeout(ref, blob, metadata){ return new Promise((resolve,reject)=>{ const t=uploadBytesResumable(ref,blob,metadata); const kill=setTimeout(()=>{ try{t.cancel();}catch{} reject(Object.assign(new Error('Timed out while uploading'),{code:'save/timeout-upload'})); },45000); t.on('state_changed', s=>{ $('saveStatus').textContent = `upload ${Math.round(100*s.bytesTransferred/s.totalBytes)}%`; }, e=>{ clearTimeout(kill); reject(e); }, ()=>{ clearTimeout(kill); resolve(); }); }); }
 
-    /* ---------------- Elements ---------------- */
-    var scenarioName=$('scenarioName'), dispatchInfo=$('dispatchInfo');
-    var photoInput=$('photoInput'), caption=$('caption'), radius=$('radius');
-    var createNow=$('createNow'), createStatus=$('createStatus');
-    var savePhoto=$('savePhoto'), saveStatus=$('saveStatus');
-    var thumbs=$('thumbs'), scenarioList=$('scenarioList'), listStatus=$('listStatus');
+    /* ---- State ---- */
+    let currentScenarioId=null, localStops=[];
+    const scenarioName=$('scenarioName'), dispatchInfo=$('dispatchInfo');
+    const photoInput=$('photoInput'), caption=$('caption'), radius=$('radius');
+    const thumbs=$('thumbs'), scenarioList=$('scenarioList'), listStatus=$('listStatus');
 
-    var currentScenarioId=null, localStops=[];
-
-    /* ---------------- DB path helpers (must match viewer) ---------------- */
-    function scenarioBase(id){
-      return {
-        id:id,
-        title: (scenarioName && scenarioName.value||'').trim(),
-        dispatch: (dispatchInfo && dispatchInfo.value||'').trim(),
-        description: (dispatchInfo && dispatchInfo.value||'').trim(),
-        createdAt: Date.now(),
-        active: true,
-        stops: []
-      };
+    /* ---- DB helpers (mirror like viewer) ---- */
+    function baseScenario(id){
+      const dispatch=(dispatchInfo?.value||'').trim();
+      return { id, title:(scenarioName?.value||'').trim(), dispatch, description:dispatch, createdAt:Date.now(), active:true, stops:[] };
     }
-    function mirrorWrite(obj){
-      // write to both trees so the viewer can see either
-      var multi={};
-      Object.keys(obj).forEach(function(k){ multi[k]=obj[k]; });
-      return db.ref().update(multi);
+    async function mirrorUpdate(multi){ await update(dbRef(db), multi); }
+    async function createScenarioRecord(){
+      const title=(scenarioName?.value||'').trim();
+      if(!title) throw new Error('Please enter a Scenario Name');
+      await ensureAuthed();
+      const id = (await import("https://www.gstatic.com/firebasejs/10.12.4/firebase-database.js")).push(dbRef(db,'scenarios')).key;
+      const base = baseScenario(id);
+      await mirrorUpdate({ [`scenarios/${id}`]:base, [`geophoto/scenarios/${id}`]:base });
+      currentScenarioId=id; return id;
     }
 
-    /* ---------------- Create scenario (old flow) ---------------- */
-    function createScenarioRecord(){
-      var name=(scenarioName && scenarioName.value||'').trim();
-      if(!name){ return Promise.reject(new Error('Please enter a Scenario Name')); }
-      return ensureAuthed().then(function(){
-        var id = db.ref('scenarios').push().key;
-        var base = scenarioBase(id);
-        var multi={};
-        multi['scenarios/'+id] = base;
-        multi['geophoto/scenarios/'+id] = base;
-        return mirrorWrite(multi).then(function(){ currentScenarioId=id; return id; });
-      });
-    }
+    /* ---- UI actions ---- */
+    $('createNow').onclick = async ()=>{
+      try{ $('createStatus').textContent='creating…'; await createScenarioRecord(); $('createStatus').textContent='created ✓'; setStep('Scenario created. You can now add photos.'); loadList(); }
+      catch(e){ $('createStatus').textContent='error'; showErr(e.message||e); setStep('Create failed.'); }
+    };
 
-    createNow.addEventListener('click', function(){
-      createStatus.textContent='creating…';
-      createScenarioRecord()
-        .then(function(){ createStatus.textContent='created ✓'; setStep('Scenario created. You can now add photos.'); loadList(); })
-        .catch(function(e){ createStatus.textContent='error'; setErr(e && e.message || String(e)); setStep('Create failed.'); });
-    }, false);
-
-    /* ---------------- Save photo (upload + mirror DB) ---------------- */
-    savePhoto.addEventListener('click', function(){
-      saveStatus.textContent='preparing…'; setStep('Checking selection…');
-      var file = photoInput && photoInput.files && photoInput.files[0];
-      if(!file){ saveStatus.textContent='no file'; setStep('Pick a photo first.'); return; }
-
-      var ensureScenario = currentScenarioId ? Promise.resolve(currentScenarioId) : (function(){
-        if (!scenarioName || !scenarioName.value.trim()){
-          scenarioName.value = 'New Scenario ' + new Date().toLocaleString();
+    $('savePhoto').onclick = async ()=>{
+      try{
+        $('saveStatus').textContent='preparing…'; setStep('Checking selection…');
+        const f = photoInput?.files?.[0]; if(!f){ $('saveStatus').textContent='no file'; setStep('Pick a photo first.'); return; }
+        showLoad(true);
+        if(!currentScenarioId){
+          if(!scenarioName.value.trim()) scenarioName.value = 'New Scenario ' + new Date().toLocaleString();
+          $('createStatus').textContent='creating…';
+          await createScenarioRecord(); $('createStatus').textContent='created ✓';
         }
-        createStatus.textContent='creating…';
-        return createScenarioRecord().then(function(id){ createStatus.textContent='created ✓'; return id; });
-      })();
+        await ensureAuthed();
 
-      ensureScenario
-      .then(function(){
         setStep('Compressing photo…');
-        return readAsDataURL(file).then(loadImage).then(function(img){ return canvasToDataURL(toCanvas(img,1280)); });
-      })
-      .then(function(dataURL){
-        setStep('Uploading to Cloud Storage…');
-        return ensureAuthed().then(function(){
-          var ts = Date.now();
-          var storagePath = 'scenarios/'+currentScenarioId+'/'+ts+'.jpg';
-          var ref = storage.ref(storagePath);
-          var meta={ contentType:'image/jpeg', cacheControl:'public,max-age=31536000,immutable' };
-          return new Promise(function(resolve,reject){
-            var task = ref.put(dataURLtoBlob(dataURL), meta);
-            var killer = setTimeout(function(){ try{task.cancel();}catch(_){ } reject(new Error('Upload timeout')); }, 60000);
-            task.on('state_changed',
-              function(s){ var pct=Math.round(100*s.bytesTransferred/s.totalBytes); saveStatus.textContent='upload '+pct+'%'; },
-              function(err){ clearTimeout(killer); reject(err); },
-              function(){ clearTimeout(killer); ref.getDownloadURL().then(function(url){
-                resolve({ imageURL:url, storagePath:storagePath, gsUri:'gs://'+FORCE_BUCKET+'/'+storagePath, ts:ts });
-              }, reject); }
-            );
-          });
-        });
-      })
-      .then(function(fileInfo){
+        const dataURL = canvasToDataURL(toCanvas(await loadImage(await readAsDataURL(f))));
+        const thumbURL = await makeThumb(dataURL);
+
+        const ts = Date.now();
+        const fullRef  = stRef(storage, `scenarios/${currentScenarioId}/${ts}.jpg`);
+        const thmbRef  = stRef(storage, `scenarios/${currentScenarioId}/thumbs/${ts}.jpg`);
+        const meta     = { contentType:'image/jpeg', cacheControl:'public,max-age=31536000,immutable' };
+
+        let cloud=null;
+        try{
+          await uploadWithTimeout(fullRef, dataURLtoBlob(dataURL), meta);
+          try{ await uploadBytes(thmbRef, dataURLtoBlob(thumbURL), meta); }catch{}
+          const url = await getDownloadURL(fullRef);
+          const turl= await getDownloadURL(thmbRef).catch(()=>url);
+          cloud = { url, thumbURL:turl, path:fullRef.fullPath, gsUri:`gs://${FORCE_BUCKET}/${fullRef.fullPath}`, via:'storage' };
+        }catch(e1){
+          // Same fallback strategy as Advanced Editor
+          try{
+            const res = await uploadViaFunction(dataURL, currentScenarioId, `${ts}.jpg`);
+            cloud = { url:res.url, thumbURL:res.url, path:res.path, gsUri:res.gsUri, via:'function' };
+          }catch(e2){
+            cloud = null; // final fallback: inline
+          }
+        }
+
         setStep('Saving to database…');
-        var r = Math.max(5, Math.min(1000, parseInt((radius && radius.value)||'50',10) || 50));
-        var stop = {
+        const r = Math.max(5, Math.min(1000, parseInt((radius?.value)||'50',10)||50));
+        const stop = {
           type:'photo',
           title:'',
-          caption:(caption && caption.value)||'',
-          imageURL:fileInfo.imageURL,
-          storagePath:fileInfo.storagePath,
-          gsUri:fileInfo.gsUri,
+          caption:(caption?.value)||'',
           radiusMeters:r,
           overlays:[],
-          at:fileInfo.ts
+          at:ts
         };
+        if (cloud){
+          stop.imageURL=cloud.url; stop.thumbURL=cloud.thumbURL||cloud.url; stop.storagePath=cloud.path; stop.gsUri=cloud.gsUri;
+        }else{
+          stop.imageData={ format:'jpeg', data:dataURL.split(',')[1] };
+        }
         localStops.push(stop);
+        await mirrorUpdate({
+          [`scenarios/${currentScenarioId}/stops`]: localStops,
+          [`geophoto/scenarios/${currentScenarioId}/stops`]: localStops
+        });
 
-        var multi={};
-        multi['scenarios/'+currentScenarioId+'/stops'] = localStops;
-        multi['geophoto/scenarios/'+currentScenarioId+'/stops'] = localStops;
-        return mirrorWrite(multi).then(function(){ return stop; });
-      })
-      .then(function(){
-        saveStatus.textContent='saved ✓'; setStep('Photo saved.');
+        $('saveStatus').textContent='saved ✓'; setStep('Photo saved.');
         if(caption) caption.value=''; if(radius) radius.value=50; if(photoInput) photoInput.value='';
         renderThumbs(); loadList();
-      })
-      .catch(function(e){
-        saveStatus.textContent='error'; setStep('Save failed.'); setErr(e && e.message || String(e));
-      });
-    }, false);
-
-    /* ---------------- Thumbs & delete ---------------- */
-    function renderThumbs(){
-      if(!thumbs) return;
-      thumbs.innerHTML='';
-      for(var i=0;i<localStops.length;i++){
-        var s=localStops[i];
-        var w=document.createElement('div'); w.className='thumbWrap';
-        var img=document.createElement('img'); img.className='thumb'; img.src=s.imageURL || ''; img.alt=s.caption||('Stop '+(i+1));
-        var del=document.createElement('button'); del.className='btn del'; del.textContent='Delete';
-        (function(idx,stop){
-          del.onclick=function(){
-            if(!confirm('Delete this photo?')) return;
-            ensureAuthed()
-              .then(function(){ if(stop && stop.storagePath){ return storage.ref(stop.storagePath).delete()["catch"](function(){}); }})
-              .then(function(){
-                localStops.splice(idx,1);
-                var multi={};
-                multi['scenarios/'+currentScenarioId+'/stops'] = localStops;
-                multi['geophoto/scenarios/'+currentScenarioId+'/stops'] = localStops;
-                return mirrorWrite(multi);
-              })
-              .then(renderThumbs)
-              .catch(function(e){ setErr(e && e.message || String(e)); });
-          };
-        })(i,s);
-        w.appendChild(img); w.appendChild(del); thumbs.appendChild(w);
+      }catch(e){
+        $('saveStatus').textContent='error'; setStep('Save failed.'); showErr(e.message||e);
+      }finally{
+        showLoad(false);
       }
+    };
+
+    /* ---- Thumbs & list ---- */
+    function renderThumbs(){
+      const wrap=$('thumbs'); wrap.innerHTML='';
+      localStops.forEach((s,i)=>{
+        const w=document.createElement('div'); w.className='thumbWrap';
+        const img=document.createElement('img'); img.className='thumb'; img.src=s.thumbURL||s.imageURL||''; img.alt=s.caption||('Stop '+(i+1));
+        const del=document.createElement('button'); del.className='btn del'; del.textContent='Delete';
+        del.onclick=async ()=>{
+          if(!confirm('Delete this photo?')) return;
+          try{
+            await ensureAuthed();
+            if(s.storagePath){ try{ await deleteObject(stRef(storage, s.storagePath)); }catch{} }
+            localStops.splice(i,1);
+            await mirrorUpdate({
+              [`scenarios/${currentScenarioId}/stops`]: localStops,
+              [`geophoto/scenarios/${currentScenarioId}/stops`]: localStops
+            });
+            renderThumbs();
+          }catch(e){ showErr(e.message||e); }
+        };
+        w.appendChild(img); w.appendChild(del); wrap.appendChild(w);
+      });
     }
 
-    /* ---------------- List scenarios (merge like viewer) ---------------- */
-    function normalizeStops(stopsLike){
-      if(!stopsLike) return [];
-      var arr = Array.isArray(stopsLike) ? stopsLike : Object.values(stopsLike);
-      return arr.map(function(s){ return { imageURL:s.imageURL||s.url||'', storagePath:s.storagePath||'', gsUri:s.gsUri||'', caption:s.caption||'', at:s.at||0 }; });
-    }
-
-    function loadList(){
-      listStatus.textContent='Loading…';
-      ensureAuthed().then(function(){
-        // Pull both trees then merge by id (like the viewer does)
-        return Promise.all([
-          fetch(firebaseConfig.databaseURL + '/geophoto/scenarios.json').then(function(r){return r.ok?r.json():{};})["catch"](function(){return{};}),
-          fetch(firebaseConfig.databaseURL + '/scenarios.json').then(function(r){return r.ok?r.json():{};})["catch"](function(){return{};})
+    async function loadList(){
+      try{
+        $('listStatus').textContent='Loading…';
+        await ensureAuthed();
+        const [geo,plain] = await Promise.all([
+          fetch(firebaseConfig.databaseURL+'/geophoto/scenarios.json',{cache:'no-store'}).then(r=>r.ok?r.json():{}).catch(()=>({})),
+          fetch(firebaseConfig.databaseURL+'/scenarios.json',{cache:'no-store'}).then(r=>r.ok?r.json():{}).catch(()=>({}))
         ]);
-      }).then(function(arr){
-        var geo = arr[0]||{}, plain = arr[1]||{}, map = {}, k;
-        for(k in geo){ if(geo.hasOwnProperty(k)) map[k]=geo[k]; }
-        for(k in plain){ if(plain.hasOwnProperty(k) && !map[k]) map[k]=plain[k]; }
-        var list = Object.keys(map).map(function(id){ var s=map[id]||{}; return { id:id, title:s.title||'(untitled)', createdAt:s.createdAt||0, active:s.active!==false, stops:normalizeStops(s.stops) }; });
-        list.sort(function(a,b){ return (b.createdAt||0)-(a.createdAt||0); });
-
-        listStatus.textContent = list.length ? (list.length + ' scenario(s)') : 'No scenarios yet.';
-        scenarioList.innerHTML='';
-        list.forEach(function(sc){
-          var row=document.createElement('div'); row.style.cssText='display:flex;align-items:center;justify-content:space-between;padding:10px;border:1px solid var(--edge);border-radius:12px;margin-bottom:8px';
-          var L=document.createElement('div'); L.innerHTML='<div style="font-weight:800">'+sc.title+'</div><div class="tag">Stops: '+(sc.stops.length||0)+'</div>';
-          var R=document.createElement('div');
-
-          var open=document.createElement('button'); open.className='btn secondary'; open.textContent='Open';
-          open.onclick=function(){
-            currentScenarioId=sc.id;
-            scenarioName.value=sc.title||'';
-            dispatchInfo.value=''; // not merging here, optional
-            localStops=sc.stops||[];
-            renderThumbs(); window.scrollTo({top:0,behavior:'smooth'});
-          };
-
-          var toggle=document.createElement('button'); toggle.className='btn secondary'; toggle.style.marginLeft='8px'; toggle.textContent=sc.active?'Deactivate':'Activate';
-          toggle.onclick=function(){
-            ensureAuthed().then(function(){
-              var multi={}; multi['scenarios/'+sc.id+'/active']=!sc.active; multi['geophoto/scenarios/'+sc.id+'/active']=!sc.active;
-              return mirrorWrite(multi).then(loadList);
-            });
-          };
-
-          var del=document.createElement('button'); del.className='btn'; del.style.marginLeft='8px'; del.textContent='Delete';
-          del.onclick=function(){
+        const map={...geo}; Object.keys(plain||{}).forEach(id=>{ if(!map[id]) map[id]=plain[id]; });
+        const list = Object.keys(map).map(id=>({ id, title:map[id]?.title||'(untitled)', createdAt:map[id]?.createdAt||0, active:map[id]?.active!==false, stops:(map[id]?.stops||[]) }))
+                     .sort((a,b)=>(b.createdAt||0)-(a.createdAt||0));
+        $('listStatus').textContent = list.length ? `${list.length} scenario(s)` : 'No scenarios yet.';
+        const host=$('scenarioList'); host.innerHTML='';
+        list.forEach(sc=>{
+          const row=document.createElement('div'); row.style.cssText='display:flex;align-items:center;justify-content:space-between;padding:10px;border:1px solid var(--edge);border-radius:12px;margin-bottom:8px';
+          const L=document.createElement('div'); L.innerHTML=`<div style="font-weight:800">${sc.title}</div><div class="tag">Stops: ${(sc.stops||[]).length}</div>`;
+          const R=document.createElement('div');
+          const open=document.createElement('button'); open.className='btn secondary'; open.textContent='Open';
+          open.onclick=()=>{ currentScenarioId=sc.id; scenarioName.value=sc.title||''; localStops=sc.stops||[]; renderThumbs(); window.scrollTo({top:0,behavior:'smooth'}); };
+          const togg=document.createElement('button'); togg.className='btn secondary'; togg.style.marginLeft='8px'; togg.textContent=sc.active?'Deactivate':'Activate';
+          togg.onclick=async ()=>{ await ensureAuthed(); await mirrorUpdate({[`scenarios/${sc.id}/active`]:!sc.active,[`geophoto/scenarios/${sc.id}/active`]:!sc.active}); loadList(); };
+          const del=document.createElement('button'); del.className='btn'; del.style.marginLeft='8px'; del.textContent='Delete';
+          del.onclick=async ()=>{
             if(!confirm('Delete this scenario?')) return;
-            ensureAuthed().then(function(){
-              var p=Promise.resolve();
-              (sc.stops||[]).forEach(function(s){ if(s && s.storagePath){ p=p.then(function(){ return storage.ref(s.storagePath).delete()["catch"](function(){}); }); }});
-              return p.then(function(){
-                var multi={}; multi['scenarios/'+sc.id]=null; multi['geophoto/scenarios/'+sc.id]=null;
-                return mirrorWrite(multi);
-              }).then(loadList);
-            });
+            await ensureAuthed();
+            // best-effort storage cleanup
+            for(const s of (sc.stops||[])){ if(s?.storagePath){ try{ await deleteObject(stRef(storage,s.storagePath)); }catch{} } }
+            await mirrorUpdate({[`scenarios/${sc.id}`]:null,[`geophoto/scenarios/${sc.id}`]:null});
+            loadList();
           };
-
-          R.appendChild(open); R.appendChild(toggle); R.appendChild(del);
-          row.appendChild(L); row.appendChild(R); scenarioList.appendChild(row);
+          R.appendChild(open); R.appendChild(togg); R.appendChild(del);
+          row.appendChild(L); row.appendChild(R); host.appendChild(row);
         });
-      })["catch"](function(e){ listStatus.textContent='Error'; setErr(e && e.message || String(e)); });
+      }catch(e){ $('listStatus').textContent='Error'; showErr(e.message||e); }
     }
 
     // boot
-    loadList();
-  })();
+    (async ()=>{ try{ await ensureAuthed(); await loadList(); }catch(e){ showErr(e.message||e); }})();
   </script>
 </body>
 </html>
