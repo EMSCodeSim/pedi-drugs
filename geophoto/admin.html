@@ -8,14 +8,14 @@
   <style>
     :root{
       --bg:#0b0f14; --bg2:#0e1421; --card:#0f1624; --edge:rgba(255,255,255,.12);
-      --text:#eaf2ff; --muted:#9fb2d6; --a1:#54a6ff; --a2:#0a84ff; --ok:#16a34a;
+      --text:#eaf2ff; --muted:#9fb2d6; --a1:#54a6ff; --a2:#0a84ff; --ok:#16a34a; --err:#ef4444;
     }
     *{box-sizing:border-box}
     html,body{margin:0;height:100%;color:var(--text);
       background:radial-gradient(1400px 700px at 15% -15%, rgba(10,132,255,.24), transparent 60%),
                  radial-gradient(1200px 600px at 110% 0%, rgba(255,59,48,.15), transparent 60%),
                  linear-gradient(165deg,var(--bg2),var(--bg) 55%);
-      overflow-x:hidden;} /* prevent sideways scroll on iOS */
+      overflow-x:hidden;}
     .topbar{position:sticky;top:0;z-index:40;background:rgba(12,15,22,.78);backdrop-filter:blur(6px);border-bottom:1px solid rgba(255,255,255,.08)}
     .topnav{max-width:1000px;margin:0 auto;padding:10px 12px;display:flex;gap:10px;align-items:center;flex-wrap:wrap}
     .brand{font-weight:900}
@@ -26,12 +26,12 @@
     .btn.ghost{background:transparent}
     .btn.ok{background:linear-gradient(180deg,#20c46b,#0fa36b);border-color:#178b56}
     .pill{font-size:12px;padding:6px 10px;border:1px solid rgba(255,255,255,.16);border-radius:999px;color:var(--muted);
-      overflow-wrap:anywhere;white-space:normal}  /* wrap long strings */
+      overflow-wrap:anywhere;white-space:normal}
     main{max-width:1000px;margin:16px auto 40px;padding:0 12px;display:grid;grid-template-columns:1fr 1fr;gap:12px}
     .card{background:var(--card);border:1px solid var(--edge);border-radius:16px;padding:12px}
     label{display:block;margin:10px 0 6px 2px;font-size:12px;color:var(--muted)}
     input,select,textarea{width:100%;padding:10px;border-radius:10px;border:1px solid rgba(255,255,255,.14);background:#0c1322;color:#eaf2ff;
-      font-size:16px}  /* >=16px prevents iOS zoom */
+      font-size:16px}
     textarea{min-height:90px}
     .row{display:flex;gap:8px;align-items:center;flex-wrap:wrap;min-width:0}
     .hint{font-size:12px;color:var(--muted);overflow-wrap:anywhere}
@@ -46,6 +46,10 @@
     @keyframes spin{to{transform:rotate(360deg)}}
     @media (max-width:840px){ main{grid-template-columns:1fr} .grid{grid-template-columns:1fr} }
     a[aria-disabled="true"]{pointer-events:none;opacity:.5}
+
+    /* Progress bar */
+    .bar{height:10px;border-radius:8px;background:#0d1727;border:1px solid rgba(255,255,255,.14);overflow:hidden}
+    .bar>span{display:block;height:100%;width:0;background:linear-gradient(90deg,#2484ff,#63dbff)}
   </style>
 </head>
 <body>
@@ -79,7 +83,7 @@
         </div>
       </div>
 
-      <!-- Step 2 (hidden until Step 1 complete) -->
+      <!-- Step 2 -->
       <div class="section hidden" id="step2" style="margin-top:12px">
         <b>Step 2 — Add a Photo</b>
         <div class="hint" style="margin:4px 0 10px">Take a picture, choose from library, or upload a file.</div>
@@ -88,12 +92,10 @@
           <button id="btnLibrary" class="btn">Choose from Library</button>
           <button id="btnUpload" class="btn">Upload File</button>
         </div>
-        <!-- hidden file inputs so phones get correct UX -->
         <input id="inCamera"  class="hidden" type="file" accept="image/*" capture="environment">
         <input id="inLibrary" class="hidden" type="file" accept="image/*">
         <input id="inUpload"  class="hidden" type="file" accept="image/*">
 
-        <!-- Preview + location choice -->
         <div id="previewWrap" class="row hidden" style="margin-top:10px;align-items:flex-start">
           <img id="thumb" class="thumb" alt="">
           <div style="min-width:200px;max-width:100%">
@@ -122,6 +124,15 @@
                 <button id="btnManualBack" class="btn ghost">Back</button>
               </div>
             </div>
+
+            <!-- Progress UI -->
+            <div id="progWrap" class="hidden" style="margin-top:10px">
+              <div class="row" style="justify-content:space-between">
+                <div class="hint">Upload progress</div>
+                <div id="progPct" class="hint">0%</div>
+              </div>
+              <div class="bar"><span id="progBar"></span></div>
+            </div>
           </div>
         </div>
       </div>
@@ -143,8 +154,8 @@
       <h3 style="margin:0 0 8px">Tips</h3>
       <ul style="margin:8px 0 0 14px; padding:0 0 0 4px; line-height:1.5">
         <li>Step 2 stays hidden until you create the scenario in Step 1.</li>
-        <li>After picking a photo, choose **Use my location** or **Enter manually**.</li>
-        <li>Edits (titles, captions, order) now live in the **Advanced Editor**.</li>
+        <li>If upload fails with <code>storage/unauthorized</code>, check **Storage rules** or **App Check**.</li>
+        <li>HEIC on iOS: if compression fails, we upload the original file automatically.</li>
       </ul>
       <hr style="border:none;height:1px;background:rgba(255,255,255,.08);margin:12px 0">
       <div id="debug" class="hint"></div>
@@ -157,33 +168,36 @@
     const $ = (id)=>document.getElementById(id);
     const show = (el, on)=> (typeof el==='string' ? $(el) : el).classList.toggle('hidden', !on);
     const snack = (m)=>{ const b=$('snack'); b.textContent=m; b.style.display='block'; setTimeout(()=>b.style.display='none', 2400); };
-    const errBar= (m)=>{ const b=$('errbar'); b.textContent=m; b.style.display='block'; setTimeout(()=>b.style.display='none', 4200); };
+    const errBar= (m)=>{ const b=$('errbar'); b.textContent=m; b.style.display='block'; setTimeout(()=>b.style.display='none', 6000); };
     const loading = (on)=>{ $('loader').style.display = on ? 'grid' : 'none'; };
     const setKV = (id, t)=> $(id).textContent = t;
 
     // ---------- Firebase ----------
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-app.js";
-    import { getDatabase, ref as dbRef, set, get, push, update } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-database.js";
-    import { getStorage, ref as stRef, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-storage.js";
-    import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-auth.js";
-    // App Check (uncomment if Enforcement is ON)
+    // App Check FIRST if you enforce it
     // import { initializeAppCheck, ReCaptchaV3Provider } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-app-check.js";
+    import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-auth.js";
+    import { getDatabase, ref as dbRef, get, push, update } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-database.js";
+    import { getStorage, ref as stRef, uploadBytesResumable, getDownloadURL } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-storage.js";
 
     const firebaseConfig = {
       apiKey:"AIzaSyDM6DpRSeZueVKRpbyJyDmhf8WY66KyCDk",
       authDomain:"dailyquiz-d5279.firebaseapp.com",
       databaseURL:"https://dailyquiz-d5279-default-rtdb.firebaseio.com",
       projectId:"dailyquiz-d5279",
-      storageBucket:"dailyquiz-d5279.appspot.com",
+      storageBucket:"dailyquiz-d5279.appspot.com", // correct Storage bucket
       appId:"1:94577748034:web:c032d3a1d72db1313de5db",
       measurementId:"G-19DVN7NNH7"
     };
-    const appFB = initializeApp(firebaseConfig);
-    // const appCheck = initializeAppCheck(appFB, { provider: new ReCaptchaV3Provider('YOUR_RECAPTCHA_V3_SITE_KEY'), isTokenAutoRefreshEnabled: true });
 
-    const db = getDatabase(appFB);
-    const storage = getStorage(appFB);
-    const auth = getAuth(appFB);
+    const app = initializeApp(firebaseConfig);
+    // // UNCOMMENT if App Check is enforced:
+    // self.FIREBASE_APPCHECK_DEBUG_TOKEN = true; // dev only
+    // initializeAppCheck(app, { provider: new ReCaptchaV3Provider('YOUR_RECAPTCHA_V3_SITE_KEY'), isTokenAutoRefreshEnabled: true });
+
+    const auth = getAuth(app);
+    const db = getDatabase(app);
+    const storage = getStorage(app);
 
     async function ensureAuthed(){
       if (auth.currentUser) return auth.currentUser;
@@ -196,18 +210,26 @@
     // ---------- image pipeline ----------
     const FULL_MAX = 1600, THUMB_MAX = 480, QUALITY = 0.82;
     async function fileToBitmap(file){
-      if ('createImageBitmap' in window){ try{ return await createImageBitmap(file, { imageOrientation: 'from-image' }); }catch{} }
+      try{
+        if ('createImageBitmap' in window){
+          return await createImageBitmap(file, { imageOrientation: 'from-image' });
+        }
+      }catch(e){ /* fall through */ }
       const url = URL.createObjectURL(file);
       const img = new Image(); img.decoding='async'; img.src=url; await img.decode(); URL.revokeObjectURL(url);
+      // shim bitmap object for downstream
+      img.width = img.naturalWidth; img.height = img.naturalHeight;
       return img;
     }
     const scale = (w,h,max)=>{ const s=Math.min(1,max/Math.max(w,h)); return {w:Math.round(w*s),h:Math.round(h*s)}; };
     async function toBlob(bmp,maxEdge,quality=QUALITY,type='image/jpeg'){
-      const {w,h}=scale(bmp.width,bmp.height,maxEdge);
+      const w0 = bmp.width || bmp.naturalWidth, h0 = bmp.height || bmp.naturalHeight;
+      const {w,h}=scale(w0,h0,maxEdge);
       const c=('OffscreenCanvas' in window) ? new OffscreenCanvas(w,h) : Object.assign(document.createElement('canvas'),{width:w,height:h});
       if(!('width' in c)){ c.width=w; c.height=h; }
-      const g=c.getContext('2d'); g.imageSmoothingEnabled=true; g.imageSmoothingQuality='high'; g.drawImage(bmp,0,0,w,h);
-      const blob = await (c.convertToBlob ? c.convertToBlob({type,quality}) : new Promise(res=>c.toBlob(res,type,quality)));
+      const g=c.getContext('2d'); g.imageSmoothingEnabled=true; g.imageSmoothingQuality='high';
+      g.drawImage(bmp,0,0,w,h);
+      const blob = await (c.convertToBlob ? c.convertToBlob({type,quality}) : new Promise((res,rej)=>c.toBlob(b=>b?res(b):rej(new Error('toBlob failed')),type,quality)));
       return {blob,width:w,height:h};
     }
 
@@ -217,8 +239,9 @@
     let pendingGeo=null; // {lat,lng,accuracy,at}
 
     function gateSteps(){
-      show('step2', !!createdId);
+      const step2 = !!createdId;
       const hasPhoto = !!pendingFile;
+      show('step2', step2);
       show('previewWrap', hasPhoto);
       show('locChoice', hasPhoto);
       show('step3', !!createdId);
@@ -229,7 +252,7 @@
     // ---------- Step 1 ----------
     $('createBtn').onclick = async ()=>{
       try{
-        await ensureAuthed();
+        const u = await ensureAuthed();
         const title = $('sTitle').value.trim();
         const dispatch = $('sDispatch').value.trim();
         if (!title){ errBar('Please enter a scenario name.'); return; }
@@ -237,14 +260,12 @@
         $('createBtn').disabled = true;
         $('step1Status').textContent = 'creating…';
 
-        // push id (canonical path)
         const id = (push(dbRef(db, 'scenarios'))).key;
         const base = {
           id, title, description: dispatch || '', dispatch: dispatch || '',
           createdAt: Date.now(), active: true, stops: []
         };
 
-        // mirror to both /scenarios and /geophoto/scenarios (viewer reads)
         const multi = {};
         multi[`scenarios/${id}`] = base;
         multi[`geophoto/scenarios/${id}`] = base;
@@ -256,7 +277,7 @@
       }catch(e){
         const msg = e?.code || e?.message || String(e);
         errBar(/permission|denied/i.test(msg)
-          ? 'Blocked by rules. Allow authenticated admin writes to "/scenarios/**" and "/geophoto/scenarios/**".'
+          ? 'DB rules are blocking creates. Allow admin writes to "/scenarios/**" & "/geophoto/scenarios/**".'
           : 'Create failed: ' + msg);
       }finally{
         $('createBtn').disabled = false;
@@ -277,8 +298,8 @@
       const bmp = await fileToBitmap(file);
       $('thumb').src = URL.createObjectURL(file);
       pendingFile = file;
-      pendingMeta = { w:bmp.width, h:bmp.height, mb:(file.size/1024/1024).toFixed(2) };
-      setKV('imgInfo', `Image: ${pendingMeta.w}×${pendingMeta.h} • ${pendingMeta.mb} MB`);
+      pendingMeta = { w:(bmp.width||bmp.naturalWidth), h:(bmp.height||bmp.naturalHeight), mb:(file.size/1024/1024).toFixed(2), type:file.type };
+      setKV('imgInfo', `Image: ${pendingMeta.w}×${pendingMeta.h} • ${pendingMeta.mb} MB • ${pendingMeta.type||'image'}`);
       pendingGeo = null;
       setKV('gpsLine', 'GPS: waiting…');
 
@@ -343,43 +364,85 @@
     $('btnRefreshGPS').onclick = ()=> getGPSFix(true);
     $('btnClearGPS').onclick   = ()=>{ pendingGeo=null; setKV('gpsLine','GPS: cleared'); };
 
-    // ---------- Step 3: upload + DB write ----------
+    // ---------- Step 3: upload + DB write (with progress & fallbacks) ----------
     $('saveBtn').onclick = async ()=>{
       if (!(createdId && pendingFile)){ errBar('Need a scenario and a photo.'); return; }
-      loading(true);
-      $('saveStatus').textContent='uploading…';
-      try{
-        await ensureAuthed();
-        const bmp = await fileToBitmap(pendingFile);
-        const full = await toBlob(bmp, FULL_MAX, QUALITY, 'image/jpeg');
-        const thmb = await toBlob(bmp, THUMB_MAX, 0.8,       'image/jpeg');
+      $('saveStatus').textContent='preparing image…';
+      show('progWrap', true); setKV('progPct', '0%'); $('progBar').style.width='0%';
 
+      try{
+        const u = await ensureAuthed();
+
+        // 1) Prepare images (try compressed; if fails, use original)
+        let full, thmb, usedOriginal = false;
+        try{
+          const bmp = await fileToBitmap(pendingFile);
+          full = await toBlob(bmp, 1600, 0.82, 'image/jpeg');
+          thmb = await toBlob(bmp, 480, 0.80, 'image/jpeg');
+        }catch(procErr){
+          usedOriginal = true;
+        }
+
+        // 2) Paths & metadata
         const ts = Date.now();
         const basePath = `scenarios/${createdId}/${ts}`;
         const fullRef  = stRef(storage, `${basePath}.jpg`);
         const thumbRef = stRef(storage, `scenarios/${createdId}/thumbs/${ts}.jpg`);
-        const meta = { contentType:'image/jpeg', cacheControl:'public,max-age=31536000,immutable' };
+        const metaJpg  = { contentType:'image/jpeg', cacheControl:'public,max-age=31536000,immutable' };
+        const metaOrig = { contentType: pendingFile.type || 'application/octet-stream', cacheControl:'public,max-age=31536000,immutable' };
 
-        await uploadBytes(fullRef,  full.blob,  meta);
-        await uploadBytes(thumbRef, thmb.blob, meta);
+        // 3) Upload (resumable with progress)
+        let fullUpload, thumbUpload;
+
+        if (usedOriginal){
+          fullUpload = uploadBytesResumable(fullRef, pendingFile, metaOrig);
+          // make a tiny JPEG thumb from original if possible; if not, skip thumb
+          try{
+            const bmp2 = await fileToBitmap(pendingFile);
+            const t2 = await toBlob(bmp2, 480, 0.80, 'image/jpeg');
+            thumbUpload = uploadBytesResumable(thumbRef, t2.blob, metaJpg);
+          }catch{ /* no thumb */ }
+        }else{
+          fullUpload  = uploadBytesResumable(fullRef, full.blob, metaJpg);
+          thumbUpload = uploadBytesResumable(thumbRef, thmb.blob, metaJpg);
+        }
+
+        const watch = (task)=> new Promise((res,rej)=>{
+          if(!task){ res(); return; }
+          task.on('state_changed',
+            (snap)=>{
+              const pct = Math.round((snap.bytesTransferred/snap.totalBytes)*100);
+              setKV('progPct', pct+'%'); $('progBar').style.width = pct+'%';
+            },
+            (err)=> rej(err),
+            ()=> res()
+          );
+        });
+
+        $('saveStatus').textContent='uploading…';
+        await watch(fullUpload);
+        await watch(thumbUpload);
+
         const imageURL = await getDownloadURL(fullRef);
-        const thumbURL = await getDownloadURL(thumbRef);
+        let thumbURL   = null;
+        try{ thumbURL = await getDownloadURL(thumbRef); }catch{}
 
-        // append stop (canonical)
+        // 4) Update DB
+        $('saveStatus').textContent='saving…';
         const snap = await get(dbRef(db, `scenarios/${createdId}`));
         const sc = snap.exists() ? snap.val() : { id: createdId, title: createdTitle, dispatch: createdDispatch, createdAt: Date.now(), active:true, stops: [] };
         const stops = Array.isArray(sc.stops) ? sc.stops : [];
         const stop = {
           type:'photo', title:'', caption:'',
-          imageURL, thumbURL, storagePath:`${basePath}.jpg`, thumbPath:`scenarios/${createdId}/thumbs/${ts}.jpg`,
-          width: full.width, height: full.height,
+          imageURL, thumbURL, storagePath:`${basePath}.jpg`, thumbPath: thumbURL ? `scenarios/${createdId}/thumbs/${ts}.jpg` : null,
+          width: usedOriginal ? null : full?.width || null,
+          height: usedOriginal ? null : full?.height || null,
           lat: pendingGeo?.lat ?? null, lng: pendingGeo?.lng ?? null, accuracy: pendingGeo?.accuracy ?? null,
           at: ts, overlays:[]
         };
         stops.push(stop);
         sc.stops = stops;
 
-        // mirror to both locations
         const multi = {};
         multi[`scenarios/${createdId}`] = sc;
         multi[`geophoto/scenarios/${createdId}`] = sc;
@@ -390,13 +453,21 @@
         // reset for another photo
         pendingFile=null; pendingMeta=null; pendingGeo=null;
         $('thumb').src=''; setKV('imgInfo','Image: —'); setKV('gpsLine','GPS: —');
+        setKV('progPct','0%'); $('progBar').style.width = '0%'; show('progWrap', false);
         show('previewWrap', false);
         gateSteps();
       }catch(e){
+        const code = e?.code || '';
+        const msg  = e?.message || String(e);
         $('saveStatus').textContent='error';
-        errBar('Save failed: ' + (e?.code || e?.message || String(e)));
-      }finally{
-        loading(false);
+        // Friendly hints
+        let hint = '';
+        if (/unauthorized|permission|denied/i.test(code+msg)) {
+          hint = ' — Check Storage rules (allow auth users to write "scenarios/**") and App Check enforcement.';
+        } else if (/appcheck/i.test(msg)) {
+          hint = ' — App Check token missing/invalid; enable App Check in this page or disable enforcement temporarily.';
+        }
+        errBar(`Upload failed: ${code || 'error'} — ${msg}${hint}`);
       }
     };
 
@@ -404,7 +475,7 @@
     (async ()=>{
       try{
         const u = await ensureAuthed();
-        $('debug').textContent = `Auth: ${u.uid.slice(0,8)} • DB: ${firebaseConfig.databaseURL}`;
+        $('debug').textContent = `Auth: ${u.uid.slice(0,8)} • DB: ${firebaseConfig.databaseURL} • Bucket: ${firebaseConfig.storageBucket}`;
       }catch(_){}
       gateSteps();
     })();
