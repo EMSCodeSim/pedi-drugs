@@ -11,17 +11,34 @@
       --text:#eaf2ff;--muted:#9fb2d6;--edge:rgba(255,255,255,.14);
     }
     *{box-sizing:border-box}
-    html,body{margin:0;height:100%;color:var(--text);font-family:system-ui,-apple-system,Segoe UI,Inter,Roboto,Arial,sans-serif;
-      background:radial-gradient(1200px 600px at 12% -8%, rgba(10,132,255,.22), transparent 60%),
-                 radial-gradient(1200px 600px at 110% 0%, rgba(255,59,48,.16), transparent 60%),
-                 linear-gradient(165deg,var(--bg2),var(--bg) 55%);
-      overflow-x:hidden}
-    header{position:sticky;top:0;z-index:10;background:rgba(12,16,24,.75);backdrop-filter:blur(8px);border-bottom:1px solid var(--edge)}
-    .bar{max-width:1100px;margin:0 auto;padding:12px;display:flex;gap:10px;align-items:center;justify-content:center}
+    html,body{
+      margin:0;height:100%;color:var(--text);
+      font-family:system-ui,-apple-system,Segoe UI,Inter,Roboto,Arial,sans-serif;
+      background:
+        radial-gradient(1200px 600px at 12% -8%, rgba(10,132,255,.22), transparent 60%),
+        radial-gradient(1200px 600px at 110% 0%, rgba(255,59,48,.16), transparent 60%),
+        linear-gradient(165deg,var(--bg2),var(--bg) 55%);
+      overflow-x:hidden
+    }
+    /* ---- Header fix: solid color, no blur, isolated ---- */
+    header{
+      position:sticky;top:0;z-index:10;
+      background:#0b0f14;              /* solid */
+      border-bottom:1px solid var(--edge);
+      isolation:isolate;               /* prevent backdrop bleed */
+      -webkit-backface-visibility:hidden;
+    }
+    .bar{
+      max-width:1100px;margin:0 auto;padding:12px;
+      display:flex;gap:10px;align-items:center;justify-content:center
+    }
     .brand{font-weight:900}
     main{max-width:1100px;margin:14px auto 30px;padding:0 12px;display:grid;gap:12px}
-    .card{background:linear-gradient(180deg,rgba(255,255,255,.02),transparent 26%),linear-gradient(180deg,#0f1624,#0e1420);
-      border:1px solid var(--edge);border-radius:16px;padding:14px}
+    .card{
+      background:linear-gradient(180deg,rgba(255,255,255,.02),transparent 26%),
+                 linear-gradient(180deg,#0f1624,#0e1420);
+      border:1px solid var(--edge);border-radius:16px;padding:14px
+    }
     .hidden{display:none !important}
     label{display:block;font-weight:700;margin-top:8px}
     input,textarea,select{width:100%;padding:10px 12px;border-radius:12px;background:#0b1322;color:#eaf2ff;border:1px solid var(--edge)}
@@ -187,8 +204,6 @@
     let scenarioId=null, pendingFile=null, pendingImg=null, pendingFullDataURL=null, pendingThumbDataURL=null, pendingGeo=null;
     let localStops=[];
 
-    const sTitle = $('sTitle'), sDispatch=$('sDispatch');
-
     function gate(){
       show('step2', !!scenarioId);
       show('galleryCard', !!scenarioId);
@@ -218,34 +233,30 @@
     $('createBtn').onclick = async ()=>{
       try{
         await ensureAuthed();
-        const title=(sTitle.value||'').trim();
-        if(!title){ $('s1Status').textContent='enter a name'; return; }
-        $('s1Status').textContent='creating…';
+        const title=(document.getElementById('sTitle').value||'').trim();
+        if(!title){ document.getElementById('s1Status').textContent='enter a name'; return; }
+        document.getElementById('s1Status').textContent='creating…';
 
         const id = push(dbRef(db,'scenarios')).key;
-        const base = {
-          id, title, dispatch:(sDispatch.value||'').trim(),
-          description:(sDispatch.value||'').trim(),
-          createdAt: Date.now(), active:true, stops:[]
-        };
+        const dispatch=(document.getElementById('sDispatch').value||'').trim();
+        const base = { id, title, dispatch, description:dispatch, createdAt: Date.now(), active:true, stops:[] };
         const multi={}; multi[`scenarios/${id}`]=base; multi[`geophoto/scenarios/${id}`]=base;
         await update(dbRef(db), multi);
 
-        scenarioId=id;
-        localStops=[]; // new scenario
-        $('s1Status').textContent='created ✓';
+        scenarioId=id; localStops=[];
+        document.getElementById('s1Status').textContent='created ✓';
         gate();
       }catch(e){
-        $('s1Status').textContent='error';
-        sayErr(e.message||String(e));
+        document.getElementById('s1Status').textContent='error';
+        const b=document.getElementById('errbar'); b.textContent=e.message||String(e); b.style.display='block'; setTimeout(()=>b.style.display='none', 5000);
       }
     };
 
     /* ---------- Step 2: Pickers ---------- */
-    const open = id => $(id).click();
-    $('btnCamera').onclick  = ()=> open('inCamera');
-    $('btnLibrary').onclick = ()=> open('inLibrary');
-    $('btnUpload').onclick  = ()=> open('inUpload');
+    const open = id => document.getElementById(id).click();
+    document.getElementById('btnCamera').onclick  = ()=> open('inCamera');
+    document.getElementById('btnLibrary').onclick = ()=> open('inLibrary');
+    document.getElementById('btnUpload').onclick  = ()=> open('inUpload');
 
     async function onPick(file){
       if(!file || !scenarioId) return;
@@ -258,39 +269,39 @@
         pendingFullDataURL  = downscale(img, FULL_EDGE,  FULL_Q);
         pendingThumbDataURL = downscale(img, THUMB_EDGE, THUMB_Q);
 
-        $('previewImg').src = pendingFullDataURL;
-        $('imgInfo').textContent = `Original: ${img.width}×${img.height} → Saving ~${Math.round(Math.max(img.width,img.height) > FULL_EDGE ? FULL_EDGE : Math.max(img.width,img.height))} px`;
+        document.getElementById('previewImg').src = pendingFullDataURL;
+        document.getElementById('imgInfo').textContent = `Original: ${img.width}×${img.height} → Saving ~${Math.round(Math.max(img.width,img.height) > FULL_EDGE ? FULL_EDGE : Math.max(img.width,img.height))} px`;
         show('workArea', true);
-        $('saveStatus').textContent='ready';
-        $('pctFull').textContent='0%'; $('barFull').style.width='0%';
-        $('pctThumb').textContent='0%'; $('barThumb').style.width='0%';
+        document.getElementById('saveStatus').textContent='ready';
+        document.getElementById('pctFull').textContent='0%'; document.getElementById('barFull').style.width='0%';
+        document.getElementById('pctThumb').textContent='0%'; document.getElementById('barThumb').style.width='0%';
 
         // Auto GPS
-        $('gpsLine').textContent='GPS: acquiring…';
+        document.getElementById('gpsLine').textContent='GPS: acquiring…';
         pendingGeo=null;
         if(navigator.geolocation){
           navigator.geolocation.getCurrentPosition(
-            p=>{ pendingGeo={lat:p.coords.latitude,lng:p.coords.longitude,accuracy:Math.round(p.coords.accuracy||0)}; $('gpsLine').textContent=`GPS: ${pendingGeo.lat.toFixed(6)}, ${pendingGeo.lng.toFixed(6)} ±${pendingGeo.accuracy||'–'} m`; },
-            _=>{ $('gpsLine').textContent='GPS: unavailable'; },
+            p=>{ pendingGeo={lat:p.coords.latitude,lng:p.coords.longitude,accuracy:Math.round(p.coords.accuracy||0)}; document.getElementById('gpsLine').textContent=`GPS: ${pendingGeo.lat.toFixed(6)}, ${pendingGeo.lng.toFixed(6)} ±${pendingGeo.accuracy||'–'} m`; },
+            _=>{ document.getElementById('gpsLine').textContent='GPS: unavailable'; },
             {enableHighAccuracy:true,timeout:8000,maximumAge:0}
           );
         }else{
-          $('gpsLine').textContent='GPS: not supported';
+          document.getElementById('gpsLine').textContent='GPS: not supported';
         }
       }catch(e){
-        sayErr('Could not read image: '+(e.message||e));
+        const b=document.getElementById('errbar'); b.textContent='Could not read image: '+(e.message||e); b.style.display='block'; setTimeout(()=>b.style.display='none', 5000);
       }
     }
-    $('inCamera').addEventListener('change', e=> onPick(e.target.files?.[0]));
-    $('inLibrary').addEventListener('change',e=> onPick(e.target.files?.[0]));
-    $('inUpload').addEventListener('change', e=> onPick(e.target.files?.[0]));
+    document.getElementById('inCamera').addEventListener('change', e=> onPick(e.target.files?.[0]));
+    document.getElementById('inLibrary').addEventListener('change',e=> onPick(e.target.files?.[0]));
+    document.getElementById('inUpload').addEventListener('change', e=> onPick(e.target.files?.[0]));
 
-    $('resetBtn').onclick = ()=>{
+    document.getElementById('resetBtn').onclick = ()=>{
       pendingFile=pendingImg=pendingFullDataURL=pendingThumbDataURL=null;
-      $('previewImg').src=''; show('workArea',false); show('afterSave',false);
-      $('pctFull').textContent='0%'; $('barFull').style.width='0%';
-      $('pctThumb').textContent='0%'; $('barThumb').style.width='0%';
-      $('radius').value='5';
+      document.getElementById('previewImg').src=''; show('workArea',false); show('afterSave',false);
+      document.getElementById('pctFull').textContent='0%'; document.getElementById('barFull').style.width='0%';
+      document.getElementById('pctThumb').textContent='0%'; document.getElementById('barThumb').style.width='0%';
+      document.getElementById('radius').value='5';
     };
 
     /* ---------- Upload helpers ---------- */
@@ -300,8 +311,8 @@
         task.on('state_changed',
           s=>{
             const pct=Math.round(100*s.bytesTransferred/s.totalBytes);
-            if(which==='full'){ $('pctFull').textContent=pct+'%'; $('barFull').style.width=pct+'%'; }
-            else { $('pctThumb').textContent=pct+'%'; $('barThumb').style.width=pct+'%'; }
+            if(which==='full'){ document.getElementById('pctFull').textContent=pct+'%'; document.getElementById('barFull').style.width=pct+'%'; }
+            else { document.getElementById('pctThumb').textContent=pct+'%'; document.getElementById('barThumb').style.width=pct+'%'; }
           },
           e=>{ clearTimeout(killer); rej(e); },
           ()=>{ clearTimeout(killer); res(); }
@@ -362,16 +373,16 @@
     }
 
     /* ---------- Save Photo ---------- */
-    $('saveBtn').onclick = async ()=>{
+    document.getElementById('saveBtn').onclick = async ()=>{
       if(!(scenarioId && pendingFullDataURL)) return;
       try{
-        busy(true);
-        $('saveStatus').textContent='uploading…'; show('afterSave',false);
+        document.getElementById('loader').style.display='grid';
+        document.getElementById('saveStatus').textContent='uploading…'; show('afterSave',false);
 
         const ts = Date.now();
         const cloud = await uploadBlobs(ts, pendingFullDataURL, pendingThumbDataURL);
 
-        const r = Math.max(1, Math.min(1000, parseInt(($('radius').value||'5'),10) || 5));
+        const r = Math.max(1, Math.min(1000, parseInt((document.getElementById('radius').value||'5'),10) || 5));
         const stop = {
           type:'photo', title:'', caption:'',
           imageURL: cloud.imageURL || '',
@@ -385,23 +396,23 @@
 
         await appendStopToDB(stop);
 
-        $('saveStatus').textContent='saved ✓';
+        document.getElementById('saveStatus').textContent='saved ✓';
         show('afterSave', true);
       }catch(e){
-        $('saveStatus').textContent='error';
-        sayErr(e.message||String(e));
+        document.getElementById('saveStatus').textContent='error';
+        const b=document.getElementById('errbar'); b.textContent=e.message||String(e); b.style.display='block'; setTimeout(()=>b.style.display='none', 5000);
       }finally{
-        busy(false);
+        document.getElementById('loader').style.display='none';
       }
     };
 
     /* ---------- Add another ---------- */
-    $('addAnotherBtn').onclick = ()=>{
+    document.getElementById('addAnotherBtn').onclick = ()=>{
       pendingFile=pendingImg=pendingFullDataURL=pendingThumbDataURL=null;
-      $('previewImg').src=''; show('workArea',false); show('afterSave',false);
-      $('pctFull').textContent='0%'; $('barFull').style.width='0%';
-      $('pctThumb').textContent='0%'; $('barThumb').style.width='0%';
-      $('radius').value='5';
+      document.getElementById('previewImg').src=''; show('workArea',false); show('afterSave',false);
+      document.getElementById('pctFull').textContent='0%'; document.getElementById('barFull').style.width='0%';
+      document.getElementById('pctThumb').textContent='0%'; document.getElementById('barThumb').style.width='0%';
+      document.getElementById('radius').value='5';
     };
   </script>
 </body>
