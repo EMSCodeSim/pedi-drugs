@@ -50,7 +50,6 @@
     }
     .thumb .img{aspect-ratio:16/10;background:#000;position:relative;display:block}
     .thumb .img img{width:100%;height:100%;object-fit:cover}
-    /* Fallback "no image" look (used for Dispatch slide) */
     .thumb .img.noimg{
       background:linear-gradient(180deg,rgba(84,166,255,.25),rgba(10,132,255,.12));
       display:grid;place-items:center;
@@ -61,9 +60,8 @@
     }
     .thumb .tcap{padding:8px 10px;font-size:13px;color:var(--muted)}
     .row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
-    .grow{flex:1}
     .badge{font-size:12px;padding:4px 8px;border:1px solid var(--edge2);border-radius:999px;color:var(--muted)}
-    .sp{flex:1}
+    #status{min-height:22px}
   </style>
 </head>
 <body>
@@ -80,6 +78,7 @@
         </select>
         <button id="loadBtn" class="btn small" type="button">Load</button>
         <button id="clearBtn" class="btn secondary small" type="button">Clear Screen</button>
+        <span id="authPill" class="badge">auth: …</span>
       </div>
     </div>
   </div>
@@ -110,22 +109,25 @@
 
   <!-- Firebase (compat) -->
   <script src="https://www.gstatic.com/firebasejs/10.12.4/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.4/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.4/firebase-database-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.4/firebase-storage-compat.js"></script>
 
   <script>
   (function(){
-    const $ = s => document.querySelector(s);
-    const sessionInput = $('#sessionInput');
-    const scenarioSelect = $('#scenarioSelect');
-    const loadBtn = $('#loadBtn');
-    const clearBtn = $('#clearBtn');
+    const $  = s => document.querySelector(s);
+    const qs = new URLSearchParams(location.search);
 
-    const currentImg = $('#currentImg');
-    const currentCaption = $('#currentCaption');
-    const statusEl = $('#status');
-    const sessionBadge = $('#sessionBadge');
-
-    const thumbsEl = $('#thumbs');
+    const sessionInput    = $('#sessionInput');
+    const scenarioSelect  = $('#scenarioSelect');
+    const loadBtn         = $('#loadBtn');
+    const clearBtn        = $('#clearBtn');
+    const currentImg      = $('#currentImg');
+    const currentCaption  = $('#currentCaption');
+    const statusEl        = $('#status');
+    const sessionBadge    = $('#sessionBadge');
+    const authPill        = $('#authPill');
+    const thumbsEl        = $('#thumbs');
 
     // Firebase init (same project as viewer)
     const firebaseConfig = {
@@ -133,16 +135,37 @@
       authDomain:"dailyquiz-d5279.firebaseapp.com",
       databaseURL:"https://dailyquiz-d5279-default-rtdb.firebaseio.com",
       projectId:"dailyquiz-d5279",
+      storageBucket:"dailyquiz-d5279.firebasestorage.app",
       appId:"1:94577748034:web:c032d3a1d72db1313de5db",
       measurementId:"G-19DVN7NNH7"
     };
     firebase.initializeApp(firebaseConfig);
-    const db = firebase.database();
+    const db      = firebase.database();
+    const auth    = firebase.auth();
+    // Force classic bucket for SDK refs even if public URLs disabled
+    const FORCE_BUCKET = "dailyquiz-d5279.appspot.com";
+    const storage = firebase.storage(); // compat; we'll use refFromURL with gs://
 
-    // utils
-    const qs = new URLSearchParams(location.search);
-    sessionInput.value = qs.get('session') || 'default';
+    // ---------- Auth gate ----------
+    async function ensureAuthed(){
+      return new Promise((resolve,reject)=>{
+        const unsub = auth.onAuthStateChanged(async (u)=>{
+          if (u){
+            authPill.textContent = 'auth: anon ✓ ' + u.uid.slice(0,8);
+            unsub(); resolve(u);
+          }else{
+            try{
+              await auth.signInAnonymously();
+            }catch(e){
+              authPill.textContent = 'auth: failed';
+              unsub(); reject(e);
+            }
+          }
+        });
+      });
+    }
 
+    // ---------- Helpers ----------
     function toDataURL(stored){
       if (!stored) return '';
       if (typeof stored === 'string') return stored;
@@ -163,23 +186,67 @@
           lat: num(s.lat ?? s.latitude ?? s.latDeg),
           lng: num(s.lng ?? s.lon ?? s.long ?? s.longitude ?? s.lngDeg),
           radiusMeters: num(s.radiusMeters ?? s.radius ?? s.r) || 40,
-          image: toDataURL(s.imageData || s.imageURL || s.imageUrl || s.url || s.photoURL || s.photo)
+          // Prefer explicit fields, but keep originals for fallback lookups
+          image: toDataURL(s.imageData || s.imageURL || s.imageUrl || s.url || s.photoURL || s.photo),
+          storagePath: s.storagePath || s.thumbPath || '',
+          gsUri: s.gsUri || ''
         };
       });
     }
+    function toStorageRefString(v){
+      if(!v) return '';
+      let s = (v+'').trim();
+      try{ s = decodeURIComponent(s); }catch{}
+      if (s.startsWith('gs://')) return s;
+      // firebase storage REST url
+      let m = s.match(/^https?:\/\/firebasestorage\.googleapis\.com\/v0\/b\/([^/]+)\/o\/([^?]+)/i);
+      if (m) return `gs://${m[1]}/${m[2].replace(/\+/g,' ')}`;
+      // new firebasestorage.app url
+      m = s.match(/^https?:\/\/([^/]+)\.firebasestorage\.app\/o\/([^?]+)/i);
+      if (m) return `gs://${m[1]}/${m[2].replace(/\+/g,' ')}`;
+      // plain path
+      if (!/^https?:\/\//i.test(s)) return `gs://${FORCE_BUCKET}/${s}`;
+      return '';
+    }
+    async function getDownloadURLAuth(pathOrGs){
+      const refStr = toStorageRefString(pathOrGs);
+      if (!refStr) throw new Error('no storage ref');
+      const ref = storage.refFromURL(refStr);
+      return await ref.getDownloadURL();
+    }
+    async function blobToDataURLViaStorage(pathOrGs){
+      const refStr = toStorageRefString(pathOrGs);
+      const ref = storage.refFromURL(refStr);
+      const blob = await ref.getBlob();
+      return await new Promise((res,rej)=>{
+        const fr = new FileReader();
+        fr.onload = ()=>res(fr.result);
+        fr.onerror= rej;
+        fr.readAsDataURL(blob);
+      });
+    }
 
+    // ---------- Data access (SDK; honors rules) ----------
+    async function fetchNode(path){
+      const snap = await db.ref(path).get();
+      return snap.exists() ? snap.val() : null;
+    }
     async function loadAllScenarios(){
-      const out=[];
+      const list=[];
       try{
-        const a = await fetch('https://dailyquiz-d5279-default-rtdb.firebaseio.com/geophoto/scenarios.json',{cache:'no-store'});
-        if(a.ok){ const ja=await a.json()||{}; for(const [id,s] of Object.entries(ja)){ out.push({ id, ...(s||{}), stops: normalizeStops(s?.stops) }); } }
-      }catch{}
+        const a = await fetchNode('geophoto/scenarios');
+        if (a) for (const [id,s] of Object.entries(a)) list.push({ id, ...(s||{}), stops: normalizeStops(s?.stops) });
+      }catch(e){
+        console.warn('read geophoto/scenarios denied or missing', e);
+      }
       try{
-        const b = await fetch('https://dailyquiz-d5279-default-rtdb.firebaseio.com/scenarios.json',{cache:'no-store'});
-        if(b.ok){ const jb=await b.json()||{}; for(const [id,s] of Object.entries(jb)){ out.push({ id, ...(s||{}), stops: normalizeStops(s?.stops) }); } }
-      }catch{}
+        const b = await fetchNode('scenarios');
+        if (b) for (const [id,s] of Object.entries(b)) list.push({ id, ...(s||{}), stops: normalizeStops(s?.stops) });
+      }catch(e){
+        console.warn('read scenarios denied or missing', e);
+      }
       // de-dup
-      const map=new Map(); out.forEach(s=>{ if(!map.has(s.id)) map.set(s.id, s); });
+      const map=new Map(); list.forEach(s=>{ if(!map.has(s.id)) map.set(s.id, s); });
       return Array.from(map.values());
     }
 
@@ -192,7 +259,6 @@
         o.textContent=sc.title || sc.name || '(untitled)';
         scenarioSelect.appendChild(o);
       });
-      // Preselect by ?id if present
       const pre = qs.get('id');
       if (pre && list.some(s=>s.id===pre)) scenarioSelect.value = pre;
     }
@@ -203,7 +269,7 @@
       if (currentRef) currentRef.off();
       const path = `geophoto/manual/${session}/current`;
       currentRef = db.ref(path);
-      sessionBadge.textContent = 'session: ' + session;
+      $('#sessionBadge').textContent = 'session: ' + session;
 
       currentRef.on('value', snap=>{
         const v = snap.val();
@@ -218,22 +284,47 @@
         const capText = (v.title ? (v.title + ' — ') : '') + (v.caption || '');
         currentCaption.textContent = capText;
         statusEl.textContent = 'Showing: ' + (v.title || '(untitled)');
+      }, err=>{
+        statusEl.textContent = 'Live read denied — check rules for /geophoto/manual/*';
+        console.error(err);
       });
     }
 
-    // Push a frame to users
+    // Pick best display URL for a stop (thumbnail display for instructor)
+    async function resolveThumbURL(stop){
+      if (stop.image) return stop.image; // already data URL or http(s)
+      if (stop.storagePath) {
+        try{ return await getDownloadURLAuth(stop.storagePath); }catch{}
+      }
+      if (stop.gsUri){
+        try{ return await getDownloadURLAuth(stop.gsUri); }catch{}
+      }
+      return ''; // will render a label card
+    }
+
+    // Push a frame to users (send data URL when storage is private)
     async function pushFrame(session, stop){
       const path = `geophoto/manual/${session}/current`;
+      let imgToSend = stop.image || '';
+
+      // If no inline/URL image, try to fetch blob from Storage and convert to data URL
+      if (!imgToSend){
+        const refStr = stop.gsUri || stop.storagePath || '';
+        if (refStr){
+          try{ imgToSend = await blobToDataURLViaStorage(refStr); }catch{}
+        }
+      }
+
       const payload = {
         title: stop.title || '',
         caption: stop.caption || '',
-        image: stop.image || ''  // can be data URL or https URL; empty => black slide with caption
+        image: imgToSend || '' // empty => viewer shows caption-only slide
       };
       try{
         await db.ref(path).set(payload);
         statusEl.textContent = 'Sent: ' + (stop.title || '(untitled)');
       }catch(e){
-        statusEl.textContent = 'Error sending frame';
+        statusEl.textContent = 'Error sending frame (rules?)';
         console.error(e);
       }
     }
@@ -243,16 +334,16 @@
         await db.ref(path).set({ clear:true });
         statusEl.textContent = 'Cleared';
       }catch(e){
-        statusEl.textContent = 'Error clearing';
+        statusEl.textContent = 'Error clearing (rules?)';
         console.error(e);
       }
     }
 
     // Build thumbnails grid (adds Dispatch slide first when available)
-    function renderThumbs(stops, session, dispatchText){
+    async function renderThumbs(stops, session, dispatchText){
       thumbsEl.innerHTML = '';
 
-      // 0) Dispatch slide (no image) if provided
+      // Dispatch slide
       if (dispatchText){
         const dCard = document.createElement('div');
         dCard.className = 'thumb';
@@ -275,32 +366,29 @@
         thumbsEl.appendChild(dCard);
       }
 
-      // 1) Regular stops
       if (!stops || !stops.length){
-        // (If no stops AND no dispatch, show empty state)
         if (!dispatchText){
           const empty = document.createElement('div');
           empty.style.cssText = 'padding:12px;color:#94a3b8';
-          empty.textContent = 'No stops found for this scenario.';
+          empty.textContent = 'No stops found for this scenario or you lack read permission.';
           thumbsEl.appendChild(empty);
         }
         return;
       }
 
-      stops.forEach((st)=>{
+      for (const st of stops){
         const card = document.createElement('div');
         card.className = 'thumb';
         card.title = (st.title || 'Untitled') + (st.caption ? (' — ' + st.caption) : '');
 
         const imgWrap = document.createElement('div');
         imgWrap.className = 'img';
-        const hasImg = !!st.image;
-        if (hasImg){
+
+        const url = await resolveThumbURL(st);
+        if (url){
           const img = document.createElement('img');
-          img.loading = 'lazy';
-          img.decoding = 'async';
-          img.src = st.image || '';
-          img.alt = st.title || 'Scenario image';
+          img.loading = 'lazy'; img.decoding = 'async';
+          img.src = url; img.alt = st.title || 'Scenario image';
           imgWrap.appendChild(img);
         }else{
           imgWrap.classList.add('noimg');
@@ -316,10 +404,9 @@
 
         card.appendChild(imgWrap);
         card.appendChild(cap);
-
         card.addEventListener('click', ()=> pushFrame(session, st));
         thumbsEl.appendChild(card);
-      });
+      }
     }
 
     // Wire UI
@@ -328,24 +415,16 @@
       const scenarioId = scenarioSelect.value;
       if (!scenarioId){ alert('Select a scenario.'); return; }
 
-      // 1) subscribe to current users view for this session
+      // subscribe to current users view for this session
       subscribeCurrent(session);
 
-      // 2) fetch scenario and render thumbs (+ dispatch slide if available)
-      let sc=null;
-      try{
-        const rA = await fetch(`https://dailyquiz-d5279-default-rtdb.firebaseio.com/geophoto/scenarios/${scenarioId}.json`,{cache:'no-store'});
-        if(rA.ok) sc = await rA.json();
-      }catch{}
-      if(!sc){
-        try{
-          const rB = await fetch(`https://dailyquiz-d5279-default-rtdb.firebaseio.com/scenarios/${scenarioId}.json`,{cache:'no-store'});
-          if(rB.ok) sc = await rB.json();
-        }catch{}
-      }
+      // fetch scenario via SDK
+      let sc = await fetchNode(`geophoto/scenarios/${scenarioId}`);
+      if(!sc) sc = await fetchNode(`scenarios/${scenarioId}`);
+
       const stops = normalizeStops(sc?.stops) || [];
       const dispatchText = ((sc?.dispatch || sc?.notes || '') + '').trim();
-      renderThumbs(stops, session, dispatchText);
+      await renderThumbs(stops, session, dispatchText);
       statusEl.textContent = 'Loaded scenario: ' + (sc?.title || sc?.name || scenarioId);
     });
 
@@ -354,16 +433,23 @@
       clearScreen(session);
     });
 
-    // Boot
+    // ---------- Boot ----------
     (async function boot(){
-      const list = await loadAllScenarios();
-      populateDropdown(list);
-      // Auto-load if both session & id are provided
-      const autoId = qs.get('id');
-      if (autoId && list.some(s=>s.id===autoId)){
-        scenarioSelect.value = autoId;
+      sessionInput.value = qs.get('session') || 'default';
+      try{
+        await ensureAuthed();
+        const list = await loadAllScenarios();
+        populateDropdown(list);
+        // Auto-subscribe and preselect if provided
+        const autoId = qs.get('id');
+        if (autoId && list.some(s=>s.id===autoId)){
+          scenarioSelect.value = autoId;
+        }
+        subscribeCurrent(sessionInput.value || 'default');
+      }catch(e){
+        statusEl.textContent = 'Startup failed: auth/rules';
+        console.error(e);
       }
-      subscribeCurrent(sessionInput.value || 'default');
     })();
 
   })();
