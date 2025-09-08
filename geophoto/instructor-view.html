@@ -91,13 +91,14 @@
     const sessionInput=$('#sessionInput'), scenarioSelect=$('#scenarioSelect');
     const loadBtn=$('#loadBtn'), clearBtn=$('#clearBtn'), helloBtn=$('#helloBtn'), testBtn=$('#testBtn');
     const thumbs=$('#thumbs'), currentImg=$('#currentImg'), currentCap=$('#currentCap');
-
     const setStatus=t=> statusEl.textContent=t;
 
+    // Paths
     function normSession(raw){return (raw||'default').trim().toLowerCase();}
     function manualPath(s){return `geophoto/manual/${normSession(s)}/current`;}
     function helloPath(s){return `geophoto/manual/${normSession(s)}/hello`;}
 
+    // Auth
     async function ensureAuthed(){
       return new Promise((resolve,reject)=>{
         const unsub=auth.onAuthStateChanged(u=>{
@@ -107,22 +108,18 @@
       });
     }
 
-    async function fetchNode(path){
-      const snap=await db.ref(path).get();
-      return snap.exists()?snap.val():null;
-    }
-
+    // Data helpers
+    async function fetchNode(path){ const snap=await db.ref(path).get(); return snap.exists()?snap.val():null; }
     async function loadScenarios(){
       const list=[];
-      try{const a=await fetchNode('geophoto/scenarios'); if(a) for(const [id,s] of Object.entries(a)) list.push({id,...(s||{})});}catch(e){}
-      try{const b=await fetchNode('scenarios');          if(b) for(const [id,s] of Object.entries(b)) list.push({id,...(s||{})});}catch(e){}
-      const uniq=new Map(); list.forEach(x=>{if(!uniq.has(x.id)) uniq.set(x.id,x);});
+      try{const a=await fetchNode('geophoto/scenarios'); if(a) for(const [id,s] of Object.entries(a)) list.push({id,...(s||{})});}catch{}
+      try{const b=await fetchNode('scenarios');          if(b) for(const [id,s] of Object.entries(b)) list.push({id,...(s||{})});}catch{}
+      const uniq=new Map(); list.forEach(x=>{if(!uniq.has(x.id))uniq.set(x.id,x);});
       const arr=Array.from(uniq.values()).sort((a,b)=>(b.createdAt||0)-(a.createdAt||0));
       scenarioSelect.innerHTML='<option value="">Select a scenario…</option>';
       arr.forEach(sc=>{const o=document.createElement('option');o.value=sc.id;o.textContent=sc.title||sc.name||'(untitled)';scenarioSelect.appendChild(o);});
       return arr;
     }
-
     function toDataURLFromStored(stored){
       if(!stored) return ''; if(typeof stored==='string') return stored;
       if(stored.data){ const fmt=(stored.format==='jpeg'||stored.format==='jpg')?'jpeg':'png'; return `data:image/${fmt};base64,${stored.data}`;}
@@ -133,7 +130,8 @@
       if(s.startsWith('gs://')) return s;
       let m=s.match(/^https?:\/\/firebasestorage\.googleapis\.com\/v0\/b\/([^/]+)\/o\/([^?]+)/i); if(m) return `gs://${m[1]}/${m[2].replace(/\+/g,' ')}`;
       m=s.match(/^https?:\/\/([^/]+)\.firebasestorage\.app\/o\/([^?]+)/i); if(m) return `gs://${m[1]}/${m[2].replace(/\+/g,' ')}`;
-      if(!/^https?:\/\//i.test(s)) return `gs://${FORCE_BUCKET}/${s}`; return '';
+      if(!/^https?:\/\//i.test(s)) return `gs://${FORCE_BUCKET}/${s}`;
+      return '';
     }
     async function blobToDataURLViaStorage(pathOrGs){
       const refStr=toStorageRefString(pathOrGs); if(!refStr) return '';
@@ -143,8 +141,8 @@
     async function getStopDataURL(st){
       const inline=toDataURLFromStored(st.imageData||st.imageURL||st.imageUrl||st.url||st.photoURL||st.photo);
       if(inline) return inline;
-      if(st.gsUri) try{return await blobToDataURLViaStorage(st.gsUri);}catch(e){}
-      if(st.storagePath) try{return await blobToDataURLViaStorage(st.storagePath);}catch(e){}
+      if(st.gsUri) try{return await blobToDataURLViaStorage(st.gsUri);}catch{}
+      if(st.storagePath) try{return await blobToDataURLViaStorage(st.storagePath);}catch{}
       return '';
     }
     async function compressDataURL(dataURL, maxEdge=1600, q=0.85){
@@ -157,11 +155,11 @@
       ctx.drawImage(img,0,0,c.width,c.height); return c.toDataURL('image/jpeg', q);
     }
 
-    // Live preview
+    // Preview current frame (what viewers see)
     let currentRef=null;
     function subscribeCurrent(sessionRaw){
-      const s=normSession(sessionRaw); pathPill.textContent=`path: ${manualPath(s)}`;
-      if(currentRef) try{currentRef.off();}catch{}; currentRef=db.ref(manualPath(s));
+      const s=normSession(sessionRaw); const p=manualPath(s); pathPill.textContent=`path: ${p}`;
+      if(currentRef) try{ currentRef.off(); }catch{}; currentRef=db.ref(p);
       currentRef.on('value', snap=>{
         const v=snap.val();
         if(!v||v.clear){ currentImg.src=''; currentCap.textContent=''; setStatus('preview waiting…'); return; }
@@ -170,12 +168,36 @@
       }, err=>{ setStatus(`preview read error: ${err.code||err.message}`); console.error(err); });
     }
 
+    // Send slide (UPDATE with ts/kind/by, also removes any lingering "clear")
+    async function sendSlide(payload){
+      const p = manualPath(sessionInput.value);
+      setStatus('sending…');
+      try{
+        const u = auth.currentUser || await ensureAuthed();
+        const frame = {
+          ts: Date.now(),
+          kind: 'slide',
+          by: u?.uid || 'unknown',
+          title: payload.title || '',
+          caption: payload.caption || '',
+          image: payload.image || '',
+          clear: null   // remove any previous clear flag
+        };
+        await db.ref(p).update(frame); // update avoids full-node wipes
+        setStatus('sent');
+      }catch(e){
+        setStatus(`write error: ${e.code||e.message}`);
+        console.error('[sendSlide]', e);
+      }
+    }
+
+    // Render scenario thumbnails
     async function renderThumbsForScenario(id){
       thumbs.innerHTML='';
       let sc=await fetchNode(`geophoto/scenarios/${id}`); if(!sc) sc=await fetchNode(`scenarios/${id}`);
       if(!sc){ thumbs.innerHTML='<div class="pill">Scenario not found</div>'; return; }
-      const stops=(Array.isArray(sc.stops)?sc.stops:Object.values(sc.stops||{}))||[];
-      // dispatch
+      const rawStops=(Array.isArray(sc.stops)?sc.stops:Object.values(sc.stops||{}))||[];
+
       const dispatch=String(sc.dispatch||sc.notes||'').trim();
       if(dispatch){
         const card=document.createElement('div'); card.className='thumb';
@@ -185,34 +207,24 @@
         card.onclick=()=> sendSlide({title:'Dispatch', caption:dispatch, image:''});
         thumbs.appendChild(card);
       }
-      for(const raw of stops){
+
+      for(const raw of rawStops){
         const st={ title:raw.title||raw.name||'', caption:raw.caption||raw.text||'', storagePath:raw.storagePath||raw.thumbPath||'', gsUri:raw.gsUri||'', imageData:raw.imageData, imageURL:raw.imageURL||raw.imageUrl||raw.url||raw.photoURL||raw.photo||'' };
         const card=document.createElement('div'); card.className='thumb';
         const imgWrap=document.createElement('div'); imgWrap.className='img';
         const cap=document.createElement('div'); cap.className='cap'; cap.textContent=(st.title||'')+(st.caption?(' — '+st.caption):'');
+
         try{
           const url=await getStopDataURL(st);
           if(url){ const im=document.createElement('img'); im.src=url; im.alt=st.title||''; imgWrap.innerHTML=''; imgWrap.appendChild(im); }
         }catch{}
+
         card.appendChild(imgWrap); card.appendChild(cap);
         card.onclick=async ()=>{
           let dataURL=''; try{ dataURL=await getStopDataURL(st); dataURL=await compressDataURL(dataURL,1600,0.85);}catch{}
-          await sendSlide({title:st.title||'', caption:st.caption||'', image:dataURL||''});
+          await sendSlide({ title:st.title||'', caption:st.caption||'', image:dataURL||'' });
         };
         thumbs.appendChild(card);
-      }
-    }
-
-    function sessionPath(){ return manualPath(sessionInput.value); }
-
-    async function sendSlide(payload){
-      const p=sessionPath(); setStatus('sending…');
-      try{
-        await db.ref(p).set({ ts: Date.now(), ...payload });
-        setStatus('sent');
-      }catch(e){
-        setStatus(`write error: ${e.code||e.message}`);
-        console.error('[sendSlide]', e);
       }
     }
 
@@ -222,14 +234,19 @@
         await renderThumbsForScenario(scenarioSelect.value);
         subscribeCurrent(sessionInput.value);
         setStatus('loaded');
-      }catch(e){
-        setStatus(`load error: ${e.code||e.message}`); console.error(e);
-      }
+      }catch(e){ setStatus(`load error: ${e.code||e.message}`); console.error(e); }
     };
+
     clearBtn.onclick=async ()=>{
-      try{ await db.ref(sessionPath()).set({ clear:true, ts: Date.now() }); setStatus('cleared'); }
-      catch(e){ setStatus(`clear error: ${e.code||e.message}`); console.error(e); }
+      const p = manualPath(sessionInput.value);
+      setStatus('clearing…');
+      try{
+        // Set clear flag and remove slide fields to avoid stale data
+        await db.ref(p).update({ clear:true, ts: Date.now(), title:null, caption:null, image:null, kind:null, by:null });
+        setStatus('cleared');
+      }catch(e){ setStatus(`clear error: ${e.code||e.message}`); console.error(e); }
     };
+
     helloBtn.onclick=async ()=>{
       try{
         const u=auth.currentUser || await ensureAuthed();
@@ -237,6 +254,7 @@
         setStatus('hello sent');
       }catch(e){ setStatus(`hello error: ${e.code||e.message}`); console.error(e); }
     };
+
     testBtn.onclick=async ()=>{ await sendSlide({ title:'Test', caption:'If viewers see this, we are connected.', image:'' }); };
 
     // Boot
