@@ -6,72 +6,55 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <meta name="theme-color" content="#0b0f14" />
   <style>
-    :root{ --bg:#0b0f14; --bg2:#0e1421; --card:#0f1624; --edge:rgba(255,255,255,.10); --text:#eaf2ff; --muted:#93a0b5; --blue:#0a84ff; }
+    :root{ --bg:#0b0f14; --bg2:#0e1421; --card:#0f1624; --edge:rgba(255,255,255,.12); --text:#eaf2ff; --muted:#93a0b5; --blue:#0a84ff; }
     *{box-sizing:border-box}
-    html,body{margin:0;height:100%;color:var(--text);font-family:system-ui,-apple-system,Segoe UI,Roboto,Inter,Arial,sans-serif;background:
-      radial-gradient(1400px 700px at 15% -15%, rgba(10,132,255,.28), transparent 60%),
-      radial-gradient(1200px 600px at 110% 0%, rgba(255,59,48,.22), transparent 60%),
-      linear-gradient(165deg, var(--bg2), var(--bg) 55%)}
+    html,body{
+      margin:0;height:100%;color:var(--text);
+      font-family:system-ui,-apple-system,Segoe UI,Roboto,Inter,Arial,sans-serif;
+      background:
+        radial-gradient(1200px 600px at 14% -12%, rgba(10,132,255,.24), transparent 60%),
+        radial-gradient(1200px 600px at 110% 0%, rgba(255,59,48,.18), transparent 60%),
+        linear-gradient(165deg, var(--bg2), var(--bg) 55%);
+    }
     a{color:inherit;text-decoration:none}
-    .topbar{position:sticky;top:0;z-index:40;background:rgba(12,15,22,.78);backdrop-filter:blur(6px) saturate(120%);border-bottom:1px solid rgba(255,255,255,.08)}
-    .topnav{max-width:1100px;margin:0 auto;padding:10px 16px;display:flex;gap:12px;align-items:center}
-    .brand{display:flex;gap:12px;align-items:center;font-weight:900}
-    .logo{width:40px;height:40px;border-radius:10px;background:#0f1624;box-shadow:0 12px 34px rgba(0,0,0,.38)}
-    .spacer{flex:1}
-    .btn{appearance:none;border:1px solid rgba(255,255,255,.16);background:linear-gradient(180deg,#142238,#0f1930);color:#fff;border-radius:12px;padding:10px 14px;font-weight:800;cursor:pointer}
-    .btn.primary{background:linear-gradient(180deg,#54a6ff,#0a84ff);color:#03131b;border:0}
-    main{max-width:1100px;margin:20px auto 60px;padding:0 16px}
-    .hero{display:grid;grid-template-columns:1.2fr 1fr;gap:20px;align-items:center}
-    .card{background:var(--card);border:1px solid var(--edge);border-radius:16px;padding:16px}
-    .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px}
-    @media (max-width:900px){ .hero{grid-template-columns:1fr} }
+    header{
+      position:sticky;top:0;z-index:10;background:#0b0f14;
+      border-bottom:1px solid var(--edge)
+    }
+    .nav{max-width:900px;margin:0 auto;padding:12px 16px;display:flex;align-items:center;justify-content:center;font-weight:900}
+    main{max-width:900px;margin:28px auto;padding:0 16px}
+    .card{background:var(--card);border:1px solid var(--edge);border-radius:16px;padding:18px}
+    .title{margin:0 0 6px 0;font-size:28px;font-weight:900}
+    .lead{color:#c9d6f3;margin:0 0 14px 0;line-height:1.5}
+    .btn{
+      appearance:none;display:inline-block;border:0;border-radius:14px;
+      padding:14px 18px;font-weight:900;cursor:pointer;text-align:center;
+      background:linear-gradient(180deg,#54a6ff,#0a84ff);color:#03131b;box-shadow:0 6px 22px rgba(10,132,255,.25)
+    }
+    .links{display:flex;gap:10px;flex-wrap:wrap;margin-top:14px}
+    .link{border:1px solid var(--edge);background:#132036;color:#fff;border-radius:12px;padding:10px 14px;font-weight:700}
+    .muted{color:var(--muted);font-size:13px;margin-top:10px}
   </style>
 </head>
 <body>
-  <div class="topbar">
-    <div class="topnav">
-      <div class="brand">
-        <div class="logo"></div>
-        <div>FireOps SIM</div>
-      </div>
-      <div class="spacer"></div>
-      <a class="btn" href="viewer.html">Open Viewer</a>
-      <a class="btn" href="instructor-view.html">Instructor</a>
-      <a class="btn" href="advanced-editor.html">Advanced Editor</a>
-    </div>
-  </div>
+  <header>
+    <div class="nav">FireOps SIM</div>
+  </header>
 
   <main>
-    <section class="hero">
-      <div class="card">
-        <h1 style="margin:0 0 8px 0">Train where it matters.</h1>
-        <p style="color:#c9d6f3;line-height:1.5">
-          Scenario-based fire/EMS training using real scene photos, overlays, and GPS geofences.
-          Run instructor-controlled slides in Manual Mode, or let students unlock slides by arriving on scene in GPS Mode.
-        </p>
-        <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:12px">
-          <a class="btn primary" href="viewer.html">Launch Viewer</a>
-          <a class="btn" href="instructor-view.html">Instructor Controls</a>
-        </div>
-      </div>
-      <div class="card">
-        <h2 style="margin-top:0">Quick Links</h2>
-        <div class="grid">
-          <a class="btn" href="viewer.html?mode=manual&session=alpha">Viewer (Manual, session=alpha)</a>
-          <a class="btn" href="viewer.html?mode=gps">Viewer (GPS Mode)</a>
-          <a class="btn" href="advanced-editor.html">Advanced Editor</a>
-          <a class="btn" href="/">EMSCodeSim.com</a>
-        </div>
-      </div>
-    </section>
+    <section class="card" style="text-align:center">
+      <h1 class="title">Welcome</h1>
+      <p class="lead">Open the photo viewer for trainees, or jump to instructor controls.</p>
 
-    <!-- OPTIONAL: Put your existing homepage content below -->
-    <section class="card" style="margin-top:16px">
-      <h2 style="margin-top:0">About</h2>
-      <p style="color:#c9d6f3;line-height:1.6">
-        Replace this section with your existing homepage content that used to live in index.html.
-        This file intentionally contains <em>no viewer logic</em> to keep it fast and clean.
-      </p>
+      <!-- BIG PRIMARY BUTTON: goes straight to the user viewer -->
+      <a class="btn" href="viewer.html">Open Geo Photo Viewer</a>
+
+      <div class="links" style="justify-content:center">
+        <a class="link" href="instructor-view.html">Instructor Controls</a>
+        <a class="link" href="advanced-editor.html">Advanced Editor</a>
+      </div>
+
+      <div class="muted">Direct link: <code>viewer.html</code></div>
     </section>
   </main>
 </body>
