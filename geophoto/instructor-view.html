@@ -52,7 +52,7 @@
         <button id="loadBtn" class="btn">Load</button>
         <button id="clearBtn" class="btn secondary">Clear</button>
         <button id="helloBtn" class="btn secondary">Announce (Hello)</button>
-        <button id="testBtn" class="btn secondary">Send Test Slide</button>
+        <button id="testBtn" class="btn secondary">Send Test</button>
         <span id="status" class="badge">idle</span>
       </div>
     </div>
@@ -166,6 +166,23 @@
       const blob = await ref.getBlob();
       return await new Promise((res,rej)=>{ const fr=new FileReader(); fr.onload=()=>res(fr.result); fr.onerror=rej; fr.readAsDataURL(blob); });
     }
+
+    // Resize/compress any image/dataURL to ~1600px max edge JPEG (85%)
+    async function compressDataURL(dataURL, maxEdge=1600, quality=0.85){
+      if (!dataURL) return '';
+      // Non-data URLs (http/https): just pass through (usually download URLs already small)
+      if (!/^data:image\//i.test(dataURL)) return dataURL;
+      const img = new Image(); img.decoding='async'; img.src=dataURL; await img.decode();
+      const w=img.naturalWidth, h=img.naturalHeight;
+      const s=Math.min(1, maxEdge/Math.max(w,h));
+      if (s===1) return dataURL;
+      const cw=Math.round(w*s), ch=Math.round(h*s);
+      const c=document.createElement('canvas'); c.width=cw; c.height=ch;
+      const ctx=c.getContext('2d'); ctx.imageSmoothingEnabled=true; ctx.imageSmoothingQuality='high';
+      ctx.drawImage(img,0,0,cw,ch);
+      return c.toDataURL('image/jpeg', quality);
+    }
+
     async function getStopDataURL(stop){
       // Prefer inline data first; then fetch from Storage if private
       const inline = toDataURLFromStored(stop.imageData || stop.imageURL || stop.imageUrl || stop.url || stop.photoURL || stop.photo);
@@ -188,7 +205,7 @@
       }));
     }
 
-    // Live preview of what users see (subscribe to manual path)
+    // Live preview of what users see
     let currentRef = null;
     function subscribeCurrent(sessionRaw){
       const s = normSession(sessionRaw);
@@ -220,7 +237,7 @@
         card.appendChild(imgWrap); card.appendChild(cap);
         card.onclick = async ()=>{
           const session = normSession(sessionInput.value);
-          await db.ref(manualPath(session)).set({ title:'Dispatch', caption:String(sc.dispatch||sc.notes||''), image:'' });
+          await db.ref(manualPath(session)).set({ ts: Date.now(), title:'Dispatch', caption:String(sc.dispatch||sc.notes||''), image:'' });
           setStatus('Sent: Dispatch');
         };
         thumbs.appendChild(card);
@@ -252,11 +269,13 @@
 
         card.onclick = async ()=>{
           const session = normSession(sessionInput.value);
-          const dataURL = await getStopDataURL(st);
+          let dataURL = await getStopDataURL(st);
+          dataURL = await compressDataURL(dataURL, 1600, 0.85); // smaller + faster
           await db.ref(manualPath(session)).set({
+            ts: Date.now(),
             title: st.title || '',
             caption: st.caption || '',
-            image: dataURL || ''  // data URL avoids Storage permissions on viewer
+            image: dataURL || ''  // Viewer accepts URL or dataURL; prefers dataURL
           });
           setStatus('Sent: ' + (st.title || 'slide'));
         };
@@ -276,7 +295,7 @@
 
     clearBtn.onclick = async ()=>{
       const s = normSession(sessionInput.value);
-      await db.ref(manualPath(s)).set({ clear:true });
+      await db.ref(manualPath(s)).set({ clear:true, ts: Date.now() });
       setStatus('cleared');
     };
 
@@ -289,7 +308,7 @@
 
     testBtn.onclick = async ()=>{
       const s = normSession(sessionInput.value);
-      await db.ref(manualPath(s)).set({ title:'Test', caption:'If viewers see this, we are connected.', image:'' });
+      await db.ref(manualPath(s)).set({ ts: Date.now(), title:'Test', caption:'If viewers see this, we are connected.', image:'' });
       setStatus('test sent');
     };
 
