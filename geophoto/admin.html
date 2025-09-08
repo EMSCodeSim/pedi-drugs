@@ -15,10 +15,11 @@
     <label>Scenario Name *</label>
     <input id="scName" type="text" placeholder="Example: 2-story house, smoke from roof" required />
     <label>Dispatch Info (optional)</label>
-    <textarea id="scDispatch" placeholder="E184, 123 Main St, smoke from roof, hydrant at 1st & Oak"></textarea>
-    <label>Geofence radius (meters)</label>
-    <input id="scRadius" type="number" value="5" min="1" />
-    <div id="geoStatus">Location: (checking…)</div>
+    <textarea id="scDispatch" placeholder="E184, 123 Main St, smoke from roof, hydrant at 1st &amp; Oak"></textarea>
+
+    <div id="authStatus" style="margin-top:6px;font-size:.9rem;color:#a9b8e8">Auth: (signing in…)</div>
+    <div id="geoStatus" style="font-size:.9rem;color:#a9b8e8;margin-top:4px">Location: (checking…)</div>
+
     <div style="margin-top:10px">
       <button id="btnCreateScenario">Create Scenario</button>
     </div>
@@ -27,6 +28,7 @@
   <!-- STEP 2: Add Photo -->
   <section id="step2" hidden>
     <h2>Step 2 — Add Photo (+ GPS)</h2>
+
     <div class="file-row">
       <label class="btn">
         <input id="fileCamera" type="file" accept="image/*" capture="environment" hidden />
@@ -38,6 +40,9 @@
       </label>
       <button id="btnRefreshGPS" class="btn">↻ Refresh GPS</button>
     </div>
+
+    <label>Geofence radius for this photo (meters)</label>
+    <input id="photoRadius" type="number" value="5" min="1" />
 
     <figure id="previewBox">
       <img id="preview" alt="Preview" />
@@ -52,7 +57,7 @@
   </section>
 
   <!-- Thumbs -->
-  <section id="photos">
+  <section id="photos" hidden>
     <h3>Photos in this Scenario</h3>
     <div id="thumbs" class="thumbs"></div>
   </section>
@@ -61,6 +66,7 @@
 <script type="module">
 /* ---------------- Firebase ---------------- */
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js';
+import { getAuth, signInAnonymously, onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js';
 import { getStorage, ref as sRef, uploadBytesResumable, getDownloadURL, updateMetadata } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-storage.js';
 import { getDatabase, ref as dRef, push, set, update, onChildAdded } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js';
 
@@ -76,16 +82,19 @@ const firebaseConfig = {
 // If you already have firebase-init.js exporting `app`, you can:
 // import { app } from './firebase-init.js';
 const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
 const storage = getStorage(app);
 const db = getDatabase(app);
 
 /* ---------------- Elements ---------------- */
 const step1 = document.getElementById('step1');
 const step2 = document.getElementById('step2');
+const photosSection = document.getElementById('photos');
+
 const scName = document.getElementById('scName');
 const scDispatch = document.getElementById('scDispatch');
-const scRadius = document.getElementById('scRadius');
 const btnCreate = document.getElementById('btnCreateScenario');
+const authStatus = document.getElementById('authStatus');
 const geoStatus = document.getElementById('geoStatus');
 
 const fileCamera = document.getElementById('fileCamera');
@@ -94,6 +103,8 @@ const preview = document.getElementById('preview');
 const previewMeta = document.getElementById('previewMeta');
 const btnSavePhoto = document.getElementById('btnSavePhoto');
 const btnRefreshGPS = document.getElementById('btnRefreshGPS');
+const photoRadius = document.getElementById('photoRadius');
+
 const progress = document.getElementById('progress');
 const progressBar = progress.querySelector('div');
 const thumbs = document.getElementById('thumbs');
@@ -102,6 +113,25 @@ const thumbs = document.getElementById('thumbs');
 let scenarioId = null;
 let pendingFile = null;
 let lastLocation = null;
+let authed = false;
+
+/* ---------------- Auth (fixes create-scenario failures) ---------------- */
+function ensureAuth() {
+  return new Promise((resolve) => {
+    if (authed) return resolve();
+    signInAnonymously(auth).catch(() => {/* handled by onAuthStateChanged */});
+    const unsub = onAuthStateChanged(auth, (user) => {
+      if (user) {
+        authed = true;
+        authStatus.textContent = `Auth: anonymous ✓`;
+        unsub();
+        resolve();
+      } else {
+        authStatus.textContent = `Auth: (not signed in)`;
+      }
+    });
+  });
+}
 
 /* ---------------- Geolocation ---------------- */
 function formatLoc(loc) {
@@ -122,13 +152,13 @@ async function refreshLocationUI() {
     lastLocation = await getLocationOnce();
     geoStatus.textContent = formatLoc(lastLocation);
   } catch (e) {
+    // Do not block flows on location failure
     geoStatus.textContent = 'Location: unavailable (' + e.message + ')';
   }
 }
 
 /* ---------------- Image Downscale ---------------- */
 async function downscaleToJpeg(file, maxDim = 1800, quality = 0.78) {
-  // Try createImageBitmap path
   try {
     const bitmap = await createImageBitmap(file);
     const scale = Math.min(1, maxDim / Math.max(bitmap.width, bitmap.height));
@@ -142,7 +172,7 @@ async function downscaleToJpeg(file, maxDim = 1800, quality = 0.78) {
     if (bitmap.close) bitmap.close();
     return { blob, w, h };
   } catch {
-    // Fallback to HTMLImageElement decode
+    // Fallback
     const url = URL.createObjectURL(file);
     const img = document.createElement('img');
     await new Promise((res, rej) => { img.onload = res; img.onerror = rej; img.src = url; });
@@ -160,8 +190,8 @@ async function downscaleToJpeg(file, maxDim = 1800, quality = 0.78) {
 }
 const makeThumbnail = (file) => downscaleToJpeg(file, 400, 0.7);
 
-/* ---------------- Upload Flow ---------------- */
-async function uploadPhotoSet(scenarioId, file, loc) {
+/* ---------------- Upload Flow (radius per photo) ---------------- */
+async function uploadPhotoSet(scenarioId, file, loc, radiusMeters) {
   const [main, thumb] = await Promise.all([downscaleToJpeg(file, 1800, 0.78), makeThumbnail(file)]);
   const basePath = `fireops/${scenarioId}/${Date.now()}`;
   const mainRef = sRef(storage, `${basePath}.jpg`);
@@ -178,9 +208,9 @@ async function uploadPhotoSet(scenarioId, file, loc) {
     progressBar.style.width = `${pct}%`;
   });
 
-  const [mainSnap, thumbSnap] = await Promise.all([
-    new Promise(res => mainTask.on('state_changed', null, null, () => res(mainTask.snapshot))),
-    new Promise(res => thumbTask.on('state_changed', null, null, () => res(thumbTask.snapshot))),
+  const [_, __] = await Promise.all([
+    new Promise(res => mainTask.on('state_changed', null, null, () => res())),
+    new Promise(res => thumbTask.on('state_changed', null, null, () => res())),
   ]);
 
   const [url, thumbUrl] = await Promise.all([getDownloadURL(mainRef), getDownloadURL(thumbRef)]);
@@ -191,7 +221,8 @@ async function uploadPhotoSet(scenarioId, file, loc) {
     url, thumbUrl,
     w: main.w, h: main.h,
     createdAt: Date.now(),
-    gps: loc ? { lat: loc.coords.latitude, lng: loc.coords.longitude, accuracy: loc.coords.accuracy, ts: loc.timestamp } : null
+    gps: loc ? { lat: loc.coords.latitude, lng: loc.coords.longitude, accuracy: loc.coords.accuracy, ts: loc.timestamp } : null,
+    radiusMeters: Number(radiusMeters) || 5
   };
 
   await update(dRef(db, `/scenarios/${scenarioId}/photos/${photoKey}`), photoData);
@@ -200,6 +231,7 @@ async function uploadPhotoSet(scenarioId, file, loc) {
 
 /* ---------------- Thumbnails listener ---------------- */
 function startThumbListener(scenarioId) {
+  photosSection.hidden = false;
   const photosRef = dRef(db, `/scenarios/${scenarioId}/photos`);
   onChildAdded(photosRef, (snap) => {
     const v = snap.val();
@@ -210,7 +242,7 @@ function startThumbListener(scenarioId) {
       <img loading="lazy" src="${v.thumbUrl || v.url}" alt="thumb">
       <div class="meta">
         <div>${new Date(v.createdAt).toLocaleString()}</div>
-        <div>${v.w}×${v.h}</div>
+        <div>${v.w}×${v.h} • ${v.radiusMeters ?? '—'} m</div>
       </div>`;
     thumbs.prepend(card);
   });
@@ -220,26 +252,35 @@ function startThumbListener(scenarioId) {
 btnCreate.addEventListener('click', async () => {
   const name = scName.value.trim();
   if (!name) { alert('Please enter a scenario name.'); return; }
+
   btnCreate.disabled = true;
 
-  if (!lastLocation) await refreshLocationUI();
+  try {
+    await ensureAuth();                    // <-- important fix
+    if (!lastLocation) await refreshLocationUI(); // non-blocking if it fails
 
-  const scenariosRef = dRef(db, '/scenarios');
-  const newRef = push(scenariosRef);
-  scenarioId = newRef.key;
-  const payload = {
-    name,
-    dispatch: scDispatch.value.trim() || null,
-    radiusMeters: Number(scRadius.value) || 5,
-    createdAt: Date.now(),
-    source: 'builder-web',
-    gps: lastLocation ? { lat: lastLocation.coords.latitude, lng: lastLocation.coords.longitude, accuracy: lastLocation.coords.accuracy, ts: lastLocation.timestamp } : null
-  };
-  await set(newRef, payload);
+    const scenariosRef = dRef(db, '/scenarios');
+    const newRef = push(scenariosRef);
+    scenarioId = newRef.key;
 
-  scName.disabled = scDispatch.disabled = scRadius.disabled = true;
-  step2.hidden = false;
-  startThumbListener(scenarioId);
+    const payload = {
+      name,
+      dispatch: scDispatch.value.trim() || null,
+      createdAt: Date.now(),
+      source: 'builder-web'
+      // No radius here; radius is saved per photo
+    };
+
+    await set(newRef, payload);
+
+    scName.disabled = scDispatch.disabled = true;
+    step2.hidden = false;
+    startThumbListener(scenarioId);
+  } catch (e) {
+    console.error('Create scenario failed:', e);
+    alert('Unable to create scenario: ' + (e?.message || e));
+    btnCreate.disabled = false;
+  }
 });
 
 [fileCamera, fileLibrary].forEach(input => input.addEventListener('change', () => {
@@ -258,8 +299,9 @@ btnSavePhoto.addEventListener('click', async () => {
   if (!pendingFile) { alert('Choose or take a photo first.'); return; }
   btnSavePhoto.disabled = true;
   try {
-    await refreshLocationUI();
-    await uploadPhotoSet(scenarioId, pendingFile, lastLocation);
+    await ensureAuth();              // defensive
+    await refreshLocationUI();       // best-effort
+    await uploadPhotoSet(scenarioId, pendingFile, lastLocation, photoRadius.value);
     previewMeta.textContent = 'Saved ✔';
   } catch (e) {
     console.error(e);
@@ -272,7 +314,8 @@ btnSavePhoto.addEventListener('click', async () => {
 });
 
 btnRefreshGPS.addEventListener('click', refreshLocationUI);
-refreshLocationUI(); // initial
+/* Kick off auth+location early */
+ensureAuth().then(refreshLocationUI);
 </script>
 
 <style>
@@ -298,7 +341,6 @@ textarea{min-height:80px;resize:vertical}
 .thumb{display:block;border:1px solid #23335f;border-radius:12px;overflow:hidden;text-decoration:none;color:inherit;background:#0d142b}
 .thumb img{width:100%;height:90px;object-fit:cover;display:block}
 .thumb .meta{padding:6px 8px;font-size:.72rem;color:#a9b8e8}
-#geoStatus{font-size:.9rem;color:#a9b8e8;margin-top:8px}
 </style>
 </body>
 </html>
