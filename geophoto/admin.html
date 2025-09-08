@@ -1,334 +1,364 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="utf-8" />
-  <title>FireOps SIM — Instructor</title>
-  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
-  <meta name="theme-color" content="#0b0f14" />
+  <meta charset="utf-8">
+  <title>FireOps SIM — Admin (fixed Firebase paths)</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#0b0f14">
   <style>
-    :root{--bg:#0b0f14;--bg2:#0d121c;--panel:#0f1624;--text:#eaf2ff;--muted:#94a3b8;--edge:rgba(255,255,255,.12)}
+    :root{--bg:#0b0f14;--bg2:#0d121c;--panel:#0f1624;--text:#eaf2ff;--muted:#94a3b8;--edge:rgba(255,255,255,.12);--edge2:rgba(255,255,255,.18)}
     *{box-sizing:border-box}
-    html,body{margin:0;height:100%;background:linear-gradient(165deg,var(--bg2),var(--bg));color:var(--text);
-      font-family:system-ui,-apple-system,Segoe UI,Roboto,Inter,Arial,sans-serif}
-    header{position:sticky;top:0;z-index:10;background:rgba(12,16,24,.75);backdrop-filter:blur(8px);
-      border-bottom:1px solid var(--edge)}
-    .bar{max-width:1100px;margin:0 auto;padding:10px 12px;display:flex;gap:8px;align-items:center;flex-wrap:wrap}
-    .title{font-weight:900}
-    main{max-width:1100px;margin:10px auto;padding:0 12px;display:grid;gap:12px}
-    @media(min-width:900px){main{grid-template-columns:1fr 1fr}}
-    .card{background:linear-gradient(180deg,rgba(255,255,255,.02),transparent 20%),linear-gradient(180deg,#0f1624,#0e1420);
-      border:1px solid var(--edge);border-radius:16px;padding:12px}
-    label{font-weight:700}
-    .input,select{width:100%;padding:10px 12px;border-radius:12px;background:#0b1322;color:var(--text);
-      border:1px solid var(--edge)}
-    .btn{appearance:none;border:1px solid var(--edge);background:#132136;color:#fff;border-radius:12px;
-      padding:10px 14px;font-weight:700;cursor:pointer}
+    html,body{margin:0;height:100%;color:var(--text);font-family:system-ui,-apple-system,Segoe UI,Roboto,Inter,Arial,sans-serif;
+      background:radial-gradient(1200px 600px at 15% -10%, rgba(10,132,255,.25), transparent 60%),
+                 radial-gradient(1200px 600px at 110% 0%, rgba(255,59,48,.17), transparent 60%),
+                 linear-gradient(165deg,var(--bg2),var(--bg) 55%)}
+    header{position:sticky;top:0;z-index:10;background:rgba(12,15,22,.78);backdrop-filter:blur(8px);border-bottom:1px solid var(--edge2)}
+    .bar{max-width:1100px;margin:0 auto;padding:12px;display:flex;gap:10px;align-items:center}
+    .brand{font-weight:900}
+    .spacer{flex:1}
+    .btn{appearance:none;border:1px solid var(--edge2);background:linear-gradient(180deg,#122036,#0f1a2e);color:#fff;border-radius:12px;padding:10px 14px;font-weight:700;cursor:pointer}
+    .btn.secondary{background:linear-gradient(180deg,#0f1a2e,#0d1627)}
     .btn[disabled]{opacity:.6;cursor:not-allowed}
-    .pill{display:inline-block;border:1px solid var(--edge);border-radius:999px;padding:6px 10px;color:#d5e3ff;
-      font-size:12px;margin-left:6px}
-    .grid{display:grid;gap:10px;grid-template-columns:repeat(auto-fill,minmax(140px,1fr))}
-    .thumb{border:1px solid var(--edge);border-radius:14px;overflow:hidden;cursor:pointer;background:#0d1526}
-    .thumb .img{height:92px;display:grid;place-items:center}
-    .thumb .img img{width:100%;height:100%;object-fit:cover;display:block}
-    .thumb .img.noimg{background:#061321;color:#9fb3d9;font-weight:800}
-    .thumb .label{position:absolute;inset:auto 8px 8px auto;background:rgba(0,0,0,.45);border-radius:8px;padding:2px 6px}
-    .tcap{padding:8px 10px;font-size:12px;color:#d5e3ff}
-    #errbar{position:fixed;left:10px;bottom:10px;background:#2b0d0d;color:#ffd7d7;border:1px solid #7a2b2b;border-radius:12px;padding:8px 12px;display:none;z-index:99}
-    #status{font-size:12px;color:#9fb3d9;margin-left:6px}
-    .viewer{display:grid;gap:8px}
-    .viewer .frame{aspect-ratio:16/9;background:#020a14;border:1px solid var(--edge);border-radius:14px;display:grid;place-items:center;overflow:hidden}
-    .viewer .frame img{max-width:100%;max-height:100%;object-fit:contain}
+    main{max-width:1100px;margin:16px auto;padding:0 12px;display:grid;gap:12px}
+    @media(min-width:900px){main{grid-template-columns:1.15fr .85fr}}
+    .card{background:linear-gradient(180deg,rgba(255,255,255,.02),transparent 26%),linear-gradient(180deg,#0e1524,#0e131e);
+      border:1px solid var(--edge);border-radius:18px;padding:14px}
+    label{font-weight:700}
+    .input,textarea{width:100%;padding:10px 12px;border-radius:12px;background:#0c1322;color:#eaf2ff;border:1px solid var(--edge2)}
+    textarea{min-height:86px}
+    .status{margin-top:8px;padding:8px 10px;border-radius:10px;border:1px solid var(--edge2);background:rgba(255,255,255,.04);font-size:13px}
+    .thumbs{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:12px}
+    .thumbWrap{position:relative;border:1px solid var(--edge2);border-radius:12px;overflow:hidden;background:#0e1624}
+    .thumb{width:100%}
+    .del{position:absolute;right:8px;bottom:8px}
+    .tag{color:var(--muted);font-size:12px}
+    #errbar{position:fixed;left:12px;bottom:12px;z-index:99;display:none;padding:10px 12px;border-radius:12px;border:1px solid #7a2b2b;background:#2b0d0d;color:#ffd7d7}
   </style>
 </head>
 <body>
   <div id="errbar"></div>
-
   <header>
     <div class="bar">
-      <div class="title">FireOps SIM — Instructor</div>
-      <div class="pill" id="sessionBadge">session: default</div>
-      <div class="pill" id="helloPill">hello: —</div>
-      <div class="pill" id="status">idle</div>
+      <div class="brand">FireOps SIM — Admin</div>
+      <div class="spacer"></div>
+      <div id="env" class="tag"></div>
     </div>
   </header>
 
   <main>
+    <!-- Create / Add Photo -->
     <section class="card">
-      <h3 style="margin:0">Choose Session & Scenario</h3>
-      <div style="display:grid;gap:8px;margin-top:6px">
-        <div>
-          <label>Session</label>
-          <input id="sessionInput" class="input" placeholder="e.g., station5" />
-        </div>
-        <div>
-          <label>Scenario</label>
-          <select id="scenarioSelect" class="input">
-            <option value="">Loading…</option>
-          </select>
-        </div>
-        <div style="display:flex;gap:8px;flex-wrap:wrap">
-          <button class="btn" id="reloadBtn">Reload Scenarios</button>
-          <button class="btn" id="subscribeBtn">Subscribe</button>
-          <button class="btn" id="clearBtn">Clear Users</button>
-        </div>
+      <h3 style="margin:0">Create Scenario</h3>
+      <div class="tag">Writes to <code>scenarios/**</code> and <code>geophoto/scenarios/**</code>. Photos saved under <code>scenarios/&lt;id&gt;/&lt;ts&gt;.jpg</code>.</div>
+
+      <div style="margin-top:10px">
+        <label>Scenario Name</label>
+        <input class="input" id="scenarioName" placeholder="e.g., House Fire — Elm St.">
+      </div>
+      <div style="margin-top:10px">
+        <label>Dispatch (optional)</label>
+        <textarea id="dispatchInfo" placeholder="Engine 1, Engine 2, Medic 1…"></textarea>
       </div>
 
-      <h4 style="margin:12px 0 6px">Slides</h4>
-      <div id="thumbs" class="grid"></div>
+      <div style="margin-top:10px;display:flex;gap:10px;flex-wrap:wrap;align-items:center">
+        <button class="btn" id="createNow">Create Scenario</button>
+        <span id="createStatus" class="tag">idle</span>
+      </div>
+
+      <hr style="border-color:rgba(255,255,255,.08)">
+
+      <div style="margin-top:6px">
+        <label>Add Photo Stop</label>
+        <input type="file" id="photoInput" accept="image/*" capture="environment">
+      </div>
+      <div style="display:grid;gap:10px;grid-template-columns:1fr 1fr;margin-top:8px">
+        <div><label>Caption (optional)</label><input class="input" id="caption" placeholder="e.g., Alpha side"></div>
+        <div><label>Radius (m)</label><input class="input" id="radius" type="number" min="5" max="1000" value="50"></div>
+      </div>
+      <div style="margin-top:10px;display:flex;gap:10px;flex-wrap:wrap;align-items:center">
+        <button class="btn" id="savePhoto">Save Photo</button>
+        <span id="saveStatus" class="tag">waiting</span>
+      </div>
+
+      <div id="steps" class="status">—</div>
+      <div class="thumbs" id="thumbs" style="margin-top:10px"></div>
     </section>
 
-    <section class="card viewer">
-      <h3 style="margin:0">Live Preview</h3>
-      <div class="frame">
-        <img id="currentImg" alt="current" />
-      </div>
-      <div id="currentCaption" style="min-height:1.4em;color:#dfe8ff"></div>
+    <!-- Existing scenarios -->
+    <section class="card">
+      <h3 style="margin:0">Existing</h3>
+      <div id="listStatus" class="tag">Loading…</div>
+      <div id="scenarioList" style="margin-top:8px"></div>
     </section>
   </main>
 
-  <!-- Firebase (modules) -->
-  <script type="module">
-    /* ---------- tiny helpers ---------- */
-    const $ = (id)=>document.getElementById(id);
-    const say = (m)=>{ $('status').textContent = m; };
-    const err = (m)=>{ const b=$('errbar'); b.textContent=m; b.style.display='block'; setTimeout(()=> b.style.display='none', 4200); };
-    const qs = new URLSearchParams(location.search);
+  <!-- Firebase compat SDKs -->
+  <script src="https://www.gstatic.com/firebasejs/10.12.4/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.4/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.4/firebase-database-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.4/firebase-storage-compat.js"></script>
 
-    /* ---------- Firebase ---------- */
-    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-app.js";
-    import { getDatabase, ref as dbRef, get, set, onValue } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-database.js";
-    import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-auth.js";
-    import { getStorage, ref as stRef, getDownloadURL } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-storage.js";
-
-    const firebaseConfig = {
+  <script>
+  (function(){
+    /* ---------------- Firebase config & constants ---------------- */
+    var firebaseConfig = {
       apiKey:"AIzaSyDM6DpRSeZueVKRpbyJyDmhf8WY66KyCDk",
       authDomain:"dailyquiz-d5279.firebaseapp.com",
       databaseURL:"https://dailyquiz-d5279-default-rtdb.firebaseio.com",
       projectId:"dailyquiz-d5279",
-      storageBucket:"dailyquiz-d5279.appspot.com",            // real bucket
+      storageBucket:"dailyquiz-d5279.appspot.com",  // must match viewer bucket
       appId:"1:94577748034:web:c032d3a1d72db1313de5db",
       measurementId:"G-19DVN7NNH7"
     };
-    const appFB = initializeApp(firebaseConfig);
-    const db = getDatabase(appFB);
-    const storage = getStorage(appFB, "gs://dailyquiz-d5279.appspot.com");
-    const auth = getAuth(appFB);
+    firebase.initializeApp(firebaseConfig);
 
-    async function ensureAuthed(){
-      if (auth.currentUser) return auth.currentUser;
-      await signInAnonymously(auth);
-      await new Promise(res => onAuthStateChanged(auth, u=>u && res(), { once:true }));
-      return auth.currentUser;
+    var db = firebase.database();
+    var storage = firebase.storage(); // uses fixed bucket above
+    var auth = firebase.auth();
+    var FORCE_BUCKET = firebaseConfig.storageBucket || (firebaseConfig.projectId + '.appspot.com');
+
+    document.getElementById('env').textContent = 'DB: ' + firebaseConfig.databaseURL + ' • Bucket: ' + FORCE_BUCKET;
+
+    /* ---------------- DOM helpers ---------------- */
+    var $ = function(id){ return document.getElementById(id); };
+    var steps = $('steps'), errbar=$('errbar');
+    function setStep(m){ steps.textContent = m; }
+    function setErr(m){ errbar.textContent=m; errbar.style.display='block'; }
+
+    /* ---------------- Auth ---------------- */
+    function ensureAuthed(){
+      if (auth.currentUser) return Promise.resolve(auth.currentUser);
+      return auth.signInAnonymously().then(function(){
+        return new Promise(function(resolve){
+          var off = auth.onAuthStateChanged(function(u){ if(u){ off(); resolve(u); } });
+        });
+      });
     }
 
-    /* ---------- Paths (must match viewer) ---------- */
-    const FORCE_BUCKET = "dailyquiz-d5279.appspot.com";
-    const manualPath = (s)=>`geophoto/manual/${s}/current`;
-    const helloPath  = (s)=>`geophoto/manual/${s}/hello`;
+    /* ---------------- Image pipeline (phone-friendly) ---------------- */
+    // 1280px max edge, JPEG q=0.75
+    function readAsDataURL(file){ return new Promise(function(res,rej){ var r=new FileReader(); r.onload=function(){res(r.result)}; r.onerror=rej; r.readAsDataURL(file); }); }
+    function loadImage(src){ return new Promise(function(res,rej){ var i=new Image(); i.onload=function(){res(i)}; i.onerror=rej; i.src=src; }); }
+    function toCanvas(img,max){ max=max||1280; var c=document.createElement('canvas'); var s=Math.min(max/img.width,max/img.height,1); c.width=Math.round(img.width*s); c.height=Math.round(img.height*s); c.getContext('2d').drawImage(img,0,0,c.width,c.height); return c; }
+    function canvasToDataURL(c){ return c.toDataURL('image/jpeg',0.75); }
+    function dataURLtoBlob(u){ var p=u.split(','), b64=p[1]; var mime=(/data:(.*?);base64/).exec(p[0])[1]; var bin=atob(b64), len=bin.length, a=new Uint8Array(len); for(var i=0;i<len;i++) a[i]=bin.charCodeAt(i); return new Blob([a],{type:mime}); }
 
-    /* ---------- Normalize stops like the viewer ---------- */
+    /* ---------------- Elements ---------------- */
+    var scenarioName=$('scenarioName'), dispatchInfo=$('dispatchInfo');
+    var photoInput=$('photoInput'), caption=$('caption'), radius=$('radius');
+    var createNow=$('createNow'), createStatus=$('createStatus');
+    var savePhoto=$('savePhoto'), saveStatus=$('saveStatus');
+    var thumbs=$('thumbs'), scenarioList=$('scenarioList'), listStatus=$('listStatus');
+
+    var currentScenarioId=null, localStops=[];
+
+    /* ---------------- DB path helpers (must match viewer) ---------------- */
+    function scenarioBase(id){
+      return {
+        id:id,
+        title: (scenarioName && scenarioName.value||'').trim(),
+        dispatch: (dispatchInfo && dispatchInfo.value||'').trim(),
+        description: (dispatchInfo && dispatchInfo.value||'').trim(),
+        createdAt: Date.now(),
+        active: true,
+        stops: []
+      };
+    }
+    function mirrorWrite(obj){
+      // write to both trees so the viewer can see either
+      var multi={};
+      Object.keys(obj).forEach(function(k){ multi[k]=obj[k]; });
+      return db.ref().update(multi);
+    }
+
+    /* ---------------- Create scenario (old flow) ---------------- */
+    function createScenarioRecord(){
+      var name=(scenarioName && scenarioName.value||'').trim();
+      if(!name){ return Promise.reject(new Error('Please enter a Scenario Name')); }
+      return ensureAuthed().then(function(){
+        var id = db.ref('scenarios').push().key;
+        var base = scenarioBase(id);
+        var multi={};
+        multi['scenarios/'+id] = base;
+        multi['geophoto/scenarios/'+id] = base;
+        return mirrorWrite(multi).then(function(){ currentScenarioId=id; return id; });
+      });
+    }
+
+    createNow.addEventListener('click', function(){
+      createStatus.textContent='creating…';
+      createScenarioRecord()
+        .then(function(){ createStatus.textContent='created ✓'; setStep('Scenario created. You can now add photos.'); loadList(); })
+        .catch(function(e){ createStatus.textContent='error'; setErr(e && e.message || String(e)); setStep('Create failed.'); });
+    }, false);
+
+    /* ---------------- Save photo (upload + mirror DB) ---------------- */
+    savePhoto.addEventListener('click', function(){
+      saveStatus.textContent='preparing…'; setStep('Checking selection…');
+      var file = photoInput && photoInput.files && photoInput.files[0];
+      if(!file){ saveStatus.textContent='no file'; setStep('Pick a photo first.'); return; }
+
+      var ensureScenario = currentScenarioId ? Promise.resolve(currentScenarioId) : (function(){
+        if (!scenarioName || !scenarioName.value.trim()){
+          scenarioName.value = 'New Scenario ' + new Date().toLocaleString();
+        }
+        createStatus.textContent='creating…';
+        return createScenarioRecord().then(function(id){ createStatus.textContent='created ✓'; return id; });
+      })();
+
+      ensureScenario
+      .then(function(){
+        setStep('Compressing photo…');
+        return readAsDataURL(file).then(loadImage).then(function(img){ return canvasToDataURL(toCanvas(img,1280)); });
+      })
+      .then(function(dataURL){
+        setStep('Uploading to Cloud Storage…');
+        return ensureAuthed().then(function(){
+          var ts = Date.now();
+          var storagePath = 'scenarios/'+currentScenarioId+'/'+ts+'.jpg';
+          var ref = storage.ref(storagePath);
+          var meta={ contentType:'image/jpeg', cacheControl:'public,max-age=31536000,immutable' };
+          return new Promise(function(resolve,reject){
+            var task = ref.put(dataURLtoBlob(dataURL), meta);
+            var killer = setTimeout(function(){ try{task.cancel();}catch(_){ } reject(new Error('Upload timeout')); }, 60000);
+            task.on('state_changed',
+              function(s){ var pct=Math.round(100*s.bytesTransferred/s.totalBytes); saveStatus.textContent='upload '+pct+'%'; },
+              function(err){ clearTimeout(killer); reject(err); },
+              function(){ clearTimeout(killer); ref.getDownloadURL().then(function(url){
+                resolve({ imageURL:url, storagePath:storagePath, gsUri:'gs://'+FORCE_BUCKET+'/'+storagePath, ts:ts });
+              }, reject); }
+            );
+          });
+        });
+      })
+      .then(function(fileInfo){
+        setStep('Saving to database…');
+        var r = Math.max(5, Math.min(1000, parseInt((radius && radius.value)||'50',10) || 50));
+        var stop = {
+          type:'photo',
+          title:'',
+          caption:(caption && caption.value)||'',
+          imageURL:fileInfo.imageURL,
+          storagePath:fileInfo.storagePath,
+          gsUri:fileInfo.gsUri,
+          radiusMeters:r,
+          overlays:[],
+          at:fileInfo.ts
+        };
+        localStops.push(stop);
+
+        var multi={};
+        multi['scenarios/'+currentScenarioId+'/stops'] = localStops;
+        multi['geophoto/scenarios/'+currentScenarioId+'/stops'] = localStops;
+        return mirrorWrite(multi).then(function(){ return stop; });
+      })
+      .then(function(){
+        saveStatus.textContent='saved ✓'; setStep('Photo saved.');
+        if(caption) caption.value=''; if(radius) radius.value=50; if(photoInput) photoInput.value='';
+        renderThumbs(); loadList();
+      })
+      .catch(function(e){
+        saveStatus.textContent='error'; setStep('Save failed.'); setErr(e && e.message || String(e));
+      });
+    }, false);
+
+    /* ---------------- Thumbs & delete ---------------- */
+    function renderThumbs(){
+      if(!thumbs) return;
+      thumbs.innerHTML='';
+      for(var i=0;i<localStops.length;i++){
+        var s=localStops[i];
+        var w=document.createElement('div'); w.className='thumbWrap';
+        var img=document.createElement('img'); img.className='thumb'; img.src=s.imageURL || ''; img.alt=s.caption||('Stop '+(i+1));
+        var del=document.createElement('button'); del.className='btn del'; del.textContent='Delete';
+        (function(idx,stop){
+          del.onclick=function(){
+            if(!confirm('Delete this photo?')) return;
+            ensureAuthed()
+              .then(function(){ if(stop && stop.storagePath){ return storage.ref(stop.storagePath).delete()["catch"](function(){}); }})
+              .then(function(){
+                localStops.splice(idx,1);
+                var multi={};
+                multi['scenarios/'+currentScenarioId+'/stops'] = localStops;
+                multi['geophoto/scenarios/'+currentScenarioId+'/stops'] = localStops;
+                return mirrorWrite(multi);
+              })
+              .then(renderThumbs)
+              .catch(function(e){ setErr(e && e.message || String(e)); });
+          };
+        })(i,s);
+        w.appendChild(img); w.appendChild(del); thumbs.appendChild(w);
+      }
+    }
+
+    /* ---------------- List scenarios (merge like viewer) ---------------- */
     function normalizeStops(stopsLike){
       if(!stopsLike) return [];
-      const arr = Array.isArray(stopsLike) ? stopsLike : Object.values(stopsLike);
-      return arr.map(s=>({
-        title: s.title||s.name||'',
-        caption: s.caption||s.text||'',
-        imageURL: s.imageURL||s.url||s.photoURL||'',
-        storagePath: s.storagePath||'',
-        gsUri: s.gsUri||'',
-        imageData: s.imageData||null
-      }));
+      var arr = Array.isArray(stopsLike) ? stopsLike : Object.values(stopsLike);
+      return arr.map(function(s){ return { imageURL:s.imageURL||s.url||'', storagePath:s.storagePath||'', gsUri:s.gsUri||'', caption:s.caption||'', at:s.at||0 }; });
     }
 
-    /* Convert various forms to a shareable URL for the viewer */
-    async function toShareableURL(stop){
-      if (stop.imageURL) return stop.imageURL;
-      if (stop.gsUri){
-        const ref = stRef(storage, stop.gsUri);
-        return await getDownloadURL(ref);
-      }
-      if (stop.storagePath){
-        const ref = stRef(storage, `gs://${FORCE_BUCKET}/${stop.storagePath}`);
-        return await getDownloadURL(ref);
-      }
-      if (stop.imageData && stop.imageData.data){
-        const fmt = (stop.imageData.format==='jpeg'||stop.imageData.format==='jpg')?'jpeg':'png';
-        return `data:image/${fmt};base64,${stop.imageData.data}`;
-      }
-      return '';
+    function loadList(){
+      listStatus.textContent='Loading…';
+      ensureAuthed().then(function(){
+        // Pull both trees then merge by id (like the viewer does)
+        return Promise.all([
+          fetch(firebaseConfig.databaseURL + '/geophoto/scenarios.json').then(function(r){return r.ok?r.json():{};})["catch"](function(){return{};}),
+          fetch(firebaseConfig.databaseURL + '/scenarios.json').then(function(r){return r.ok?r.json():{};})["catch"](function(){return{};})
+        ]);
+      }).then(function(arr){
+        var geo = arr[0]||{}, plain = arr[1]||{}, map = {}, k;
+        for(k in geo){ if(geo.hasOwnProperty(k)) map[k]=geo[k]; }
+        for(k in plain){ if(plain.hasOwnProperty(k) && !map[k]) map[k]=plain[k]; }
+        var list = Object.keys(map).map(function(id){ var s=map[id]||{}; return { id:id, title:s.title||'(untitled)', createdAt:s.createdAt||0, active:s.active!==false, stops:normalizeStops(s.stops) }; });
+        list.sort(function(a,b){ return (b.createdAt||0)-(a.createdAt||0); });
+
+        listStatus.textContent = list.length ? (list.length + ' scenario(s)') : 'No scenarios yet.';
+        scenarioList.innerHTML='';
+        list.forEach(function(sc){
+          var row=document.createElement('div'); row.style.cssText='display:flex;align-items:center;justify-content:space-between;padding:10px;border:1px solid var(--edge);border-radius:12px;margin-bottom:8px';
+          var L=document.createElement('div'); L.innerHTML='<div style="font-weight:800">'+sc.title+'</div><div class="tag">Stops: '+(sc.stops.length||0)+'</div>';
+          var R=document.createElement('div');
+
+          var open=document.createElement('button'); open.className='btn secondary'; open.textContent='Open';
+          open.onclick=function(){
+            currentScenarioId=sc.id;
+            scenarioName.value=sc.title||'';
+            dispatchInfo.value=''; // not merging here, optional
+            localStops=sc.stops||[];
+            renderThumbs(); window.scrollTo({top:0,behavior:'smooth'});
+          };
+
+          var toggle=document.createElement('button'); toggle.className='btn secondary'; toggle.style.marginLeft='8px'; toggle.textContent=sc.active?'Deactivate':'Activate';
+          toggle.onclick=function(){
+            ensureAuthed().then(function(){
+              var multi={}; multi['scenarios/'+sc.id+'/active']=!sc.active; multi['geophoto/scenarios/'+sc.id+'/active']=!sc.active;
+              return mirrorWrite(multi).then(loadList);
+            });
+          };
+
+          var del=document.createElement('button'); del.className='btn'; del.style.marginLeft='8px'; del.textContent='Delete';
+          del.onclick=function(){
+            if(!confirm('Delete this scenario?')) return;
+            ensureAuthed().then(function(){
+              var p=Promise.resolve();
+              (sc.stops||[]).forEach(function(s){ if(s && s.storagePath){ p=p.then(function(){ return storage.ref(s.storagePath).delete()["catch"](function(){}); }); }});
+              return p.then(function(){
+                var multi={}; multi['scenarios/'+sc.id]=null; multi['geophoto/scenarios/'+sc.id]=null;
+                return mirrorWrite(multi);
+              }).then(loadList);
+            });
+          };
+
+          R.appendChild(open); R.appendChild(toggle); R.appendChild(del);
+          row.appendChild(L); row.appendChild(R); scenarioList.appendChild(row);
+        });
+      })["catch"](function(e){ listStatus.textContent='Error'; setErr(e && e.message || String(e)); });
     }
-
-    /* ---------- UI wiring ---------- */
-    const sessionInput   = $('sessionInput');
-    const scenarioSelect = $('scenarioSelect');
-    const thumbsEl       = $('thumbs');
-    const currentImg     = $('currentImg');
-    const currentCaption = $('currentCaption');
-    const sessionBadge   = $('sessionBadge');
-    const helloPill      = $('helloPill');
-
-    // prefill session from ?session=
-    sessionInput.value = (qs.get('session') || 'default').trim();
-
-    async function loadScenarios(){
-      await ensureAuthed();
-      say('loading…');
-
-      const out = [];
-
-      // Prefer geophoto/scenarios, then scenarios (same as viewer)
-      try{
-        const a = await fetch('https://dailyquiz-d5279-default-rtdb.firebaseio.com/geophoto/scenarios.json',{cache:'no-store'});
-        if(a.ok){
-          const ja = await a.json()||{};
-          for(const [id,s] of Object.entries(ja)){ out.push({ id, ...(s||{}), stops: normalizeStops(s?.stops) }); }
-        }
-      }catch{}
-      try{
-        const b = await fetch('https://dailyquiz-d5279-default-rtdb.firebaseio.com/scenarios.json',{cache:'no-store'});
-        if(b.ok){
-          const jb = await b.json()||{};
-          for(const [id,s] of Object.entries(jb)){ if(!out.some(x=>x.id===id)){ out.push({ id, ...(s||{}), stops: normalizeStops(s?.stops) }); } }
-        }
-      }catch{}
-
-      out.sort((a,b)=>(b.createdAt||0)-(a.createdAt||0));
-
-      // Populate dropdown
-      scenarioSelect.innerHTML = '<option value="">Select a scenario…</option>';
-      out.forEach(sc=>{
-        const o=document.createElement('option');
-        o.value=sc.id; o.textContent=sc.title || sc.name || '(untitled)';
-        o.dataset.dispatch = sc.dispatch || sc.notes || '';
-        o.dataset.stops = JSON.stringify(sc.stops||[]);
-        scenarioSelect.appendChild(o);
-      });
-
-      say(out.length ? `loaded ${out.length}` : 'no scenarios');
-      // preselect ?id
-      const pre = qs.get('id'); if (pre && out.some(s=>s.id===pre)) scenarioSelect.value = pre;
-
-      renderThumbs();
-    }
-
-    function renderThumbs(){
-      thumbsEl.innerHTML = '';
-      const id = scenarioSelect.value;
-      if (!id) return;
-
-      const opt = scenarioSelect.selectedOptions[0];
-      const stops = JSON.parse(opt.dataset.stops||'[]');
-      const dispatchText = (opt.dataset.dispatch||'').trim();
-
-      // Dispatch slide card (no image)
-      if (dispatchText){
-        const d = document.createElement('div');
-        d.className='thumb'; d.title='Dispatch';
-        const imgWrap=document.createElement('div'); imgWrap.className='img noimg'; imgWrap.textContent='Dispatch';
-        const cap = document.createElement('div'); cap.className='tcap'; cap.innerHTML=`<strong>Dispatch</strong><br>${dispatchText}`;
-        d.appendChild(imgWrap); d.appendChild(cap);
-        d.addEventListener('click', ()=> pushFrame(sessionInput.value.trim().toLowerCase()||'default', {title:'Dispatch', caption:dispatchText, imageURL:''}));
-        thumbsEl.appendChild(d);
-      }
-
-      // Photo stops
-      stops.forEach((st)=>{
-        const card=document.createElement('div'); card.className='thumb';
-        const imgWrap=document.createElement('div'); imgWrap.className='img';
-        const img=document.createElement('img'); img.alt=st.title||'';
-        img.src = st.imageURL || ''; imgWrap.appendChild(img);
-        const cap=document.createElement('div'); cap.className='tcap';
-        cap.innerHTML=`<strong>${st.title||'Untitled'}</strong><br>${st.caption||''}`;
-        card.appendChild(imgWrap); card.appendChild(cap);
-        card.addEventListener('click', ()=> pushFrame(sessionInput.value.trim().toLowerCase()||'default', st));
-        thumbsEl.appendChild(card);
-      });
-    }
-
-    /* Live subscribe to show what users will see (nice for confidence) */
-    let currentRef = null, helloRef = null;
-    function subscribe(sessionRaw){
-      const session = (sessionRaw||'default').trim().toLowerCase();
-      $('sessionBadge').textContent = 'session: ' + session;
-
-      if(currentRef) currentRef.off();
-      if(helloRef)   helloRef.off();
-
-      currentRef = dbRef(db, manualPath(session));
-      helloRef   = dbRef(db, helloPath(session));
-
-      onValue(helloRef, snap=>{
-        const v=snap.val()||{}; helloPill.textContent = 'hello: ' + (v.instructorPing ? new Date(v.instructorPing).toLocaleTimeString() : '—');
-      });
-
-      onValue(currentRef, snap=>{
-        const v = snap.val();
-        if (!v || v.clear){
-          currentImg.src=''; currentCaption.textContent=''; say('Waiting…'); return;
-        }
-        currentImg.src = v.image || v.imageURL || '';
-        currentCaption.textContent = (v.title ? (v.title + ' — ') : '') + (v.caption || '');
-        say('Showing: ' + (v.title || '(untitled)'));
-      });
-    }
-
-    /* Send a frame exactly how the viewer expects it */
-    async function pushFrame(sessionRaw, stop){
-      const session = (sessionRaw||'default').trim().toLowerCase();
-      await ensureAuthed();
-
-      // heartbeat
-      await set(dbRef(db, helloPath(session)), { instructorPing: Date.now() });
-
-      // decide the best shareable image
-      const shareURL = await toShareableURL(stop);
-
-      const payload = {
-        kind: 'slide',
-        ts: Date.now(),
-        title: stop.title || '',
-        caption: stop.caption || '',
-        // The viewer accepts either field; include both for robustness
-        imageURL: shareURL,
-        image: shareURL.startsWith('data:') ? shareURL : ''  // only put data URLs into "image"
-      };
-
-      try{
-        await set(dbRef(db, manualPath(session)), payload);
-        say('Sent: ' + (payload.title || '(untitled)'));
-      }catch(e){
-        err('Error sending frame: ' + (e.message||e));
-      }
-    }
-
-    async function clearUsers(sessionRaw){
-      const session = (sessionRaw||'default').trim().toLowerCase();
-      await ensureAuthed();
-      try{
-        await set(dbRef(db, helloPath(session)), { instructorPing: Date.now() });
-        await set(dbRef(db, manualPath(session)), { clear:true, ts: Date.now() });
-        say('Cleared');
-      }catch(e){
-        err('Error clearing: '+(e.message||e));
-      }
-    }
-
-    // Wire controls
-    $('reloadBtn').onclick = ()=> loadScenarios();
-    $('subscribeBtn').onclick = ()=> subscribe(sessionInput.value);
-    $('clearBtn').onclick = ()=> clearUsers(sessionInput.value);
-    $('scenarioSelect').onchange = renderThumbs;
 
     // boot
-    (async ()=>{
-      try{
-        await ensureAuthed();
-      }catch(_){}
-      await loadScenarios();
-      subscribe(sessionInput.value);
-      // send a heartbeat every 20s while the page is open
-      setInterval(()=> set(dbRef(db, helloPath((sessionInput.value||'default').trim().toLowerCase())), { instructorPing: Date.now() })["catch"](()=>{}), 20000);
-    })();
+    loadList();
+  })();
   </script>
 </body>
 </html>
