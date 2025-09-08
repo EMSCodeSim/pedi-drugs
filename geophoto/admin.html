@@ -37,6 +37,7 @@
     .hint{font-size:12px;color:var(--muted);overflow-wrap:anywhere}
     .grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
     .thumb{width:100%;aspect-ratio:16/10;object-fit:cover;border-radius:12px;border:1px solid rgba(255,255,255,.14);background:#0a1727}
+    .thumb.na{display:grid;place-items:center;font-size:12px;color:#9fb2d6}
     .section{padding:10px;border:1px dashed rgba(255,255,255,.14);border-radius:12px;background:rgba(255,255,255,.02)}
     .hidden{display:none !important}
     #snack{position:fixed;left:12px;bottom:12px;z-index:99;display:none;padding:10px 12px;border-radius:12px;border:1px solid #2c7a4b;background:#0f2a19;color:#d8ffe2}
@@ -46,8 +47,6 @@
     @keyframes spin{to{transform:rotate(360deg)}}
     @media (max-width:840px){ main{grid-template-columns:1fr} .grid{grid-template-columns:1fr} }
     a[aria-disabled="true"]{pointer-events:none;opacity:.5}
-
-    /* Progress bar */
     .bar{height:10px;border-radius:8px;background:#0d1727;border:1px solid rgba(255,255,255,.14);overflow:hidden}
     .bar>span{display:block;height:100%;width:0;background:linear-gradient(90deg,#2484ff,#63dbff)}
   </style>
@@ -66,7 +65,6 @@
   </div>
 
   <main>
-    <!-- LEFT: 3-step guided flow -->
     <section class="card">
       <h3 style="margin:0 0 8px">New Scenario</h3>
 
@@ -149,32 +147,28 @@
       </div>
     </section>
 
-    <!-- RIGHT: tips / debug -->
     <section class="card">
       <h3 style="margin:0 0 8px">Tips</h3>
       <ul style="margin:8px 0 0 14px; padding:0 0 0 4px; line-height:1.5">
-        <li>Step 2 stays hidden until you create the scenario in Step 1.</li>
-        <li>If upload fails with <code>storage/unauthorized</code>, check **Storage rules** or **App Check**.</li>
-        <li>HEIC on iOS: if compression fails, we upload the original file automatically.</li>
+        <li>If you see <code>storage/unauthorized</code> or <code>permission-denied</code>, fix Storage rules or enable App Check in this page.</li>
+        <li>If your phone saves **HEIC**, we’ll upload the original if conversion fails.</li>
       </ul>
       <hr style="border:none;height:1px;background:rgba(255,255,255,.08);margin:12px 0">
       <div id="debug" class="hint"></div>
     </section>
   </main>
 
-  <!-- Firebase (ES Modules) -->
   <script type="module">
     // ---------- helpers ----------
     const $ = (id)=>document.getElementById(id);
     const show = (el, on)=> (typeof el==='string' ? $(el) : el).classList.toggle('hidden', !on);
     const snack = (m)=>{ const b=$('snack'); b.textContent=m; b.style.display='block'; setTimeout(()=>b.style.display='none', 2400); };
-    const errBar= (m)=>{ const b=$('errbar'); b.textContent=m; b.style.display='block'; setTimeout(()=>b.style.display='none', 6000); };
-    const loading = (on)=>{ $('loader').style.display = on ? 'grid' : 'none'; };
+    const errBar= (m)=>{ const b=$('errbar'); b.textContent=m; b.style.display='block'; setTimeout(()=>b.style.display='none', 7000); };
     const setKV = (id, t)=> $(id).textContent = t;
 
     // ---------- Firebase ----------
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-app.js";
-    // App Check FIRST if you enforce it
+    // If App Check is enforced for Storage/DB, uncomment next lines and add your site key:
     // import { initializeAppCheck, ReCaptchaV3Provider } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-app-check.js";
     import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-auth.js";
     import { getDatabase, ref as dbRef, get, push, update } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-database.js";
@@ -185,13 +179,11 @@
       authDomain:"dailyquiz-d5279.firebaseapp.com",
       databaseURL:"https://dailyquiz-d5279-default-rtdb.firebaseio.com",
       projectId:"dailyquiz-d5279",
-      storageBucket:"dailyquiz-d5279.appspot.com", // correct Storage bucket
+      storageBucket:"dailyquiz-d5279.appspot.com",
       appId:"1:94577748034:web:c032d3a1d72db1313de5db",
       measurementId:"G-19DVN7NNH7"
     };
-
     const app = initializeApp(firebaseConfig);
-    // // UNCOMMENT if App Check is enforced:
     // self.FIREBASE_APPCHECK_DEBUG_TOKEN = true; // dev only
     // initializeAppCheck(app, { provider: new ReCaptchaV3Provider('YOUR_RECAPTCHA_V3_SITE_KEY'), isTokenAutoRefreshEnabled: true });
 
@@ -209,21 +201,26 @@
 
     // ---------- image pipeline ----------
     const FULL_MAX = 1600, THUMB_MAX = 480, QUALITY = 0.82;
+
     async function fileToBitmap(file){
+      // Try ImageBitmap, then HTMLImage; if both fail (e.g., HEIC on some browsers), throw.
       try{
         if ('createImageBitmap' in window){
-          return await createImageBitmap(file, { imageOrientation: 'from-image' });
+          return await createImageBitmap(file, { imageOrientation:'from-image' });
         }
-      }catch(e){ /* fall through */ }
+      }catch{}
       const url = URL.createObjectURL(file);
-      const img = new Image(); img.decoding='async'; img.src=url; await img.decode(); URL.revokeObjectURL(url);
-      // shim bitmap object for downstream
-      img.width = img.naturalWidth; img.height = img.naturalHeight;
-      return img;
+      try{
+        const img = new Image(); img.decoding='async'; img.src=url; await img.decode();
+        img.width = img.naturalWidth; img.height = img.naturalHeight;
+        return img;
+      } finally {
+        URL.revokeObjectURL(url);
+      }
     }
     const scale = (w,h,max)=>{ const s=Math.min(1,max/Math.max(w,h)); return {w:Math.round(w*s),h:Math.round(h*s)}; };
     async function toBlob(bmp,maxEdge,quality=QUALITY,type='image/jpeg'){
-      const w0 = bmp.width || bmp.naturalWidth, h0 = bmp.height || bmp.naturalHeight;
+      const w0=bmp.width||bmp.naturalWidth, h0=bmp.height||bmp.naturalHeight;
       const {w,h}=scale(w0,h0,maxEdge);
       const c=('OffscreenCanvas' in window) ? new OffscreenCanvas(w,h) : Object.assign(document.createElement('canvas'),{width:w,height:h});
       if(!('width' in c)){ c.width=w; c.height=h; }
@@ -252,7 +249,7 @@
     // ---------- Step 1 ----------
     $('createBtn').onclick = async ()=>{
       try{
-        const u = await ensureAuthed();
+        await ensureAuthed();
         const title = $('sTitle').value.trim();
         const dispatch = $('sDispatch').value.trim();
         if (!title){ errBar('Please enter a scenario name.'); return; }
@@ -295,11 +292,27 @@
       if (!file){ return; }
       if (!createdId){ errBar('Create the scenario first.'); return; }
 
-      const bmp = await fileToBitmap(file);
-      $('thumb').src = URL.createObjectURL(file);
+      let bmp=null, previewOK=true;
+      try{
+        bmp = await fileToBitmap(file);
+      }catch{
+        previewOK=false; // e.g., HEIC decode not supported
+      }
+
       pendingFile = file;
-      pendingMeta = { w:(bmp.width||bmp.naturalWidth), h:(bmp.height||bmp.naturalHeight), mb:(file.size/1024/1024).toFixed(2), type:file.type };
-      setKV('imgInfo', `Image: ${pendingMeta.w}×${pendingMeta.h} • ${pendingMeta.mb} MB • ${pendingMeta.type||'image'}`);
+      if (previewOK){
+        const obj = URL.createObjectURL(file);
+        $('thumb').classList.remove('na'); $('thumb').src = obj;
+        // revoke after some time to keep preview displayed
+        setTimeout(()=>URL.revokeObjectURL(obj), 60000);
+        pendingMeta = { w:(bmp.width||bmp.naturalWidth), h:(bmp.height||bmp.naturalHeight), mb:(file.size/1024/1024).toFixed(2), type:file.type };
+        setKV('imgInfo', `Image: ${pendingMeta.w}×${pendingMeta.h} • ${pendingMeta.mb} MB • ${pendingMeta.type||'image'}`);
+      }else{
+        $('thumb').classList.add('na'); $('thumb').removeAttribute('src'); $('thumb').textContent='Preview not available';
+        pendingMeta = { w:null, h:null, mb:(file.size/1024/1024).toFixed(2), type:file.type };
+        setKV('imgInfo', `Image: ${pendingMeta.mb} MB • ${pendingMeta.type||'file'} — preview not available; will upload original`);
+      }
+
       pendingGeo = null;
       setKV('gpsLine', 'GPS: waiting…');
 
@@ -364,22 +377,23 @@
     $('btnRefreshGPS').onclick = ()=> getGPSFix(true);
     $('btnClearGPS').onclick   = ()=>{ pendingGeo=null; setKV('gpsLine','GPS: cleared'); };
 
-    // ---------- Step 3: upload + DB write (with progress & fallbacks) ----------
+    // ---------- Step 3: upload + DB write ----------
     $('saveBtn').onclick = async ()=>{
       if (!(createdId && pendingFile)){ errBar('Need a scenario and a photo.'); return; }
-      $('saveStatus').textContent='preparing image…';
-      show('progWrap', true); setKV('progPct', '0%'); $('progBar').style.width='0%';
 
       try{
-        const u = await ensureAuthed();
+        await ensureAuthed();
+        $('saveStatus').textContent='preparing image…';
+        show('progWrap', true); setKV('progPct', '0%'); $('progBar').style.width='0%';
 
-        // 1) Prepare images (try compressed; if fails, use original)
-        let full, thmb, usedOriginal = false;
+        // 1) Prepare images: prefer JPEG compressed; if any step fails, upload original.
+        let fullBlob=null, thumbBlob=null, imgW=null, imgH=null, usedOriginal=false;
         try{
           const bmp = await fileToBitmap(pendingFile);
-          full = await toBlob(bmp, 1600, 0.82, 'image/jpeg');
-          thmb = await toBlob(bmp, 480, 0.80, 'image/jpeg');
-        }catch(procErr){
+          const full = await toBlob(bmp, FULL_MAX, 0.82, 'image/jpeg');
+          const thmb = await toBlob(bmp, THUMB_MAX, 0.80, 'image/jpeg');
+          fullBlob = full.blob; thumbBlob = thmb.blob; imgW=full.width; imgH=full.height;
+        }catch{
           usedOriginal = true;
         }
 
@@ -391,22 +405,8 @@
         const metaJpg  = { contentType:'image/jpeg', cacheControl:'public,max-age=31536000,immutable' };
         const metaOrig = { contentType: pendingFile.type || 'application/octet-stream', cacheControl:'public,max-age=31536000,immutable' };
 
-        // 3) Upload (resumable with progress)
-        let fullUpload, thumbUpload;
-
-        if (usedOriginal){
-          fullUpload = uploadBytesResumable(fullRef, pendingFile, metaOrig);
-          // make a tiny JPEG thumb from original if possible; if not, skip thumb
-          try{
-            const bmp2 = await fileToBitmap(pendingFile);
-            const t2 = await toBlob(bmp2, 480, 0.80, 'image/jpeg');
-            thumbUpload = uploadBytesResumable(thumbRef, t2.blob, metaJpg);
-          }catch{ /* no thumb */ }
-        }else{
-          fullUpload  = uploadBytesResumable(fullRef, full.blob, metaJpg);
-          thumbUpload = uploadBytesResumable(thumbRef, thmb.blob, metaJpg);
-        }
-
+        // 3) Upload with progress
+        $('saveStatus').textContent='uploading…';
         const watch = (task)=> new Promise((res,rej)=>{
           if(!task){ res(); return; }
           task.on('state_changed',
@@ -419,28 +419,38 @@
           );
         });
 
-        $('saveStatus').textContent='uploading…';
-        await watch(fullUpload);
-        await watch(thumbUpload);
+        let fullTask, thumbTask;
+        if (usedOriginal){
+          fullTask = uploadBytesResumable(fullRef, pendingFile, metaOrig);
+          try{
+            const bmp2 = await fileToBitmap(pendingFile);
+            const t2 = await toBlob(bmp2, THUMB_MAX, 0.80, 'image/jpeg');
+            thumbTask = uploadBytesResumable(thumbRef, t2.blob, metaJpg);
+          }catch{/* skip thumb if still failing */}
+        }else{
+          fullTask  = uploadBytesResumable(fullRef, fullBlob,  metaJpg);
+          thumbTask = uploadBytesResumable(thumbRef, thumbBlob, metaJpg);
+        }
+
+        await watch(fullTask);
+        await watch(thumbTask);
 
         const imageURL = await getDownloadURL(fullRef);
-        let thumbURL   = null;
-        try{ thumbURL = await getDownloadURL(thumbRef); }catch{}
+        let thumbURL=null; try{ thumbURL=await getDownloadURL(thumbRef);}catch{}
 
-        // 4) Update DB
+        // 4) Update DB (mirror to both nodes)
         $('saveStatus').textContent='saving…';
         const snap = await get(dbRef(db, `scenarios/${createdId}`));
         const sc = snap.exists() ? snap.val() : { id: createdId, title: createdTitle, dispatch: createdDispatch, createdAt: Date.now(), active:true, stops: [] };
         const stops = Array.isArray(sc.stops) ? sc.stops : [];
-        const stop = {
+        stops.push({
           type:'photo', title:'', caption:'',
-          imageURL, thumbURL, storagePath:`${basePath}.jpg`, thumbPath: thumbURL ? `scenarios/${createdId}/thumbs/${ts}.jpg` : null,
-          width: usedOriginal ? null : full?.width || null,
-          height: usedOriginal ? null : full?.height || null,
+          imageURL, thumbURL,
+          storagePath:`${basePath}.jpg`, thumbPath: thumbURL ? `scenarios/${createdId}/thumbs/${ts}.jpg` : null,
+          width: imgW, height: imgH,
           lat: pendingGeo?.lat ?? null, lng: pendingGeo?.lng ?? null, accuracy: pendingGeo?.accuracy ?? null,
           at: ts, overlays:[]
-        };
-        stops.push(stop);
+        });
         sc.stops = stops;
 
         const multi = {};
@@ -450,9 +460,9 @@
 
         $('saveStatus').textContent='saved ✓';
         snack('Photo saved to cloud.');
-        // reset for another photo
+        // reset for another
         pendingFile=null; pendingMeta=null; pendingGeo=null;
-        $('thumb').src=''; setKV('imgInfo','Image: —'); setKV('gpsLine','GPS: —');
+        $('thumb').src=''; $('thumb').classList.remove('na'); setKV('imgInfo','Image: —'); setKV('gpsLine','GPS: —');
         setKV('progPct','0%'); $('progBar').style.width = '0%'; show('progWrap', false);
         show('previewWrap', false);
         gateSteps();
@@ -460,14 +470,14 @@
         const code = e?.code || '';
         const msg  = e?.message || String(e);
         $('saveStatus').textContent='error';
-        // Friendly hints
         let hint = '';
         if (/unauthorized|permission|denied/i.test(code+msg)) {
-          hint = ' — Check Storage rules (allow auth users to write "scenarios/**") and App Check enforcement.';
+          hint = ' — Check Storage rules for "scenarios/**" and App Check enforcement.';
         } else if (/appcheck/i.test(msg)) {
-          hint = ' — App Check token missing/invalid; enable App Check in this page or disable enforcement temporarily.';
+          hint = ' — App Check token missing/invalid; enable App Check in this page or disable enforcement.';
         }
         errBar(`Upload failed: ${code || 'error'} — ${msg}${hint}`);
+        console.error('Upload error:', e);
       }
     };
 
