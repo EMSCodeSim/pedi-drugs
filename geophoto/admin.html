@@ -2,418 +2,303 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>FireOps SIM — Scenario Builder</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <meta name="theme-color" content="#0b0f14" />
-  <style>
-    :root{
-      --bg:#0b0f14;--bg2:#0d121c;--panel:#0f1624;
-      --text:#eaf2ff;--muted:#9fb2d6;--edge:rgba(255,255,255,.14);
-    }
-    *{box-sizing:border-box}
-    html,body{
-      margin:0;height:100%;color:var(--text);
-      font-family:system-ui,-apple-system,Segoe UI,Inter,Roboto,Arial,sans-serif;
-      background:
-        radial-gradient(1200px 600px at 12% -8%, rgba(10,132,255,.22), transparent 60%),
-        radial-gradient(1200px 600px at 110% 0%, rgba(255,59,48,.16), transparent 60%),
-        linear-gradient(165deg,var(--bg2),var(--bg) 55%);
-      overflow-x:hidden
-    }
-    /* ---- Header fix: solid color, no blur, isolated ---- */
-    header{
-      position:sticky;top:0;z-index:10;
-      background:#0b0f14;              /* solid */
-      border-bottom:1px solid var(--edge);
-      isolation:isolate;               /* prevent backdrop bleed */
-      -webkit-backface-visibility:hidden;
-    }
-    .bar{
-      max-width:1100px;margin:0 auto;padding:12px;
-      display:flex;gap:10px;align-items:center;justify-content:center
-    }
-    .brand{font-weight:900}
-    main{max-width:1100px;margin:14px auto 30px;padding:0 12px;display:grid;gap:12px}
-    .card{
-      background:linear-gradient(180deg,rgba(255,255,255,.02),transparent 26%),
-                 linear-gradient(180deg,#0f1624,#0e1420);
-      border:1px solid var(--edge);border-radius:16px;padding:14px
-    }
-    .hidden{display:none !important}
-    label{display:block;font-weight:700;margin-top:8px}
-    input,textarea,select{width:100%;padding:10px 12px;border-radius:12px;background:#0b1322;color:#eaf2ff;border:1px solid var(--edge)}
-    textarea{min-height:90px}
-    .row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
-    .btn{appearance:none;border:1px solid var(--edge);background:#132136;color:#fff;border-radius:12px;padding:10px 14px;font-weight:700;cursor:pointer}
-    .btn.ghost{background:transparent}
-    .btn[disabled]{opacity:.6;cursor:not-allowed}
-    .hint{font-size:12px;color:var(--muted)}
-    .barWrap{height:10px;border:1px solid var(--edge);border-radius:8px;background:#0c1322;overflow:hidden}
-    .bar{height:100%;width:0;background:linear-gradient(90deg,#2484ff,#63dbff)}
-    .preview{width:100%;max-height:70vh;display:grid;place-items:center;background:#050e19;border:1px solid var(--edge);border-radius:14px;overflow:hidden}
-    .preview img{max-width:100%;max-height:70vh;object-fit:contain;display:block}
-    /* Gallery */
-    #gallery{display:grid;gap:10px;grid-template-columns:repeat(auto-fill,minmax(120px,1fr))}
-    .gItem{border:1px solid var(--edge);border-radius:12px;overflow:hidden;background:#0b1322}
-    .gItem img{width:100%;height:100%;object-fit:cover;display:block;aspect-ratio:1/1}
-    .gCap{padding:6px 8px;font-size:12px;color:var(--muted)}
-    /* Toast/overlay */
-    #errbar{position:fixed;left:12px;bottom:12px;z-index:99;display:none;padding:10px 12px;border-radius:12px;border:1px solid #7a2b2b;background:#2b0d0d;color:#ffd7d7}
-    #loader{position:fixed;inset:0;display:none;place-items:center;background:rgba(6,12,20,.55);backdrop-filter:blur(2px);z-index:98}
-    .spinner{width:42px;height:42px;border-radius:999px;border:4px solid rgba(255,255,255,.25);border-top-color:#fff;animation:spin 1s linear infinite}
-    @keyframes spin{to{transform:rotate(360deg)}}
-  </style>
 </head>
 <body>
-  <div id="errbar"></div>
-  <div id="loader"><div class="spinner"></div></div>
+<header>FireOps SIM — Scenario Builder</header>
 
-  <header>
-    <div class="bar">
-      <div class="brand">FireOps SIM — Scenario Builder</div>
+<main>
+  <!-- STEP 1: Create Scenario -->
+  <section id="step1">
+    <h2>Step 1 — Create Scenario</h2>
+    <label>Scenario Name *</label>
+    <input id="scName" type="text" placeholder="Example: 2-story house, smoke from roof" required />
+    <label>Dispatch Info (optional)</label>
+    <textarea id="scDispatch" placeholder="E184, 123 Main St, smoke from roof, hydrant at 1st & Oak"></textarea>
+    <label>Geofence radius (meters)</label>
+    <input id="scRadius" type="number" value="5" min="1" />
+    <div id="geoStatus">Location: (checking…)</div>
+    <div style="margin-top:10px">
+      <button id="btnCreateScenario">Create Scenario</button>
     </div>
-  </header>
+  </section>
 
-  <main>
-    <!-- STEP 1 -->
-    <section id="step1" class="card">
-      <h3 style="margin:0">Step 1 — Scenario details</h3>
-      <div class="hint">Enter a name and (optional) dispatch. Create the scenario to continue.</div>
-      <label>Scenario Name</label>
-      <input id="sTitle" placeholder="e.g., House Fire — Elm St.">
-      <label>Dispatch (optional)</label>
-      <textarea id="sDispatch" placeholder="Engine 1, Engine 2, Medic 1…"></textarea>
-      <div class="row" style="margin-top:10px">
-        <button id="createBtn" class="btn">Create Scenario</button>
-        <span id="s1Status" class="hint">idle</span>
-      </div>
-    </section>
+  <!-- STEP 2: Add Photo -->
+  <section id="step2" hidden>
+    <h2>Step 2 — Add Photo (+ GPS)</h2>
+    <div class="file-row">
+      <label class="btn">
+        <input id="fileCamera" type="file" accept="image/*" capture="environment" hidden />
+        📷 Take Photo
+      </label>
+      <label class="btn">
+        <input id="fileLibrary" type="file" accept="image/*" hidden />
+        🖼️ Choose From Library
+      </label>
+      <button id="btnRefreshGPS" class="btn">↻ Refresh GPS</button>
+    </div>
 
-    <!-- STEP 2 -->
-    <section id="step2" class="card hidden">
-      <h3 style="margin:0 0 6px">Step 2 — Add a photo stop</h3>
-      <div class="hint">Take a photo, choose from your photo library, or upload a file. GPS is added automatically.</div>
+    <figure id="previewBox">
+      <img id="preview" alt="Preview" />
+      <figcaption id="previewMeta"></figcaption>
+    </figure>
 
-      <div class="row" style="margin:8px 0 6px">
-        <button id="btnCamera" class="btn">Take Photo</button>
-        <button id="btnLibrary" class="btn">Choose from Library</button>
-        <button id="btnUpload" class="btn">Upload File</button>
-      </div>
-      <input id="inCamera"  type="file" accept="image/*" capture="environment" class="hidden">
-      <input id="inLibrary" type="file" accept="image/*" class="hidden">
-      <input id="inUpload"  type="file" accept="image/*" class="hidden">
+    <div id="progress" class="progress" hidden><div></div></div>
 
-      <div id="workArea" class="hidden">
-        <div class="preview" style="margin:10px 0">
-          <img id="previewImg" alt="preview">
-        </div>
+    <div style="margin-top:8px">
+      <button id="btnSavePhoto" disabled>Save Photo to Cloud</button>
+    </div>
+  </section>
 
-        <div class="row">
-          <div class="hint" id="imgInfo">Image: —</div>
-          <div class="row" style="margin-left:auto">
-            <label for="radius" class="hint">Radius (m)</label>
-            <input id="radius" type="number" min="1" max="1000" value="5" style="width:110px">
-          </div>
-        </div>
+  <!-- Thumbs -->
+  <section id="photos">
+    <h3>Photos in this Scenario</h3>
+    <div id="thumbs" class="thumbs"></div>
+  </section>
+</main>
 
-        <div class="row" style="margin-top:6px">
-          <div id="gpsLine" class="hint">GPS: acquiring…</div>
-        </div>
+<script type="module">
+/* ---------------- Firebase ---------------- */
+import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js';
+import { getStorage, ref as sRef, uploadBytesResumable, getDownloadURL, updateMetadata } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-storage.js';
+import { getDatabase, ref as dRef, push, set, update, onChildAdded } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js';
 
-        <div style="margin-top:10px">
-          <div class="row" style="justify-content:space-between">
-            <span class="hint">Full upload</span><span id="pctFull" class="hint">0%</span>
-          </div>
-          <div class="barWrap"><div id="barFull" class="bar"></div></div>
-          <div class="row" style="justify-content:space-between;margin-top:6px">
-            <span class="hint">Thumbnail</span><span id="pctThumb" class="hint">0%</span>
-          </div>
-          <div class="barWrap"><div id="barThumb" class="bar"></div></div>
-        </div>
+/* Replace with your config (or import your existing app from ./firebase-init.js) */
+const firebaseConfig = {
+  apiKey: "YOUR_API_KEY",
+  authDomain: "YOUR_AUTH_DOMAIN",
+  databaseURL: "YOUR_DB_URL",
+  projectId: "YOUR_PROJECT_ID",
+  storageBucket: "YOUR_STORAGE_BUCKET",
+  appId: "YOUR_APP_ID"
+};
+// If you already have firebase-init.js exporting `app`, you can:
+// import { app } from './firebase-init.js';
+const app = initializeApp(firebaseConfig);
+const storage = getStorage(app);
+const db = getDatabase(app);
 
-        <div class="row" style="margin-top:10px">
-          <button id="saveBtn" class="btn">Save Photo</button>
-          <button id="resetBtn" class="btn ghost">Choose another</button>
-          <span id="saveStatus" class="hint">waiting</span>
-        </div>
+/* ---------------- Elements ---------------- */
+const step1 = document.getElementById('step1');
+const step2 = document.getElementById('step2');
+const scName = document.getElementById('scName');
+const scDispatch = document.getElementById('scDispatch');
+const scRadius = document.getElementById('scRadius');
+const btnCreate = document.getElementById('btnCreateScenario');
+const geoStatus = document.getElementById('geoStatus');
 
-        <div id="afterSave" class="hidden" style="margin-top:8px">
-          <button id="addAnotherBtn" class="btn">Add another photo</button>
-          <span class="hint">Repeat to add more stops.</span>
-        </div>
-      </div>
-    </section>
+const fileCamera = document.getElementById('fileCamera');
+const fileLibrary = document.getElementById('fileLibrary');
+const preview = document.getElementById('preview');
+const previewMeta = document.getElementById('previewMeta');
+const btnSavePhoto = document.getElementById('btnSavePhoto');
+const btnRefreshGPS = document.getElementById('btnRefreshGPS');
+const progress = document.getElementById('progress');
+const progressBar = progress.querySelector('div');
+const thumbs = document.getElementById('thumbs');
 
-    <!-- BOTTOM GALLERY -->
-    <section id="galleryCard" class="card hidden">
-      <h3 style="margin:0 0 6px">Photos in this scenario</h3>
-      <div id="gallery"></div>
-      <div id="galleryEmpty" class="hint">No photos yet.</div>
-    </section>
-  </main>
+/* ---------------- State ---------------- */
+let scenarioId = null;
+let pendingFile = null;
+let lastLocation = null;
 
-  <!-- Firebase (modules) -->
-  <script type="module">
-    const $ = (id)=>document.getElementById(id);
-    const show = (el, on)=> (typeof el==='string'?$(el):el).classList.toggle('hidden', !on);
-    const sayErr = (m)=>{ const b=$('errbar'); b.textContent=m; b.style.display='block'; setTimeout(()=>b.style.display='none', 5000); };
-    const busy = (on)=> $('loader').style.display = on ? 'grid' : 'none';
+/* ---------------- Geolocation ---------------- */
+function formatLoc(loc) {
+  if (!loc) return 'Location: (pending…)';
+  const { coords } = loc;
+  return `Location: ${coords.latitude.toFixed(6)}, ${coords.longitude.toFixed(6)} (±${Math.round(coords.accuracy)}m at ${new Date(loc.timestamp).toLocaleTimeString()})`;
+}
+function getLocationOnce() {
+  return new Promise((resolve, reject) => {
+    if (!navigator.geolocation) return reject(new Error('Geolocation unsupported'));
+    navigator.geolocation.getCurrentPosition(resolve, reject, {
+      enableHighAccuracy: true, maximumAge: 10_000, timeout: 15_000
+    });
+  });
+}
+async function refreshLocationUI() {
+  try {
+    lastLocation = await getLocationOnce();
+    geoStatus.textContent = formatLoc(lastLocation);
+  } catch (e) {
+    geoStatus.textContent = 'Location: unavailable (' + e.message + ')';
+  }
+}
 
-    /* ---------- Firebase ---------- */
-    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-app.js";
-    import { getDatabase, ref as dbRef, push, update, get } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-database.js";
-    import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-auth.js";
-    import { getStorage, ref as stRef, uploadBytesResumable, getDownloadURL } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-storage.js";
+/* ---------------- Image Downscale ---------------- */
+async function downscaleToJpeg(file, maxDim = 1800, quality = 0.78) {
+  // Try createImageBitmap path
+  try {
+    const bitmap = await createImageBitmap(file);
+    const scale = Math.min(1, maxDim / Math.max(bitmap.width, bitmap.height));
+    const w = Math.round(bitmap.width * scale);
+    const h = Math.round(bitmap.height * scale);
+    const canvas = ('OffscreenCanvas' in window) ? new OffscreenCanvas(w, h) : Object.assign(document.createElement('canvas'), { width: w, height: h });
+    if (!('OffscreenCanvas' in window)) { canvas.width = w; canvas.height = h; }
+    const ctx = canvas.getContext('2d', { alpha: false });
+    ctx.drawImage(bitmap, 0, 0, w, h);
+    const blob = await (('convertToBlob' in canvas) ? canvas.convertToBlob({ type: 'image/jpeg', quality }) : new Promise(res => canvas.toBlob(res, 'image/jpeg', quality)));
+    if (bitmap.close) bitmap.close();
+    return { blob, w, h };
+  } catch {
+    // Fallback to HTMLImageElement decode
+    const url = URL.createObjectURL(file);
+    const img = document.createElement('img');
+    await new Promise((res, rej) => { img.onload = res; img.onerror = rej; img.src = url; });
+    const scale = Math.min(1, maxDim / Math.max(img.naturalWidth, img.naturalHeight));
+    const w = Math.round(img.naturalWidth * scale);
+    const h = Math.round(img.naturalHeight * scale);
+    const canvas = document.createElement('canvas');
+    canvas.width = w; canvas.height = h;
+    const ctx = canvas.getContext('2d', { alpha: false });
+    ctx.drawImage(img, 0, 0, w, h);
+    const blob = await new Promise(res => canvas.toBlob(res, 'image/jpeg', quality));
+    URL.revokeObjectURL(url);
+    return { blob, w, h };
+  }
+}
+const makeThumbnail = (file) => downscaleToJpeg(file, 400, 0.7);
 
-    const cfg = {
-      apiKey:"AIzaSyDM6DpRSeZueVKRpbyJyDmhf8WY66KyCDk",
-      authDomain:"dailyquiz-d5279.firebaseapp.com",
-      databaseURL:"https://dailyquiz-d5279-default-rtdb.firebaseio.com",
-      projectId:"dailyquiz-d5279",
-      storageBucket:"dailyquiz-d5279.appspot.com",
-      appId:"1:94577748034:web:c032d3a1d72db1313de5db",
-      measurementId:"G-19DVN7NNH7"
-    };
-    const app = initializeApp(cfg);
-    const db = getDatabase(app);
-    const auth = getAuth(app);
-    const storage = getStorage(app, "gs://dailyquiz-d5279.appspot.com");
+/* ---------------- Upload Flow ---------------- */
+async function uploadPhotoSet(scenarioId, file, loc) {
+  const [main, thumb] = await Promise.all([downscaleToJpeg(file, 1800, 0.78), makeThumbnail(file)]);
+  const basePath = `fireops/${scenarioId}/${Date.now()}`;
+  const mainRef = sRef(storage, `${basePath}.jpg`);
+  const thumbRef = sRef(storage, `${basePath}_400.jpg`);
+  const meta = { contentType: 'image/jpeg', cacheControl: 'public, max-age=86400, immutable' };
 
-    async function ensureAuthed(){
-      if (auth.currentUser) return auth.currentUser;
-      await signInAnonymously(auth);
-      await new Promise(res=> onAuthStateChanged(auth, u=>u && res(), {once:true}));
-      return auth.currentUser;
-    }
-    ensureAuthed().catch(()=>{});
+  progress.hidden = false; progressBar.style.width = '0%';
 
-    /* ---------- Imaging ---------- */
-    const FULL_EDGE=1280, FULL_Q=0.75, THUMB_EDGE=480, THUMB_Q=0.8;
+  const mainTask = uploadBytesResumable(mainRef, main.blob, meta);
+  const thumbTask = uploadBytesResumable(thumbRef, thumb.blob, meta);
 
-    const readAsDataURL = f => new Promise((res,rej)=>{ const r=new FileReader(); r.onload=()=>res(r.result); r.onerror=rej; r.readAsDataURL(f); });
-    const loadImage = src => new Promise((res,rej)=>{ const i=new Image(); i.onload=()=>res(i); i.onerror=rej; i.src=src; });
-    function downscale(img, maxEdge, q){
-      const s = Math.min(1, maxEdge/Math.max(img.width, img.height));
-      const c = document.createElement('canvas'); c.width=Math.round(img.width*s); c.height=Math.round(img.height*s);
-      c.getContext('2d').drawImage(img,0,0,c.width,c.height);
-      return c.toDataURL('image/jpeg', q);
-    }
-    function dataURLtoBlob(u){ const [h,b64]=u.split(','); const mime=(/data:(.*?);base64/).exec(h)[1]; const bin=atob(b64), a=new Uint8Array(bin.length); for(let i=0;i<bin.length;i++) a[i]=bin.charCodeAt(i); return new Blob([a],{type:mime}); }
+  mainTask.on('state_changed', s => {
+    const pct = Math.round(100 * s.bytesTransferred / s.totalBytes);
+    progressBar.style.width = `${pct}%`;
+  });
 
-    /* ---------- State ---------- */
-    let scenarioId=null, pendingFile=null, pendingImg=null, pendingFullDataURL=null, pendingThumbDataURL=null, pendingGeo=null;
-    let localStops=[];
+  const [mainSnap, thumbSnap] = await Promise.all([
+    new Promise(res => mainTask.on('state_changed', null, null, () => res(mainTask.snapshot))),
+    new Promise(res => thumbTask.on('state_changed', null, null, () => res(thumbTask.snapshot))),
+  ]);
 
-    function gate(){
-      show('step2', !!scenarioId);
-      show('galleryCard', !!scenarioId);
-      renderGallery();
-    }
+  const [url, thumbUrl] = await Promise.all([getDownloadURL(mainRef), getDownloadURL(thumbRef)]);
+  await Promise.all([updateMetadata(mainRef, meta), updateMetadata(thumbRef, meta)]);
 
-    /* ---------- Gallery render ---------- */
-    function renderGallery(){
-      const host=$('gallery');
-      const empty=$('galleryEmpty');
-      host.innerHTML='';
-      if(!Array.isArray(localStops) || localStops.length===0){
-        empty.textContent='No photos yet.';
-        show(empty, true);
-        return;
-      }
-      show(empty, false);
-      localStops.forEach((s, i)=>{
-        const card=document.createElement('div'); card.className='gItem';
-        const img=document.createElement('img'); img.src=s.thumbURL||s.imageURL||''; img.alt=s.caption||('Stop '+(i+1));
-        const cap=document.createElement('div'); cap.className='gCap'; cap.textContent=s.caption||('Stop '+(i+1));
-        card.appendChild(img); card.appendChild(cap); host.appendChild(card);
-      });
-    }
+  const photoKey = mainRef.name.replace('.jpg', '');
+  const photoData = {
+    url, thumbUrl,
+    w: main.w, h: main.h,
+    createdAt: Date.now(),
+    gps: loc ? { lat: loc.coords.latitude, lng: loc.coords.longitude, accuracy: loc.coords.accuracy, ts: loc.timestamp } : null
+  };
 
-    /* ---------- Step 1: Create ---------- */
-    $('createBtn').onclick = async ()=>{
-      try{
-        await ensureAuthed();
-        const title=(document.getElementById('sTitle').value||'').trim();
-        if(!title){ document.getElementById('s1Status').textContent='enter a name'; return; }
-        document.getElementById('s1Status').textContent='creating…';
+  await update(dRef(db, `/scenarios/${scenarioId}/photos/${photoKey}`), photoData);
+  return { url, thumbUrl, key: photoKey, w: main.w, h: main.h };
+}
 
-        const id = push(dbRef(db,'scenarios')).key;
-        const dispatch=(document.getElementById('sDispatch').value||'').trim();
-        const base = { id, title, dispatch, description:dispatch, createdAt: Date.now(), active:true, stops:[] };
-        const multi={}; multi[`scenarios/${id}`]=base; multi[`geophoto/scenarios/${id}`]=base;
-        await update(dbRef(db), multi);
+/* ---------------- Thumbnails listener ---------------- */
+function startThumbListener(scenarioId) {
+  const photosRef = dRef(db, `/scenarios/${scenarioId}/photos`);
+  onChildAdded(photosRef, (snap) => {
+    const v = snap.val();
+    const card = document.createElement('a');
+    card.className = 'thumb';
+    card.href = v.url; card.target = '_blank';
+    card.innerHTML = `
+      <img loading="lazy" src="${v.thumbUrl || v.url}" alt="thumb">
+      <div class="meta">
+        <div>${new Date(v.createdAt).toLocaleString()}</div>
+        <div>${v.w}×${v.h}</div>
+      </div>`;
+    thumbs.prepend(card);
+  });
+}
 
-        scenarioId=id; localStops=[];
-        document.getElementById('s1Status').textContent='created ✓';
-        gate();
-      }catch(e){
-        document.getElementById('s1Status').textContent='error';
-        const b=document.getElementById('errbar'); b.textContent=e.message||String(e); b.style.display='block'; setTimeout(()=>b.style.display='none', 5000);
-      }
-    };
+/* ---------------- Events ---------------- */
+btnCreate.addEventListener('click', async () => {
+  const name = scName.value.trim();
+  if (!name) { alert('Please enter a scenario name.'); return; }
+  btnCreate.disabled = true;
 
-    /* ---------- Step 2: Pickers ---------- */
-    const open = id => document.getElementById(id).click();
-    document.getElementById('btnCamera').onclick  = ()=> open('inCamera');
-    document.getElementById('btnLibrary').onclick = ()=> open('inLibrary');
-    document.getElementById('btnUpload').onclick  = ()=> open('inUpload');
+  if (!lastLocation) await refreshLocationUI();
 
-    async function onPick(file){
-      if(!file || !scenarioId) return;
-      pendingFile=file;
-      try{
-        const dataURL = await readAsDataURL(file);
-        const img = await loadImage(dataURL);
-        pendingImg=img;
-        // Reduced + thumb
-        pendingFullDataURL  = downscale(img, FULL_EDGE,  FULL_Q);
-        pendingThumbDataURL = downscale(img, THUMB_EDGE, THUMB_Q);
+  const scenariosRef = dRef(db, '/scenarios');
+  const newRef = push(scenariosRef);
+  scenarioId = newRef.key;
+  const payload = {
+    name,
+    dispatch: scDispatch.value.trim() || null,
+    radiusMeters: Number(scRadius.value) || 5,
+    createdAt: Date.now(),
+    source: 'builder-web',
+    gps: lastLocation ? { lat: lastLocation.coords.latitude, lng: lastLocation.coords.longitude, accuracy: lastLocation.coords.accuracy, ts: lastLocation.timestamp } : null
+  };
+  await set(newRef, payload);
 
-        document.getElementById('previewImg').src = pendingFullDataURL;
-        document.getElementById('imgInfo').textContent = `Original: ${img.width}×${img.height} → Saving ~${Math.round(Math.max(img.width,img.height) > FULL_EDGE ? FULL_EDGE : Math.max(img.width,img.height))} px`;
-        show('workArea', true);
-        document.getElementById('saveStatus').textContent='ready';
-        document.getElementById('pctFull').textContent='0%'; document.getElementById('barFull').style.width='0%';
-        document.getElementById('pctThumb').textContent='0%'; document.getElementById('barThumb').style.width='0%';
+  scName.disabled = scDispatch.disabled = scRadius.disabled = true;
+  step2.hidden = false;
+  startThumbListener(scenarioId);
+});
 
-        // Auto GPS
-        document.getElementById('gpsLine').textContent='GPS: acquiring…';
-        pendingGeo=null;
-        if(navigator.geolocation){
-          navigator.geolocation.getCurrentPosition(
-            p=>{ pendingGeo={lat:p.coords.latitude,lng:p.coords.longitude,accuracy:Math.round(p.coords.accuracy||0)}; document.getElementById('gpsLine').textContent=`GPS: ${pendingGeo.lat.toFixed(6)}, ${pendingGeo.lng.toFixed(6)} ±${pendingGeo.accuracy||'–'} m`; },
-            _=>{ document.getElementById('gpsLine').textContent='GPS: unavailable'; },
-            {enableHighAccuracy:true,timeout:8000,maximumAge:0}
-          );
-        }else{
-          document.getElementById('gpsLine').textContent='GPS: not supported';
-        }
-      }catch(e){
-        const b=document.getElementById('errbar'); b.textContent='Could not read image: '+(e.message||e); b.style.display='block'; setTimeout(()=>b.style.display='none', 5000);
-      }
-    }
-    document.getElementById('inCamera').addEventListener('change', e=> onPick(e.target.files?.[0]));
-    document.getElementById('inLibrary').addEventListener('change',e=> onPick(e.target.files?.[0]));
-    document.getElementById('inUpload').addEventListener('change', e=> onPick(e.target.files?.[0]));
+[fileCamera, fileLibrary].forEach(input => input.addEventListener('change', () => {
+  const f = input.files?.[0];
+  if (!f) return;
+  pendingFile = f;
+  const url = URL.createObjectURL(f);
+  preview.src = url;
+  preview.onload = () => URL.revokeObjectURL(url);
+  previewMeta.textContent = `${f.name} — ${(f.size/1024/1024).toFixed(2)} MB`;
+  btnSavePhoto.disabled = false;
+}));
 
-    document.getElementById('resetBtn').onclick = ()=>{
-      pendingFile=pendingImg=pendingFullDataURL=pendingThumbDataURL=null;
-      document.getElementById('previewImg').src=''; show('workArea',false); show('afterSave',false);
-      document.getElementById('pctFull').textContent='0%'; document.getElementById('barFull').style.width='0%';
-      document.getElementById('pctThumb').textContent='0%'; document.getElementById('barThumb').style.width='0%';
-      document.getElementById('radius').value='5';
-    };
+btnSavePhoto.addEventListener('click', async () => {
+  if (!scenarioId) { alert('Create the scenario first.'); return; }
+  if (!pendingFile) { alert('Choose or take a photo first.'); return; }
+  btnSavePhoto.disabled = true;
+  try {
+    await refreshLocationUI();
+    await uploadPhotoSet(scenarioId, pendingFile, lastLocation);
+    previewMeta.textContent = 'Saved ✔';
+  } catch (e) {
+    console.error(e);
+    alert('Upload failed: ' + e.message);
+  } finally {
+    progress.hidden = true; progressBar.style.width = '0%';
+    btnSavePhoto.disabled = false;
+    pendingFile = null;
+  }
+});
 
-    /* ---------- Upload helpers ---------- */
-    function watchTask(task, which){
-      return new Promise((res,rej)=>{
-        const killer = setTimeout(()=>{ try{task.cancel();}catch{} rej(new Error('Upload timed out')); }, 60000);
-        task.on('state_changed',
-          s=>{
-            const pct=Math.round(100*s.bytesTransferred/s.totalBytes);
-            if(which==='full'){ document.getElementById('pctFull').textContent=pct+'%'; document.getElementById('barFull').style.width=pct+'%'; }
-            else { document.getElementById('pctThumb').textContent=pct+'%'; document.getElementById('barThumb').style.width=pct+'%'; }
-          },
-          e=>{ clearTimeout(killer); rej(e); },
-          ()=>{ clearTimeout(killer); res(); }
-        );
-      });
-    }
+btnRefreshGPS.addEventListener('click', refreshLocationUI);
+refreshLocationUI(); // initial
+</script>
 
-    async function uploadBlobs(ts, fullDataURL, thumbDataURL){
-      await ensureAuthed(); // ensure before uploading
-
-      const fullRef  = stRef(storage, `scenarios/${scenarioId}/${ts}.jpg`);
-      const thmbRef  = stRef(storage, `scenarios/${scenarioId}/thumbs/${ts}.jpg`);
-      const meta     = { contentType:'image/jpeg', cacheControl:'public,max-age=31536000,immutable' };
-
-      try{
-        const fullTask  = uploadBytesResumable(fullRef,  dataURLtoBlob(fullDataURL), meta);
-        await watchTask(fullTask,'full');
-
-        const thumbTask = uploadBytesResumable(thmbRef,  dataURLtoBlob(thumbDataURL), meta);
-        await watchTask(thumbTask,'thumb');
-
-        const imageURL = await getDownloadURL(fullRef);
-        const thumbURL = await getDownloadURL(thmbRef).catch(()=>imageURL);
-        return { imageURL, thumbURL, storagePath: fullRef.fullPath, gsUri:`gs://${cfg.storageBucket}/${fullRef.fullPath}` };
-      }catch(e1){
-        // Fallback to your function with ID token (Advanced Editor style)
-        try{
-          const u = await ensureAuthed(); const token = u ? await u.getIdToken() : null;
-          const resp = await fetch('https://us-central1-dailyquiz-d5279.cloudfunctions.net/uploadScenarioImage', {
-            method:'POST',
-            headers:{ 'Content-Type':'application/json', ...(token?{Authorization:`Bearer ${token}`}:{}) },
-            body: JSON.stringify({ scenarioId, fileName: `${ts}.jpg`, dataURL: fullDataURL })
-          });
-          if(!resp.ok) throw new Error('Function HTTP '+resp.status);
-          const j = await resp.json(); if(!j.ok) throw new Error(j.error||'Function error');
-          return { imageURL:j.url, thumbURL:j.url, storagePath:j.path, gsUri:j.gsUri };
-        }catch(e2){
-          // Final fallback: inline (ensures progress even if network rules block)
-          return { imageData:{format:'jpeg', data: fullDataURL.split(',')[1]}, thumbURL: thumbDataURL };
-        }
-      }
-    }
-
-    async function appendStopToDB(stop){
-      // Pull latest stops to avoid overwriting
-      let stops=[];
-      try{
-        const snap = await get(dbRef(db, `scenarios/${scenarioId}/stops`));
-        stops = snap.exists()? (snap.val()||[]) : [];
-      }catch{}
-      stops.push(stop);
-      const multi={};
-      multi[`scenarios/${scenarioId}/stops`] = stops;
-      multi[`geophoto/scenarios/${scenarioId}/stops`] = stops;
-      await update(dbRef(db), multi);
-      localStops = stops;
-      renderGallery();
-    }
-
-    /* ---------- Save Photo ---------- */
-    document.getElementById('saveBtn').onclick = async ()=>{
-      if(!(scenarioId && pendingFullDataURL)) return;
-      try{
-        document.getElementById('loader').style.display='grid';
-        document.getElementById('saveStatus').textContent='uploading…'; show('afterSave',false);
-
-        const ts = Date.now();
-        const cloud = await uploadBlobs(ts, pendingFullDataURL, pendingThumbDataURL);
-
-        const r = Math.max(1, Math.min(1000, parseInt((document.getElementById('radius').value||'5'),10) || 5));
-        const stop = {
-          type:'photo', title:'', caption:'',
-          imageURL: cloud.imageURL || '',
-          thumbURL: cloud.thumbURL || '',
-          storagePath: cloud.storagePath || '',
-          gsUri: cloud.gsUri || '',
-          imageData: cloud.imageData || null,
-          lat: pendingGeo?.lat ?? null, lng: pendingGeo?.lng ?? null, accuracy: pendingGeo?.accuracy ?? null,
-          radiusMeters:r, overlays:[], at: ts
-        };
-
-        await appendStopToDB(stop);
-
-        document.getElementById('saveStatus').textContent='saved ✓';
-        show('afterSave', true);
-      }catch(e){
-        document.getElementById('saveStatus').textContent='error';
-        const b=document.getElementById('errbar'); b.textContent=e.message||String(e); b.style.display='block'; setTimeout(()=>b.style.display='none', 5000);
-      }finally{
-        document.getElementById('loader').style.display='none';
-      }
-    };
-
-    /* ---------- Add another ---------- */
-    document.getElementById('addAnotherBtn').onclick = ()=>{
-      pendingFile=pendingImg=pendingFullDataURL=pendingThumbDataURL=null;
-      document.getElementById('previewImg').src=''; show('workArea',false); show('afterSave',false);
-      document.getElementById('pctFull').textContent='0%'; document.getElementById('barFull').style.width='0%';
-      document.getElementById('pctThumb').textContent='0%'; document.getElementById('barThumb').style.width='0%';
-      document.getElementById('radius').value='5';
-    };
-  </script>
+<style>
+:root { --bg:#0b1020; --card:#121a2f; --accent:#4ad; --text:#eaf1ff; --muted:#9ab; }
+*{box-sizing:border-box}
+body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,Arial,sans-serif;background:var(--bg);color:var(--text)}
+header{position:sticky;top:0;background:linear-gradient(90deg,#0b1020,#16254a);padding:12px 16px;font-weight:700;letter-spacing:.2px;border-bottom:1px solid #1f2b4d}
+main{padding:16px;max-width:960px;margin:0 auto}
+section{background:var(--card);border:1px solid #1f2b4d;border-radius:16px;padding:16px;margin-bottom:16px;box-shadow:0 4px 24px rgba(0,0,0,.25)}
+h2,h3{margin:0 0 12px 0;font-size:1.1rem;color:#dfe9ff}
+label{display:block;margin:10px 0 6px 2px;font-size:.92rem;color:#cdd8f7}
+input[type=text],input[type=number],textarea{width:100%;padding:10px 12px;border-radius:12px;border:1px solid #2a3a66;background:#0f1730;color:var(--text);outline:none}
+textarea{min-height:80px;resize:vertical}
+.btn, button{display:inline-block;background:#1a2a52;border:1px solid #27407a;color:#dfe9ff;padding:10px 14px;border-radius:12px;cursor:pointer;font-weight:600;user-select:none}
+.btn:hover,button:hover{filter:brightness(1.1)}
+.btn:disabled,button:disabled{opacity:.6;cursor:not-allowed}
+.file-row{display:flex;gap:8px;flex-wrap:wrap;margin:8px 0}
+#previewBox{margin:8px 0;border-radius:14px;overflow:hidden;border:1px solid #23335f}
+#preview{width:100%;max-height:60vh;object-fit:contain;display:block;background:#0d142b}
+#progress{height:10px;background:#0e1a34;border-radius:8px;overflow:hidden;margin:8px 0;border:1px solid #24355f}
+#progress>div{height:100%;width:0%;background:linear-gradient(90deg,#2a7ae2,#4ad)}
+.thumbs{display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:10px}
+.thumb{display:block;border:1px solid #23335f;border-radius:12px;overflow:hidden;text-decoration:none;color:inherit;background:#0d142b}
+.thumb img{width:100%;height:90px;object-fit:cover;display:block}
+.thumb .meta{padding:6px 8px;font-size:.72rem;color:#a9b8e8}
+#geoStatus{font-size:.9rem;color:#a9b8e8;margin-top:8px}
+</style>
 </body>
 </html>
