@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <title>FireOps SIM — Admin</title>
+  <title>FireOps SIM — Scenario Builder</title>
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <meta name="theme-color" content="#0b0f14" />
   <style>
@@ -17,10 +17,8 @@
                  linear-gradient(165deg,var(--bg2),var(--bg) 55%);
       overflow-x:hidden}
     header{position:sticky;top:0;z-index:10;background:rgba(12,16,24,.75);backdrop-filter:blur(8px);border-bottom:1px solid var(--edge)}
-    .bar{max-width:1100px;margin:0 auto;padding:12px;display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+    .bar{max-width:1100px;margin:0 auto;padding:12px;display:flex;gap:10px;align-items:center;justify-content:center}
     .brand{font-weight:900}
-    .spacer{flex:1}
-    .pill{font-size:12px;color:var(--muted)}
     main{max-width:1100px;margin:14px auto 30px;padding:0 12px;display:grid;gap:12px}
     .card{background:linear-gradient(180deg,rgba(255,255,255,.02),transparent 26%),linear-gradient(180deg,#0f1624,#0e1420);
       border:1px solid var(--edge);border-radius:16px;padding:14px}
@@ -37,6 +35,12 @@
     .bar{height:100%;width:0;background:linear-gradient(90deg,#2484ff,#63dbff)}
     .preview{width:100%;max-height:70vh;display:grid;place-items:center;background:#050e19;border:1px solid var(--edge);border-radius:14px;overflow:hidden}
     .preview img{max-width:100%;max-height:70vh;object-fit:contain;display:block}
+    /* Gallery */
+    #gallery{display:grid;gap:10px;grid-template-columns:repeat(auto-fill,minmax(120px,1fr))}
+    .gItem{border:1px solid var(--edge);border-radius:12px;overflow:hidden;background:#0b1322}
+    .gItem img{width:100%;height:100%;object-fit:cover;display:block;aspect-ratio:1/1}
+    .gCap{padding:6px 8px;font-size:12px;color:var(--muted)}
+    /* Toast/overlay */
     #errbar{position:fixed;left:12px;bottom:12px;z-index:99;display:none;padding:10px 12px;border-radius:12px;border:1px solid #7a2b2b;background:#2b0d0d;color:#ffd7d7}
     #loader{position:fixed;inset:0;display:none;place-items:center;background:rgba(6,12,20,.55);backdrop-filter:blur(2px);z-index:98}
     .spinner{width:42px;height:42px;border-radius:999px;border:4px solid rgba(255,255,255,.25);border-top-color:#fff;animation:spin 1s linear infinite}
@@ -49,10 +53,7 @@
 
   <header>
     <div class="bar">
-      <div class="brand">FireOps SIM — Admin</div>
-      <div class="spacer"></div>
-      <div id="env" class="pill"></div>
-      <div id="authPill" class="pill">Auth: –</div>
+      <div class="brand">FireOps SIM — Scenario Builder</div>
     </div>
   </header>
 
@@ -67,14 +68,14 @@
       <textarea id="sDispatch" placeholder="Engine 1, Engine 2, Medic 1…"></textarea>
       <div class="row" style="margin-top:10px">
         <button id="createBtn" class="btn">Create Scenario</button>
-        <span id="s1Status" class="pill">idle</span>
+        <span id="s1Status" class="hint">idle</span>
       </div>
     </section>
 
     <!-- STEP 2 -->
     <section id="step2" class="card hidden">
       <h3 style="margin:0 0 6px">Step 2 — Add a photo stop</h3>
-      <div class="hint">Pick how to add a photo. Your current GPS will be recorded automatically.</div>
+      <div class="hint">Take a photo, choose from your photo library, or upload a file. GPS is added automatically.</div>
 
       <div class="row" style="margin:8px 0 6px">
         <button id="btnCamera" class="btn">Take Photo</button>
@@ -92,8 +93,7 @@
 
         <div class="row">
           <div class="hint" id="imgInfo">Image: —</div>
-          <div class="spacer"></div>
-          <div class="row">
+          <div class="row" style="margin-left:auto">
             <label for="radius" class="hint">Radius (m)</label>
             <input id="radius" type="number" min="1" max="1000" value="5" style="width:110px">
           </div>
@@ -117,7 +117,7 @@
         <div class="row" style="margin-top:10px">
           <button id="saveBtn" class="btn">Save Photo</button>
           <button id="resetBtn" class="btn ghost">Choose another</button>
-          <span id="saveStatus" class="pill">waiting</span>
+          <span id="saveStatus" class="hint">waiting</span>
         </div>
 
         <div id="afterSave" class="hidden" style="margin-top:8px">
@@ -125,6 +125,13 @@
           <span class="hint">Repeat to add more stops.</span>
         </div>
       </div>
+    </section>
+
+    <!-- BOTTOM GALLERY -->
+    <section id="galleryCard" class="card hidden">
+      <h3 style="margin:0 0 6px">Photos in this scenario</h3>
+      <div id="gallery"></div>
+      <div id="galleryEmpty" class="hint">No photos yet.</div>
     </section>
   </main>
 
@@ -155,16 +162,12 @@
     const auth = getAuth(app);
     const storage = getStorage(app, "gs://dailyquiz-d5279.appspot.com");
 
-    $('env').textContent = `DB ok • Bucket: dailyquiz-d5279.appspot.com`;
-
     async function ensureAuthed(){
       if (auth.currentUser) return auth.currentUser;
       await signInAnonymously(auth);
       await new Promise(res=> onAuthStateChanged(auth, u=>u && res(), {once:true}));
-      $('authPill').textContent = `Auth: anon ✔ ${auth.currentUser.uid.slice(0,8)}`;
       return auth.currentUser;
     }
-    // Try at load too
     ensureAuthed().catch(()=>{});
 
     /* ---------- Imaging ---------- */
@@ -186,7 +189,30 @@
 
     const sTitle = $('sTitle'), sDispatch=$('sDispatch');
 
-    function gate(){ show('step2', !!scenarioId); }
+    function gate(){
+      show('step2', !!scenarioId);
+      show('galleryCard', !!scenarioId);
+      renderGallery();
+    }
+
+    /* ---------- Gallery render ---------- */
+    function renderGallery(){
+      const host=$('gallery');
+      const empty=$('galleryEmpty');
+      host.innerHTML='';
+      if(!Array.isArray(localStops) || localStops.length===0){
+        empty.textContent='No photos yet.';
+        show(empty, true);
+        return;
+      }
+      show(empty, false);
+      localStops.forEach((s, i)=>{
+        const card=document.createElement('div'); card.className='gItem';
+        const img=document.createElement('img'); img.src=s.thumbURL||s.imageURL||''; img.alt=s.caption||('Stop '+(i+1));
+        const cap=document.createElement('div'); cap.className='gCap'; cap.textContent=s.caption||('Stop '+(i+1));
+        card.appendChild(img); card.appendChild(cap); host.appendChild(card);
+      });
+    }
 
     /* ---------- Step 1: Create ---------- */
     $('createBtn').onclick = async ()=>{
@@ -206,13 +232,9 @@
         await update(dbRef(db), multi);
 
         scenarioId=id;
+        localStops=[]; // new scenario
         $('s1Status').textContent='created ✓';
         gate();
-        // Load any existing stops (probably none)
-        try{
-          const snap = await get(dbRef(db,`scenarios/${id}/stops`));
-          localStops = snap.exists()? (snap.val()||[]) : [];
-        }catch{}
       }catch(e){
         $('s1Status').textContent='error';
         sayErr(e.message||String(e));
@@ -237,7 +259,7 @@
         pendingThumbDataURL = downscale(img, THUMB_EDGE, THUMB_Q);
 
         $('previewImg').src = pendingFullDataURL;
-        $('imgInfo').textContent = `Original: ${img.width}×${img.height} → Save at ~${Math.round(Math.max(img.width,img.height) > FULL_EDGE ? FULL_EDGE : Math.max(img.width,img.height))}px`;
+        $('imgInfo').textContent = `Original: ${img.width}×${img.height} → Saving ~${Math.round(Math.max(img.width,img.height) > FULL_EDGE ? FULL_EDGE : Math.max(img.width,img.height))} px`;
         show('workArea', true);
         $('saveStatus').textContent='ready';
         $('pctFull').textContent='0%'; $('barFull').style.width='0%';
@@ -288,8 +310,7 @@
     }
 
     async function uploadBlobs(ts, fullDataURL, thumbDataURL){
-      // Make sure we're authed at the moment of upload (fix)
-      await ensureAuthed();
+      await ensureAuthed(); // ensure before uploading
 
       const fullRef  = stRef(storage, `scenarios/${scenarioId}/${ts}.jpg`);
       const thmbRef  = stRef(storage, `scenarios/${scenarioId}/thumbs/${ts}.jpg`);
@@ -299,18 +320,16 @@
         const fullTask  = uploadBytesResumable(fullRef,  dataURLtoBlob(fullDataURL), meta);
         await watchTask(fullTask,'full');
 
-        // thumb after full to avoid double contention on weak networks
         const thumbTask = uploadBytesResumable(thmbRef,  dataURLtoBlob(thumbDataURL), meta);
         await watchTask(thumbTask,'thumb');
 
         const imageURL = await getDownloadURL(fullRef);
         const thumbURL = await getDownloadURL(thmbRef).catch(()=>imageURL);
-        return { imageURL, thumbURL, storagePath: fullRef.fullPath, gsUri:`gs://${cfg.storageBucket}/${fullRef.fullPath}`, via:'storage' };
+        return { imageURL, thumbURL, storagePath: fullRef.fullPath, gsUri:`gs://${cfg.storageBucket}/${fullRef.fullPath}` };
       }catch(e1){
-        // Fallback: call your function with ID token (same as Advanced Editor flow)
+        // Fallback to your function with ID token (Advanced Editor style)
         try{
-          const user = await ensureAuthed();
-          const token = user ? await user.getIdToken() : null;
+          const u = await ensureAuthed(); const token = u ? await u.getIdToken() : null;
           const resp = await fetch('https://us-central1-dailyquiz-d5279.cloudfunctions.net/uploadScenarioImage', {
             method:'POST',
             headers:{ 'Content-Type':'application/json', ...(token?{Authorization:`Bearer ${token}`}:{}) },
@@ -318,10 +337,10 @@
           });
           if(!resp.ok) throw new Error('Function HTTP '+resp.status);
           const j = await resp.json(); if(!j.ok) throw new Error(j.error||'Function error');
-          return { imageURL:j.url, thumbURL:j.url, storagePath:j.path, gsUri:j.gsUri, via:'function' };
+          return { imageURL:j.url, thumbURL:j.url, storagePath:j.path, gsUri:j.gsUri };
         }catch(e2){
           // Final fallback: inline (ensures progress even if network rules block)
-          return { imageData:{format:'jpeg', data: fullDataURL.split(',')[1]}, thumbURL: thumbDataURL, via:'inline' };
+          return { imageData:{format:'jpeg', data: fullDataURL.split(',')[1]}, thumbURL: thumbDataURL };
         }
       }
     }
@@ -339,6 +358,7 @@
       multi[`geophoto/scenarios/${scenarioId}/stops`] = stops;
       await update(dbRef(db), multi);
       localStops = stops;
+      renderGallery();
     }
 
     /* ---------- Save Photo ---------- */
