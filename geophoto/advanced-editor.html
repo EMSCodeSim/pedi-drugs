@@ -50,11 +50,9 @@
     .small{font-size:12px;opacity:.85}
     #errbar{position:fixed;left:10px;bottom:10px;background:#2b0d0d;color:#ffd7d7;border:1px solid #7a2b2b;border-radius:12px;padding:8px 12px;display:none;z-index:9999}
 
-    /* collapsible drawer */
     #drawer summary{cursor:pointer;list-style:none;padding:8px 10px;border:1px solid rgba(255,255,255,.14);border-radius:10px;background:#0c1528;font-weight:800}
     #drawer[open] summary{background:#0e1a30}
 
-    /* loading overlay */
     #loader{ position:fixed; inset:0; display:none; place-items:center; z-index:99; background:rgba(6,12,20,.55); backdrop-filter:blur(2px) }
     .spinner{ width:42px; height:42px; border-radius:999px; border:4px solid rgba(255,255,255,.25); border-top-color:#fff; animation:spin 1s linear infinite }
     @keyframes spin{ to{ transform:rotate(360deg) } }
@@ -75,7 +73,6 @@
 
   <main>
     <div class="app" id="app">
-      <!-- LEFT: all tools (collapsible) -->
       <aside class="col" id="tools">
         <details id="drawer" open>
           <summary>Editing Tools (collapse/expand)</summary>
@@ -163,17 +160,14 @@
               <option value="photo">Composite Photo</option>
               <option value="overlays">Overlays Only (PNG)</option>
             </select>
-
             <label>Style</label>
             <select id="aiStyle" class="input">
               <option value="realistic">Photo-realistic</option>
               <option value="dramatic">Dramatic Incident</option>
               <option value="training">Training Drill</option>
             </select>
-
             <label>Scene Notes (optional)</label>
             <textarea id="aiNotes" class="input" placeholder="e.g., light wind from north, 2 occupants, late evening lighting"></textarea>
-
             <div class="row" style="margin-top:6px">
               <button class="btn" id="aiPreview">Preview Payload</button>
               <button class="btn" id="aiSend">Send to AI</button>
@@ -185,7 +179,6 @@
         </details>
       </aside>
 
-      <!-- RIGHT: viewer -->
       <section class="col">
         <div class="sectionTitle">Photos in Scenario (click to load in viewer)</div>
         <div id="thumbRow"></div>
@@ -214,7 +207,6 @@
     const status = (msg)=>{ $('statusPill').textContent=msg; };
     const setAuthPill = (t)=>{ $('authPill').textContent = `Auth: ${t}`; };
 
-    /* collapse tools */
     $('toggleTools').onclick = ()=>{
       const app = $('app');
       const collapse = !app.classList.contains('toolsCollapsed');
@@ -240,34 +232,23 @@
     };
     const appFB = initializeApp(firebaseConfig);
 
-    /* ✅ Force classic bucket so SDK-auth reads/writes work */
+    /* Force classic bucket for SDK-auth */
     const FORCE_BUCKET = "dailyquiz-d5279.appspot.com";
     const storage = getStorage(appFB, `gs://${FORCE_BUCKET}`);
-
     const db = getDatabase(appFB);
     const auth = getAuth(appFB);
 
-    /* ---------- Auth gate ---------- */
     async function ensureAuthed(){
       try{ await setPersistence(auth, browserLocalPersistence); }
       catch{ try{ await setPersistence(auth, browserSessionPersistence); }
       catch{ await setPersistence(auth, inMemoryPersistence); } }
-
       if (!auth.currentUser){
-        await signInAnonymously(auth).catch((e)=>{ setAuthPill('anonymous sign-in failed'); throw e; });
-        await new Promise(res=>{
-          const unsub = onAuthStateChanged(auth, u=>{ if(u){ unsub(); res(); } });
-        });
+        await signInAnonymously(auth);
+        await new Promise(res=> onAuthStateChanged(auth, u=>u && res(), {once:true}));
       }
       const uid = auth.currentUser.uid.slice(0,8);
       setAuthPill(`anon ✔ (${uid})`);
       return auth.currentUser;
-    }
-    async function getIdToken(force=false){
-      try{
-        const u = auth.currentUser || await ensureAuthed();
-        return await u.getIdToken(force);
-      }catch{return null;}
     }
 
     /* ---------- Root detection ---------- */
@@ -281,7 +262,6 @@
       }catch{}
       return 'scenarios';
     }
-    $('rootPill').textContent = 'root: …';
 
     /* ---------- Storage helpers ---------- */
     function toStorageRefString(s){
@@ -289,13 +269,10 @@
       let v = s.trim();
       try{ v = decodeURIComponent(v); }catch{}
       if (v.startsWith('gs://')) return v;
-
-      // https URL → gs://
       let m = v.match(/^https?:\/\/firebasestorage\.googleapis\.com\/v0\/b\/([^/]+)\/o\/([^?]+)/i);
       if (m) return `gs://${m[1]}/${m[2].replace(/\+/g,' ')}`;
       m = v.match(/^https?:\/\/([^/]+)\.firebasestorage\.app\/o\/([^?]+)/i);
       if (m) return `gs://${m[1]}/${m[2].replace(/\+/g,' ')}`;
-
       if (!/^https?:\/\//i.test(v)) return v;
       return v;
     }
@@ -310,28 +287,23 @@
       const ref = stRef(storage, coerced);
       return await getBlob(ref);
     }
-
-    /* ---------- Cloud Function (fallback upload) ---------- */
-    const FUNCTION_UPLOAD_URL = 'https://us-central1-dailyquiz-d5279.cloudfunctions.net/uploadScenarioImage';
-    async function uploadViaFunction(dataURL, scenarioId, fileName){
-      const idt = await getIdToken().catch(()=>null);
-      const resp = await fetch(FUNCTION_UPLOAD_URL, {
-        method:'POST',
-        headers:{
-          'Content-Type':'application/json',
-          ...(idt ? { 'Authorization': `Bearer ${idt}` } : {})
-        },
-        body: JSON.stringify({ scenarioId, fileName, dataURL })
-      });
-      if (!resp.ok){
-        const txt = await resp.text();
-        const e = new Error(`Function HTTP ${resp.status} ${txt}`); e.code='save/function-http'; throw e;
+    function candidateOriginals(pathOrUrl){
+      const out = new Set();
+      if (!pathOrUrl) return [];
+      let s = pathOrUrl;
+      try{ s = decodeURIComponent(s); }catch{}
+      const [base, qs] = s.split('?');
+      const variants = new Set([base]);
+      variants.add(base.replace(/\/thumbs\//i,'/'));
+      variants.add(base.replace(/\/thumb_([^/]+)/i, '/$1'));
+      variants.add(base.replace(/([-_])(thumb|small|preview|min|tiny)(\.[a-z0-9]+)$/i, '$3'));
+      variants.forEach(v=> variants.add(v.replace(/(\.[a-z0-9]+)\1$/i, '$1')));
+      for (const v of variants){
+        const gs = toStorageRefString(v);
+        out.add(gs);
+        if (/^https?:\/\//i.test(s) && qs) out.add(`${v}?${qs}`);
       }
-      const json = await resp.json();
-      if (!json.ok){
-        const e = new Error(`Function error: ${json.error||'unknown'}`); e.code='save/function-error'; throw e;
-      }
-      return { url: json.url, path: json.path, gsUri: json.gsUri, via:'function' };
+      return Array.from(out).filter(Boolean);
     }
 
     /* ---------- Canvas ---------- */
@@ -353,42 +325,6 @@
     function blobToObjectURL(blob){ return URL.createObjectURL(blob); }
     function revokeURL(u){ try{ URL.revokeObjectURL(u); }catch{} }
 
-    /* ---------- Smart path fixer ---------- */
-    function candidateOriginals(pathOrUrl){
-      const out = new Set();
-      if (!pathOrUrl) return [];
-      let s = pathOrUrl;
-      try{ s = decodeURIComponent(s); }catch{}
-      const [base, qs] = s.split('?');
-      const variants = new Set([base]);
-      variants.add(base.replace(/\/thumbs\//i,'/'));
-      variants.add(base.replace(/\/thumb_([^/]+)/i, '/$1'));
-      variants.add(base.replace(/([-_])(thumb|small|preview|min|tiny)(\.[a-z0-9]+)$/i, '$3'));
-      variants.forEach(v=> variants.add(v.replace(/(\.[a-z0-9]+)\1$/i, '$1')));
-      for (const v of variants){
-        const gs = toStorageRefString(v);
-        out.add(gs);
-        if (/^https?:\/\//i.test(s) && qs) out.add(`${v}?${qs}`);
-      }
-      return Array.from(out).filter(Boolean);
-    }
-
-    /* ---------- Image load pipeline ---------- */
-    async function loadBlobForStop(stop){
-      if (stop.gsUri)        return await getBlobFromRefString(stop.gsUri);
-      if (stop.storagePath)  return await getBlobFromRefString(stop.storagePath);
-      if (typeof stop.imageURL === 'string' && stop.imageURL){
-        try{ return await getBlobFromRefString(stop.imageURL); }catch(_e){}
-        const r = await fetch(stop.imageURL, { mode:'cors', credentials:'omit', cache:'no-store' });
-        if (!r.ok) throw new Error('HTTP '+r.status);
-        return await r.blob();
-      }
-      if (stop.imageData?.data){
-        const fmt = stop.imageData.format==='jpeg' ? 'jpeg' : 'png';
-        return await (await fetch(`data:image/${fmt};base64,${stop.imageData.data}`)).blob();
-      }
-      throw new Error('No image source on this stop.');
-    }
     async function setBaseFromBlob(blob){
       return new Promise((resolve,reject)=>{
         const u = blobToObjectURL(blob);
@@ -427,6 +363,21 @@
       }
       return false;
     }
+    async function loadBlobForStop(stop){
+      if (stop.gsUri)        return await getBlobFromRefString(stop.gsUri);
+      if (stop.storagePath)  return await getBlobFromRefString(stop.storagePath);
+      if (typeof stop.imageURL === 'string' && stop.imageURL){
+        try{ return await getBlobFromRefString(stop.imageURL); }catch(_e){}
+        const r = await fetch(stop.imageURL, { mode:'cors', credentials:'omit', cache:'no-store' });
+        if (!r.ok) throw new Error('HTTP '+r.status);
+        return await r.blob();
+      }
+      if (stop.imageData?.data){
+        const fmt = stop.imageData.format==='jpeg' ? 'jpeg' : 'png';
+        return await (await fetch(`data:image/${fmt};base64,${stop.imageData.data}`)).blob();
+      }
+      throw new Error('No image source on this stop.');
+    }
     async function persistStopSource(stop){
       if (!current || stopIndex<0) return;
       const next = current._stops.slice();
@@ -437,7 +388,7 @@
       current._raw = updated; current._stops = next;
     }
 
-    /* ---------- Data ---------- */
+    /* ---------- Data / scenarios ---------- */
     let scenarios=[], current=null, stopIndex=-1;
 
     function coerceStops(sc){
@@ -460,7 +411,6 @@
         sel.appendChild(o);
       });
     }
-
     async function loadScenarios(){
       await ensureAuthed();
       status('Loading…');
@@ -485,7 +435,7 @@
       }, (err)=>{ showErr('Live updates blocked by rules: '+(err?.message||err)); });
     }
 
-    /* ---------- Thumbnails row ---------- */
+    /* ---------- Thumbnails ---------- */
     function dataURLFromStored(stored){
       return typeof stored==='string'
         ? stored
@@ -504,7 +454,6 @@
       });
     }
 
-    /* ---------- Scenario selection ---------- */
     $('scenarioSel').onchange = async ()=>{
       const id=$('scenarioSel').value;
       current=scenarios.find(s=>s.id===id)||null;
@@ -514,7 +463,6 @@
       if (current && current._stops.length){ await loadStop(0); }
     };
 
-    /* ---------- Load a stop ---------- */
     async function loadStop(i){
       hideErr();
       if (!current) return;
@@ -549,7 +497,6 @@
         showLoad(false);
       }
 
-      // overlays
       if (Array.isArray(s.overlays)){
         for (const ov of s.overlays){
           if (ov?.kind==='text'){
@@ -574,7 +521,6 @@
       }
     }
 
-    /* ---------- Base makers ---------- */
     function setBaseAsTextSlide(text, fontSize){
       f.clear();
       const rect = new fabric.Rect({ left:0, top:0, width:f.getWidth(), height:f.getHeight(), fill:'#000', selectable:false, evented:false, erasable:false });
@@ -592,7 +538,6 @@
       $('canvasInfo').textContent='Text slide';
     }
 
-    /* ---------- Meta save ---------- */
     function serializeOverlays(){
       const out=[];
       f.getObjects().forEach(o=>{
@@ -614,6 +559,7 @@
       });
       return out;
     }
+
     $('useGPS').onclick = ()=>{
       navigator.geolocation.getCurrentPosition(p=>{
         $('stopLat').value = p.coords.latitude.toFixed(6);
@@ -621,6 +567,7 @@
         $('metaMsg').textContent='GPS captured.';
       }, e=>{ $('metaMsg').textContent='GPS error: '+e.message; }, { enableHighAccuracy:true, timeout:10000 });
     };
+
     $('saveMeta').onclick = async ()=>{
       try{
         await ensureAuthed();
@@ -643,10 +590,7 @@
       }catch(e){ $('metaMsg').textContent=String(e.message||e); }
     };
 
-    /* ---------- Export / Save (Storage → Function → Inline) ---------- */
-    const EDIT_MAX_EDGE     = 1600;
-    const EDIT_THUMB_EDGE   = 480;
-    const EDIT_JPEG_QUALITY = 0.85;
+    const EDIT_MAX_EDGE=1600, EDIT_THUMB_EDGE=480, EDIT_JPEG_QUALITY=0.85;
 
     async function dataURLFromCanvasScaled(fabricCanvas, maxEdge=EDIT_MAX_EDGE, quality=EDIT_JPEG_QUALITY){
       const raw = fabricCanvas.toDataURL({ format:'jpeg', quality:1 });
@@ -681,11 +625,7 @@
       return new Promise((resolve,reject)=>{
         const task = uploadBytesResumable(ref, blob, metadata);
         const killer = setTimeout(()=>{ try{ task.cancel(); }catch{}; reject(Object.assign(new Error('Timed out while uploading'), { code:'save/timeout-upload' })); }, 45000);
-        task.on('state_changed',
-          s=>{ /* optional progress hook */ },
-          e=>{ clearTimeout(killer); reject(e); },
-          ()=>{ clearTimeout(killer); resolve(); }
-        );
+        task.on('state_changed', ()=>{}, e=>{ clearTimeout(killer); reject(e); }, ()=>{ clearTimeout(killer); resolve(); });
       });
     }
 
@@ -693,6 +633,7 @@
       const url = await dataURLFromCanvasScaled(f, EDIT_MAX_EDGE, 0.95);
       const a=document.createElement('a'); a.href=url; a.download='image-edited.jpg'; a.click();
     };
+
     $('saveImage').onclick = async ()=>{
       try{
         if(!current || stopIndex<0) throw new Error('Select a stop first.');
@@ -712,17 +653,10 @@
         const metaFull = { contentType:'image/jpeg', cacheControl:'public,max-age=31536000,immutable' };
         const metaThmb = { contentType:'image/jpeg', cacheControl:'public,max-age=31536000,immutable' };
 
-        let cloud=null;
-        try{
-          await uploadWithTimeout(fullRef, fullBlob, metaFull);
-          try{ await uploadBytes(thumbRef, thumbBlob, metaThmb); }catch(e){ /* non-fatal */ }
-          const fullURL  = await getDownloadURL(fullRef);
-          const thumbURL = await getDownloadURL(thumbRef).catch(()=>fullURL);
-          cloud = { url:fullURL, thumbURL, path:fullRef.fullPath, gsUri:`gs://${FORCE_BUCKET}/${fullRef.fullPath}`, via:'storage' };
-        }catch(e1){
-          const res = await uploadViaFunction(dataURL, current.id, `${ts}_edited_${stopIndex}.jpg`);
-          cloud = { url: res.url, thumbURL: res.url, path: res.path, gsUri: res.gsUri, via:'function' };
-        }
+        await uploadWithTimeout(fullRef, fullBlob, metaFull);
+        try{ await uploadBytes(thumbRef, thumbBlob, metaThmb); }catch(e){ /* non-fatal */ }
+        const fullURL  = await getDownloadURL(fullRef);
+        const thumbURL = await getDownloadURL(thumbRef).catch(()=>fullURL);
 
         const s = Object.assign({}, current._stops[stopIndex]);
         const ts2 = Date.now();
@@ -730,10 +664,10 @@
           type:'photo',
           title: (s.title||'')+' (edited)',
           caption: s.caption||'',
-          imageURL: cloud.url,
-          thumbURL: cloud.thumbURL||cloud.url,
-          storagePath: cloud.path||null,
-          gsUri: cloud.gsUri||null,
+          imageURL: fullURL,
+          thumbURL: thumbURL||fullURL,
+          storagePath: fullRef.fullPath,
+          gsUri: `gs://${FORCE_BUCKET}/${fullRef.fullPath}`,
           lat: s.lat??null, lng: s.lng??null, accuracy: s.accuracy??null,
           radiusMeters: s.radiusMeters ?? 50,
           overlays: serializeOverlays(),
@@ -751,7 +685,6 @@
       }finally{ showLoad(false); }
     };
 
-    /* ---------- Canvas utilities ---------- */
     $('fit').onclick  = ()=>{
       if (baseImage && baseImage.type==='image'){
         const cw=f.getWidth(), ch=f.getHeight(), s=Math.min(cw/baseImage.width, ch/baseImage.height);
@@ -767,25 +700,6 @@
     $('rotateL').onclick = ()=>{ if(baseImage && baseImage.rotate){ baseImage.rotate((baseImage.angle||0)+90); f.requestRenderAll(); } };
     $('rotateR').onclick = ()=>{ if(baseImage && baseImage.rotate){ baseImage.rotate((baseImage.angle||0)-90); f.requestRenderAll(); } };
 
-    /* ---------- Text tools ---------- */
-    function selTB(){ const o=f.getActiveObject(); return (o && o.type==='textbox' && !o.isBaseText) ? o : null; }
-    $('addTextbox').onclick = ()=>{
-      const tb = new fabric.Textbox('Double-click to edit', {
-        left: Math.max(10, (f.getWidth()*0.5)-120),
-        top:  Math.max(10, (f.getHeight()*0.5)-30),
-        width: 260, fontSize: 24, fill:'#fff', backgroundColor:'rgba(0,0,0,0.6)', padding:8,
-        cornerStyle:'circle', transparentCorners:false, editable:true
-      });
-      f.add(tb); f.setActiveObject(tb); $('tbContent').value=tb.text;
-    };
-    $('tbApply').onclick = ()=>{
-      const tb=selTB(); if(!tb){ alert('Select a text box first.'); return; }
-      tb.set({ text:$('tbContent').value, fontSize:parseInt($('tbFont').value,10)||24, backgroundColor:`rgba(0,0,0,${parseFloat($('tbBgOpacity').value)||0.6})` });
-      f.requestRenderAll();
-    };
-    $('tbDelete').onclick = ()=>{ const tb=selTB(); if(tb){ f.remove(tb); f.discardActiveObject(); f.requestRenderAll(); } };
-
-    /* ---------- Overlays + brush ---------- */
     const OVERLAY_BASE='https://fireopssim.com/geophoto/overlays/';
     const FOLDER={ fire:'fire', smoke:'smoke', people:'people', cars:'cars', hazard:'hazard' };
     const EXT=['png','webp','jpg','jpeg'];
@@ -872,38 +786,28 @@
     f.on('mouse:move', (e)=>{ if(!pointerDown) return; const p=f.getPointer(e.e); if(brushMode==='fire') stampAt(p,'fire'); else if(brushMode==='smoke') stampAt(p,'smoke'); else if(brushMode==='erase') eraseStampsAt(p); });
     f.on('mouse:up', ()=>{ pointerDown=false; });
 
-    /* order / delete selected overlay */
     $('bringFront').onclick = ()=>{ const o=f.getActiveObject(); if(o && o!==baseImage){ o.bringToFront(); f.requestRenderAll(); } };
     $('sendBack').onclick  = ()=>{ const o=f.getActiveObject(); if(o && o!==baseImage){ o.sendToBack(); if(baseImage) baseImage.sendToBack(); f.requestRenderAll(); } };
     $('deleteObj').onclick = ()=>{ const o=f.getActiveObject(); if(o && o!==baseImage){ f.remove(o); f.discardActiveObject(); f.requestRenderAll(); } };
     $('flipSelH').onclick  = ()=>{ const o=f.getActiveObject(); if(o && o!==baseImage){ o.set('flipX', !o.flipX); f.requestRenderAll(); } };
     $('flipSelV').onclick  = ()=>{ const o=f.getActiveObject(); if(o && o!==baseImage){ o.set('flipY', !o.flipY); f.requestRenderAll(); } };
 
-    /* ---------- Delete scenario ---------- */
     $('deleteScenario').onclick = async ()=>{
       if (!current) return;
       if (!confirm('Delete this scenario and its cloud images?')) return;
       try{
         showLoad(true);
         await ensureAuthed();
-
-        // collect candidate storage paths
         const paths = [];
         (current._stops||[]).forEach(s=>{
           if (s.storagePath) paths.push(s.storagePath);
           if (s.gsUri) paths.push(s.gsUri);
           if (s.imageURL && !/^https?:\/\//.test(s.imageURL)) paths.push(s.imageURL);
         });
-
-        // Best-effort delete
         for (const p of paths){
           try{ await deleteObject(stRef(storage, toStorageRefString(p))); }catch(_e){}
         }
-
-        // Remove DB node
         await remove(dbRef(db, `${ROOT}/${current.id}`));
-
-        // Reset UI
         current=null; stopIndex=-1; populateScenarios(); $('scenarioSel').value=''; $('thumbRow').innerHTML='';
         f.clear(); baseImage=null; fitCanvas();
         status('Scenario deleted.');
@@ -914,13 +818,8 @@
       }
     };
 
-    /* ---------- Canvas utilities quick buttons ---------- */
-    $('rotateL').onclick = ()=>{ if(baseImage && baseImage.rotate){ baseImage.rotate((baseImage.angle||0)+90); f.requestRenderAll(); } };
-    $('rotateR').onclick = ()=>{ if(baseImage && baseImage.rotate){ baseImage.rotate((baseImage.angle||0)-90); f.requestRenderAll(); } };
+    /* ---------- AI Generate (Netlify function) ---------- */
 
-    /* ---------- AI Generate (beta) ---------- */
-
-    // Convert Fabric object bbox to base-image pixel coords
     function rectCanvasToImage(rect){
       if (!baseImage || baseImage.type!=='image') return { x:0, y:0, w:0, h:0 };
       const sx = baseImage.getScaledWidth()  / baseImage.width;
@@ -936,10 +835,7 @@
       const H = clamp(Math.round(h), 0, Math.round(baseImage.height - Y));
       return { x:X, y:Y, w:W, h:H };
     }
-    function bboxForObject(o){
-      const rect = o.getBoundingRect(true, true);
-      return rectCanvasToImage(rect);
-    }
+    function bboxForObject(o){ return rectCanvasToImage(o.getBoundingRect(true, true)); }
     function inferCatFromSrc(src){
       if (!src || typeof src !== 'string') return 'generic';
       const s = src.toLowerCase();
@@ -981,106 +877,59 @@
         return null;
       }).filter(Boolean);
     }
-    function buildAIRequest(){
-      if (!current || stopIndex < 0) throw new Error('Select a stop first.');
-      const s = current._stops[stopIndex];
-      const base = {
-        gsUri:       s.gsUri       || null,
-        storagePath: s.storagePath || null,
-        imageURL:    s.imageURL    || null,
-        imageData:   s.imageData   || null,
-        width:  Math.round(baseImage?.width  || 0),
-        height: Math.round(baseImage?.height || 0)
-      };
-      return {
-        version: 1,
-        scenarioId: current.id,
-        stopIndex,
-        purpose: 'generate-realistic-photo',
-        return: $('aiReturn').value,  // 'photo' | 'overlays'
-        style:  $('aiStyle').value,   // 'realistic' | 'dramatic' | 'training'
-        notes:  ($('aiNotes').value||'').trim() || null,
-        scene: {
-          title: s.title || null,
-          caption: s.caption || null,
-          lat: s.lat ?? null,
-          lng: s.lng ?? null,
-          radiusMeters: s.radiusMeters ?? null
-        },
-        base,
-        overlays: serializeOverlaysForAI(),
-        createdAt: Date.now()
-      };
-    }
-
-    const AI_FUNCTION_URL = 'https://us-central1-dailyquiz-d5279.cloudfunctions.net/requestAIGeneration'; // optional backend
-    async function sendAIRequest(){
-      await ensureAuthed();
-      const req = buildAIRequest();
-
-      // Save request JSON into Storage so backend/worker can fetch it
-      const ts = Date.now();
-      const reqName = `${ts}_stop${req.stopIndex}.json`;
-      const reqRef  = stRef(storage, `scenarios/${req.scenarioId}/ai/${reqName}`);
-      await uploadBytes(reqRef, new Blob([JSON.stringify(req)], { type:'application/json' }), { cacheControl:'no-store' });
-
-      const gsReqUri = `gs://${FORCE_BUCKET}/${reqRef.fullPath}`;
-
-      // Optional: notify a Cloud Function for job orchestration
-      let jobId = null;
-      try{
-        const idt = await getIdToken().catch(()=>null);
-        const r = await fetch(AI_FUNCTION_URL, {
-          method:'POST',
-          headers:{ 'Content-Type':'application/json', ...(idt?{Authorization:`Bearer ${idt}`}:{}) },
-          body: JSON.stringify({ requestGsUri: gsReqUri })
-        });
-        if (r.ok){
-          const j = await r.json().catch(()=> ({}));
-          jobId = j.jobId || null;
-          $('aiMsg').textContent = jobId ? `Queued AI job: ${jobId}` : 'Queued AI job.';
-        } else {
-          $('aiMsg').textContent = 'Request saved to Storage (no backend).';
-        }
-      }catch(_e){
-        $('aiMsg').textContent = 'Request saved to Storage (no backend).';
+    function buildMaskDataURL(){
+      const W = Math.round(baseImage?.width  || 0);
+      const H = Math.round(baseImage?.height || 0);
+      if (!W || !H) throw new Error('No base image loaded.');
+      const c = document.createElement('canvas'); c.width = W; c.height = H;
+      const ctx = c.getContext('2d');
+      ctx.clearRect(0,0,W,H);
+      ctx.fillStyle = '#ffffff';
+      // Slightly inflate masks (feather) to improve blending
+      const feather = 6;
+      const overlays = serializeOverlaysForAI();
+      for (const o of overlays){
+        const { x, y, w, h } = o.bbox;
+        ctx.fillRect(Math.max(0,x-feather), Math.max(0,y-feather),
+                     Math.min(W-x+feather, w+2*feather), Math.min(H-y+feather, h+2*feather));
       }
-
-      pollAIResult({ scenarioId:req.scenarioId, reqKey: reqName.replace('.json',''), jobId });
+      return { dataUrl: c.toDataURL('image/png'), overlays };
     }
-
-    function pollAIResult({ scenarioId, reqKey, jobId }){
-      let tries = 0, maxTries = 120; // ~4 min at 2s
-      const timer = setInterval(async ()=>{
-        tries++;
-
-        let result = null;
-        try{
-          if (jobId){
-            const snap = await get(dbRef(db, `ai/jobs/${jobId}`));
-            result = snap.exists() ? snap.val() : null;
-          } else {
-            const snap = await get(dbRef(db, `ai/results/${scenarioId}/${reqKey}`));
-            result = snap.exists() ? snap.val() : null;
-          }
-        }catch{}
-
-        if (result && result.url){
-          clearInterval(timer);
-          $('aiOpen').disabled = false;
-          $('aiAdd').disabled  = false;
-          $('aiOpen').onclick = ()=> window.open(result.url, '_blank');
-          $('aiAdd').onclick  = ()=> addResultAsNewStop(result.url);
-          $('aiMsg').textContent = 'Result ready.';
-        } else if (tries >= maxTries){
-          clearInterval(timer);
-          $('aiMsg').textContent = 'No result yet (timeout).';
-        } else {
-          $('aiMsg').textContent = `Waiting… ${tries}`;
-        }
-      }, 2000);
+    function summarizeOverlayCounts(list){
+      const counts = { fire:0, smoke:0, people:0, cars:0, hazard:0, generic:0, text:0 };
+      for (const o of list){
+        if (o.kind === 'text') counts.text++;
+        else counts[o.category || 'generic'] = (counts[o.category || 'generic'] || 0) + 1;
+      }
+      return counts;
     }
-
+    async function getBaseImageURLForStop(){
+      const s = current._stops[stopIndex];
+      if (s?.imageURL && /^https?:\/\//i.test(s.imageURL)) return s.imageURL;
+      const refStr = s?.storagePath || s?.gsUri;
+      if (refStr){
+        const ref = stRef(storage, refStr);
+        return await getDownloadURL(ref);
+      }
+      if (s?.imageData?.data){
+        return `data:image/${s.imageData.format||'jpeg'};base64,${s.imageData.data}`;
+      }
+      throw new Error('This stop has no accessible base image.');
+    }
+    async function saveAIResultToStorage(dataUrl){
+      const blob = await (await fetch(dataUrl)).blob();
+      const ts = Date.now();
+      const path = `scenarios/${current.id}/ai/results/${ts}_stop${stopIndex}.png`;
+      const ref = stRef(storage, path);
+      await uploadBytes(ref, blob, { contentType: 'image/png', cacheControl: 'public,max-age=31536000,immutable' });
+      const url = await getDownloadURL(ref);
+      $('aiOpen').disabled = false;
+      $('aiAdd').disabled  = false;
+      $('aiOpen').onclick = ()=> window.open(url, '_blank');
+      $('aiAdd').onclick  = ()=> addResultAsNewStop(url);
+      $('aiMsg').textContent = 'Result uploaded ✓';
+      return url;
+    }
     async function addResultAsNewStop(url){
       if (!current || stopIndex<0) return;
       const base = current._stops[stopIndex];
@@ -1102,7 +951,6 @@
         origin: 'ai',
         basedOn: stopIndex
       };
-
       const next = current._stops.slice(); next.push(newStop);
       const updated = Object.assign({}, current._raw);
       setStops(updated, next);
@@ -1114,25 +962,55 @@
 
     $('aiPreview').onclick = ()=>{
       try{
-        const req = buildAIRequest();
-        const pretty = JSON.stringify(req, null, 2);
-        console.log(pretty);
-        alert('AI request payload (also in console):\n\n' + (pretty.length>1800 ? pretty.slice(0,1800)+'…' : pretty));
-        $('aiMsg').textContent = 'Payload ready.';
+        const { dataUrl, overlays } = buildMaskDataURL();
+        console.log('[AI] mask preview (dataUrl length):', dataUrl.length, 'overlays:', overlays);
+        $('aiMsg').textContent = 'Mask + overlay payload logged to console.';
       }catch(e){
-        $('aiMsg').textContent = e.message||String(e);
+        $('aiMsg').textContent = e.message || String(e);
       }
     };
-    $('aiSend').onclick = ()=> sendAIRequest().catch(e=> $('aiMsg').textContent = e.message||String(e));
 
-    /* ---------- Refresh ---------- */
+    $('aiSend').onclick = async ()=>{
+      try{
+        if(!current || stopIndex<0) throw new Error('Select a stop first.');
+        $('aiMsg').textContent = 'Preparing…';
+        const { dataUrl: maskDataUrl, overlays } = buildMaskDataURL();
+        const baseImageUrl = await getBaseImageURLForStop();
+        const returnType = $('aiReturn').value;
+        const style      = $('aiStyle').value;
+        const notes      = ($('aiNotes').value||'').trim();
+        const overlaySummary = summarizeOverlayCounts(overlays);
+
+        $('aiMsg').textContent = 'Contacting AI…';
+        const r = await fetch('/.netlify/functions/ai-image', {
+          method:'POST',
+          headers:{ 'Content-Type':'application/json' },
+          body: JSON.stringify({ baseImageUrl, maskDataUrl, style, returnType, notes, overlaySummary })
+        });
+
+        if (!r.ok){
+          const txt = await r.text().catch(()=> '');
+          $('aiMsg').textContent = `AI error: ${txt || r.status}`;
+          return;
+        }
+        const json = await r.json();
+        if (!json?.image) { $('aiMsg').textContent = 'No image returned.'; return; }
+
+        $('aiMsg').textContent = 'Uploading result…';
+        await saveAIResultToStorage(json.image);
+      }catch(e){
+        $('aiMsg').textContent = e.message || String(e);
+      }
+    };
+
+    $('aiAdd').onclick = ()=> $('aiMsg').textContent = 'Open a result first.';
+
+    /* ---------- Refresh / init ---------- */
     $('refreshBtn').onclick = async ()=>{
       ROOT = await detectRoot();
       $('rootPill').textContent = `root: ${ROOT}`;
       await loadScenarios();
     };
-
-    /* ---------- Init ---------- */
     (async()=>{
       ROOT = await detectRoot();
       $('rootPill').textContent = `root: ${ROOT}`;
