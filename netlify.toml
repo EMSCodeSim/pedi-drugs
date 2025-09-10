@@ -2,3 +2,8 @@
 directory = "functions"
 node_bundler = "esbuild"
 external_node_modules = ["sharp"]
+
+# Optional (use if you have a build step + a publish dir)
+# [build]
+# command = "npm run build"
+# publish = "dist"
