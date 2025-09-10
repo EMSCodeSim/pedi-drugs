@@ -1,11 +1,4 @@
-[build]
-  functions = "functions"
-  publish = "."
-
-[[redirects]]
-  from = "/api/*"
-  to = "/.netlify/functions/:splat"
-  status = 200
-
-[[plugins]]
-  package = "@netlify/plugin-functions-install-core"
+[functions]
+directory = "functions"
+node_bundler = "esbuild"
+external_node_modules = ["sharp"]
