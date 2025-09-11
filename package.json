@@ -1,24 +1,16 @@
 {
+  "name": "pedi-drugs",
+  "version": "1.0.0",
+  "description": "Pediatric drug calculator or reference tool",
+  "main": "index.js",
   "type": "commonjs",
-  "dependencies": {
-    "openai": "^4.6.0",
-    "busboy": "^1.6.0",
-    "multiparty": "^4.2.3"
-  }{
-  "name": "fireops-sim",
-  "private": true,
-  "type": "module",
   "scripts": {
-    "build": "netlify build",
-    "dev": "netlify dev",
-    "start": "netlify dev"
+    "start": "node index.js",
+    "dev": "nodemon index.js"
   },
   "dependencies": {
     "firebase-admin": "^12.6.0",
     "openai": "^4.57.0",
     "replicate": "^0.32.1"
-  },
-  "devDependencies": {}
-}
-
+  }
 }
