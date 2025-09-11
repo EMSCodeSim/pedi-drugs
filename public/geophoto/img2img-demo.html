@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>GeoPhoto Img2Img Demo</title>
+  <title>GeoPhoto Img2Img (Photobucket)</title>
   <style>
     body { font-family: system-ui, sans-serif; margin: 16px; }
     .row { display:flex; gap:16px; flex-wrap:wrap; align-items:flex-start; }
@@ -14,18 +14,18 @@
   </style>
 </head>
 <body>
-  <h1>GeoPhoto → Replicate (img2img)</h1>
+  <h1>GeoPhoto → Replicate (img2img) via Firebase Photobucket</h1>
 
   <div class="row">
     <fieldset>
       <legend>Base Photo & Overlays</legend>
       <label>Base Photo URL</label>
-      <input id="baseUrl" type="text" placeholder="https://.../your-base-photo.png" style="min-width:420px" />
+      <input id="baseUrl" type="text" placeholder="https://firebasestorage.googleapis.com/v0/b/dailyquiz-d5279.appspot.com/o/...">
 
       <details style="margin-top:.5rem">
         <summary>Add Overlay</summary>
         <label>Overlay URL</label>
-        <input id="ovUrl" type="text" placeholder="https://.../overlay.png" style="min-width:420px" />
+        <input id="ovUrl" type="text" placeholder="https://.../overlay.png" />
         <div style="display:flex; gap:8px; flex-wrap:wrap; margin-top:.5rem">
           <label>X <input id="ovX" type="number" value="0"></label>
           <label>Y <input id="ovY" type="number" value="0"></label>
@@ -48,10 +48,6 @@
 
     <div>
       <canvas id="cv" width="0" height="0"></canvas>
-      <div style="margin-top:.5rem; display:flex; gap:8px; flex-wrap:wrap">
-        <button id="upload" type="button">2) Upload Composite to Storage</button>
-        <input id="compositeUrl" type="text" placeholder="guideUrl will appear here..." style="min-width:420px" readonly />
-      </div>
     </div>
   </div>
 
@@ -64,7 +60,7 @@
         <input id="strength" type="number" min="0" max="1" step="0.05" value="0.35">
       </label>
     </div>
-    <button id="render" type="button">3) Render via Replicate</button>
+    <button id="render" type="button">2) Render via Replicate</button>
   </fieldset>
 
   <div class="row" style="margin-top:16px">
@@ -75,24 +71,7 @@
     </div>
   </div>
 
-  <!-- Firebase (v10 modular) -->
-  <script type="module">
-    // TODO: if your app is already initialized elsewhere, remove this block and keep only the Storage imports
-    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
-    import { getStorage, ref, uploadString, getDownloadURL } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-storage.js";
-
-    // --- FIREBASE CONFIG (fill in if not already initialized globally) ---
-    const firebaseConfig = {
-      apiKey: "YOUR_API_KEY",
-      authDomain: "YOUR_PROJECT.firebaseapp.com",
-      projectId: "YOUR_PROJECT",
-      storageBucket: "YOUR_PROJECT.appspot.com",
-      appId: "YOUR_APP_ID"
-    };
-    const app = initializeApp(firebaseConfig);
-    const storage = getStorage(app);
-    // ---------------------------------------------------------------------
-
+  <script>
     const baseUrlEl = document.getElementById("baseUrl");
     const overlayListEl = document.getElementById("overlayList");
     const canvas = document.getElementById("cv");
@@ -121,7 +100,7 @@
     function loadImage(url) {
       return new Promise((resolve, reject) => {
         const img = new Image();
-        img.crossOrigin = "anonymous"; // requires bucket CORS
+        img.crossOrigin = "anonymous"; // requires proper CORS on Firebase Storage
         img.onload = () => resolve(img);
         img.onerror = reject;
         img.src = url;
@@ -148,7 +127,7 @@
           ctx.globalAlpha = prev;
         }
       }
-      return canvas.toDataURL("image/png");
+      return canvas.toDataURL("image/png"); // "data:image/png;base64,..."
     }
 
     document.getElementById("compose").onclick = async () => {
@@ -163,44 +142,31 @@
       }
     };
 
-    async function uploadComposite(dataURL) {
-      const path = `composites/${Date.now()}.png`;
-      const objectRef = ref(storage, path);
-      await uploadString(objectRef, dataURL, "data_url");
-      return await getDownloadURL(objectRef);
-    }
-
-    document.getElementById("upload").onclick = async () => {
+    document.getElementById("render").onclick = async () => {
       try {
-        const dataURL = canvas.toDataURL("image/png");
-        if (!dataURL || dataURL.length < 50) return alert("Compose first.");
-        const url = await uploadComposite(dataURL);
-        document.getElementById("compositeUrl").value = url;
-        alert("Uploaded composite.");
+        const baseUrl = baseUrlEl.value.trim();
+        if (!baseUrl) return alert("Enter Base Photo URL");
+        const dataUrl = await compositeToDataURL({ baseUrl, overlays }); // compose fresh
+
+        const prompt   = document.getElementById("prompt").value;
+        const strength = Number(document.getElementById("strength").value || 0.35);
+
+        const resp = await fetch("/.netlify/functions/ai-image", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ dataUrl, prompt, strength })  // <- send dataUrl (server uploads)
+        });
+        const data = await resp.json();
+        if (!data.ok) {
+          console.error(data);
+          return alert(data.error || "Function failed.");
+        }
+        document.getElementById("out").src = data.image.url;
+        document.getElementById("outUrl").value = data.image.url;
       } catch (e) {
         console.error(e);
-        alert("Upload failed. Check Firebase config & rules.");
+        alert(e.message || e);
       }
-    };
-
-    document.getElementById("render").onclick = async () => {
-      const guideUrl = document.getElementById("compositeUrl").value.trim();
-      if (!guideUrl) return alert("Upload the composite first.");
-      const prompt = document.getElementById("prompt").value;
-      const strength = Number(document.getElementById("strength").value || 0.35);
-
-      const resp = await fetch("/.netlify/functions/ai-image", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ guideUrl, prompt, strength })
-      });
-      const data = await resp.json();
-      if (!data.ok) {
-        console.error(data);
-        return alert(data.error || "Function failed.");
-      }
-      document.getElementById("out").src = data.image.url;
-      document.getElementById("outUrl").value = data.image.url;
     };
   </script>
 </body>
