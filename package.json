@@ -1,12 +1,12 @@
 {
   "name": "pedi-drugs",
   "version": "1.0.0",
-  "description": "Pediatric drug calculator or reference tool",
-  "main": "index.js",
-  "type": "commonjs",
+  "private": true,
+  "type": "module",
   "scripts": {
-    "start": "node index.js",
-    "dev": "nodemon index.js"
+    "build": "echo \"No build step for this project\"",
+    "dev": "netlify dev",
+    "start": "netlify dev"
   },
   "dependencies": {
     "firebase-admin": "^12.6.0",
