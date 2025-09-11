@@ -1,10 +1,10 @@
 [build]
   command = "npm run build"
-  publish = "public"   # change if your static files live elsewhere
+  publish = "public"
 
 [functions]
   directory = "functions"
-  node_bundler = "esbuild"
+  node_bundler = "esbuild"   # fine to keep
   external_node_modules = ["firebase-admin"]
 
 [build.environment]
