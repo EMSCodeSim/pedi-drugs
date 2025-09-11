@@ -1,79 +1,72 @@
+// functions/ai-image.js
 import { json } from "./_response.js";
 import Replicate from "replicate";
 
-// ✅ set your model here (owner/name, no version hash)
-const MODEL = process.env.REPLICATE_MODEL || "stability-ai/sdxl";
-// Examples you can try (depending on your account access):
-//   "stability-ai/sdxl"
-//   "stability-ai/sdxl-turbo"
-//   "black-forest-labs/flux-1.1-pro"
+const replicate = process.env.REPLICATE_API_TOKEN
+  ? new Replicate({ auth: process.env.REPLICATE_API_TOKEN })
+  : null;
 
-const replicate = new Replicate({ auth: process.env.REPLICATE_API_TOKEN });
+// Use an img2img-capable model you have access to
+const REPLICATE_MODEL = process.env.REPLICATE_MODEL || "stability-ai/sdxl-turbo";
 
 function splitModel(full) {
-  const parts = String(full || "").split("/");
-  if (parts.length !== 2 || !parts[0] || !parts[1]) {
-    throw new Error(`MODEL must be "owner/name", got "${full}"`);
-  }
-  return { owner: parts[0], name: parts[1] };
+  const [owner, name] = String(full || "").split("/");
+  if (!owner || !name) throw new Error(`MODEL must be "owner/name", got "${full}"`);
+  return { owner, name };
 }
 
-async function getLatestVersionId(owner, name, token) {
+async function getLatestReplicateVersion(owner, name, token) {
   const res = await fetch(`https://api.replicate.com/v1/models/${owner}/${name}`, {
-    headers: {
-      Authorization: `Bearer ${token}`,
-      "Content-Type": "application/json"
-    }
+    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" }
   });
-  if (!res.ok) {
-    const detail = await res.text().catch(() => "");
-    throw new Error(
-      `Unable to resolve latest version for ${owner}/${name} (HTTP ${res.status}). ${detail}`
-    );
-  }
-  const data = await res.json();
+  const txt = await res.text();
+  if (!res.ok) throw new Error(`Replicate model lookup failed (${res.status}): ${txt}`);
+  const data = JSON.parse(txt);
   const id = data?.latest_version?.id;
-  if (!id) {
-    throw new Error(`Model ${owner}/${name} has no latest_version.id in response.`);
-  }
+  if (!id) throw new Error(`No latest_version.id for ${owner}/${name}`);
   return id;
+}
+
+function normalizeOutput(output) {
+  if (Array.isArray(output) && output.length) return String(output[0]);
+  if (typeof output === "string") return output;
+  if (output?.output && Array.isArray(output.output) && output.output.length) return String(output.output[0]);
+  throw new Error("No image URL in Replicate output");
 }
 
 export default async function handler(request) {
   try {
-    if (!process.env.REPLICATE_API_TOKEN) {
-      throw new Error("Missing REPLICATE_API_TOKEN env var");
-    }
-
-    const { owner, name } = splitModel(MODEL);
+    if (!replicate) throw new Error("Missing REPLICATE_API_TOKEN");
 
     const body = request.method === "POST" ? await request.json() : {};
-    const prompt = body?.prompt ?? "a realistic fire scene (placeholder)";
-    const input = body?.input && typeof body.input === "object" ? body.input : { prompt };
+    const prompt   = body?.prompt ?? "enhance realism; keep scene layout from guide";
+    const guideUrl = body?.guideUrl;
+    if (!guideUrl) {
+      return json({ ok: false, error: "Missing guideUrl (public URL for your composited PNG)." }, 400);
+    }
 
-    // 🔎 Resolve version id robustly (no undefined)
-    const version = await getLatestVersionId(owner, name, process.env.REPLICATE_API_TOKEN);
+    const strength = typeof body?.strength === "number" ? Math.max(0, Math.min(1, body.strength)) : 0.35;
 
-    // ▶️ Run model with resolved version
-    const output = await replicate.run(`${owner}/${name}:${version}`, { input });
+    // Many SDXL forks accept these keys for img2img:
+    const input = {
+      prompt,
+      image: guideUrl,
+      strength
+      // you can add: negative_prompt, num_outputs, seed, etc. if your chosen model supports them
+    };
 
-    return json({ ok: true, model: `${owner}/${name}`, version, output });
+    const { owner, name } = splitModel(REPLICATE_MODEL);
+    const version = await getLatestReplicateVersion(owner, name, process.env.REPLICATE_API_TOKEN);
+    const output  = await replicate.run(`${owner}/${name}:${version}`, { input });
+    const url     = normalizeOutput(output);
+
+    return json({ ok: true, image: { url, source: "replicate" }, debug: { model: `${owner}/${name}`, version } });
   } catch (e) {
-    const msg = String(e?.message || e);
-    const likely =
-      /not permitted|permission|does not exist|not found|invalid version/i.test(msg)
-        ? "Check that your token has access to this model (some require a paid plan) and that the model name is correct."
-        : undefined;
-
+    const msg  = String(e?.message || e);
+    const is402 = /402|payment required|insufficient credit/i.test(msg);
     return json(
-      {
-        ok: false,
-        error: msg,
-        hint: likely,
-        // Uncomment for temporary debugging:
-        // stack: e?.stack
-      },
-      500
+      { ok: false, error: msg, hint: is402 ? "Add Replicate credit or switch model." : "Ensure model supports img2img and guideUrl is public." },
+      is402 ? 402 : 500
     );
   }
 }
