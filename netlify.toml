@@ -1,14 +1,6 @@
-[build]
-  command = "npm run build"
-  publish = "public"
-
-[functions]
-  directory = "functions"
-  node_bundler = "esbuild"   # fine to keep
-  external_node_modules = ["firebase-admin"]
-
-[build.environment]
-  NODE_VERSION = "20"
-
-[[plugins]]
-package = "@netlify/plugin-functions-install-core"
+# route pretty function paths -> real Netlify function paths
+[[redirects]]
+from = "/functions/*"
+to = "/.netlify/functions/:splat"
+status = 200
+force = true
