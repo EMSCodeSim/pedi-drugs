@@ -1,6 +1,24 @@
-# route pretty function paths -> real Netlify function paths
+# ---------- Build ----------
+[build]
+  command = "echo Building static site"
+  publish = "public"
+
+# ---------- Functions ----------
+[functions]
+  node_bundler = "esbuild"
+  # external_node_modules = ["firebase-admin"]   # uncomment if needed
+
+# ---------- Redirects (order matters) ----------
+# Pretty function paths -> real Netlify path
 [[redirects]]
-from = "/functions/*"
-to = "/.netlify/functions/:splat"
-status = 200
-force = true
+  from = "/functions/*"
+  to = "/.netlify/functions/:splat"
+  status = 200
+  force = true
+
+# If (and only if) you have a SPA, uncomment this.
+# For multi-page static sites, leave it disabled or it will swallow your pages.
+# [[redirects]]
+#   from = "/*"
+#   to = "/index.html"
+#   status = 200
