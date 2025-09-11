@@ -1,15 +1,15 @@
 {
-  "name": "your-app",
+  "name": "fireopssim",
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "netlify build",
-    "dev": "netlify dev",
+    "build": "echo Building static site",
     "start": "netlify dev"
   },
   "dependencies": {
-    "firebase-admin": "^12.5.0",
+    "firebase-admin": "^12.6.0",
     "openai": "^4.57.0",
-    "replicate": "^0.32.1"
+    "replicate": "^0.32.1",
+    "sharp": "^0.33.4"
   }
 }
