@@ -1,14 +1,14 @@
 {
-  "name": "pedi-drugs",
+  "name": "your-app",
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "echo \"No build step for this project\"",
+    "build": "netlify build",
     "dev": "netlify dev",
     "start": "netlify dev"
   },
   "dependencies": {
-    "firebase-admin": "^12.6.0",
+    "firebase-admin": "^12.5.0",
     "openai": "^4.57.0",
     "replicate": "^0.32.1"
   }
