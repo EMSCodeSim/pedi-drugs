@@ -1,264 +1,175 @@
-// functions/ai-image.js
-// Photoreal fire/smoke compositor:
-// - Accepts { baseImageUrl, maskDataUrl, style, returnType, notes, overlaySummary }
-// - Tries OpenAI "gpt-image-1" edits first (needs OPENAI_API_KEY)
-// - Falls back to Replicate inpainting (needs REPLICATE_API_TOKEN)
-// - Returns JSON: { image: dataUrl[, overlay: dataUrl], model: "openai"|"replicate" }
+// ai-image.js
+// Netlify Function: SDXL img2img with dynamic version fetch + Firebase bucket upload for dataUrl
+import { json } from "./_response.js";
+import Replicate from "replicate";
+import admin from "firebase-admin";
 
-const OPENAI_API_KEY =
-  process.env.OPENAI_API_KEY ||
-  process.env.OPENAI_API_TOKEN ||
-  "";
+// --------- Firebase Admin (server-side upload for dataUrl) ----------
+if (!admin.apps.length) {
+  // Uses Application Default Credentials. On Netlify, provide a service account via env/secret if needed.
+  // Also requires FIREBASE_STORAGE_BUCKET env var (e.g., "dailyquiz-d5279.appspot.com").
+  admin.initializeApp({
+    credential: admin.credential.applicationDefault(),
+    storageBucket: process.env.FIREBASE_STORAGE_BUCKET
+  });
+}
+const bucket = admin.storage().bucket();
 
-const REPLICATE_API_TOKEN = process.env.REPLICATE_API_TOKEN || "";
+// --------- Replicate client ----------
+const replicate = process.env.REPLICATE_API_TOKEN
+  ? new Replicate({ auth: process.env.REPLICATE_API_TOKEN })
+  : null;
 
-// Optional: pin a specific Replicate model/version:
-const R_OWNER = process.env.REPLICATE_OWNER || "fofr";
-const R_MODEL = process.env.REPLICATE_MODEL || "sdxl-inpainting";
-const R_VERSION = process.env.REPLICATE_VERSION || ""; // version hash from model page, or leave blank
+// Hardcode the model owner/name; we resolve the version dynamically each invocation.
+const SDXL_MODEL = "stability-ai/sdxl";
 
-const DEFAULT_SIZE = "2048x2048";
-
-// -------- CORS / OPTIONS ----------
-function corsHeaders(extra = {}) {
-  return {
-    "access-control-allow-origin": "*",
-    "access-control-allow-methods": "POST, OPTIONS",
-    "access-control-allow-headers": "content-type, authorization",
-    ...extra
-  };
+// Fetch the latest model version id so we can call owner/name:version
+async function getLatestVersionId(owner, name, token) {
+  const res = await fetch(`https://api.replicate.com/v1/models/${owner}/${name}`, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json"
+    }
+  });
+  const text = await res.text();
+  if (!res.ok) {
+    throw new Error(`Failed to fetch model version (${res.status}): ${text}`);
+  }
+  const data = JSON.parse(text);
+  const id = data?.latest_version?.id;
+  if (!id) throw new Error(`No latest_version.id for ${owner}/${name}`);
+  return id;
 }
 
-export async function handler(event) {
-  if (event.httpMethod === "OPTIONS") {
-    return new Response("", { status: 204, headers: corsHeaders() });
+// Normalize Replicate output (commonly an array of URLs) to a single URL string
+function normalizeOutput(output) {
+  if (Array.isArray(output) && output.length) return String(output[0]);
+  if (typeof output === "string") return output;
+  if (output?.output && Array.isArray(output.output) && output.output.length) {
+    return String(output.output[0]);
   }
-  if (event.httpMethod !== "POST") {
-    return new Response("Use POST", {
-      status: 405,
-      headers: corsHeaders({ "content-type": "text/plain" })
-    });
-  }
+  throw new Error("No image URL returned from Replicate output");
+}
 
+// Upload a data URL ("data:image/png;base64,...") to your Firebase Storage bucket and return a public URL
+async function uploadDataUrlToStorage(dataUrl) {
+  const m = /^data:(image\/[a-zA-Z0-9.+-]+);base64,(.*)$/i.exec(dataUrl || "");
+  if (!m) throw new Error("Invalid dataUrl (expected 'data:image/...;base64,....').");
+  const contentType = m[1];
+  const base64 = m[2];
+  const buffer = Buffer.from(base64, "base64");
+  const filename = `composites/${Date.now()}.png`;
+  const file = bucket.file(filename);
+  // Public read; if your bucket isn't public, swap for a signed URL flow.
+  await file.save(buffer, { contentType, public: true, resumable: false, validation: false });
+  return `https://storage.googleapis.com/${bucket.name}/${filename}`;
+}
+
+export default async function handler(request) {
   try {
-    const payload = JSON.parse(event.body || "{}");
-    const {
-      baseImageUrl,
-      maskDataUrl,
-      style = "realistic",
-      returnType = "photo",
-      notes = "",
-      overlaySummary
-    } = payload;
-
-    if (!baseImageUrl || !maskDataUrl) {
-      return new Response("Missing baseImageUrl or maskDataUrl", {
-        status: 400,
-        headers: corsHeaders({ "content-type": "text/plain" })
-      });
-    }
-
-    // Try OpenAI, else Replicate
-    let pngBuffer, modelUsed;
-    try {
-      ({ pngBuffer } = await openaiEdit({
-        baseImageUrl,
-        maskDataUrl,
-        style,
-        notes,
-        overlaySummary
-      }));
-      modelUsed = "openai";
-    } catch (e1) {
-      if (!REPLICATE_API_TOKEN) throw e1;
-      ({ pngBuffer } = await replicateEdit({
-        baseImageUrl,
-        maskDataUrl,
-        style,
-        notes,
-        overlaySummary
-      }));
-      modelUsed = "replicate";
-    }
-
-    const imageDataUrl = `data:image/png;base64,${pngBuffer.toString("base64")}`;
-
-    // If the caller wants "overlays", clip composite by the mask as alpha
-    if (returnType === "overlays") {
-      const { buf: maskBuf } = await fetchAsBlob(maskDataUrl);
-      const overlayBuf = await makeOverlayPNG(pngBuffer, maskBuf);
-      const overlayDataUrl = `data:image/png;base64,${overlayBuf.toString("base64")}`;
-      return new Response(
-        JSON.stringify({ image: imageDataUrl, overlay: overlayDataUrl, model: modelUsed }),
-        { status: 200, headers: corsHeaders({ "content-type": "application/json" }) }
+    if (request.method !== "POST") {
+      return json(
+        {
+          ok: false,
+          error: "Use POST with JSON body.",
+          example: { guideUrl: "https://...", strength: 0.35, prompt: "..." }
+        },
+        405
       );
     }
 
-    return new Response(
-      JSON.stringify({ image: imageDataUrl, model: modelUsed }),
-      { status: 200, headers: corsHeaders({ "content-type": "application/json" }) }
-    );
-  } catch (err) {
-    console.error("ai-image error:", err);
-    return new Response(`ai-image error: ${err.message || String(err)}`, {
-      status: 500,
-      headers: corsHeaders({ "content-type": "text/plain" })
-    });
-  }
-}
+    if (!replicate) throw new Error("Missing REPLICATE_API_TOKEN");
+    if (!process.env.FIREBASE_STORAGE_BUCKET) throw new Error("Missing FIREBASE_STORAGE_BUCKET");
 
-// ---------- Helpers ----------
-function styleToPrompt(style, notes, overlaySummary) {
-  const parts = [];
-  parts.push(
-    "photojournalism-grade realism of a residential structure fire," +
-      " preserve original building geometry, perspective and lens," +
-      " add physically-plausible flames and volumetric smoke only where masked," +
-      " correct warm light spill on nearby materials, subtle glass reflections," +
-      " no new objects, no people, no trucks"
-  );
-  if (style === "dramatic") {
-    parts.push("cinematic contrast, crisp detail, intense glow but not neon");
-  } else if (style === "training") {
-    parts.push("daylight or overcast training drill look, neutral grading, moderate contrast");
-  } else {
-    parts.push("natural grading, balanced saturation");
-  }
-  if (overlaySummary && typeof overlaySummary === "object") {
-    const { fire = 0, smoke = 0 } = overlaySummary;
-    if (fire || smoke) parts.push(`emphasize ${fire} flame region(s) and ${smoke} smoke region(s) as masked`);
-  }
-  if (notes && notes.trim()) parts.push(notes.trim());
-  parts.push(
-    "do not distort walls, windows, doors, rooflines; avoid oversaturated neon or cartoon effects"
-  );
-  return parts.join(", ");
-}
-
-async function fetchAsBlob(urlOrDataUrl) {
-  if (typeof urlOrDataUrl !== "string") throw new Error("Invalid image url");
-  if (urlOrDataUrl.startsWith("data:")) {
-    const [head, b64] = urlOrDataUrl.split(",");
-    const mime = (head.match(/^data:(.+);base64$/) || [])[1] || "application/octet-stream";
-    const buf = Buffer.from(b64, "base64");
-    return { buf, mime, name: "image.png" };
-  }
-  const r = await fetch(urlOrDataUrl, { cache: "no-store" });
-  if (!r.ok) throw new Error(`Fetch failed ${r.status}`);
-  const mime = r.headers.get("content-type") || "application/octet-stream";
-  const arr = new Uint8Array(await r.arrayBuffer());
-  const ext = mime.includes("png") ? "png" : mime.includes("jpeg") || mime.includes("jpg") ? "jpg" : "bin";
-  return { buf: Buffer.from(arr), mime, name: `image.${ext}` };
-}
-
-// ---------- OpenAI path ----------
-async function openaiEdit({ baseImageUrl, maskDataUrl, style, notes, overlaySummary }) {
-  if (!OPENAI_API_KEY) throw new Error("OPENAI_API_KEY missing for OpenAI path");
-
-  const form = new FormData();
-  form.set("model", "gpt-image-1");
-  form.set("prompt", styleToPrompt(style, notes, overlaySummary));
-  form.set("size", DEFAULT_SIZE);
-
-  // Files
-  const base = await fetchAsBlob(baseImageUrl);
-  const mask = await fetchAsBlob(maskDataUrl);
-  form.set("image", new File([base.buf], base.name, { type: base.mime }));
-  form.set("mask", new File([mask.buf], "mask.png", { type: "image/png" }));
-
-  const r = await fetch("https://api.openai.com/v1/images/edits", {
-    method: "POST",
-    headers: { Authorization: `Bearer ${OPENAI_API_KEY}` },
-    body: form
-  });
-  if (!r.ok) {
-    const txt = await r.text().catch(() => "");
-    throw new Error(`OpenAI error ${r.status}: ${txt}`);
-  }
-  const json = await r.json();
-  const b64 = json?.data?.[0]?.b64_json;
-  if (!b64) throw new Error("OpenAI returned no image");
-  const pngBuffer = Buffer.from(b64, "base64");
-  return { pngBuffer };
-}
-
-// ---------- Replicate path ----------
-async function replicateEdit({ baseImageUrl, maskDataUrl, style, notes, overlaySummary }) {
-  if (!REPLICATE_API_TOKEN) throw new Error("REPLICATE_API_TOKEN missing for Replicate path");
-
-  const prompt = styleToPrompt(style, notes, overlaySummary);
-
-  const body = {
-    version: R_VERSION || undefined,
-    // Many inpaint models accept "image" + "mask" + prompt-like params:
-    input: {
-      prompt,
-      image: baseImageUrl,
-      mask: maskDataUrl,
-      // Tuning:
-      // Lower keeps original geometry; higher allows more dramatic effects.
-      prompt_strength: 0.55,
-      guidance_scale: 5,
-      num_inference_steps: 28
+    // Accept application/json (be forgiving if header is missing but body parses)
+    let body = {};
+    try {
+      body = await request.json();
+    } catch {
+      return json(
+        {
+          ok: false,
+          error: "Missing or invalid JSON body. Set header: Content-Type: application/json"
+        },
+        400
+      );
     }
-  };
 
-  // Build endpoint for predictions
-  const createUrl = "https://api.replicate.com/v1/predictions";
-  const r = await fetch(createUrl, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Token ${REPLICATE_API_TOKEN}`
-    },
-    body: JSON.stringify(body)
-  });
-  if (!r.ok) {
-    const txt = await r.text().catch(() => "");
-    throw new Error(`Replicate create error ${r.status}: ${txt}`);
-  }
-  let pred = await r.json();
+    // Input handling: either guideUrl (public URL) OR dataUrl (base64)
+    let guideUrl = body.guideUrl || body.imageUrl || body.compositeUrl || null;
+    const dataUrl = body.dataUrl || null;
 
-  // Poll until done
-  for (let i = 0; i < 60; i++) {
-    if (pred.status === "succeeded" || pred.status === "failed" || pred.status === "canceled") break;
-    await new Promise((res) => setTimeout(res, 2000));
-    const p = await fetch(`https://api.replicate.com/v1/predictions/${pred.id}`, {
-      headers: { Authorization: `Token ${REPLICATE_API_TOKEN}` }
+    if (!guideUrl && !dataUrl) {
+      return json(
+        {
+          ok: false,
+          error: "Provide either guideUrl (public image URL) or dataUrl (canvas output)."
+        },
+        400
+      );
+    }
+
+    if (!guideUrl && dataUrl) {
+      // Upload the dataUrl to your Firebase bucket and use that URL as the guide image
+      guideUrl = await uploadDataUrlToStorage(dataUrl);
+    }
+
+    // Map your UI fields
+    const prompt =
+      (typeof body.prompt === "string" && body.prompt.trim()) ||
+      "Make the scene photorealistic while preserving the guide layout.";
+
+    // SDXL uses "prompt_strength" (0..1). We map from your "strength" input.
+    // Lower values adhere more closely to the guide image.
+    const prompt_strength =
+      typeof body.strength === "number" ? Math.max(0, Math.min(1, body.strength)) : 0.35;
+
+    // Optional size (SDXL defaults to square; adjust if needed)
+    const width =
+      typeof body.width === "number" && body.width > 0 ? Math.min(2048, body.width) : 1024;
+    const height =
+      typeof body.height === "number" && body.height > 0 ? Math.min(2048, body.height) : 1024;
+
+    // Resolve the latest version ID so we don't hit "version is required"
+    const [owner, name] = SDXL_MODEL.split("/");
+    const version = await getLatestVersionId(owner, name, process.env.REPLICATE_API_TOKEN);
+
+    // Build SDXL input
+    const input = {
+      prompt,
+      image: guideUrl,
+      prompt_strength,
+      width,
+      height
+      // negative_prompt: body.negativePrompt ?? undefined,
+      // scheduler / seed / num_outputs can be added if you need them and the model supports them
+    };
+
+    // Call Replicate with owner/name:version
+    const output = await replicate.run(`${owner}/${name}:${version}`, { input });
+    const url = normalizeOutput(output);
+
+    return json({
+      ok: true,
+      image: { url, source: SDXL_MODEL },
+      guideUrl,
+      debug: {
+        model: SDXL_MODEL,
+        version,
+        input: { prompt, image: guideUrl, prompt_strength, width, height }
+      }
     });
-    pred = await p.json();
+  } catch (e) {
+    // Improve common errors
+    const msg = String(e?.message || e);
+    const is422Version = /version is required|validation failed|422/.test(msg);
+    const is402 = /402|payment required|insufficient credit/i.test(msg);
+    const hint = is402
+      ? "Replicate credit is insufficient. Add credit or switch provider."
+      : is422Version
+      ? "Replicate requires a model version. This function resolves the latest version automatically; check network logs for the version fetch."
+      : undefined;
+
+    return json({ ok: false, error: msg, hint }, is402 ? 402 : 500);
   }
-  if (pred.status !== "succeeded") throw new Error(`Replicate status: ${pred.status}`);
-
-  // Models often return an array of image URLs
-  const outUrl = Array.isArray(pred.output) ? pred.output[0] : pred.output;
-  const out = await fetchAsBlob(outUrl);
-  return { pngBuffer: out.buf };
-}
-
-// ---------- Overlay clip helper (mask -> alpha) ----------
-async function makeOverlayPNG(compositePngBuffer, maskPngBuffer) {
-  const sharp = (await import("sharp")).default;
-
-  const comp = sharp(compositePngBuffer).ensureAlpha();
-  const meta = await comp.metadata();
-
-  // Normalize mask to composite dims
-  const maskSharp = sharp(maskPngBuffer).ensureAlpha().toColourspace("b-w");
-  const maskBuf = await maskSharp.resize(meta.width, meta.height, { fit: "fill" }).toBuffer();
-
-  // Apply mask as alpha
-  const overlay = await comp
-    .joinChannel(maskBuf)
-    .toColourspace("rgba")
-    .toBuffer();
-
-  // Clean up: zero RGB where alpha = 0, to reduce size
-  const cleaned = await sharp(overlay)
-    .removeAlpha()
-    .joinChannel(await sharp(maskBuf).toColourspace("b-w").toBuffer())
-    .toFormat("png")
-    .toBuffer();
-
-  return cleaned;
 }
