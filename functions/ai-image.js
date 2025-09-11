@@ -1,7 +1,18 @@
 // functions/ai-image.js
 import { json } from "./_response.js";
 import Replicate from "replicate";
+import admin from "firebase-admin";
 
+// ---------- Firebase Admin: server-side upload to your bucket ----------
+if (!admin.apps.length) {
+  admin.initializeApp({
+    credential: admin.credential.applicationDefault(),
+    storageBucket: process.env.FIREBASE_STORAGE_BUCKET // e.g., "dailyquiz-d5279.appspot.com"
+  });
+}
+const bucket = admin.storage().bucket();
+
+// ---------- Replicate ----------
 const replicate = process.env.REPLICATE_API_TOKEN
   ? new Replicate({ auth: process.env.REPLICATE_API_TOKEN })
   : null;
@@ -34,38 +45,54 @@ function normalizeOutput(output) {
   throw new Error("No image URL in Replicate output");
 }
 
+async function uploadDataUrlToStorage(dataUrl) {
+  const m = /^data:(image\/[a-zA-Z0-9.+-]+);base64,(.*)$/i.exec(dataUrl || "");
+  if (!m) throw new Error("Invalid dataUrl");
+  const contentType = m[1];
+  const b64 = m[2];
+  const buffer = Buffer.from(b64, "base64");
+  const filename = `composites/${Date.now()}.png`;
+  const file = bucket.file(filename);
+  await file.save(buffer, { contentType, public: true, resumable: false, validation: false });
+  return `https://storage.googleapis.com/${bucket.name}/${filename}`;
+}
+
 export default async function handler(request) {
   try {
     if (!replicate) throw new Error("Missing REPLICATE_API_TOKEN");
+    if (!process.env.FIREBASE_STORAGE_BUCKET) throw new Error("Missing FIREBASE_STORAGE_BUCKET");
 
     const body = request.method === "POST" ? await request.json() : {};
     const prompt   = body?.prompt ?? "enhance realism; keep scene layout from guide";
-    const guideUrl = body?.guideUrl;
+    const strength = typeof body?.strength === "number"
+      ? Math.max(0, Math.min(1, body.strength))
+      : 0.35;
+
+    // Accept either guideUrl (already public) OR dataUrl (we upload it)
+    let guideUrl = body?.guideUrl;
     if (!guideUrl) {
-      return json({ ok: false, error: "Missing guideUrl (public URL for your composited PNG)." }, 400);
+      if (!body?.dataUrl) return json({ ok: false, error: "Provide guideUrl or dataUrl." }, 400);
+      guideUrl = await uploadDataUrlToStorage(body.dataUrl);
     }
 
-    const strength = typeof body?.strength === "number" ? Math.max(0, Math.min(1, body.strength)) : 0.35;
-
-    // Many SDXL forks accept these keys for img2img:
-    const input = {
-      prompt,
-      image: guideUrl,
-      strength
-      // you can add: negative_prompt, num_outputs, seed, etc. if your chosen model supports them
-    };
+    const input = { prompt, image: guideUrl, strength };
 
     const { owner, name } = splitModel(REPLICATE_MODEL);
     const version = await getLatestReplicateVersion(owner, name, process.env.REPLICATE_API_TOKEN);
     const output  = await replicate.run(`${owner}/${name}:${version}`, { input });
     const url     = normalizeOutput(output);
 
-    return json({ ok: true, image: { url, source: "replicate" }, debug: { model: `${owner}/${name}`, version } });
+    return json({
+      ok: true,
+      image: { url, source: "replicate" },
+      guideUrl,
+      debug: { model: `${owner}/${name}`, version }
+    });
   } catch (e) {
-    const msg  = String(e?.message || e);
+    const msg = String(e?.message || e);
     const is402 = /402|payment required|insufficient credit/i.test(msg);
     return json(
-      { ok: false, error: msg, hint: is402 ? "Add Replicate credit or switch model." : "Ensure model supports img2img and guideUrl is public." },
+      { ok: false, error: msg, hint: is402 ? "Add Replicate credit or switch model." : undefined },
       is402 ? 402 : 500
     );
   }
