@@ -1,15 +1,16 @@
 [build]
-  command = "npm run build"
-  publish = "dist"            # or your build output folder
-
-[functions]
-  directory = "functions"
-  node_bundler = "esbuild"
-  external_node_modules = ["firebase-admin"]  # keeps admin as external if needed
+  command = "echo Building static site"
+  publish = "public"
 
 [build.environment]
   NODE_VERSION = "20"
 
-# Ensures Function deps get installed even if you keep a functions-only package.json (not recommended)
+[functions]
+  # Your logs show Netlify is picking up from "netlify/functions"
+  directory = "netlify/functions"
+  node_bundler = "esbuild"
+  # Mark native deps external so Netlify installs them at deploy time
+  external_node_modules = ["firebase-admin", "sharp"]
+
 [[plugins]]
 package = "@netlify/plugin-functions-install-core"
