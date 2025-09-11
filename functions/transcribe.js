@@ -1,12 +1,10 @@
-// Minimal stub; replace with your real transcription logic or OpenAI Whisper call.
-export default async function handler(event) {
+import { json } from "./_response.js";
+
+export default async function handler(request, context) {
   try {
-    // TODO: parse file from event, run transcription
-    return {
-      statusCode: 200,
-      body: JSON.stringify({ ok: true, function: "transcribe", note: "stub" })
-    };
+    // TODO: parse file from request (multipart/form-data) and run transcription
+    return json({ ok: true, function: "transcribe", note: "stub" });
   } catch (e) {
-    return { statusCode: 500, body: JSON.stringify({ ok: false, error: e.message }) };
+    return json({ ok: false, error: e.message }, 500);
   }
 }
