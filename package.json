@@ -4,5 +4,21 @@
     "openai": "^4.6.0",
     "busboy": "^1.6.0",
     "multiparty": "^4.2.3"
-  }
+  }{
+  "name": "fireops-sim",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "netlify build",
+    "dev": "netlify dev",
+    "start": "netlify dev"
+  },
+  "dependencies": {
+    "firebase-admin": "^12.6.0",
+    "openai": "^4.57.0",
+    "replicate": "^0.32.1"
+  },
+  "devDependencies": {}
+}
+
 }
