@@ -1,15 +1,14 @@
 [build]
   command = "npm run build"
-  publish = "dist"            # or your build output folder
+  publish = "public"   # change if your static files live elsewhere
 
 [functions]
   directory = "functions"
   node_bundler = "esbuild"
-  external_node_modules = ["firebase-admin"]  # keeps admin as external if needed
+  external_node_modules = ["firebase-admin"]
 
 [build.environment]
   NODE_VERSION = "20"
 
-# Ensures Function deps get installed even if you keep a functions-only package.json (not recommended)
 [[plugins]]
 package = "@netlify/plugin-functions-install-core"
