@@ -1,35 +1,28 @@
-const { OpenAI } = require("openai");
+// Example ESM function using OpenAI. Requires OPENAI_API_KEY env var.
+import OpenAI from "openai";
 
-const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
-exports.handler = async (event) => {
-  if (event.httpMethod !== "POST") {
-    return { statusCode: 405, body: "Method Not Allowed" };
-  }
-
+export default async function handler(event) {
   try {
-    const body = JSON.parse(event.body);
-    const input = body.input || "";
+    const input = event.body ? JSON.parse(event.body) : {};
+    const prompt = input?.prompt ?? "Say hello from Netlify Functions.";
 
-    // Compose your prompt here!
-    const completion = await openai.chat.completions.create({
-      model: "gpt-3.5-turbo", // or "gpt-4o"
-      messages: [
-        { role: "system", content: "You are a helpful assistant for EMS/Fire voice size-up grading." },
-        { role: "user", content: input }
-      ],
-      max_tokens: 300,
-      temperature: 0.2
+    // Use a small/cheap model if you want:
+    const resp = await client.chat.completions.create({
+      model: "gpt-4o-mini",
+      messages: [{ role: "user", content: prompt }]
     });
 
     return {
       statusCode: 200,
-      body: JSON.stringify({ result: completion.choices[0].message.content.trim() }),
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        ok: true,
+        text: resp.choices?.[0]?.message?.content ?? ""
+      })
     };
-  } catch (err) {
-    return {
-      statusCode: 500,
-      body: JSON.stringify({ error: "OpenAI request failed", details: err.message }),
-    };
+  } catch (e) {
+    return { statusCode: 500, body: JSON.stringify({ ok: false, error: e.message }) };
   }
-};
+}
