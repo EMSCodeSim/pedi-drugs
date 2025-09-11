@@ -1,12 +1,11 @@
-export default async function handler(event) {
+import { json } from "./_response.js";
+
+export default async function handler(request, context) {
   try {
-    const payload = event.body ? JSON.parse(event.body) : {};
+    const payload = request.method === "POST" ? await request.json() : {};
     // TODO: implement scene size-up grading
-    return {
-      statusCode: 200,
-      body: JSON.stringify({ ok: true, function: "gradeSceneSizeup", payload })
-    };
+    return json({ ok: true, function: "gradeSceneSizeup", payload });
   } catch (e) {
-    return { statusCode: 500, body: JSON.stringify({ ok: false, error: e.message }) };
+    return json({ ok: false, error: e.message }, 500);
   }
 }
