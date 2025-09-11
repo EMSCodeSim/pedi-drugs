@@ -1,24 +1,15 @@
-# ---------- Build ----------
 [build]
-  command = "echo Building static site"
-  publish = "public"
+  command = "npm run build"
+  publish = "dist"            # or your build output folder
 
-# ---------- Functions ----------
 [functions]
+  directory = "functions"
   node_bundler = "esbuild"
-  # external_node_modules = ["firebase-admin"]   # uncomment if needed
+  external_node_modules = ["firebase-admin"]  # keeps admin as external if needed
 
-# ---------- Redirects (order matters) ----------
-# Pretty function paths -> real Netlify path
-[[redirects]]
-  from = "/functions/*"
-  to = "/.netlify/functions/:splat"
-  status = 200
-  force = true
+[build.environment]
+  NODE_VERSION = "20"
 
-# If (and only if) you have a SPA, uncomment this.
-# For multi-page static sites, leave it disabled or it will swallow your pages.
-# [[redirects]]
-#   from = "/*"
-#   to = "/index.html"
-#   status = 200
+# Ensures Function deps get installed even if you keep a functions-only package.json (not recommended)
+[[plugins]]
+package = "@netlify/plugin-functions-install-core"
