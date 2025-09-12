@@ -224,7 +224,6 @@
         if (r.status === 404) r = await fetch(AI_FALLBACK, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload) });
         return r;
       }catch(e){
-        // network error -> fake a minimal Response-like object
         return { ok:false, status:0, text: async()=> JSON.stringify({ ok:false, error:String(e) }) };
       }
     }
@@ -246,16 +245,16 @@
       authDomain:"dailyquiz-d5279.firebaseapp.com",
       databaseURL:"https://dailyquiz-d5279-default-rtdb.firebaseio.com",
       projectId:"dailyquiz-d5279",
-      storageBucket:"dailyquiz-d5279.firebasestorage.app", /* leave as-is; we override below */
+      storageBucket:"dailyquiz-d5279.firebasestorage.app", /* leaving original; we override below */
       appId:"1:94577748034:web:c032d3a1d72db1313de5db",
       measurementId:"G-19DVN7NNH7"
     };
     const appFB = getApps().length ? getApps()[0] : initializeApp(firebaseConfig);
 
     /* --------- ✅ FORCE THE CORRECT STORAGE BUCKET --------- */
-    const EXPLICIT_BUCKET = "dailyquiz-d5279.appspot.com"; // <— IMPORTANT
+    const EXPLICIT_BUCKET = "dailyquiz-d5279.appspot.com"; // IMPORTANT: real bucket host
     const storage = getStorage(appFB, `gs://${EXPLICIT_BUCKET}`);
-    // Fail faster instead of hanging for minutes:
+    // Fail faster (avoid long “retry-limit-exceeded” loops):
     setMaxUploadRetryTime(storage, 60_000);
     setMaxOperationRetryTime(storage, 60_000);
 
@@ -275,7 +274,7 @@
       return auth.currentUser;
     }
 
-    /* ---------- Quick storage health check (once per session) ---------- */
+    /* ---------- Quick storage health check ---------- */
     let storageHealthChecked = false;
     async function verifyStorageOnce(){
       if (storageHealthChecked) return true;
@@ -290,15 +289,22 @@
       }
     }
 
-    /* ---------- Root handling (working logic) ---------- */
+    /* ---------- Root detection (auth-aware + robust) ---------- */
     let ROOT = 'scenarios';
     async function detectRoot(){
+      await ensureAuthed();
       const fromQS = new URLSearchParams(location.search).get('root');
       if (fromQS) return fromQS;
-      try{
-        const a = await get(dbRef(db, 'geophoto/scenarios'));
-        if (a.exists()) return 'geophoto/scenarios';
-      }catch{}
+
+      const candidates = ['geophoto/scenarios','scenarios'];
+      for (const p of candidates){
+        try {
+          const s = await get(dbRef(db, p));
+          if (s.exists()) return p;
+        } catch(e){
+          console.warn('[detectRoot] unable to read', p, e?.message||e);
+        }
+      }
       return 'scenarios';
     }
     function updateRootPill(){
@@ -457,7 +463,13 @@
       await ensureAuthed();
       status('Loading…');
       const snap = await get(dbRef(db, ROOT));
-      const obj = snap.exists() ? (snap.val()||{}) : {};
+      if (!snap.exists()){
+        scenarios = [];
+        populateScenarios();
+        status(`0 scenario(s) at ${ROOT}`);
+        return;
+      }
+      const obj = snap.val()||{};
       scenarios = Object.entries(obj).map(([id,s])=>({ id, _raw:s, _stops:coerceStops(s), ...s }))
                   .sort((a,b)=>(b.createdAt||0)-(a.createdAt||0));
       populateScenarios();
@@ -474,7 +486,8 @@
           const fresh=scenarios.find(x=>x.id===current.id);
           if (fresh){ current=fresh; renderThumbs(); }
         }
-      }, (err)=>{ showErr('Live updates blocked by rules: '+(err?.message||err)); });
+        status(`${scenarios.length} scenario(s)`);
+      }, (err)=>{ showErr('Live updates error (rules?): ' + (err?.message||err)); });
     }
 
     /* ---------- Thumbnails ---------- */
@@ -666,7 +679,6 @@
         const metaFull = { contentType:'image/jpeg', cacheControl:'public,max-age=31536000,immutable' };
         const metaThmb = { contentType:'image/jpeg', cacheControl:'public,max-age=31536000,immutable' };
 
-        // Try resumable first (with timeout), then simple upload fallback
         try{
           await uploadWithTimeoutResumable(fullRef, fullBlob, metaFull, 90_000);
         }catch(e){
@@ -820,7 +832,45 @@
     });
     renderShelf('fire');
 
-    /* ---------- Selection tools ---------- */
+    /* ---------- Brush / erase ---------- */
+    let brushMode='off', pointerDown=false, lastStamp=null;
+    const brushSize=$('brushSize'), brushSizeReadout=$('brushSizeReadout');
+    brushSize.oninput=()=> brushSizeReadout.textContent=(parseInt(brushSize.value,10)||120)+' px';
+    $('brushFire').onclick = ()=> brushMode='fire';
+    $('brushSmoke').onclick= ()=> brushMode='smoke';
+    $('brushErase').onclick= ()=> brushMode='erase';
+    $('brushOff').onclick  = ()=> brushMode='off';
+    function dist(a,b){ const dx=a.x-b.x, dy=a.y-b.y; return Math.hypot(dx,dy); }
+    async function randomOverlay(cat){
+      const files = await listOverlays(cat); if(!files.length) return null;
+      const i=Math.floor(Math.random()*files.length);
+      return `${OVERLAY_BASE}${FOLDER[cat]}/${files[i]}`;
+    }
+    async function stampAt(p, cat){
+      const file = await randomOverlay(cat); if(!file) return;
+      const R = (parseInt(brushSize.value,10)||120)/2;
+      if (lastStamp && dist(p,lastStamp) < R*0.6) return; lastStamp=p;
+      fabric.Image.fromURL(file, img=>{
+        const baseW=img.width||200, scale=(R*2)/baseW, j=0.75+Math.random()*0.5;
+        img.scale(scale*j);
+        img.set({ left:p.x-(img.width*img.scaleX)/2, top:p.y-(img.height*img.scaleY)/2, angle:(Math.random()*30-15),
+                  opacity:0.9, cornerStyle:'circle', transparentCorners:false, erasable:true, selectable:false, evented:false });
+        f.add(img); f.requestRenderAll();
+      }, { crossOrigin:'anonymous' });
+    }
+    function eraseStampsAt(p){
+      const R=(parseInt(brushSize.value,10)||120)/2;
+      const targets = f.getObjects('image').filter(o => o!==baseImage);
+      for (const obj of targets){
+        const cx=obj.left + (obj.width*obj.scaleX)/2, cy=obj.top + (obj.height*obj.scaleY)/2;
+        if (Math.hypot(cx-p.x, cy-p.y) <= R) f.remove(obj);
+      }
+      f.requestRenderAll();
+    }
+    f.on('mouse:down', (e)=>{ pointerDown=true; const p=f.getPointer(e.e); if(brushMode==='fire') stampAt(p,'fire'); else if(brushMode==='smoke') stampAt(p,'smoke'); else if(brushMode==='erase') eraseStampsAt(p); });
+    f.on('mouse:move', (e)=>{ if(!pointerDown) return; const p=f.getPointer(e.e); if(brushMode==='fire') stampAt(p,'fire'); else if(brushMode==='smoke') stampAt(p,'smoke'); else if(brushMode==='erase') eraseStampsAt(p); });
+    f.on('mouse:up', ()=>{ pointerDown=false; });
+
     $('bringFront').onclick = ()=>{ const o=f.getActiveObject(); if(o && o!==baseImage){ o.bringToFront(); f.requestRenderAll(); } };
     $('sendBack').onclick  = ()=>{ const o=f.getActiveObject(); if(o && o!==baseImage){ o.sendToBack(); if(baseImage) baseImage.sendToBack(); f.requestRenderAll(); } };
     $('deleteObj').onclick = ()=>{ const o=f.getActiveObject(); if(o && o!==baseImage){ f.remove(o); f.discardActiveObject(); f.requestRenderAll(); } };
@@ -847,7 +897,7 @@
         f.clear(); baseImage=null; fitCanvas();
         status('Scenario deleted.');
       }catch(e){
-        showErr('Delete failed: '+(e.message||e));
+        showErr('Delete failed: '+(e?.message||e));
       }finally{
         showLoad(false);
       }
@@ -944,7 +994,6 @@
 
     async function saveAIResultToStorage(dataUrl){
       if (!(await verifyStorageOnce())) return null;
-      // Always store as small JPEG for classroom/phone
       const blob = await reencodeBlobToJPEG(dataURLtoBlob(dataUrl), EDIT_MAX_EDGE, EDIT_JPEG_QUALITY);
       const ts = Date.now();
       const path = `scenarios/${current.id}/ai/results/${ts}_stop${stopIndex}.jpg`;
@@ -952,7 +1001,6 @@
       try{
         await uploadWithTimeoutResumable(ref, blob, { contentType:'image/jpeg', cacheControl:'public,max-age=31536000,immutable' }, 90_000);
       }catch(e){
-        // final fallback smaller
         const smaller = await reencodeBlobToJPEG(blob, 1100, 0.8);
         await uploadBytes(ref, smaller, { contentType:'image/jpeg', cacheControl:'public,max-age=31536000,immutable' });
       }
@@ -979,7 +1027,7 @@
         return null;
       }
       const raw = await resp.blob();
-      const blob = await reencodeBlobToJPEG(raw, EDIT_MAX_EDGE, EDIT_JPEG_QUALITY); // shrink for reliability
+      const blob = await reencodeBlobToJPEG(raw, EDIT_MAX_EDGE, EDIT_JPEG_QUALITY);
       if (!(await verifyStorageOnce())) return null;
 
       const ts = Date.now();
@@ -1056,13 +1104,12 @@
         const overlays = serializeOverlaysForAI();
         const hasOverlays = overlays && overlays.length > 0;
 
-        // Prefer sending the composed canvas (guarantees subject stays the same)
+        // Prefer sending the composed canvas so the base scene remains the same
         let payload;
         const composedDataUrl = await dataURLFromCanvasScaled(f, 1600, 0.95);
         if (hasOverlays) {
           payload = { dataUrl: composedDataUrl, prompt, strength: 0.35 };
         } else {
-          // If no overlays, we still send the current base image as guide to avoid random street scenes.
           const guideUrl = await getBaseImageURLForStop();
           payload = { guideUrl, prompt, strength: 0.35 };
         }
@@ -1086,7 +1133,7 @@
           }
         }
 
-        // 🛟 Fallback: no AI image -> save the composed canvas as final
+        // Fallback: save the current composite so you still get a usable photo
         $('aiMsg').textContent = 'AI unavailable — saving current composite instead…';
         await saveAIResultToStorage(composedDataUrl);
       }catch(e){
@@ -1094,65 +1141,37 @@
       }
     };
 
-    /* ---------- Init ---------- */
+    /* ---------- Init (order matters!) ---------- */
     $('refreshBtn').onclick = async ()=>{
-      ROOT = await detectRoot();
-      updateRootPill();
-      await loadScenarios();
-    };
-    (async()=>{
-      ROOT = await detectRoot();
-      updateRootPill();
-      await loadScenarios();
-      subscribeScenarios();
-      await ensureAuthed();
-      await verifyStorageOnce(); // surface bucket issues early
-    })();
-
-    /* ---------- Overlay brush & other handlers (unchanged) ---------- */
-    let brushMode='off', pointerDown=false, lastStamp=null;
-    const brushSize=$('brushSize'), brushSizeReadout=$('brushSizeReadout');
-    brushSize.oninput=()=> brushSizeReadout.textContent=(parseInt(brushSize.value,10)||120)+' px';
-    $('brushFire').onclick = ()=> brushMode='fire';
-    $('brushSmoke').onclick= ()=> brushMode='smoke';
-    $('brushErase').onclick= ()=> brushMode='erase';
-    $('brushOff').onclick  = ()=> brushMode='off';
-    function dist(a,b){ const dx=a.x-b.x, dy=a.y-b.y; return Math.hypot(dx,dy); }
-    const OVERLAY_BASE2='https://fireopssim.com/geophoto/overlays/';
-    const FOLDER2={ fire:'fire', smoke:'smoke', people:'people', cars:'cars', hazard:'hazard' };
-    const EXT2=['png','webp','jpg','jpeg'];
-    async function randomOverlay(cat){
-      // tiny helper using listOverlays() above for variety
-      const files = await listOverlays(cat); if(!files.length) return null;
-      const i=Math.floor(Math.random()*files.length);
-      return `${OVERLAY_BASE2}${FOLDER2[cat]}/${files[i]}`;
-    }
-    function addOverlay(src){
-      fabric.Image.fromURL(src, img=>{
-        const cw=f.getWidth(), ch=f.getHeight(), targetW=cw*0.28, scale=targetW/img.width;
-        img.scale(scale);
-        img.set({ left:cw/2-(img.width*img.scaleX)/2, top:ch/2-(img.height*img.scaleY)/2,
-                  cornerStyle:'circle', transparentCorners:false, shadow:'rgba(0,0,0,0.35) 0 6px 16px', erasable:true });
-        f.add(img); f.setActiveObject(img); f.requestRenderAll();
-      }, { crossOrigin:'anonymous' });
-    }
-    f.on('mouse:down', (e)=>{ pointerDown=true; const p=f.getPointer(e.e); if(brushMode==='fire') randomOverlay('fire').then(u=>u&&addOverlay(u)); else if(brushMode==='smoke') randomOverlay('smoke').then(u=>u&&addOverlay(u)); else if(brushMode==='erase') eraseStampsAt(p); });
-    f.on('mouse:move', (e)=>{ if(!pointerDown) return; const p=f.getPointer(e.e); if(brushMode==='erase') eraseStampsAt(p); });
-    f.on('mouse:up', ()=>{ pointerDown=false; });
-    function eraseStampsAt(p){
-      const R=(parseInt(brushSize.value,10)||120)/2;
-      const targets = f.getObjects('image').filter(o => o!==baseImage);
-      for (const obj of targets){
-        const cx=obj.left + (obj.width*obj.scaleX)/2, cy=obj.top + (obj.height*obj.scaleY)/2;
-        if (Math.hypot(cx-p.x, cy-p.y) <= R) f.remove(obj);
+      try{
+        showLoad(true);
+        await ensureAuthed();           // 1) auth
+        ROOT = await detectRoot();      // 2) choose correct path
+        updateRootPill();
+        subscribeScenarios();           // 3) live updates
+        await loadScenarios();          // 4) initial load
+      } catch(e){
+        showErr('Refresh failed: ' + (e?.message||e));
+      } finally {
+        showLoad(false);
       }
-      f.requestRenderAll();
-    }
-    $('bringFront').onclick = ()=>{ const o=f.getActiveObject(); if(o && o!==baseImage){ o.bringToFront(); f.requestRenderAll(); } };
-    $('sendBack').onclick  = ()=>{ const o=f.getActiveObject(); if(o && o!==baseImage){ o.sendToBack(); if(baseImage) baseImage.sendToBack(); f.requestRenderAll(); } };
-    $('deleteObj').onclick = ()=>{ const o=f.getActiveObject(); if(o && o!==baseImage){ f.remove(o); f.discardActiveObject(); f.requestRenderAll(); } };
-    $('flipSelH').onclick  = ()=>{ const o=f.getActiveObject(); if(o && o!==baseImage){ o.set('flipX', !o.flipX); f.requestRenderAll(); } };
-    $('flipSelV').onclick  = ()=>{ const o=f.getActiveObject(); if(o && o!==baseImage){ o.set('flipY', !o.flipY); f.requestRenderAll(); } };
+    };
+
+    (async()=>{
+      try{
+        showLoad(true);
+        await ensureAuthed();           // 1) auth
+        ROOT = await detectRoot();      // 2) choose correct path
+        updateRootPill();
+        subscribeScenarios();           // 3) live updates
+        await loadScenarios();          // 4) load
+        await verifyStorageOnce();      // surface bucket issues early
+      } catch(e){
+        showErr('Startup failed: ' + (e?.message||e));
+      } finally {
+        showLoad(false);
+      }
+    })();
   </script>
 </body>
 </html>
