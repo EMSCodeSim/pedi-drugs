@@ -1,4 +1,6 @@
+# netlify.toml
 [build]
+  # No build step: just succeed and let Netlify publish /public
   command = "echo Building static site"
   publish = "public"
 
@@ -6,11 +8,16 @@
   NODE_VERSION = "20"
 
 [functions]
-  # Your logs show Netlify is picking up from "netlify/functions"
-  directory = "netlify/functions"
+  directory = "functions"
   node_bundler = "esbuild"
-  # Mark native deps external so Netlify installs them at deploy time
-  external_node_modules = ["firebase-admin", "sharp"]
+  external_node_modules = ["firebase-admin"]  # add others only if you import them
 
 [[plugins]]
 package = "@netlify/plugin-functions-install-core"
+
+# Pretty functions path (optional)
+[[redirects]]
+  from = "/functions/*"
+  to = "/.netlify/functions/:splat"
+  status = 200
+  force = true
