@@ -205,7 +205,7 @@
 
   <script src="https://cdnjs.cloudflare.com/ajax/libs/fabric.js/5.3.0/fabric.min.js" crossorigin="anonymous"></script>
   <script type="module">
-    /* ---------- global error surfacing (so silent breaks don’t hide loader) ---------- */
+    /* ---------- helpers & error surfacing ---------- */
     const $ = (id)=>document.getElementById(id);
     const showErr = (m)=>{ const b=$('errbar'); b.textContent=String(m); b.style.display='block'; console.error('[UI]', m); };
     const hideErr = ()=>{ $('errbar').style.display='none'; };
@@ -223,14 +223,12 @@
       fitCanvas();
     };
 
-    // ---------- AI endpoint (kept) ----------
+    /* ---------- AI endpoint (kept) ---------- */
     const AI_PRIMARY = "/api/ai-image";
     const AI_FALLBACK = "/.netlify/functions/ai-image";
     async function postAI(payload){
       let r = await fetch(AI_PRIMARY, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload) });
-      if (r.status === 404) {
-        r = await fetch(AI_FALLBACK, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload) });
-      }
+      if (r.status === 404) r = await fetch(AI_FALLBACK, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload) });
       return r;
     }
 
@@ -242,7 +240,7 @@
       getBlob, deleteObject, setMaxUploadRetryTime, setMaxOperationRetryTime
     } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-storage.js";
     import {
-      getAuth, signInAnonymously, onAuthStateChanged,
+      getAuth, signInAnonymously,
       setPersistence, browserLocalPersistence, browserSessionPersistence, inMemoryPersistence
     } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-auth.js";
 
@@ -256,10 +254,10 @@
       measurementId:"G-19DVN7NNH7"
     };
 
-    // Guard duplicate init (prevents crashes that stall loader)
+    // Guard duplicate init
     const appFB = getApps().length ? getApps()[0] : initializeApp(firebaseConfig);
 
-    /* -------- Explicit bucket (photo issues) -------- */
+    /* -------- Explicit bucket (photo fixes depend on this) -------- */
     const EXPLICIT_BUCKET = "dailyquiz-d5279.appspot.com";
     const storage = getStorage(appFB, `gs://${EXPLICIT_BUCKET}`);
     setMaxUploadRetryTime(storage, 5 * 60 * 1000);
@@ -268,20 +266,38 @@
     const db = getDatabase(appFB);
     const auth = getAuth(appFB);
 
+    // *** FIXED: robust, one-shot auth that never hangs ***
+    let __authReady = null;
     async function ensureAuthed(){
-      try{ await setPersistence(auth, browserLocalPersistence); }
-      catch{ try{ await setPersistence(auth, browserSessionPersistence); }
-      catch{ await setPersistence(auth, inMemoryPersistence); } }
-      if (!auth.currentUser){
-        await signInAnonymously(auth);
-        await new Promise(res=> onAuthStateChanged(auth, u=>{ if(u) res(); }));
-      }
-      const uid = auth.currentUser.uid.slice(0,8);
-      setAuthPill(`anon ✔ (${uid})`);
-      return auth.currentUser;
+      if (__authReady) return __authReady;
+      __authReady = (async()=>{
+        // Best-effort persistence chain
+        try{ await setPersistence(auth, browserLocalPersistence); }
+        catch{ try{ await setPersistence(auth, browserSessionPersistence); }
+        catch{ await setPersistence(auth, inMemoryPersistence); } }
+        try{
+          // If already signed in, use it; otherwise sign in and use returned user
+          const user = auth.currentUser ? auth.currentUser : (await signInAnonymously(auth)).user;
+          if (!user) throw new Error('Auth user missing after sign-in');
+          setAuthPill(`anon ✔ (${user.uid.slice(0,8)})`);
+          return user;
+        }catch(e){
+          setAuthPill('failed');
+          throw e;
+        }
+      })();
+      return __authReady;
     }
 
-    /* ---------- Root handling (more robust detection) ---------- */
+    // Handy timeout wrapper to avoid infinite spinners
+    function withTimeout(promise, ms, tag='operation'){
+      return Promise.race([
+        promise,
+        new Promise((_,rej)=> setTimeout(()=> rej(new Error(`${tag} timed out after ${ms}ms`)), ms))
+      ]);
+    }
+
+    /* ---------- Root handling ---------- */
     const FORCE_ROOT = ""; // optional override; or use ?root=
     let ROOT = 'scenarios';
     let unsubscribeScenarios = null;
@@ -298,10 +314,9 @@
       ];
       const probe = async (path)=>{
         try{
-          const snap = await get(dbRef(db, path));
+          const snap = await withTimeout(get(dbRef(db, path)), 8000, `DB read ${path}`);
           const val = snap.exists() ? (snap.val()||{}) : {};
           const keys = Object.keys(val);
-          // score paths that look like a map of scenarios-with-stops
           let likeSc = 0;
           for (const k of keys){
             const v = val[k];
@@ -310,7 +325,7 @@
           }
           return { path, ok:true, keys:keys.length, likeSc };
         }catch(e){
-          return { path, ok:false, err:e?.code||e?.message||String(e), keys:0, likeSc:0 };
+          return { path, ok:false, err:e?.message||String(e), keys:0, likeSc:0 };
         }
       };
       const results = await Promise.all(candidates.map(probe));
@@ -320,7 +335,7 @@
       const byKeys = ok.sort((a,b)=> b.keys-a.keys);
       if (byKeys.length) return byKeys[0].path;
 
-      showErr('DB read failed:\n' + results.map(r=> `${r.path}: ${r.ok?'ok':'❌ '+r.err}`).join('\n'));
+      showErr('No scenario-like roots found.\n' + results.map(r=> `${r.path}: ${r.ok?'ok':'❌ '+r.err}`).join('\n'));
       return 'scenarios';
     }
 
@@ -523,14 +538,17 @@
       try{
         await ensureAuthed();
         status('Loading…');
-        const snap = await get(dbRef(db, ROOT));
-        const obj = snap.exists() ? (snap.val()||{}) : {};
+        const snap = await withTimeout(get(dbRef(db, ROOT)), 8000, `DB read ${ROOT}`);
+        const raw = snap.exists() ? (snap.val()||{}) : {};
+        // Some folks store an array at root; normalize to object
+        const obj = Array.isArray(raw) ? Object.fromEntries(raw.map((v,i)=>[String(i),v])) : raw;
+
         scenarios = Object.entries(obj).map(([id,s])=>({ id, _raw:s, _stops:coerceStops(s), ...s }))
                     .sort((a,b)=>(b.createdAt||0)-(a.createdAt||0));
         populateScenarios();
         status(`${scenarios.length} scenario(s)`);
       }catch(e){
-        showErr('Read failed (rules?): ' + (e.message||e));
+        showErr('Read failed: ' + (e.message||e));
         status('0 scenario(s)');
       }
     }
@@ -540,7 +558,8 @@
       const ref = dbRef(db, ROOT);
       unsubscribeScenarios = onValue(ref, snap=>{
         const v=snap.val()||{};
-        scenarios = Object.entries(v).map(([id,s])=>({ id, _raw:s, _stops:coerceStops(s), ...s }))
+        const obj = Array.isArray(v) ? Object.fromEntries(v.map((x,i)=>[String(i),x])) : v;
+        scenarios = Object.entries(obj).map(([id,s])=>({ id, _raw:s, _stops:coerceStops(s), ...s }))
                     .sort((a,b)=>(b.createdAt||0)-(a.createdAt||0));
         populateScenarios();
         if (current){
@@ -559,7 +578,7 @@
       ];
       const probe = async (path)=>{
         try{
-          const snap = await get(dbRef(db, path));
+          const snap = await withTimeout(get(dbRef(db, path)), 8000, `DB read ${path}`);
           const val = snap.exists() ? (snap.val()||{}) : {};
           const keys = Object.keys(val);
           const likeSc = keys.filter(k=>{
@@ -568,7 +587,7 @@
           }).length;
           return { path, ok:true, keys:keys.length, likeSc };
         }catch(e){
-          return { path, ok:false, err:(e?.code||e?.message||String(e)) };
+          return { path, ok:false, err:(e?.message||String(e)) };
         }
       };
       const results = await Promise.all(paths.map(probe));
@@ -1021,7 +1040,7 @@
       }
     };
 
-    /* ---------- AI helpers (mask + inpaint stubs kept) ---------- */
+    /* ---------- AI helpers (stubs kept) ---------- */
     function rectCanvasToImage(rect){
       if (!baseImage || baseImage.type!=='image') return { x:0, y:0, w:0, h:0 };
       const sx = baseImage.getScaledWidth()  / baseImage.width;
@@ -1109,34 +1128,34 @@
       }
       throw new Error('This stop has no accessible base image.');
     }
-    async function saveAIResultFromURL(imageUrl){ /* unchanged from prior drop */ return null; }
-    async function saveAIResultToStorage(dataUrl){ /* unchanged from prior drop */ return null; }
-    async function addResultAsNewStop(url){ /* unchanged from prior drop */ return null; }
-    $('aiPreview').onclick = ()=>{
-      try{
-        const { dataUrl, overlays } = buildMaskDataURL();
-        console.log('[AI] mask preview (dataUrl length):', dataUrl.length, 'overlays:', overlays);
-        $('aiMsg').textContent = 'Mask + overlay payload logged to console.';
-      }catch(e){
-        $('aiMsg').textContent = e.message || String(e);
-      }
-    };
+    async function saveAIResultFromURL(_imageUrl){ return null; }
+    async function saveAIResultToStorage(_dataUrl){ return null; }
+    async function addResultAsNewStop(_url){ return null; }
 
     /* ---------- Refresh / init ---------- */
     $('refreshBtn').onclick = async ()=>{
-      const next = await detectRoot();
-      await switchRoot(next);
+      try{
+        showLoad(true);
+        const next = await detectRoot();
+        await switchRoot(next);
+      }catch(e){ showErr(e.message||String(e)); }
+      finally{ showLoad(false); }
     };
+
+    $('scanRoots').click(); // optional: give quick visibility on roots
 
     (async()=>{
       try{
-        await ensureAuthed();          // auth first
-        ROOT = await detectRoot();     // choose best root
+        showLoad(true);
+        await ensureAuthed();          // auth first (never hangs)
+        ROOT = await detectRoot();     // pick best root
         updateRootPill();
-        await loadScenarios();         // initial load
+        await loadScenarios();         // initial load (with timeout)
         subscribeScenarios();          // live updates
       }catch(e){
         showErr('Boot failed: ' + (e.message||e));
+      }finally{
+        showLoad(false);
       }
     })();
   </script>
