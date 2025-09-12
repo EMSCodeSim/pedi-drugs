@@ -255,8 +255,10 @@
     };
     const appFB = initializeApp(firebaseConfig);
 
-    /* -------- Storage bucket selection (robust) -------- */
-    const EXPLICIT_BUCKET = "dailyquiz-d5279.appspot.com"; // real GCS bucket
+    /* -------- Storage bucket selection (robust) --------
+       Real GCS buckets use <project-id>.appspot.com
+    */
+    const EXPLICIT_BUCKET = "dailyquiz-d5279.appspot.com"; // ← set real bucket if different
     function toAppspot(bucketOrHost = ""){ return bucketOrHost.replace(".firebasestorage.app", ".appspot.com"); }
     const candidates = [
       toAppspot(EXPLICIT_BUCKET).trim(),
@@ -333,34 +335,51 @@
       ROOT = newRoot;
       updateRootPill();
       if (unsubscribeScenarios) try { unsubscribeScenarios(); } catch {}
-      await loadScenarios();          // load once
-      subscribeScenarios();           // then live updates on the new root
+      await loadScenarios();          // load once on the new root
+      subscribeScenarios();           // then attach live updates
     }
 
-    /* ---------- Storage helpers ---------- */
+    /* ---------- Storage helpers (fixed) ---------- */
     function toStorageRefString(s){
       if(!s) return s;
       let v = s.trim();
       try{ v = decodeURIComponent(v); }catch{}
       if (v.startsWith('gs://')) return v;
+      // googleapis style (safe to coerce)
       let m = v.match(/^https?:\/\/firebasestorage\.googleapis\.com\/v0\/b\/([^/]+)\/o\/([^?]+)/i);
       if (m) return `gs://${m[1]}/${m[2].replace(/\+/g,' ')}`;
+      // firebasestorage.app style — if you MUST coerce, fix bucket to appspot.com
       m = v.match(/^https?:\/\/([^/]+)\.firebasestorage\.app\/o\/([^?]+)/i);
-      if (m) return `gs://${m[1]}/${m[2].replace(/\+/g,' ')}`;
+      if (m){
+        const bucket = m[1].includes('.') ? m[1] : `${m[1]}.appspot.com`;
+        return `gs://${bucket}/${m[2].replace(/\+/g,' ')}`;
+      }
       if (!/^https?:\/\//i.test(v)) return v;
       return v;
     }
+
+    // Only coerce to gs:// if the input is already gs:// or googleapis-style.
+    // For https links (incl. firebasestorage.app), prefer direct fetch.
     async function getBlobFromRefString(refStr){
       await ensureAuthed();
-      const coerced = toStorageRefString(refStr);
-      if (/^https?:\/\//i.test(coerced)){
-        const r = await fetch(coerced, { mode:'cors', credentials:'omit', cache:'no-store' });
+      if (!refStr) throw new Error('No reference provided');
+      const isHttp = /^https?:\/\//i.test(refStr);
+      let refCandidate = refStr;
+      if (!isHttp) {
+        refCandidate = toStorageRefString(refStr);
+      } else {
+        // keep HTTPS as-is
+      }
+
+      if (/^https?:\/\//i.test(refCandidate)){
+        const r = await fetch(refCandidate, { mode:'cors', credentials:'omit', cache:'no-store' });
         if (!r.ok) throw new Error('HTTP '+r.status);
         return await r.blob();
       }
-      const ref = stRef(storage, coerced);
+      const ref = stRef(storage, refCandidate);
       return await getBlob(ref);
     }
+
     function candidateOriginals(pathOrUrl){
       const out = new Set();
       if (!pathOrUrl) return [];
@@ -487,9 +506,9 @@
     }
 
     async function loadScenarios(){
-      await ensureAuthed();
-      status('Loading…');
       try{
+        await ensureAuthed();
+        status('Loading…');
         const snap = await get(dbRef(db, ROOT));
         const obj = snap.exists() ? (snap.val()||{}) : {};
         scenarios = Object.entries(obj).map(([id,s])=>({ id, _raw:s, _stops:coerceStops(s), ...s }))
@@ -497,9 +516,8 @@
         populateScenarios();
         status(`${scenarios.length} scenario(s)`);
       }catch(e){
-        const msg = e?.code ? `${e.code} — ${e.message||''}` : (e?.message || String(e));
-        showErr(`Failed to load scenarios from "${ROOT}": ${msg}`);
-        status('Load failed');
+        showErr('Read failed (rules?): ' + (e.message||e));
+        status('0 scenario(s)');
       }
     }
 
@@ -537,7 +555,6 @@
           const snap = await get(dbRef(db, path));
           const val = snap.exists() ? (snap.val()||{}) : {};
           const keys = Object.keys(val);
-          // crude heuristic: how many look like scenario objects
           const likeSc = keys.filter(k=>{
             const v = val[k];
             return v && typeof v==='object' && (Array.isArray(v.stops)||Array.isArray(v.photos)||Array.isArray(v.images));
@@ -622,7 +639,7 @@
           showErr('Loaded a small thumbnail. A higher-resolution original could not be found.');
         }
       }catch(e){
-        showErr('Image load failed (rules?): '+(e.message||e));
+        showErr('Image load failed: '+(e.message||e));
       }finally{
         showLoad(false);
       }
@@ -991,7 +1008,7 @@
         f.clear(); baseImage=null; fitCanvas();
         status('Scenario deleted.');
       }catch(e){
-        showErr('Delete failed (rules?): '+(e.message||e));
+        showErr('Delete failed: '+(e.message||e));
       }finally{
         showLoad(false);
       }
@@ -1190,56 +1207,6 @@
         const { dataUrl, overlays } = buildMaskDataURL();
         console.log('[AI] mask preview (dataUrl length):', dataUrl.length, 'overlays:', overlays);
         $('aiMsg').textContent = 'Mask + overlay payload logged to console.';
-      }catch(e){
-        $('aiMsg').textContent = e.message || String(e);
-      }
-    };
-
-    // ---------- “Send to AI” ----------
-    $('aiSend').onclick = async ()=>{
-      try{
-        if(!current || stopIndex<0) throw new Error('Select a stop first.');
-        $('aiMsg').textContent = 'Preparing…';
-
-        const style = $('aiStyle').value;
-        const notes = ($('aiNotes').value||'').trim();
-        const prompt =
-          (style === 'dramatic') ? `dramatic emergency scene; ${notes}` :
-          (style === 'training') ? `training drill realism; ${notes}` :
-                                   `photo-realistic; ${notes || 'keep original scene; realistic lighting'}`;
-
-        const overlays = serializeOverlaysForAI();
-        const hasOverlays = overlays.length > 0;
-
-        let payload;
-        if (hasOverlays) {
-          $('aiMsg').textContent = 'Building mask…';
-          const { dataUrl: maskDataUrl } = buildMaskDataURL();
-          $('aiMsg').textContent = 'Fetching base image…';
-          const baseUrl = await getBaseImageURLForStop();
-          payload = { mode:'inpaint', image: baseUrl, mask: maskDataUrl, prompt };
-        } else {
-          $('aiMsg').textContent = 'No overlays — sending current image…';
-          const composed = await dataURLFromCanvasScaled(f, 1280, 0.9);
-          payload = { mode:'echo', image: composed, prompt };
-        }
-
-        $('aiMsg').textContent = 'Contacting AI…';
-        const r = await postAI(payload);
-        const text = await r.text().catch(()=> '');
-        let json; try { json = JSON.parse(text); } catch { json = { ok:false, error: text || `HTTP ${r.status}` }; }
-        if (!json?.ok) { $('aiMsg').textContent = `AI error: ${json.error||'Unknown'}`; return; }
-
-        const imgField = json.image;
-        if (typeof imgField === 'string' && imgField.startsWith('data:image')) {
-          $('aiMsg').textContent = 'Uploading result…';
-          await saveAIResultToStorage(imgField);
-        } else if (imgField && typeof imgField.url === 'string') {
-          $('aiMsg').textContent = 'Uploading result…';
-          await saveAIResultFromURL(imgField.url);
-        } else {
-          $('aiMsg').textContent = 'No image returned.';
-        }
       }catch(e){
         $('aiMsg').textContent = e.message || String(e);
       }
