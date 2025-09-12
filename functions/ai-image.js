@@ -1,29 +1,30 @@
-// ai-image.js
-// Netlify Function: SDXL img2img with dynamic version fetch + Firebase bucket upload for dataUrl
+// functions/ai-image.js
+// Netlify Function for Replicate SDXL image-to-image
+// - Supports guideUrl (public image URL) OR dataUrl (base64 canvas output)
+// - Automatically fetches latest SDXL version to prevent 422 errors
+
 import { json } from "./_response.js";
 import Replicate from "replicate";
 import admin from "firebase-admin";
 
-// --------- Firebase Admin (server-side upload for dataUrl) ----------
+// ---------- Firebase Admin Setup ----------
 if (!admin.apps.length) {
-  // Uses Application Default Credentials. On Netlify, provide a service account via env/secret if needed.
-  // Also requires FIREBASE_STORAGE_BUCKET env var (e.g., "dailyquiz-d5279.appspot.com").
   admin.initializeApp({
     credential: admin.credential.applicationDefault(),
-    storageBucket: process.env.FIREBASE_STORAGE_BUCKET
+    storageBucket: process.env.FIREBASE_STORAGE_BUCKET // e.g., "dailyquiz-d5279.appspot.com"
   });
 }
 const bucket = admin.storage().bucket();
 
-// --------- Replicate client ----------
+// ---------- Replicate Setup ----------
 const replicate = process.env.REPLICATE_API_TOKEN
   ? new Replicate({ auth: process.env.REPLICATE_API_TOKEN })
   : null;
 
-// Hardcode the model owner/name; we resolve the version dynamically each invocation.
+// Hard-coded base model name
 const SDXL_MODEL = "stability-ai/sdxl";
 
-// Fetch the latest model version id so we can call owner/name:version
+// Fetch latest model version from Replicate dynamically
 async function getLatestVersionId(owner, name, token) {
   const res = await fetch(`https://api.replicate.com/v1/models/${owner}/${name}`, {
     headers: {
@@ -37,11 +38,11 @@ async function getLatestVersionId(owner, name, token) {
   }
   const data = JSON.parse(text);
   const id = data?.latest_version?.id;
-  if (!id) throw new Error(`No latest_version.id for ${owner}/${name}`);
+  if (!id) throw new Error(`No latest_version.id found for ${owner}/${name}`);
   return id;
 }
 
-// Normalize Replicate output (commonly an array of URLs) to a single URL string
+// Normalize Replicate output to a single URL
 function normalizeOutput(output) {
   if (Array.isArray(output) && output.length) return String(output[0]);
   if (typeof output === "string") return output;
@@ -51,20 +52,22 @@ function normalizeOutput(output) {
   throw new Error("No image URL returned from Replicate output");
 }
 
-// Upload a data URL ("data:image/png;base64,...") to your Firebase Storage bucket and return a public URL
+// Upload a base64 data URL to Firebase Storage and return its public URL
 async function uploadDataUrlToStorage(dataUrl) {
-  const m = /^data:(image\/[a-zA-Z0-9.+-]+);base64,(.*)$/i.exec(dataUrl || "");
-  if (!m) throw new Error("Invalid dataUrl (expected 'data:image/...;base64,....').");
-  const contentType = m[1];
-  const base64 = m[2];
+  const match = /^data:(image\/[a-zA-Z0-9.+-]+);base64,(.*)$/i.exec(dataUrl || "");
+  if (!match) throw new Error("Invalid dataUrl format (expected 'data:image/...;base64,....').");
+
+  const contentType = match[1];
+  const base64 = match[2];
   const buffer = Buffer.from(base64, "base64");
   const filename = `composites/${Date.now()}.png`;
+
   const file = bucket.file(filename);
-  // Public read; if your bucket isn't public, swap for a signed URL flow.
   await file.save(buffer, { contentType, public: true, resumable: false, validation: false });
   return `https://storage.googleapis.com/${bucket.name}/${filename}`;
 }
 
+// ---------- Handler ----------
 export default async function handler(request) {
   try {
     if (request.method !== "POST") {
@@ -78,98 +81,97 @@ export default async function handler(request) {
       );
     }
 
-    if (!replicate) throw new Error("Missing REPLICATE_API_TOKEN");
-    if (!process.env.FIREBASE_STORAGE_BUCKET) throw new Error("Missing FIREBASE_STORAGE_BUCKET");
+    if (!replicate) throw new Error("Missing REPLICATE_API_TOKEN environment variable");
+    if (!process.env.FIREBASE_STORAGE_BUCKET) {
+      throw new Error("Missing FIREBASE_STORAGE_BUCKET environment variable");
+    }
 
-    // Accept application/json (be forgiving if header is missing but body parses)
+    // Parse JSON body
     let body = {};
     try {
       body = await request.json();
     } catch {
       return json(
-        {
-          ok: false,
-          error: "Missing or invalid JSON body. Set header: Content-Type: application/json"
-        },
+        { ok: false, error: "Invalid or missing JSON body. Use Content-Type: application/json." },
         400
       );
     }
 
-    // Input handling: either guideUrl (public URL) OR dataUrl (base64)
-    let guideUrl = body.guideUrl || body.imageUrl || body.compositeUrl || null;
+    // Either a guideUrl or a dataUrl must be provided
+    let guideUrl = body.guideUrl || body.imageUrl || null;
     const dataUrl = body.dataUrl || null;
 
     if (!guideUrl && !dataUrl) {
       return json(
         {
           ok: false,
-          error: "Provide either guideUrl (public image URL) or dataUrl (canvas output)."
+          error: "Provide either guideUrl (public URL) or dataUrl (base64 canvas output)."
         },
         400
       );
     }
 
+    // If dataUrl was provided, upload it to Firebase and use that URL as the guide
     if (!guideUrl && dataUrl) {
-      // Upload the dataUrl to your Firebase bucket and use that URL as the guide image
       guideUrl = await uploadDataUrlToStorage(dataUrl);
     }
 
-    // Map your UI fields
     const prompt =
       (typeof body.prompt === "string" && body.prompt.trim()) ||
-      "Make the scene photorealistic while preserving the guide layout.";
+      "Make the scene photorealistic while preserving layout.";
 
-    // SDXL uses "prompt_strength" (0..1). We map from your "strength" input.
-    // Lower values adhere more closely to the guide image.
+    // SDXL uses prompt_strength (0..1). Lower = follow guide image more closely.
     const prompt_strength =
       typeof body.strength === "number" ? Math.max(0, Math.min(1, body.strength)) : 0.35;
 
-    // Optional size (SDXL defaults to square; adjust if needed)
     const width =
       typeof body.width === "number" && body.width > 0 ? Math.min(2048, body.width) : 1024;
     const height =
       typeof body.height === "number" && body.height > 0 ? Math.min(2048, body.height) : 1024;
 
-    // Resolve the latest version ID so we don't hit "version is required"
+    // Fetch the latest SDXL version to prevent 422 errors
     const [owner, name] = SDXL_MODEL.split("/");
     const version = await getLatestVersionId(owner, name, process.env.REPLICATE_API_TOKEN);
 
-    // Build SDXL input
+    // Build the input payload for SDXL
     const input = {
       prompt,
       image: guideUrl,
       prompt_strength,
       width,
       height
-      // negative_prompt: body.negativePrompt ?? undefined,
-      // scheduler / seed / num_outputs can be added if you need them and the model supports them
     };
 
-    // Call Replicate with owner/name:version
+    // Call Replicate
     const output = await replicate.run(`${owner}/${name}:${version}`, { input });
-    const url = normalizeOutput(output);
+    const resultUrl = normalizeOutput(output);
 
     return json({
       ok: true,
-      image: { url, source: SDXL_MODEL },
+      image: { url: resultUrl, source: SDXL_MODEL },
       guideUrl,
       debug: {
         model: SDXL_MODEL,
         version,
-        input: { prompt, image: guideUrl, prompt_strength, width, height }
+        input
       }
     });
   } catch (e) {
-    // Improve common errors
     const msg = String(e?.message || e);
-    const is422Version = /version is required|validation failed|422/.test(msg);
+    const is422 = /version is required|422/i.test(msg);
     const is402 = /402|payment required|insufficient credit/i.test(msg);
-    const hint = is402
-      ? "Replicate credit is insufficient. Add credit or switch provider."
-      : is422Version
-      ? "Replicate requires a model version. This function resolves the latest version automatically; check network logs for the version fetch."
-      : undefined;
 
-    return json({ ok: false, error: msg, hint }, is402 ? 402 : 500);
+    return json(
+      {
+        ok: false,
+        error: msg,
+        hint: is402
+          ? "Your Replicate account is out of credits. Add credits or use a free model."
+          : is422
+          ? "The Replicate model version was missing. This function fetches it dynamically; check network logs if the error persists."
+          : undefined
+      },
+      is402 ? 402 : 500
+    );
   }
 }
