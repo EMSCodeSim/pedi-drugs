@@ -48,7 +48,7 @@
     .sectionTitle{font-weight:900;margin:6px 0}
     .divider{height:1px;background:rgba(255,255,255,.08);margin:12px 0}
     .small{font-size:12px;opacity:.85}
-    #errbar{position:fixed;left:10px;bottom:10px;background:#2b0d0d;color:#ffd7d7;border:1px solid #7a2b2b;border-radius:12px;padding:8px 12px;display:none;z-index:9999}
+    #errbar{position:fixed;left:10px;bottom:10px;background:#2b0d0d;color:#ffd7d7;border:1px solid #7a2b2b;border-radius:12px;padding:8px 12px;display:none;z-index:9999;white-space:pre-wrap;max-width:90vw}
 
     #drawer summary{cursor:pointer;list-style:none;padding:8px 10px;border:1px solid rgba(255,255,255,.14);border-radius:10px;background:#0c1528;font-weight:800}
     #drawer[open] summary{background:#0e1a30}
@@ -201,7 +201,7 @@
   <script type="module">
     /* ---------- helpers ---------- */
     const $ = (id)=>document.getElementById(id);
-    const showErr = (m)=>{ const b=$('errbar'); b.textContent=m; b.style.display='block'; };
+    const showErr = (m)=>{ const b=$('errbar'); b.textContent=String(m); b.style.display='block'; console.error(m); };
     const hideErr = ()=>{ $('errbar').style.display='none'; };
     const showLoad = (on)=>{ $('loader').style.display = on ? 'grid' : 'none'; };
     const status = (msg)=>{ $('statusPill').textContent=msg; };
@@ -219,46 +219,45 @@
     const AI_PRIMARY = "/api/ai-image";
     const AI_FALLBACK = "/.netlify/functions/ai-image";
     async function postAI(payload){
-      let r = await fetch(AI_PRIMARY, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload) });
-      if (r.status === 404) {
-        r = await fetch(AI_FALLBACK, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload) });
+      try{
+        let r = await fetch(AI_PRIMARY, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload) });
+        if (r.status === 404) r = await fetch(AI_FALLBACK, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload) });
+        return r;
+      }catch(e){
+        // network error -> fake a minimal Response-like object
+        return { ok:false, status:0, text: async()=> JSON.stringify({ ok:false, error:String(e) }) };
       }
-      return r;
     }
 
     /* ---------- Firebase ---------- */
-    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-app.js";
+    import { initializeApp, getApps } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-app.js";
     import { getDatabase, ref as dbRef, get, set, onValue, remove } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-database.js";
-    import { getStorage, ref as stRef, uploadBytesResumable, uploadBytes, getDownloadURL, getBlob, deleteObject } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-storage.js";
-    import { getAuth, signInAnonymously, onAuthStateChanged, setPersistence, browserLocalPersistence, browserSessionPersistence, inMemoryPersistence } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-auth.js";
+    import {
+      getStorage, ref as stRef, uploadBytesResumable, uploadBytes, getDownloadURL,
+      getBlob, deleteObject, setMaxUploadRetryTime, setMaxOperationRetryTime
+    } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-storage.js";
+    import {
+      getAuth, signInAnonymously, onAuthStateChanged,
+      setPersistence, browserLocalPersistence, browserSessionPersistence, inMemoryPersistence
+    } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-auth.js";
 
     const firebaseConfig = {
       apiKey:"AIzaSyDM6DpRSeZueVKRpbyJyDmhf8WY66KyCDk",
       authDomain:"dailyquiz-d5279.firebaseapp.com",
       databaseURL:"https://dailyquiz-d5279-default-rtdb.firebaseio.com",
       projectId:"dailyquiz-d5279",
-      storageBucket:"dailyquiz-d5279.firebasestorage.app",
+      storageBucket:"dailyquiz-d5279.firebasestorage.app", /* leave as-is; we override below */
       appId:"1:94577748034:web:c032d3a1d72db1313de5db",
       measurementId:"G-19DVN7NNH7"
     };
-    const appFB = initializeApp(firebaseConfig);
+    const appFB = getApps().length ? getApps()[0] : initializeApp(firebaseConfig);
 
-    /* -------- Storage bucket selection (robust) --------
-       ⚠️ Set EXPLICIT_BUCKET to your real Firebase bucket name when in doubt.
-       Firebase buckets are <project-id>.appspot.com, NOT *.firebasestorage.app
-    */
-    const EXPLICIT_BUCKET = ""; // e.g. "dailyquiz-d5279.appspot.com" or leave "" to auto-detect
-    function toAppspot(bucketOrHost = ""){ return bucketOrHost.replace(".firebasestorage.app", ".appspot.com"); }
-    const candidates = [
-      toAppspot(EXPLICIT_BUCKET).trim(),
-      toAppspot((firebaseConfig.storageBucket || "").trim()),
-    ].filter(Boolean);
-    let storage;
-    if (candidates.length){
-      storage = getStorage(appFB, `gs://${candidates[0]}`);
-    } else {
-      storage = getStorage(appFB);
-    }
+    /* --------- ✅ FORCE THE CORRECT STORAGE BUCKET --------- */
+    const EXPLICIT_BUCKET = "dailyquiz-d5279.appspot.com"; // <— IMPORTANT
+    const storage = getStorage(appFB, `gs://${EXPLICIT_BUCKET}`);
+    // Fail faster instead of hanging for minutes:
+    setMaxUploadRetryTime(storage, 60_000);
+    setMaxOperationRetryTime(storage, 60_000);
 
     const db = getDatabase(appFB);
     const auth = getAuth(appFB);
@@ -276,7 +275,22 @@
       return auth.currentUser;
     }
 
-    /* ---------- Root detection ---------- */
+    /* ---------- Quick storage health check (once per session) ---------- */
+    let storageHealthChecked = false;
+    async function verifyStorageOnce(){
+      if (storageHealthChecked) return true;
+      try{
+        const testRef = stRef(storage, `healthchecks/ping_${Date.now()}.txt`);
+        await uploadBytes(testRef, new Blob([new TextEncoder().encode('ok')], {type:'text/plain'}), { cacheControl:'no-store' });
+        storageHealthChecked = true;
+        return true;
+      }catch(e){
+        showErr(`Storage write failed. Check bucket rules/host.\nBucket: ${EXPLICIT_BUCKET}\n${e?.message||e}`);
+        return false;
+      }
+    }
+
+    /* ---------- Root handling (working logic) ---------- */
     let ROOT = 'scenarios';
     async function detectRoot(){
       const fromQS = new URLSearchParams(location.search).get('root');
@@ -287,8 +301,11 @@
       }catch{}
       return 'scenarios';
     }
+    function updateRootPill(){
+      $('rootPill').textContent = `root: ${ROOT} | bucket: ${EXPLICIT_BUCKET}`;
+    }
 
-    /* ---------- Storage helpers ---------- */
+    /* ---------- Storage URL helpers ---------- */
     function toStorageRefString(s){
       if(!s) return s;
       let v = s.trim();
@@ -297,7 +314,7 @@
       let m = v.match(/^https?:\/\/firebasestorage\.googleapis\.com\/v0\/b\/([^/]+)\/o\/([^?]+)/i);
       if (m) return `gs://${m[1]}/${m[2].replace(/\+/g,' ')}`;
       m = v.match(/^https?:\/\/([^/]+)\.firebasestorage\.app\/o\/([^?]+)/i);
-      if (m) return `gs://${m[1]}/${m[2].replace(/\+/g,' ')}`;
+      if (m) return `gs://${m[1].replace(/\.firebasestorage\.app$/i,'.appspot.com')}/${m[2].replace(/\+/g,' ')}`;
       if (!/^https?:\/\//i.test(v)) return v;
       return v;
     }
@@ -517,7 +534,7 @@
           showErr('Loaded a small thumbnail. A higher-resolution original could not be found.');
         }
       }catch(e){
-        showErr('Image load failed (rules?): '+(e.message||e));
+        showErr('Image load failed: '+(e.message||e));
       }finally{
         showLoad(false);
       }
@@ -563,59 +580,8 @@
       $('canvasInfo').textContent='Text slide';
     }
 
-    function serializeOverlays(){
-      const out=[];
-      f.getObjects().forEach(o=>{
-        if (o===baseImage || o.isBaseText) return;
-        if (o.type==='image'){
-          out.push({
-            kind:'image',
-            src:o.getSrc ? o.getSrc() : (o._originalElement?.src || o.src || ''),
-            left:o.left||0, top:o.top||0, scaleX:o.scaleX||1, scaleY:o.scaleY||1,
-            angle:o.angle||0, opacity:o.opacity??1, flipX:!!o.flipX, flipY:!!o.flipY
-          });
-        } else if (o.type==='textbox'){
-          out.push({
-            kind:'text', text:o.text||'', left:o.left||0, top:o.top||0, scaleX:o.scaleX||1, scaleY:o.scaleY||1,
-            angle:o.angle||0, opacity:o.opacity??1, fontSize:o.fontSize||24, fill:o.fill||'#fff',
-            backgroundColor:o.backgroundColor||'rgba(0,0,0,0.6)', padding:o.padding??8
-          });
-        }
-      });
-      return out;
-    }
-
-    $('useGPS').onclick = ()=>{
-      navigator.geolocation.getCurrentPosition(p=>{
-        $('stopLat').value = p.coords.latitude.toFixed(6);
-        $('stopLng').value = p.coords.longitude.toFixed(6);
-        $('metaMsg').textContent='GPS captured.';
-      }, e=>{ $('metaMsg').textContent='GPS error: '+e.message; }, { enableHighAccuracy:true, timeout:10000 });
-    };
-
-    $('saveMeta').onclick = async ()=>{
-      try{
-        await ensureAuthed();
-        if(!current || stopIndex<0) throw new Error('Select a stop first.');
-        const s = Object.assign({}, current._stops[stopIndex]);
-        s.title = $('stopTitle').value.trim();
-        s.caption = $('stopCaption').value.trim();
-        const lat = $('stopLat').value.trim()==='' ? null : parseFloat($('stopLat').value);
-        const lng = $('stopLng').value.trim()==='' ? null : parseFloat($('stopLng').value);
-        s.lat = lat; s.lng = lng;
-        s.radiusMeters = Math.max(5, Math.min(1000, Math.round(parseInt($('stopRadius').value||'50',10))));
-        s.overlays = serializeOverlays();
-
-        const next=current._stops.slice(); next[stopIndex]=s;
-        const updated=Object.assign({}, current._raw); setStops(updated,next);
-        await set(dbRef(db, `${ROOT}/${current.id}`), updated);
-        current._raw = updated; current._stops = next;
-        renderThumbs();
-        $('metaMsg').textContent='Meta saved.';
-      }catch(e){ $('metaMsg').textContent=String(e.message||e); }
-    };
-
-    const EDIT_MAX_EDGE=1600, EDIT_THUMB_EDGE=480, EDIT_JPEG_QUALITY=0.85;
+    /* ---------- Export helpers (resize & encode) ---------- */
+    const EDIT_MAX_EDGE=1280, EDIT_THUMB_EDGE=480, EDIT_JPEG_QUALITY=0.84;
 
     async function dataURLFromCanvasScaled(fabricCanvas, maxEdge=EDIT_MAX_EDGE, quality=EDIT_JPEG_QUALITY){
       const raw = fabricCanvas.toDataURL({ format:'jpeg', quality:1 });
@@ -646,11 +612,32 @@
       for (let i=0;i<len;i++) buf[i] = bin.charCodeAt(i);
       return new Blob([buf], { type:mime });
     }
-    async function uploadWithTimeout(ref, blob, metadata){
+    async function blobToImage(blob){
+      return new Promise((resolve, reject)=>{
+        const url = URL.createObjectURL(blob);
+        const img = new Image();
+        img.onload = ()=>{ URL.revokeObjectURL(url); resolve(img); };
+        img.onerror = (e)=>{ URL.revokeObjectURL(url); reject(e); };
+        img.decoding='async';
+        img.src = url;
+      });
+    }
+    async function reencodeBlobToJPEG(blob, maxEdge=EDIT_MAX_EDGE, quality=EDIT_JPEG_QUALITY){
+      const img = await blobToImage(blob);
+      const w = img.naturalWidth, h = img.naturalHeight;
+      const s = Math.min(1, maxEdge / Math.max(w, h));
+      const outW = Math.max(1, Math.round(w*s)), outH = Math.max(1, Math.round(h*s));
+      const c = document.createElement('canvas'); c.width=outW; c.height=outH;
+      const ctx = c.getContext('2d'); ctx.imageSmoothingEnabled=true; ctx.imageSmoothingQuality='high';
+      ctx.drawImage(img, 0, 0, outW, outH);
+      return dataURLtoBlob(c.toDataURL('image/jpeg', quality));
+    }
+
+    async function uploadWithTimeoutResumable(ref, blob, metadata, timeoutMs=120_000){
       return new Promise((resolve,reject)=>{
         const task = uploadBytesResumable(ref, blob, metadata);
-        const killer = setTimeout(()=>{ try{ task.cancel(); }catch{}; reject(Object.assign(new Error('Timed out while uploading'), { code:'save/timeout-upload' })); }, 45000);
-        task.on('state_changed', ()=>{}, e=>{ clearTimeout(killer); reject(e); }, ()=>{ clearTimeout(killer); resolve(); });
+        const killer = setTimeout(()=>{ try{ task.cancel(); }catch{}; reject(Object.assign(new Error('upload/timeout'),{code:'upload/timeout'})); }, timeoutMs);
+        task.on('state_changed', ()=>{}, (err)=>{ clearTimeout(killer); reject(err); }, ()=>{ clearTimeout(killer); resolve(); });
       });
     }
 
@@ -664,6 +651,7 @@
         if(!current || stopIndex<0) throw new Error('Select a stop first.');
         showLoad(true);
         await ensureAuthed();
+        if (!(await verifyStorageOnce())) return;
 
         const dataURL      = await dataURLFromCanvasScaled(f, EDIT_MAX_EDGE, EDIT_JPEG_QUALITY);
         const thumbDataURL = await thumbFromDataURL(dataURL, EDIT_THUMB_EDGE, 0.8);
@@ -678,8 +666,15 @@
         const metaFull = { contentType:'image/jpeg', cacheControl:'public,max-age=31536000,immutable' };
         const metaThmb = { contentType:'image/jpeg', cacheControl:'public,max-age=31536000,immutable' };
 
-        await uploadWithTimeout(fullRef, fullBlob, metaFull);
+        // Try resumable first (with timeout), then simple upload fallback
+        try{
+          await uploadWithTimeoutResumable(fullRef, fullBlob, metaFull, 90_000);
+        }catch(e){
+          const smaller = await reencodeBlobToJPEG(fullBlob, 1100, 0.82);
+          await uploadBytes(fullRef, smaller, metaFull);
+        }
         try{ await uploadBytes(thumbRef, thumbBlob, metaThmb); }catch(e){ /* non-fatal */ }
+
         const fullURL  = await getDownloadURL(fullRef);
         const thumbURL = await getDownloadURL(thumbRef).catch(()=>fullURL);
 
@@ -692,7 +687,7 @@
           imageURL: fullURL,
           thumbURL: thumbURL||fullURL,
           storagePath: fullRef.fullPath,
-          gsUri: fullRef.fullPath, // path-only; we resolve via the configured storage instance
+          gsUri: fullRef.fullPath,
           lat: s.lat??null, lng: s.lng??null, accuracy: s.accuracy??null,
           radiusMeters: s.radiusMeters ?? 50,
           overlays: serializeOverlays(),
@@ -712,6 +707,55 @@
       }
     };
 
+    /* ---------- Overlay & text tools ---------- */
+    function serializeOverlays(){
+      const out=[];
+      f.getObjects().forEach(o=>{
+        if (o===baseImage || o.isBaseText) return;
+        if (o.type==='image'){
+          out.push({
+            kind:'image',
+            src:o.getSrc ? o.getSrc() : (o._originalElement?.src || o.src || ''),
+            left:o.left||0, top:o.top||0, scaleX:o.scaleX||1, scaleY:o.scaleY||1,
+            angle:o.angle||0, opacity:o.opacity??1, flipX:!!o.flipX, flipY:!!o.flipY
+          });
+        } else if (o.type==='textbox'){
+          out.push({
+            kind:'text', text:o.text||'', left:o.left||0, top:o.top||0, scaleX:o.scaleX||1, scaleY:o.scaleY||1,
+            angle:o.angle||0, opacity:o.opacity??1, fontSize:o.fontSize||24, fill:o.fill||'#fff',
+            backgroundColor:o.backgroundColor||'rgba(0,0,0,0.6)', padding:o.padding??8
+          });
+        }
+      });
+      return out;
+    }
+    $('addTextbox').onclick = ()=>{
+      const tb = new fabric.Textbox('Notes', {
+        left: 80, top: 80, width: 320, fontSize: 24, fill:'#fff',
+        backgroundColor: 'rgba(0,0,0,0.6)', padding: 8,
+        cornerStyle:'circle', transparentCorners:false
+      });
+      tb._kind='text';
+      f.add(tb); f.setActiveObject(tb); f.requestRenderAll();
+      $('tbContent').value = tb.text;
+      $('tbFont').value = tb.fontSize || 24;
+      $('tbBgOpacity').value = 0.6;
+    };
+    $('tbApply').onclick = ()=>{
+      const o = f.getActiveObject();
+      if (!o || o.type!=='textbox') return;
+      o.text = $('tbContent').value;
+      o.fontSize = parseInt($('tbFont').value,10) || 24;
+      const op = Math.max(0, Math.min(1, parseFloat($('tbBgOpacity').value)));
+      o.backgroundColor = `rgba(0,0,0,${op})`;
+      f.requestRenderAll();
+    };
+    $('tbDelete').onclick = ()=>{
+      const o = f.getActiveObject();
+      if (o && o.type==='textbox'){ f.remove(o); f.discardActiveObject(); f.requestRenderAll(); }
+    };
+
+    /* ---------- Viewport tools ---------- */
     $('fit').onclick  = ()=>{
       if (baseImage && baseImage.type==='image'){
         const cw=f.getWidth(), ch=f.getHeight(), s=Math.min(cw/baseImage.width, ch/baseImage.height);
@@ -727,6 +771,7 @@
     $('rotateL').onclick = ()=>{ if(baseImage && baseImage.rotate){ baseImage.rotate((baseImage.angle||0)+90); f.requestRenderAll(); } };
     $('rotateR').onclick = ()=>{ if(baseImage && baseImage.rotate){ baseImage.rotate((baseImage.angle||0)-90); f.requestRenderAll(); } };
 
+    /* ---------- Overlays shelf ---------- */
     const OVERLAY_BASE='https://fireopssim.com/geophoto/overlays/';
     const FOLDER={ fire:'fire', smoke:'smoke', people:'people', cars:'cars', hazard:'hazard' };
     const EXT=['png','webp','jpg','jpeg'];
@@ -775,44 +820,7 @@
     });
     renderShelf('fire');
 
-    let brushMode='off', pointerDown=false, lastStamp=null;
-    const brushSize=$('brushSize'), brushSizeReadout=$('brushSizeReadout');
-    brushSize.oninput=()=> brushSizeReadout.textContent=(parseInt(brushSize.value,10)||120)+' px';
-    $('brushFire').onclick = ()=> brushMode='fire';
-    $('brushSmoke').onclick= ()=> brushMode='smoke';
-    $('brushErase').onclick= ()=> brushMode='erase';
-    $('brushOff').onclick  = ()=> brushMode='off';
-    function dist(a,b){ const dx=a.x-b.x, dy=a.y-b.y; return Math.hypot(dx,dy); }
-    async function randomOverlay(cat){
-      const files = await listOverlays(cat); if(!files.length) return null;
-      const i=Math.floor(Math.random()*files.length);
-      return `${OVERLAY_BASE}${FOLDER[cat]}/${files[i]}`;
-    }
-    async function stampAt(p, cat){
-      const file = await randomOverlay(cat); if(!file) return;
-      const R = (parseInt(brushSize.value,10)||120)/2;
-      if (lastStamp && dist(p,lastStamp) < R*0.6) return; lastStamp=p;
-      fabric.Image.fromURL(file, img=>{
-        const baseW=img.width||200, scale=(R*2)/baseW, j=0.75+Math.random()*0.5;
-        img.scale(scale*j);
-        img.set({ left:p.x-(img.width*img.scaleX)/2, top:p.y-(img.height*img.scaleY)/2, angle:(Math.random()*30-15),
-                  opacity:0.9, cornerStyle:'circle', transparentCorners:false, erasable:true, selectable:false, evented:false });
-        f.add(img); f.requestRenderAll();
-      }, { crossOrigin:'anonymous' });
-    }
-    function eraseStampsAt(p){
-      const R=(parseInt(brushSize.value,10)||120)/2;
-      const targets = f.getObjects('image').filter(o => o!==baseImage);
-      for (const obj of targets){
-        const cx=obj.left + (obj.width*obj.scaleX)/2, cy=obj.top + (obj.height*obj.scaleY)/2;
-        if (Math.hypot(cx-p.x, cy-p.y) <= R) f.remove(obj);
-      }
-      f.requestRenderAll();
-    }
-    f.on('mouse:down', (e)=>{ pointerDown=true; const p=f.getPointer(e.e); if(brushMode==='fire') stampAt(p,'fire'); else if(brushMode==='smoke') stampAt(p,'smoke'); else if(brushMode==='erase') eraseStampsAt(p); });
-    f.on('mouse:move', (e)=>{ if(!pointerDown) return; const p=f.getPointer(e.e); if(brushMode==='fire') stampAt(p,'fire'); else if(brushMode==='smoke') stampAt(p,'smoke'); else if(brushMode==='erase') eraseStampsAt(p); });
-    f.on('mouse:up', ()=>{ pointerDown=false; });
-
+    /* ---------- Selection tools ---------- */
     $('bringFront').onclick = ()=>{ const o=f.getActiveObject(); if(o && o!==baseImage){ o.bringToFront(); f.requestRenderAll(); } };
     $('sendBack').onclick  = ()=>{ const o=f.getActiveObject(); if(o && o!==baseImage){ o.sendToBack(); if(baseImage) baseImage.sendToBack(); f.requestRenderAll(); } };
     $('deleteObj').onclick = ()=>{ const o=f.getActiveObject(); if(o && o!==baseImage){ f.remove(o); f.discardActiveObject(); f.requestRenderAll(); } };
@@ -839,7 +847,7 @@
         f.clear(); baseImage=null; fitCanvas();
         status('Scenario deleted.');
       }catch(e){
-        showErr('Delete failed (rules?): '+(e.message||e));
+        showErr('Delete failed: '+(e.message||e));
       }finally{
         showLoad(false);
       }
@@ -920,14 +928,6 @@
       }
       return { dataUrl: c.toDataURL('image/png'), overlays };
     }
-    function summarizeOverlayCounts(list){
-      const counts = { fire:0, smoke:0, people:0, cars:0, hazard:0, generic:0, text:0 };
-      for (const o of list){
-        if (o.kind === 'text') counts.text++;
-        else counts[o.category || 'generic'] = (counts[o.category || 'generic'] || 0) + 1;
-      }
-      return counts;
-    }
     async function getBaseImageURLForStop(){
       const s = current._stops[stopIndex];
       if (s?.imageURL && /^https?:\/\//i.test(s.imageURL)) return s.imageURL;
@@ -941,12 +941,21 @@
       }
       throw new Error('This stop has no accessible base image.');
     }
+
     async function saveAIResultToStorage(dataUrl){
-      const blob = await (await fetch(dataUrl)).blob();
+      if (!(await verifyStorageOnce())) return null;
+      // Always store as small JPEG for classroom/phone
+      const blob = await reencodeBlobToJPEG(dataURLtoBlob(dataUrl), EDIT_MAX_EDGE, EDIT_JPEG_QUALITY);
       const ts = Date.now();
-      const path = `scenarios/${current.id}/ai/results/${ts}_stop${stopIndex}.png`;
+      const path = `scenarios/${current.id}/ai/results/${ts}_stop${stopIndex}.jpg`;
       const ref = stRef(storage, path);
-      await uploadBytes(ref, blob, { contentType: 'image/png', cacheControl: 'public,max-age=31536000,immutable' });
+      try{
+        await uploadWithTimeoutResumable(ref, blob, { contentType:'image/jpeg', cacheControl:'public,max-age=31536000,immutable' }, 90_000);
+      }catch(e){
+        // final fallback smaller
+        const smaller = await reencodeBlobToJPEG(blob, 1100, 0.8);
+        await uploadBytes(ref, smaller, { contentType:'image/jpeg', cacheControl:'public,max-age=31536000,immutable' });
+      }
       const url = await getDownloadURL(ref);
       $('aiOpen').disabled = false;
       $('aiAdd').disabled  = false;
@@ -955,6 +964,7 @@
       $('aiMsg').textContent = 'Result uploaded ✓';
       return url;
     }
+
     async function saveAIResultFromURL(imageUrl){
       let resp;
       try {
@@ -968,11 +978,19 @@
         $('aiMsg').textContent = `AI returned a bad URL: ${imageUrl} (${resp.status}) ${txt || ""}`;
         return null;
       }
-      const blob = await resp.blob();
+      const raw = await resp.blob();
+      const blob = await reencodeBlobToJPEG(raw, EDIT_MAX_EDGE, EDIT_JPEG_QUALITY); // shrink for reliability
+      if (!(await verifyStorageOnce())) return null;
+
       const ts = Date.now();
-      const path = `scenarios/${current.id}/ai/results/${ts}_stop${stopIndex}.png`;
+      const path = `scenarios/${current.id}/ai/results/${ts}_stop${stopIndex}.jpg`;
       const ref = stRef(storage, path);
-      await uploadBytes(ref, blob, { contentType: blob.type || 'image/png', cacheControl: 'public,max-age=31536000,immutable' });
+      try{
+        await uploadWithTimeoutResumable(ref, blob, { contentType:'image/jpeg', cacheControl:'public,max-age=31536000,immutable' }, 90_000);
+      }catch(e){
+        const smaller = await reencodeBlobToJPEG(blob, 1100, 0.8);
+        await uploadBytes(ref, smaller, { contentType:'image/jpeg', cacheControl:'public,max-age=31536000,immutable' });
+      }
       const url = await getDownloadURL(ref);
       $('aiOpen').disabled = false;
       $('aiAdd').disabled  = false;
@@ -981,6 +999,7 @@
       $('aiMsg').textContent = 'Result uploaded ✓';
       return url;
     }
+
     async function addResultAsNewStop(url){
       if (!current || stopIndex<0) return;
       const base = current._stops[stopIndex];
@@ -1021,7 +1040,7 @@
       }
     };
 
-    // ---------- UPDATED “Send to AI” ----------
+    // ---------- “Send to AI” with graceful fallbacks ----------
     $('aiSend').onclick = async ()=>{
       try{
         if(!current || stopIndex<0) throw new Error('Select a stop first.');
@@ -1034,73 +1053,106 @@
           (style === 'training') ? `training drill realism; ${notes}` :
                                    `photo-realistic; ${notes || 'make the scene photorealistic; keep layout'}`;
 
-        const strength = 0.35;
-
         const overlays = serializeOverlaysForAI();
         const hasOverlays = overlays && overlays.length > 0;
 
-        // EITHER send dataUrl (with overlays baked-in) OR guideUrl (no overlays)
+        // Prefer sending the composed canvas (guarantees subject stays the same)
         let payload;
+        const composedDataUrl = await dataURLFromCanvasScaled(f, 1600, 0.95);
         if (hasOverlays) {
-          $('aiMsg').textContent = 'Compositing…';
-          const composedDataUrl = await dataURLFromCanvasScaled(f, 1600, 0.95);
-          payload = { dataUrl: composedDataUrl, prompt, strength };
+          payload = { dataUrl: composedDataUrl, prompt, strength: 0.35 };
         } else {
-          $('aiMsg').textContent = 'Preparing guide image…';
+          // If no overlays, we still send the current base image as guide to avoid random street scenes.
           const guideUrl = await getBaseImageURLForStop();
-          payload = { guideUrl, prompt, strength };
+          payload = { guideUrl, prompt, strength: 0.35 };
         }
 
         $('aiMsg').textContent = 'Contacting AI…';
         const r = await postAI(payload);
         const text = await r.text().catch(()=> '');
         let json;
-        try { json = JSON.parse(text); } catch { json = { ok:false, error: text || `HTTP ${r.status}` }; }
+        try { json = JSON.parse(text); } catch { json = { ok:false, error: text || `HTTP ${r?.status||0}` }; }
 
-        if (!json?.ok) {
-          $('aiMsg').textContent = `AI error: ${json?.error || 'Unknown error'}`;
-          return;
+        if (json?.ok && json.image){
+          const imgField = json.image;
+          if (typeof imgField === 'string' && imgField.startsWith('data:image')) {
+            $('aiMsg').textContent = 'Uploading result…';
+            await saveAIResultToStorage(imgField);
+            return;
+          } else if (imgField && typeof imgField.url === 'string') {
+            $('aiMsg').textContent = 'Uploading result…';
+            await saveAIResultFromURL(imgField.url);
+            return;
+          }
         }
 
-        const imgField = json.image;
-        if (typeof imgField === 'string' && imgField.startsWith('data:image')) {
-          $('aiMsg').textContent = 'Uploading result…';
-          await saveAIResultToStorage(imgField);
-        } else if (imgField && typeof imgField.url === 'string') {
-          $('aiMsg').textContent = 'Uploading result…';
-          await saveAIResultFromURL(imgField.url);
-        } else {
-          $('aiMsg').textContent = 'No image returned.';
-        }
+        // 🛟 Fallback: no AI image -> save the composed canvas as final
+        $('aiMsg').textContent = 'AI unavailable — saving current composite instead…';
+        await saveAIResultToStorage(composedDataUrl);
       }catch(e){
         $('aiMsg').textContent = e.message || String(e);
       }
     };
 
-    $('aiAdd').onclick = ()=> $('aiMsg').textContent = 'Open a result first.';
-
-    /* ---------- Refresh / init ---------- */
+    /* ---------- Init ---------- */
     $('refreshBtn').onclick = async ()=>{
       ROOT = await detectRoot();
-      // Show which bucket we're using (helps debug)
-      try {
-        const s = storage;
-        const b = (s?._bucket || s?.bucket) || (firebaseConfig.storageBucket || "(default)");
-        $('rootPill').textContent = `root: ${ROOT} | bucket: ${String(b).replace(".firebasestorage.app",".appspot.com")}`;
-      } catch {}
+      updateRootPill();
       await loadScenarios();
     };
     (async()=>{
       ROOT = await detectRoot();
-      try {
-        const s = storage;
-        const b = (s?._bucket || s?.bucket) || (firebaseConfig.storageBucket || "(default)");
-        $('rootPill').textContent = `root: ${ROOT} | bucket: ${String(b).replace(".firebasestorage.app",".appspot.com")}`;
-      } catch {}
+      updateRootPill();
       await loadScenarios();
       subscribeScenarios();
       await ensureAuthed();
+      await verifyStorageOnce(); // surface bucket issues early
     })();
+
+    /* ---------- Overlay brush & other handlers (unchanged) ---------- */
+    let brushMode='off', pointerDown=false, lastStamp=null;
+    const brushSize=$('brushSize'), brushSizeReadout=$('brushSizeReadout');
+    brushSize.oninput=()=> brushSizeReadout.textContent=(parseInt(brushSize.value,10)||120)+' px';
+    $('brushFire').onclick = ()=> brushMode='fire';
+    $('brushSmoke').onclick= ()=> brushMode='smoke';
+    $('brushErase').onclick= ()=> brushMode='erase';
+    $('brushOff').onclick  = ()=> brushMode='off';
+    function dist(a,b){ const dx=a.x-b.x, dy=a.y-b.y; return Math.hypot(dx,dy); }
+    const OVERLAY_BASE2='https://fireopssim.com/geophoto/overlays/';
+    const FOLDER2={ fire:'fire', smoke:'smoke', people:'people', cars:'cars', hazard:'hazard' };
+    const EXT2=['png','webp','jpg','jpeg'];
+    async function randomOverlay(cat){
+      // tiny helper using listOverlays() above for variety
+      const files = await listOverlays(cat); if(!files.length) return null;
+      const i=Math.floor(Math.random()*files.length);
+      return `${OVERLAY_BASE2}${FOLDER2[cat]}/${files[i]}`;
+    }
+    function addOverlay(src){
+      fabric.Image.fromURL(src, img=>{
+        const cw=f.getWidth(), ch=f.getHeight(), targetW=cw*0.28, scale=targetW/img.width;
+        img.scale(scale);
+        img.set({ left:cw/2-(img.width*img.scaleX)/2, top:ch/2-(img.height*img.scaleY)/2,
+                  cornerStyle:'circle', transparentCorners:false, shadow:'rgba(0,0,0,0.35) 0 6px 16px', erasable:true });
+        f.add(img); f.setActiveObject(img); f.requestRenderAll();
+      }, { crossOrigin:'anonymous' });
+    }
+    f.on('mouse:down', (e)=>{ pointerDown=true; const p=f.getPointer(e.e); if(brushMode==='fire') randomOverlay('fire').then(u=>u&&addOverlay(u)); else if(brushMode==='smoke') randomOverlay('smoke').then(u=>u&&addOverlay(u)); else if(brushMode==='erase') eraseStampsAt(p); });
+    f.on('mouse:move', (e)=>{ if(!pointerDown) return; const p=f.getPointer(e.e); if(brushMode==='erase') eraseStampsAt(p); });
+    f.on('mouse:up', ()=>{ pointerDown=false; });
+    function eraseStampsAt(p){
+      const R=(parseInt(brushSize.value,10)||120)/2;
+      const targets = f.getObjects('image').filter(o => o!==baseImage);
+      for (const obj of targets){
+        const cx=obj.left + (obj.width*obj.scaleX)/2, cy=obj.top + (obj.height*obj.scaleY)/2;
+        if (Math.hypot(cx-p.x, cy-p.y) <= R) f.remove(obj);
+      }
+      f.requestRenderAll();
+    }
+    $('bringFront').onclick = ()=>{ const o=f.getActiveObject(); if(o && o!==baseImage){ o.bringToFront(); f.requestRenderAll(); } };
+    $('sendBack').onclick  = ()=>{ const o=f.getActiveObject(); if(o && o!==baseImage){ o.sendToBack(); if(baseImage) baseImage.sendToBack(); f.requestRenderAll(); } };
+    $('deleteObj').onclick = ()=>{ const o=f.getActiveObject(); if(o && o!==baseImage){ f.remove(o); f.discardActiveObject(); f.requestRenderAll(); } };
+    $('flipSelH').onclick  = ()=>{ const o=f.getActiveObject(); if(o && o!==baseImage){ o.set('flipX', !o.flipX); f.requestRenderAll(); } };
+    $('flipSelV').onclick  = ()=>{ const o=f.getActiveObject(); if(o && o!==baseImage){ o.set('flipY', !o.flipY); f.requestRenderAll(); } };
   </script>
 </body>
 </html>
