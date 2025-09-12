@@ -1,141 +1,146 @@
-// functions/ai-image.js
-import { json } from "./_response.js";
-import Replicate from "replicate";
-import admin from "firebase-admin";
+// netlify/functions/ai-image.js
+// Returns either a data URL (echo mode) or a direct URL from Replicate.
+// No server-side bucket uploads — the client will upload to Firebase.
 
-// ---------- CORS ----------
-const CORS_ORIGIN = process.env.CORS_ORIGIN || "*";
-const CORS_HEADERS = {
-  "Access-Control-Allow-Origin": CORS_ORIGIN,
-  "Access-Control-Allow-Methods": "POST, OPTIONS",
-  "Access-Control-Allow-Headers": "Content-Type, Authorization",
-};
-
-// ---------- Firebase Admin ----------
-if (!admin.apps.length) {
-  admin.initializeApp({
-    credential: admin.credential.applicationDefault(),
-    storageBucket: process.env.FIREBASE_STORAGE_BUCKET, // e.g., "dailyquiz-d5279.appspot.com"
-  });
-}
-const bucket = admin.storage().bucket();
-
-// ---------- Replicate ----------
-const replicate = process.env.REPLICATE_API_TOKEN
-  ? new Replicate({ auth: process.env.REPLICATE_API_TOKEN })
-  : null;
-
-const SDXL_MODEL = "stability-ai/sdxl";
-
-async function getLatestVersionId(owner, name, token) {
-  const res = await fetch(`https://api.replicate.com/v1/models/${owner}/${name}`, {
-    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-  });
-  const text = await res.text();
-  if (!res.ok) throw new Error(`Failed to fetch model version (${res.status}): ${text}`);
-  const data = JSON.parse(text);
-  const id = data?.latest_version?.id;
-  if (!id) throw new Error(`No latest_version.id for ${owner}/${name}`);
-  return id;
-}
-
-function normalizeOutput(output) {
-  if (Array.isArray(output) && output.length) return String(output[0]);
-  if (typeof output === "string") return output;
-  if (output?.output && Array.isArray(output.output) && output.output.length) {
-    return String(output.output[0]);
+export default async (req, res) => {
+  // --- CORS ---
+  if (req.method === "OPTIONS") {
+    res.setHeader("Access-Control-Allow-Origin", "*");
+    res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
+    res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
+    return res.status(204).end();
   }
-  throw new Error("No image URL returned from Replicate output");
-}
 
-async function uploadDataUrlToStorage(dataUrl) {
-  const m = /^data:(image\/[a-zA-Z0-9.+-]+);base64,(.*)$/i.exec(dataUrl || "");
-  if (!m) throw new Error("Invalid dataUrl (expected 'data:image/...;base64,....').");
-  const contentType = m[1];
-  const base64 = m[2];
-  const buffer = Buffer.from(base64, "base64");
-  const filename = `composites/${Date.now()}.png`;
-  const file = bucket.file(filename);
-  await file.save(buffer, { contentType, public: true, resumable: false, validation: false });
-  return `https://storage.googleapis.com/${bucket.name}/${filename}`;
-}
-
-export default async function handler(request) {
-  // CORS preflight
-  if (request.method === "OPTIONS") {
-    return new Response(null, { status: 204, headers: CORS_HEADERS });
-  }
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  res.setHeader("Content-Type", "application/json; charset=utf-8");
 
   try {
-    if (request.method !== "POST") {
-      return json(
-        { ok: false, error: "Use POST with JSON body.", example: { guideUrl: "https://...", prompt: "...", strength: 0.35 } },
-        405,
-        CORS_HEADERS
-      );
+    if (req.method !== "POST") {
+      return res.status(405).json({ ok:false, error:"Use POST" });
     }
 
-    if (!replicate) throw new Error("Missing REPLICATE_API_TOKEN");
-    if (!process.env.FIREBASE_STORAGE_BUCKET) throw new Error("Missing FIREBASE_STORAGE_BUCKET");
-
-    let body = {};
-    try {
-      body = await request.json();
-    } catch {
-      return json({ ok: false, error: "Invalid or missing JSON body. Use Content-Type: application/json." }, 400, CORS_HEADERS);
+    const bodyText = typeof req.body === "string" ? req.body : JSON.stringify(req.body || {});
+    let payload;
+    try { payload = typeof req.body === "object" ? req.body : JSON.parse(bodyText); }
+    catch {
+      return res.status(400).json({ ok:false, error:"Invalid JSON body" });
     }
 
-    let guideUrl = body.guideUrl || body.imageUrl || body.compositeUrl || null;
-    const dataUrl = body.dataUrl || null;
-
-    if (!guideUrl && !dataUrl) {
-      return json(
-        { ok: false, error: "Provide either guideUrl (public URL) or dataUrl (base64 canvas output).", receivedKeys: Object.keys(body || {}) },
-        400,
-        CORS_HEADERS
-      );
+    const { dataUrl, guideUrl, prompt = "", strength = 0.35 } = payload || {};
+    if (!dataUrl && !guideUrl) {
+      return res.status(400).json({ ok:false, error:"Provide either guideUrl (public URL) or dataUrl (base64 canvas output)." });
     }
 
-    if (!guideUrl && dataUrl) {
-      guideUrl = await uploadDataUrlToStorage(dataUrl);
+    // Quick echo mode lets you validate the entire client pipeline without any 3rd-party calls.
+    const AI_MODE = process.env.AI_MODE || (process.env.REPLICATE_API_TOKEN ? "replicate" : "echo");
+
+    // Utility: fetch a URL as a data URL (if you sent guideUrl but want to echo)
+    async function urlToDataURL(url) {
+      const r = await fetch(url, { cache: "no-store" });
+      if (!r.ok) throw new Error(`Guide fetch failed: HTTP ${r.status}`);
+      const buf = await r.arrayBuffer();
+      const mime = r.headers.get("content-type") || "image/png";
+      const b64 = Buffer.from(buf).toString("base64");
+      return `data:${mime};base64,${b64}`;
     }
 
-    const prompt =
-      (typeof body.prompt === "string" && body.prompt.trim()) ||
-      "Make the scene photorealistic while preserving the guide layout.";
+    if (AI_MODE === "echo") {
+      // No AI call, just return something the client can upload to Firebase — perfect to kill bucket errors.
+      const outDataUrl = dataUrl || await urlToDataURL(guideUrl);
+      return res.status(200).json({ ok:true, image: outDataUrl, mode:"echo" });
+    }
 
-    const prompt_strength = typeof body.strength === "number" ? Math.max(0, Math.min(1, body.strength)) : 0.35;
-    const width  = typeof body.width  === "number" && body.width  > 0 ? Math.min(2048, body.width)  : 1024;
-    const height = typeof body.height === "number" && body.height > 0 ? Math.min(2048, body.height) : 1024;
+    // --- Replicate path (no server-side S3 writes) ---
+    // Model: black-forest-labs/flux-1-schnell (fast image-to-image)
+    // We try to send an image (either your composed dataUrl or guideUrl) + prompt.
+    const REPLICATE_API_TOKEN = process.env.REPLICATE_API_TOKEN;
+    if (!REPLICATE_API_TOKEN) {
+      return res.status(500).json({ ok:false, error:"Replicate not configured (missing REPLICATE_API_TOKEN). Set AI_MODE=echo to test." });
+    }
 
-    const [owner, name] = SDXL_MODEL.split("/");
-    const version = await getLatestVersionId(owner, name, process.env.REPLICATE_API_TOKEN);
+    const modelOwner = process.env.REPLICATE_MODEL_OWNER || "black-forest-labs";
+    const modelName  = process.env.REPLICATE_MODEL_NAME  || "flux-1-schnell";
 
-    const input = { prompt, image: guideUrl, prompt_strength, width, height };
-    const output = await replicate.run(`${owner}/${name}:${version}`, { input });
-    const url = normalizeOutput(output);
+    // Prepare image input for Replicate: some models accept data URLs; most accept standard URLs.
+    // Prefer uploading your composed canvas so overlays are baked in when present.
+    let imageInputUrl = guideUrl || null;
 
-    return json(
-      { ok: true, image: { url, source: SDXL_MODEL }, guideUrl, debug: { model: SDXL_MODEL, version, input } },
-      200,
-      CORS_HEADERS
-    );
-  } catch (e) {
-    const msg = String(e?.message || e);
-    const is402 = /402|payment required|insufficient credit/i.test(msg);
-    const is422 = /version is required|validation failed|422/.test(msg);
-    return json(
-      {
-        ok: false,
-        error: msg,
-        hint: is402
-          ? "Replicate credit is insufficient."
-          : is422
-          ? "Replicate requires a model version. This function fetches it dynamically; check logs if it persists."
-          : undefined
+    // If dataUrl exists, convert it to a small temporary data URL upload to Replicate's "image" field directly.
+    // Replicate generally accepts data URLs for many models; if your chosen model doesn't,
+    // you can host it elsewhere and pass the absolute URL instead.
+    const inputImage = dataUrl ? dataUrl : imageInputUrl;
+
+    // Fire the prediction
+    const createURL = `https://api.replicate.com/v1/models/${encodeURIComponent(modelOwner)}/${encodeURIComponent(modelName)}/predictions`;
+    const createResp = await fetch(createURL, {
+      method: "POST",
+      headers: {
+        "Authorization": `Token ${REPLICATE_API_TOKEN}`,
+        "Content-Type": "application/json"
       },
-      is402 ? 402 : 500,
-      CORS_HEADERS
-    );
+      body: JSON.stringify({
+        input: {
+          // Common inputs for fast I2I models:
+          // - prompt: the prompt text
+          // - image: data URL or public URL
+          // - strength / guidance may vary by model; we provide a sane default
+          prompt: prompt || "photo-realistic fire/scene composite",
+          image: inputImage,
+          strength
+        }
+      })
+    });
+
+    if (!createResp.ok) {
+      const t = await createResp.text().catch(()=> "");
+      return res.status(createResp.status).json({ ok:false, error:`Replicate create failed: ${t || createResp.statusText}` });
+    }
+
+    const created = await createResp.json();
+    const pollURL = created?.urls?.get || created?.href;
+    if (!pollURL) {
+      return res.status(502).json({ ok:false, error:"Replicate did not return a poll URL." });
+    }
+
+    // Poll until done
+    const started = Date.now();
+    let outputUrl = null;
+    while (Date.now() - started < 90000) { // up to 90s
+      await new Promise(r => setTimeout(r, 1200));
+      const pollResp = await fetch(pollURL, {
+        headers: { "Authorization": `Token ${REPLICATE_API_TOKEN}` }
+      });
+      if (!pollResp.ok) {
+        const t = await pollResp.text().catch(()=> "");
+        return res.status(pollResp.status).json({ ok:false, error:`Replicate poll failed: ${t || pollResp.statusText}` });
+      }
+      const j = await pollResp.json();
+      if (j.status === "succeeded") {
+        // Replicate output is commonly an array of URLs; use the last item if array, else string
+        const out = j.output;
+        if (Array.isArray(out)) {
+          outputUrl = out[out.length - 1];
+        } else if (typeof out === "string") {
+          outputUrl = out;
+        } else if (out && out.image) {
+          outputUrl = out.image;
+        }
+        break;
+      } else if (j.status === "failed" || j.status === "canceled") {
+        return res.status(502).json({ ok:false, error:`Replicate job ${j.status}. ${j.error || ""}`.trim() });
+      }
+      // else status: "starting" | "processing" -> keep polling
+    }
+
+    if (!outputUrl) {
+      return res.status(504).json({ ok:false, error:"Timed out waiting for Replicate output." });
+    }
+
+    // Return a direct URL — client will fetch & upload to Firebase. No S3 on our side.
+    return res.status(200).json({ ok:true, image: { url: outputUrl }, mode:"replicate" });
+
+  } catch (err) {
+    const msg = (err && err.message) ? err.message : String(err);
+    return res.status(500).json({ ok:false, error: msg });
   }
-}
+};
