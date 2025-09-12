@@ -199,7 +199,7 @@
 
   <script src="https://cdnjs.cloudflare.com/ajax/libs/fabric.js/5.3.0/fabric.min.js" crossorigin="anonymous"></script>
   <script type="module">
-    /* ---------- helpers ---------- */
+    /* ---------- tiny helpers ---------- */
     const $ = (id)=>document.getElementById(id);
     const showErr = (m)=>{ const b=$('errbar'); b.textContent=m; b.style.display='block'; };
     const hideErr = ()=>{ $('errbar').style.display='none'; };
@@ -228,9 +228,7 @@
 
     /* ---------- Firebase ---------- */
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-app.js";
-    import {
-      getDatabase, ref as dbRef, get, set, onValue, remove
-    } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-database.js";
+    import { getDatabase, ref as dbRef, get, set, onValue, remove } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-database.js";
     import {
       getStorage, ref as stRef, uploadBytesResumable, uploadBytes, getDownloadURL,
       getBlob, deleteObject, setMaxUploadRetryTime, setMaxOperationRetryTime
@@ -254,19 +252,20 @@
     /* -------- Storage bucket selection (robust) --------
        Firebase buckets are <project-id>.appspot.com, NOT *.firebasestorage.app
     */
-    const EXPLICIT_BUCKET = "dailyquiz-d5279.appspot.com"; // set to your real bucket
+    const EXPLICIT_BUCKET = "dailyquiz-d5279.appspot.com"; // set your real bucket
     function toAppspot(bucketOrHost = ""){ return bucketOrHost.replace(".firebasestorage.app", ".appspot.com"); }
     const candidates = [
       toAppspot(EXPLICIT_BUCKET).trim(),
       toAppspot((firebaseConfig.storageBucket || "").trim()),
     ].filter(Boolean);
+
     let storage;
     if (candidates.length){
       storage = getStorage(appFB, `gs://${candidates[0]}`);
     } else {
       storage = getStorage(appFB);
     }
-    // Give flaky connections generous time (uploads + ops)
+    // Generous timeouts for slow networks
     setMaxUploadRetryTime(storage, 5 * 60 * 1000);
     setMaxOperationRetryTime(storage, 5 * 60 * 1000);
 
@@ -286,15 +285,35 @@
       return auth.currentUser;
     }
 
-    /* ---------- Root detection ---------- */
+    /* ---------- Root detection (hardened) ---------- */
+    // Force a specific DB root or leave "" to auto-detect. Also override via ?root=scenarios
+    const FORCE_ROOT = "";
+
     let ROOT = 'scenarios';
     async function detectRoot(){
       const fromQS = new URLSearchParams(location.search).get('root');
       if (fromQS) return fromQS;
-      try{
-        const a = await get(dbRef(db, 'geophoto/scenarios'));
-        if (a.exists()) return 'geophoto/scenarios';
-      }catch{}
+      if (FORCE_ROOT) return FORCE_ROOT;
+
+      async function probe(path){
+        try{
+          const snap = await get(dbRef(db, path));
+          const val = snap.exists() ? (snap.val() || {}) : {};
+          const count = (val && typeof val === 'object') ? Object.keys(val).length : 0;
+          return { path, ok:true, count };
+        }catch(e){
+          return { path, ok:false, error:e };
+        }
+      }
+      const [a, b] = await Promise.all([probe('scenarios'), probe('geophoto/scenarios')]);
+      const candidates = [a,b].filter(x=>x.ok && x.count>0);
+      if (candidates.length) return candidates.sort((x,y)=>y.count-x.count)[0].path;
+      const empties = [a,b].filter(x=>x.ok);
+      if (empties.length) return empties[0].path;
+
+      showErr('DB read failed for both roots:\n'
+        + `${a.path}: ${a.error?.code || a.error?.message || a.error}\n`
+        + `${b.path}: ${b.error?.code || b.error?.message || b.error}`);
       return 'scenarios';
     }
 
@@ -449,12 +468,21 @@
     async function loadScenarios(){
       await ensureAuthed();
       status('Loading…');
-      const snap = await get(dbRef(db, ROOT));
-      const obj = snap.exists() ? (snap.val()||{}) : {};
-      scenarios = Object.entries(obj).map(([id,s])=>({ id, _raw:s, _stops:coerceStops(s), ...s }))
-                  .sort((a,b)=>(b.createdAt||0)-(a.createdAt||0));
-      populateScenarios();
-      status(`${scenarios.length} scenario(s)`);
+      try{
+        const snap = await get(dbRef(db, ROOT));
+        const obj = snap.exists() ? (snap.val()||{}) : {};
+        scenarios = Object.entries(obj).map(([id,s])=>({ id, _raw:s, _stops:coerceStops(s), ...s }))
+                    .sort((a,b)=>(b.createdAt||0)-(a.createdAt||0));
+        populateScenarios();
+        status(`${scenarios.length} scenario(s)`);
+        if (!scenarios.length){
+          console.warn('[Editor] No scenarios at root:', ROOT, 'object keys:', Object.keys(obj||{}));
+        }
+      }catch(e){
+        const msg = e?.code ? `${e.code} — ${e.message||''}` : (e?.message || String(e));
+        showErr('Failed to load scenarios from "'+ROOT+'": '+msg);
+        status('Load failed');
+      }
     }
     function subscribeScenarios(){
       const ref = dbRef(db, ROOT);
@@ -573,6 +601,33 @@
       $('canvasInfo').textContent='Text slide';
     }
 
+    /* ---------- Textbox controls ---------- */
+    $('addTextbox').onclick = ()=>{
+      const tb = new fabric.Textbox('Notes', {
+        left: 80, top: 80, width: 320, fontSize: 24, fill:'#fff',
+        backgroundColor: 'rgba(0,0,0,0.6)', padding: 8,
+        cornerStyle:'circle', transparentCorners:false
+      });
+      tb._kind='text';
+      f.add(tb); f.setActiveObject(tb); f.requestRenderAll();
+      $('tbContent').value = tb.text;
+      $('tbFont').value = tb.fontSize || 24;
+      $('tbBgOpacity').value = 0.6;
+    };
+    $('tbApply').onclick = ()=>{
+      const o = f.getActiveObject();
+      if (!o || o.type!=='textbox') return;
+      o.text = $('tbContent').value;
+      o.fontSize = parseInt($('tbFont').value,10) || 24;
+      const op = Math.max(0, Math.min(1, parseFloat($('tbBgOpacity').value)));
+      o.backgroundColor = `rgba(0,0,0,${op})`;
+      f.requestRenderAll();
+    };
+    $('tbDelete').onclick = ()=>{
+      const o = f.getActiveObject();
+      if (o && o.type==='textbox'){ f.remove(o); f.discardActiveObject(); f.requestRenderAll(); }
+    };
+
     function serializeOverlays(){
       const out=[];
       f.getObjects().forEach(o=>{
@@ -625,7 +680,7 @@
       }catch(e){ $('metaMsg').textContent=String(e.message||e); }
     };
 
-    // Smaller, classroom/phone-friendly assets
+    /* ---------- Export / Save ---------- */
     const EDIT_MAX_EDGE=1280, EDIT_THUMB_EDGE=480, EDIT_JPEG_QUALITY=0.85;
 
     async function dataURLFromCanvasScaled(fabricCanvas, maxEdge=EDIT_MAX_EDGE, quality=EDIT_JPEG_QUALITY){
@@ -679,7 +734,6 @@
       ctx.drawImage(img, 0, 0, outW, outH);
       return dataURLtoBlob(c.toDataURL('image/jpeg', quality));
     }
-
     async function uploadWithTimeoutResumable(ref, blob, metadata, timeoutMs=5*60*1000){
       return new Promise((resolve,reject)=>{
         const task = uploadBytesResumable(ref, blob, metadata);
@@ -1077,7 +1131,7 @@
       }
     };
 
-    // ---------- “Send to AI” (uses inpaint if mask present; else echo) ----------
+    // ---------- “Send to AI” (uses inpaint if mask present; else echo current) ----------
     $('aiSend').onclick = async ()=>{
       try{
         if(!current || stopIndex<0) throw new Error('Select a stop first.');
