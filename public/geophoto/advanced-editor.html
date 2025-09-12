@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -252,7 +253,7 @@
     /* -------- Storage bucket selection (robust) --------
        Firebase buckets are <project-id>.appspot.com, NOT *.firebasestorage.app
     */
-    const EXPLICIT_BUCKET = "dailyquiz-d5279.appspot.com"; // set your real bucket
+    const EXPLICIT_BUCKET = "dailyquiz-d5279.appspot.com"; // set your real bucket if needed
     function toAppspot(bucketOrHost = ""){ return bucketOrHost.replace(".firebasestorage.app", ".appspot.com"); }
     const candidates = [
       toAppspot(EXPLICIT_BUCKET).trim(),
@@ -285,36 +286,49 @@
       return auth.currentUser;
     }
 
-    /* ---------- Root detection (hardened) ---------- */
-    // Force a specific DB root or leave "" to auto-detect. Also override via ?root=scenarios
+    /* ---------- Root detection (auth-aware & robust) ---------- */
+    // Optional: force a DB root (or override with ?root=…)
     const FORCE_ROOT = "";
 
     let ROOT = 'scenarios';
+
     async function detectRoot(){
       const fromQS = new URLSearchParams(location.search).get('root');
       if (fromQS) return fromQS;
       if (FORCE_ROOT) return FORCE_ROOT;
 
-      async function probe(path){
-        try{
+      // Ensure auth before probing (rules may require it)
+      await ensureAuthed();
+
+      const probe = async (path) => {
+        try {
           const snap = await get(dbRef(db, path));
           const val = snap.exists() ? (snap.val() || {}) : {};
           const count = (val && typeof val === 'object') ? Object.keys(val).length : 0;
           return { path, ok:true, count };
-        }catch(e){
-          return { path, ok:false, error:e };
+        } catch (e) {
+          return { path, ok:false, count:0, error:e };
         }
-      }
-      const [a, b] = await Promise.all([probe('scenarios'), probe('geophoto/scenarios')]);
-      const candidates = [a,b].filter(x=>x.ok && x.count>0);
-      if (candidates.length) return candidates.sort((x,y)=>y.count-x.count)[0].path;
-      const empties = [a,b].filter(x=>x.ok);
-      if (empties.length) return empties[0].path;
+      };
 
-      showErr('DB read failed for both roots:\n'
-        + `${a.path}: ${a.error?.code || a.error?.message || a.error}\n`
-        + `${b.path}: ${b.error?.code || b.error?.message || b.error}`);
+      const [geo, plain] = await Promise.all([probe('geophoto/scenarios'), probe('scenarios')]);
+      if (geo.ok && geo.count > 0) return geo.path;
+      if (plain.ok && plain.count > 0) return plain.path;
+      if (geo.ok) return geo.path;
+      if (plain.ok) return plain.path;
+
+      showErr(`DB read failed for both roots:
+${geo.path}: ${geo.error?.code || geo.error?.message || geo.error}
+${plain.path}: ${plain.error?.code || plain.error?.message || plain.error}`);
       return 'scenarios';
+    }
+
+    function updateRootPill(){
+      try {
+        const s = storage;
+        const b = (s?._bucket || s?.bucket) || (firebaseConfig.storageBucket || "(default)");
+        $('rootPill').textContent = `root: ${ROOT} | bucket: ${String(b).replace(".firebasestorage.app",".appspot.com")}`;
+      } catch {}
     }
 
     /* ---------- Storage helpers ---------- */
@@ -465,6 +479,7 @@
         sel.appendChild(o);
       });
     }
+
     async function loadScenarios(){
       await ensureAuthed();
       status('Loading…');
@@ -475,15 +490,28 @@
                     .sort((a,b)=>(b.createdAt||0)-(a.createdAt||0));
         populateScenarios();
         status(`${scenarios.length} scenario(s)`);
+
+        // If empty, try the alternate root once
         if (!scenarios.length){
-          console.warn('[Editor] No scenarios at root:', ROOT, 'object keys:', Object.keys(obj||{}));
+          const alt = ROOT === 'scenarios' ? 'geophoto/scenarios' : 'scenarios';
+          const altSnap = await get(dbRef(db, alt));
+          if (altSnap.exists()){
+            ROOT = alt;
+            updateRootPill();
+            const altObj = altSnap.val() || {};
+            scenarios = Object.entries(altObj).map(([id,s])=>({ id, _raw:s, _stops:coerceStops(s), ...s }))
+                        .sort((a,b)=>(b.createdAt||0)-(a.createdAt||0));
+            populateScenarios();
+            status(`${scenarios.length} scenario(s) (switched to ${ROOT})`);
+          }
         }
       }catch(e){
         const msg = e?.code ? `${e.code} — ${e.message||''}` : (e?.message || String(e));
-        showErr('Failed to load scenarios from "'+ROOT+'": '+msg);
+        showErr(`Failed to load scenarios from "${ROOT}": ${msg}`);
         status('Load failed');
       }
     }
+
     function subscribeScenarios(){
       const ref = dbRef(db, ROOT);
       onValue(ref, snap=>{
@@ -795,7 +823,9 @@
         status('Saved edited image ✓');
       }catch(e){
         showErr(e.message||String(e));
-      }finally{ showLoad(false); }
+      }finally{
+        showLoad(false);
+      }
     };
 
     $('fit').onclick  = ()=>{
@@ -1187,23 +1217,16 @@
     /* ---------- Refresh / init ---------- */
     $('refreshBtn').onclick = async ()=>{
       ROOT = await detectRoot();
-      try {
-        const s = storage;
-        const b = (s?._bucket || s?.bucket) || (firebaseConfig.storageBucket || "(default)");
-        $('rootPill').textContent = `root: ${ROOT} | bucket: ${String(b).replace(".firebasestorage.app",".appspot.com")}`;
-      } catch {}
+      updateRootPill();
       await loadScenarios();
     };
+
     (async()=>{
+      await ensureAuthed();          // auth first
       ROOT = await detectRoot();
-      try {
-        const s = storage;
-        const b = (s?._bucket || s?.bucket) || (firebaseConfig.storageBucket || "(default)");
-        $('rootPill').textContent = `root: ${ROOT} | bucket: ${String(b).replace(".firebasestorage.app",".appspot.com")}`;
-      } catch {}
+      updateRootPill();
       await loadScenarios();
       subscribeScenarios();
-      await ensureAuthed();
     })();
   </script>
 </body>
