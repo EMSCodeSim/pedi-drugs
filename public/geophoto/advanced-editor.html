@@ -82,10 +82,13 @@
             <select id="scenarioSel"><option value="">Select scenario…</option></select>
             <div class="row" style="margin-top:6px">
               <button class="btn" id="refreshBtn">Refresh</button>
+              <button class="btn" id="probeBtn">Debug Probe</button>
               <button class="btn" id="deleteScenario" style="background:#2a0f14;border-color:#7a2b2b">Delete Scenario</button>
               <span id="statusPill" class="pill">Loading…</span>
               <span id="rootPill" class="pill small">root: …</span>
             </div>
+            <label>Root override (optional)</label>
+            <input class="input" id="rootOverride" placeholder="e.g. geophoto/scenarios or users/<uid>/scenarios" />
 
             <div class="divider"></div>
             <div class="sectionTitle">Stop meta</div>
@@ -245,16 +248,16 @@
       authDomain:"dailyquiz-d5279.firebaseapp.com",
       databaseURL:"https://dailyquiz-d5279-default-rtdb.firebaseio.com",
       projectId:"dailyquiz-d5279",
-      storageBucket:"dailyquiz-d5279.firebasestorage.app", /* leaving original; we override below */
+      storageBucket:"dailyquiz-d5279.firebasestorage.app", /* left as original; we override below */
       appId:"1:94577748034:web:c032d3a1d72db1313de5db",
       measurementId:"G-19DVN7NNH7"
     };
     const appFB = getApps().length ? getApps()[0] : initializeApp(firebaseConfig);
 
     /* --------- ✅ FORCE THE CORRECT STORAGE BUCKET --------- */
-    const EXPLICIT_BUCKET = "dailyquiz-d5279.appspot.com"; // IMPORTANT: real bucket host
+    const EXPLICIT_BUCKET = "dailyquiz-d5279.appspot.com"; // IMPORTANT
     const storage = getStorage(appFB, `gs://${EXPLICIT_BUCKET}`);
-    // Fail faster (avoid long “retry-limit-exceeded” loops):
+    // Fail faster (avoid long retry loops)
     setMaxUploadRetryTime(storage, 60_000);
     setMaxOperationRetryTime(storage, 60_000);
 
@@ -289,24 +292,39 @@
       }
     }
 
-    /* ---------- Root detection (auth-aware + robust) ---------- */
+    /* ---------- Root detection (auth-aware + broad search) ---------- */
     let ROOT = 'scenarios';
+
     async function detectRoot(){
       await ensureAuthed();
-      const fromQS = new URLSearchParams(location.search).get('root');
-      if (fromQS) return fromQS;
 
-      const candidates = ['geophoto/scenarios','scenarios'];
+      // Allow overrides
+      const qsRoot = new URLSearchParams(location.search).get('root');
+      const uiRoot = ($('rootOverride')?.value || '').trim();
+      if (qsRoot) return qsRoot;
+      if (uiRoot) return uiRoot;
+
+      const uid = auth.currentUser?.uid || null;
+      const candidates = [
+        'geophoto/scenarios',
+        'scenarios',
+        uid ? `users/${uid}/geophoto/scenarios` : null,
+        uid ? `users/${uid}/scenarios` : null,
+        'geophoto/sim/scenarios',
+        'geophoto/v1/scenarios'
+      ].filter(Boolean);
+
       for (const p of candidates){
-        try {
+        try{
           const s = await get(dbRef(db, p));
           if (s.exists()) return p;
-        } catch(e){
-          console.warn('[detectRoot] unable to read', p, e?.message||e);
+        }catch(e){
+          console.warn('[detectRoot] cannot read', p, e?.message||e);
         }
       }
       return 'scenarios';
     }
+
     function updateRootPill(){
       $('rootPill').textContent = `root: ${ROOT} | bucket: ${EXPLICIT_BUCKET}`;
     }
@@ -438,6 +456,7 @@
 
     /* ---------- Data / scenarios ---------- */
     let scenarios=[], current=null, stopIndex=-1;
+    let unsubscribeScenarios = null;
 
     function coerceStops(sc){
       if (Array.isArray(sc?.stops)) return sc.stops;
@@ -476,8 +495,9 @@
       status(`${scenarios.length} scenario(s)`);
     }
     function subscribeScenarios(){
+      if (unsubscribeScenarios) try{ unsubscribeScenarios(); }catch{}
       const ref = dbRef(db, ROOT);
-      onValue(ref, snap=>{
+      unsubscribeScenarios = onValue(ref, snap=>{
         const v=snap.val()||{};
         scenarios = Object.entries(v).map(([id,s])=>({ id, _raw:s, _stops:coerceStops(s), ...s }))
                     .sort((a,b)=>(b.createdAt||0)-(a.createdAt||0));
@@ -489,6 +509,52 @@
         status(`${scenarios.length} scenario(s)`);
       }, (err)=>{ showErr('Live updates error (rules?): ' + (err?.message||err)); });
     }
+
+    /* ---------- Debug Probe ---------- */
+    async function probePaths(){
+      await ensureAuthed();
+      const uid = auth.currentUser?.uid || '(no-auth?)';
+      const paths = [
+        ROOT,
+        'geophoto/scenarios',
+        'scenarios',
+        `users/${uid}/geophoto/scenarios`,
+        `users/${uid}/scenarios`,
+        'geophoto/sim/scenarios',
+        'geophoto/v1/scenarios'
+      ];
+
+      const lines = [];
+      for (const p of paths){
+        try{
+          const s = await get(dbRef(db, p));
+          if (!s.exists()){ lines.push(`❌ ${p} — (no data)`); continue; }
+          const v = s.val() || {};
+          const n = Array.isArray(v) ? v.length : Object.keys(v).length;
+          lines.push(`✅ ${p} — ${n} item(s)`);
+        }catch(e){
+          lines.push(`⛔ ${p} — ${e?.message || e}`);
+        }
+      }
+      const msg = lines.join('\n');
+      console.log('[Probe]', msg);
+      const bar = $('errbar'); if (bar){ bar.style.display='block'; bar.textContent = msg; }
+    }
+    $('probeBtn').addEventListener('click', async ()=>{
+      try{
+        await probePaths();
+        // If we found any valid path, switch to the first one
+        const msg = $('errbar').textContent || '';
+        const firstValid = msg.split('\n').find(l=>l.startsWith('✅ '));
+        if (firstValid){
+          const newRoot = firstValid.replace(/^✅ /,'').split(' — ')[0];
+          if (newRoot && newRoot !== ROOT){
+            ROOT = newRoot; updateRootPill();
+            subscribeScenarios(); await loadScenarios();
+          }
+        }
+      }catch(e){ showErr('Probe failed: '+(e?.message||e)); }
+    });
 
     /* ---------- Thumbnails ---------- */
     function dataURLFromStored(stored){
@@ -871,12 +937,44 @@
     f.on('mouse:move', (e)=>{ if(!pointerDown) return; const p=f.getPointer(e.e); if(brushMode==='fire') stampAt(p,'fire'); else if(brushMode==='smoke') stampAt(p,'smoke'); else if(brushMode==='erase') eraseStampsAt(p); });
     f.on('mouse:up', ()=>{ pointerDown=false; });
 
+    // Selection helpers
     $('bringFront').onclick = ()=>{ const o=f.getActiveObject(); if(o && o!==baseImage){ o.bringToFront(); f.requestRenderAll(); } };
     $('sendBack').onclick  = ()=>{ const o=f.getActiveObject(); if(o && o!==baseImage){ o.sendToBack(); if(baseImage) baseImage.sendToBack(); f.requestRenderAll(); } };
     $('deleteObj').onclick = ()=>{ const o=f.getActiveObject(); if(o && o!==baseImage){ f.remove(o); f.discardActiveObject(); f.requestRenderAll(); } };
     $('flipSelH').onclick  = ()=>{ const o=f.getActiveObject(); if(o && o!==baseImage){ o.set('flipX', !o.flipX); f.requestRenderAll(); } };
     $('flipSelV').onclick  = ()=>{ const o=f.getActiveObject(); if(o && o!==baseImage){ o.set('flipY', !o.flipY); f.requestRenderAll(); } };
 
+    /* ---------- Meta: GPS + Save ---------- */
+    $('useGPS').onclick = ()=>{
+      if (!navigator.geolocation){ $('metaMsg').textContent='Geolocation not supported.'; return; }
+      $('metaMsg').textContent='Getting location…';
+      navigator.geolocation.getCurrentPosition(pos=>{
+        $('stopLat').value = pos.coords.latitude.toFixed(6);
+        $('stopLng').value = pos.coords.longitude.toFixed(6);
+        $('metaMsg').textContent='Location filled.';
+      }, err=>{
+        $('metaMsg').textContent='GPS error: '+(err?.message||err);
+      }, { enableHighAccuracy:true, timeout:10_000, maximumAge:0 });
+    };
+    $('saveMeta').onclick = async ()=>{
+      try{
+        if(!current || stopIndex<0) throw new Error('Select a stop first.');
+        const s = Object.assign({}, current._stops[stopIndex]);
+        s.title   = $('stopTitle').value;
+        s.caption = $('stopCaption').value;
+        s.lat = ($('stopLat').value||'')==='' ? null : parseFloat($('stopLat').value);
+        s.lng = ($('stopLng').value||'')==='' ? null : parseFloat($('stopLng').value);
+        s.radiusMeters = parseInt($('stopRadius').value, 10) || 50;
+        const next = current._stops.slice(); next[stopIndex]=s;
+        const updated = Object.assign({}, current._raw); setStops(updated, next);
+        await set(dbRef(db, `${ROOT}/${current.id}`), updated);
+        current._raw = updated; current._stops = next;
+        $('metaMsg').textContent='Saved ✓';
+        renderThumbs();
+      }catch(e){ $('metaMsg').textContent='Save failed: '+(e?.message||e); }
+    };
+
+    /* ---------- Delete scenario ---------- */
     $('deleteScenario').onclick = async ()=>{
       if (!current) return;
       if (!confirm('Delete this scenario and its cloud images?')) return;
@@ -958,7 +1056,6 @@
             z: f.getObjects().indexOf(o)
           };
         }
-        return null;
       }).filter(Boolean);
     }
     function buildMaskDataURL(){
@@ -1146,7 +1243,7 @@
       try{
         showLoad(true);
         await ensureAuthed();           // 1) auth
-        ROOT = await detectRoot();      // 2) choose correct path
+        ROOT = await detectRoot();      // 2) path
         updateRootPill();
         subscribeScenarios();           // 3) live updates
         await loadScenarios();          // 4) initial load
