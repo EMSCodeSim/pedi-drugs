@@ -1,23 +1,28 @@
-# netlify.toml
+# ---------- Build ----------
 [build]
-  # No build step: just succeed and let Netlify publish /public
   command = "echo Building static site"
   publish = "public"
 
 [build.environment]
   NODE_VERSION = "20"
 
+# ---------- Functions ----------
 [functions]
   directory = "functions"
   node_bundler = "esbuild"
-  external_node_modules = ["firebase-admin"]  # add others only if you import them
+  external_node_modules = ["firebase-admin"]
 
-[[plugins]]
-package = "@netlify/plugin-functions-install-core"
-
-# Pretty functions path (optional)
+# ---------- Redirects (order matters) ----------
+# Pretty function path
 [[redirects]]
   from = "/functions/*"
-  to = "/.netlify/functions/:splat"
+  to   = "/.netlify/functions/:splat"
   status = 200
-  force = true
+  force  = true
+
+# Local API proxy so your pages can call /api/ai-image
+[[redirects]]
+  from = "/api/*"
+  to   = "/.netlify/functions/:splat"
+  status = 200
+  force  = true
