@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -57,6 +56,10 @@
     #loader{ position:fixed; inset:0; display:none; place-items:center; z-index:99; background:rgba(6,12,20,.55); backdrop-filter:blur(2px) }
     .spinner{ width:42px; height:42px; border-radius:999px; border:4px solid rgba(255,255,255,.25); border-top-color:#fff; animation:spin 1s linear infinite }
     @keyframes spin{ to{ transform:rotate(360deg) } }
+    .scanRow{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+    .scanTable{width:100%;border-collapse:collapse;margin-top:8px}
+    .scanTable th,.scanTable td{border:1px solid rgba(255,255,255,.14);padding:6px 8px;font-size:12px}
+    .scanTable th{background:#0e1a30;text-align:left}
   </style>
 </head>
 <body>
@@ -83,10 +86,12 @@
             <select id="scenarioSel"><option value="">Select scenario…</option></select>
             <div class="row" style="margin-top:6px">
               <button class="btn" id="refreshBtn">Refresh</button>
+              <button class="btn" id="scanRoots">Scan for Scenarios</button>
               <button class="btn" id="deleteScenario" style="background:#2a0f14;border-color:#7a2b2b">Delete Scenario</button>
               <span id="statusPill" class="pill">Loading…</span>
               <span id="rootPill" class="pill small">root: …</span>
             </div>
+            <div id="scanResults" class="small" style="margin-top:6px"></div>
 
             <div class="divider"></div>
             <div class="sectionTitle">Stop meta</div>
@@ -250,10 +255,8 @@
     };
     const appFB = initializeApp(firebaseConfig);
 
-    /* -------- Storage bucket selection (robust) --------
-       Firebase buckets are <project-id>.appspot.com, NOT *.firebasestorage.app
-    */
-    const EXPLICIT_BUCKET = "dailyquiz-d5279.appspot.com"; // set your real bucket if needed
+    /* -------- Storage bucket selection (robust) -------- */
+    const EXPLICIT_BUCKET = "dailyquiz-d5279.appspot.com"; // real GCS bucket
     function toAppspot(bucketOrHost = ""){ return bucketOrHost.replace(".firebasestorage.app", ".appspot.com"); }
     const candidates = [
       toAppspot(EXPLICIT_BUCKET).trim(),
@@ -266,7 +269,6 @@
     } else {
       storage = getStorage(appFB);
     }
-    // Generous timeouts for slow networks
     setMaxUploadRetryTime(storage, 5 * 60 * 1000);
     setMaxOperationRetryTime(storage, 5 * 60 * 1000);
 
@@ -286,18 +288,15 @@
       return auth.currentUser;
     }
 
-    /* ---------- Root detection (auth-aware & robust) ---------- */
-    // Optional: force a DB root (or override with ?root=…)
-    const FORCE_ROOT = "";
-
+    /* ---------- Root handling ---------- */
+    const FORCE_ROOT = ""; // optional override; or use ?root=
     let ROOT = 'scenarios';
+    let unsubscribeScenarios = null;
 
     async function detectRoot(){
       const fromQS = new URLSearchParams(location.search).get('root');
       if (fromQS) return fromQS;
       if (FORCE_ROOT) return FORCE_ROOT;
-
-      // Ensure auth before probing (rules may require it)
       await ensureAuthed();
 
       const probe = async (path) => {
@@ -310,16 +309,14 @@
           return { path, ok:false, count:0, error:e };
         }
       };
+      const paths = ['geophoto/scenarios', 'scenarios'];
+      const results = await Promise.all(paths.map(probe));
+      const withData = results.filter(r => r.ok && r.count>0);
+      if (withData.length) return withData.sort((a,b)=>b.count-a.count)[0].path;
+      const ok = results.find(r => r.ok);
+      if (ok) return ok.path;
 
-      const [geo, plain] = await Promise.all([probe('geophoto/scenarios'), probe('scenarios')]);
-      if (geo.ok && geo.count > 0) return geo.path;
-      if (plain.ok && plain.count > 0) return plain.path;
-      if (geo.ok) return geo.path;
-      if (plain.ok) return plain.path;
-
-      showErr(`DB read failed for both roots:
-${geo.path}: ${geo.error?.code || geo.error?.message || geo.error}
-${plain.path}: ${plain.error?.code || plain.error?.message || plain.error}`);
+      showErr(`DB read failed:\n` + results.map(r=>`${r.path}: ${r.error?.code||r.error?.message||r.error}`).join('\n'));
       return 'scenarios';
     }
 
@@ -329,6 +326,15 @@ ${plain.path}: ${plain.error?.code || plain.error?.message || plain.error}`);
         const b = (s?._bucket || s?.bucket) || (firebaseConfig.storageBucket || "(default)");
         $('rootPill').textContent = `root: ${ROOT} | bucket: ${String(b).replace(".firebasestorage.app",".appspot.com")}`;
       } catch {}
+    }
+
+    async function switchRoot(newRoot){
+      if (!newRoot || newRoot === ROOT) return;
+      ROOT = newRoot;
+      updateRootPill();
+      if (unsubscribeScenarios) try { unsubscribeScenarios(); } catch {}
+      await loadScenarios();          // load once
+      subscribeScenarios();           // then live updates on the new root
     }
 
     /* ---------- Storage helpers ---------- */
@@ -490,21 +496,6 @@ ${plain.path}: ${plain.error?.code || plain.error?.message || plain.error}`);
                     .sort((a,b)=>(b.createdAt||0)-(a.createdAt||0));
         populateScenarios();
         status(`${scenarios.length} scenario(s)`);
-
-        // If empty, try the alternate root once
-        if (!scenarios.length){
-          const alt = ROOT === 'scenarios' ? 'geophoto/scenarios' : 'scenarios';
-          const altSnap = await get(dbRef(db, alt));
-          if (altSnap.exists()){
-            ROOT = alt;
-            updateRootPill();
-            const altObj = altSnap.val() || {};
-            scenarios = Object.entries(altObj).map(([id,s])=>({ id, _raw:s, _stops:coerceStops(s), ...s }))
-                        .sort((a,b)=>(b.createdAt||0)-(a.createdAt||0));
-            populateScenarios();
-            status(`${scenarios.length} scenario(s) (switched to ${ROOT})`);
-          }
-        }
       }catch(e){
         const msg = e?.code ? `${e.code} — ${e.message||''}` : (e?.message || String(e));
         showErr(`Failed to load scenarios from "${ROOT}": ${msg}`);
@@ -513,8 +504,9 @@ ${plain.path}: ${plain.error?.code || plain.error?.message || plain.error}`);
     }
 
     function subscribeScenarios(){
+      if (unsubscribeScenarios) try { unsubscribeScenarios(); } catch {}
       const ref = dbRef(db, ROOT);
-      onValue(ref, snap=>{
+      unsubscribeScenarios = onValue(ref, snap=>{
         const v=snap.val()||{};
         scenarios = Object.entries(v).map(([id,s])=>({ id, _raw:s, _stops:coerceStops(s), ...s }))
                     .sort((a,b)=>(b.createdAt||0)-(a.createdAt||0));
@@ -525,6 +517,53 @@ ${plain.path}: ${plain.error?.code || plain.error?.message || plain.error}`);
         }
       }, (err)=>{ showErr('Live updates blocked by rules: '+(err?.message||err)); });
     }
+
+    // ---- Root scanner UI ----
+    $('scanRoots').onclick = async ()=>{
+      await ensureAuthed();
+      const paths = [
+        'geophoto/scenarios',
+        'scenarios',
+        'geophoto/photos',
+        'photos',
+        'geophoto/images',
+        'images',
+        'training/scenarios',
+        'cases',
+        'incidents'
+      ];
+      const probe = async (path)=>{
+        try{
+          const snap = await get(dbRef(db, path));
+          const val = snap.exists() ? (snap.val()||{}) : {};
+          const keys = Object.keys(val);
+          // crude heuristic: how many look like scenario objects
+          const likeSc = keys.filter(k=>{
+            const v = val[k];
+            return v && typeof v==='object' && (Array.isArray(v.stops)||Array.isArray(v.photos)||Array.isArray(v.images));
+          }).length;
+          return { path, ok:true, keys:keys.length, likeSc };
+        }catch(e){
+          return { path, ok:false, err:(e?.code||e?.message||String(e)) };
+        }
+      };
+      const results = await Promise.all(paths.map(probe));
+      const el = $('scanResults');
+      const rows = results.map(r=>{
+        if (!r.ok) return `<tr><td>${r.path}</td><td colspan="2">❌ ${r.err}</td><td></td></tr>`;
+        const btn = `<button class="btn" data-switch="${r.path}">Use</button>`;
+        return `<tr><td>${r.path}</td><td>${r.keys}</td><td>${r.likeSc}</td><td>${btn}</td></tr>`;
+      }).join('');
+      el.innerHTML = `
+        <div class="scanRow"><strong>Root scan:</strong> Click "Use" to switch.</div>
+        <table class="scanTable">
+          <thead><tr><th>Path</th><th>#keys</th><th>Looks like scenarios</th><th></th></tr></thead>
+          <tbody>${rows}</tbody>
+        </table>`;
+      el.querySelectorAll('button[data-switch]').forEach(b=>{
+        b.onclick = async ()=>{ await switchRoot(b.dataset.switch); };
+      });
+    };
 
     /* ---------- Thumbnails ---------- */
     function dataURLFromStored(stored){
@@ -741,7 +780,6 @@ ${plain.path}: ${plain.error?.code || plain.error?.message || plain.error}`);
       return new Blob([buf], { type:mime });
     }
 
-    // Re-encode arbitrary image blobs → upload-friendly JPEG
     async function blobToImage(blob){
       return new Promise((resolve, reject)=>{
         const url = URL.createObjectURL(blob);
@@ -823,9 +861,7 @@ ${plain.path}: ${plain.error?.code || plain.error?.message || plain.error}`);
         status('Saved edited image ✓');
       }catch(e){
         showErr(e.message||String(e));
-      }finally{
-        showLoad(false);
-      }
+      }finally{ showLoad(false); }
     };
 
     $('fit').onclick  = ()=>{
@@ -1050,7 +1086,7 @@ ${plain.path}: ${plain.error?.code || plain.error?.message || plain.error}`);
       throw new Error('This stop has no accessible base image.');
     }
 
-    // Upload AI result (URL path) with re-encode + resumable
+    // Upload AI result (URL path)
     async function saveAIResultFromURL(imageUrl){
       let resp;
       try {
@@ -1072,9 +1108,8 @@ ${plain.path}: ${plain.error?.code || plain.error?.message || plain.error}`);
       const ref = stRef(storage, path);
       const meta = { contentType: 'image/jpeg', cacheControl: 'public,max-age=31536000,immutable' };
 
-      try {
-        await uploadWithTimeoutResumable(ref, uploadBlob, meta);
-      } catch (e) {
+      try { await uploadWithTimeoutResumable(ref, uploadBlob, meta); }
+      catch (e) {
         const msg = e?.code || e?.message || String(e);
         if (/retry-limit-exceeded|upload\/timeout/i.test(msg)) {
           $('aiMsg').textContent = 'Upload slow — retrying smaller…';
@@ -1095,7 +1130,7 @@ ${plain.path}: ${plain.error?.code || plain.error?.message || plain.error}`);
       return url;
     }
 
-    // Upload AI result (data URL path) with re-encode + resumable
+    // Upload AI result (data URL path)
     async function saveAIResultToStorage(dataUrl){
       const originalBlob = await (await fetch(dataUrl)).blob();
       let uploadBlob = await reencodeBlobToJPEG(originalBlob, 1280, 0.85);
@@ -1105,9 +1140,8 @@ ${plain.path}: ${plain.error?.code || plain.error?.message || plain.error}`);
       const ref = stRef(storage, path);
       const meta = { contentType: 'image/jpeg', cacheControl: 'public,max-age=31536000,immutable' };
 
-      try{
-        await uploadWithTimeoutResumable(ref, uploadBlob, meta);
-      }catch(e){
+      try{ await uploadWithTimeoutResumable(ref, uploadBlob, meta); }
+      catch(e){
         const msg = e?.code || e?.message || String(e);
         if (/retry-limit-exceeded|upload\/timeout/i.test(msg)) {
           $('aiMsg').textContent = 'Upload slow — retrying smaller…';
@@ -1161,7 +1195,7 @@ ${plain.path}: ${plain.error?.code || plain.error?.message || plain.error}`);
       }
     };
 
-    // ---------- “Send to AI” (uses inpaint if mask present; else echo current) ----------
+    // ---------- “Send to AI” ----------
     $('aiSend').onclick = async ()=>{
       try{
         if(!current || stopIndex<0) throw new Error('Select a stop first.');
@@ -1185,7 +1219,6 @@ ${plain.path}: ${plain.error?.code || plain.error?.message || plain.error}`);
           const baseUrl = await getBaseImageURLForStop();
           payload = { mode:'inpaint', image: baseUrl, mask: maskDataUrl, prompt };
         } else {
-          // No overlays → don’t T2I. Return current image back (keeps it anchored).
           $('aiMsg').textContent = 'No overlays — sending current image…';
           const composed = await dataURLFromCanvasScaled(f, 1280, 0.9);
           payload = { mode:'echo', image: composed, prompt };
@@ -1212,13 +1245,10 @@ ${plain.path}: ${plain.error?.code || plain.error?.message || plain.error}`);
       }
     };
 
-    $('aiAdd').onclick = ()=> $('aiMsg').textContent = 'Open a result first.';
-
     /* ---------- Refresh / init ---------- */
     $('refreshBtn').onclick = async ()=>{
-      ROOT = await detectRoot();
-      updateRootPill();
-      await loadScenarios();
+      const next = await detectRoot();
+      await switchRoot(next);
     };
 
     (async()=>{
