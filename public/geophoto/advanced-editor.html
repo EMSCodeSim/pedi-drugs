@@ -56,10 +56,6 @@
     #loader{ position:fixed; inset:0; display:none; place-items:center; z-index:99; background:rgba(6,12,20,.55); backdrop-filter:blur(2px) }
     .spinner{ width:42px; height:42px; border-radius:999px; border:4px solid rgba(255,255,255,.25); border-top-color:#fff; animation:spin 1s linear infinite }
     @keyframes spin{ to{ transform:rotate(360deg) } }
-    .scanRow{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
-    .scanTable{width:100%;border-collapse:collapse;margin-top:8px}
-    .scanTable th,.scanTable td{border:1px solid rgba(255,255,255,.14);padding:6px 8px;font-size:12px}
-    .scanTable th{background:#0e1a30;text-align:left}
   </style>
 </head>
 <body>
@@ -86,12 +82,10 @@
             <select id="scenarioSel"><option value="">Select scenario…</option></select>
             <div class="row" style="margin-top:6px">
               <button class="btn" id="refreshBtn">Refresh</button>
-              <button class="btn" id="scanRoots">Scan for Scenarios</button>
               <button class="btn" id="deleteScenario" style="background:#2a0f14;border-color:#7a2b2b">Delete Scenario</button>
               <span id="statusPill" class="pill">Loading…</span>
               <span id="rootPill" class="pill small">root: …</span>
             </div>
-            <div id="scanResults" class="small" style="margin-top:6px"></div>
 
             <div class="divider"></div>
             <div class="sectionTitle">Stop meta</div>
@@ -205,7 +199,7 @@
 
   <script src="https://cdnjs.cloudflare.com/ajax/libs/fabric.js/5.3.0/fabric.min.js" crossorigin="anonymous"></script>
   <script type="module">
-    /* ---------- tiny helpers ---------- */
+    /* ---------- helpers ---------- */
     const $ = (id)=>document.getElementById(id);
     const showErr = (m)=>{ const b=$('errbar'); b.textContent=m; b.style.display='block'; };
     const hideErr = ()=>{ $('errbar').style.display='none'; };
@@ -235,14 +229,8 @@
     /* ---------- Firebase ---------- */
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-app.js";
     import { getDatabase, ref as dbRef, get, set, onValue, remove } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-database.js";
-    import {
-      getStorage, ref as stRef, uploadBytesResumable, uploadBytes, getDownloadURL,
-      getBlob, deleteObject, setMaxUploadRetryTime, setMaxOperationRetryTime
-    } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-storage.js";
-    import {
-      getAuth, signInAnonymously, onAuthStateChanged,
-      setPersistence, browserLocalPersistence, browserSessionPersistence, inMemoryPersistence
-    } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-auth.js";
+    import { getStorage, ref as stRef, uploadBytesResumable, uploadBytes, getDownloadURL, getBlob, deleteObject } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-storage.js";
+    import { getAuth, signInAnonymously, onAuthStateChanged, setPersistence, browserLocalPersistence, browserSessionPersistence, inMemoryPersistence } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-auth.js";
 
     const firebaseConfig = {
       apiKey:"AIzaSyDM6DpRSeZueVKRpbyJyDmhf8WY66KyCDk",
@@ -256,23 +244,21 @@
     const appFB = initializeApp(firebaseConfig);
 
     /* -------- Storage bucket selection (robust) --------
-       Real GCS buckets use <project-id>.appspot.com
+       ⚠️ Set EXPLICIT_BUCKET to your real Firebase bucket name when in doubt.
+       Firebase buckets are <project-id>.appspot.com, NOT *.firebasestorage.app
     */
-    const EXPLICIT_BUCKET = "dailyquiz-d5279.appspot.com"; // ← set real bucket if different
+    const EXPLICIT_BUCKET = ""; // e.g. "dailyquiz-d5279.appspot.com" or leave "" to auto-detect
     function toAppspot(bucketOrHost = ""){ return bucketOrHost.replace(".firebasestorage.app", ".appspot.com"); }
     const candidates = [
       toAppspot(EXPLICIT_BUCKET).trim(),
       toAppspot((firebaseConfig.storageBucket || "").trim()),
     ].filter(Boolean);
-
     let storage;
     if (candidates.length){
       storage = getStorage(appFB, `gs://${candidates[0]}`);
     } else {
       storage = getStorage(appFB);
     }
-    setMaxUploadRetryTime(storage, 5 * 60 * 1000);
-    setMaxOperationRetryTime(storage, 5 * 60 * 1000);
 
     const db = getDatabase(appFB);
     const auth = getAuth(appFB);
@@ -290,96 +276,42 @@
       return auth.currentUser;
     }
 
-    /* ---------- Root handling ---------- */
-    const FORCE_ROOT = ""; // optional override; or use ?root=
+    /* ---------- Root detection ---------- */
     let ROOT = 'scenarios';
-    let unsubscribeScenarios = null;
-
     async function detectRoot(){
       const fromQS = new URLSearchParams(location.search).get('root');
       if (fromQS) return fromQS;
-      if (FORCE_ROOT) return FORCE_ROOT;
-      await ensureAuthed();
-
-      const probe = async (path) => {
-        try {
-          const snap = await get(dbRef(db, path));
-          const val = snap.exists() ? (snap.val() || {}) : {};
-          const count = (val && typeof val === 'object') ? Object.keys(val).length : 0;
-          return { path, ok:true, count };
-        } catch (e) {
-          return { path, ok:false, count:0, error:e };
-        }
-      };
-      const paths = ['geophoto/scenarios', 'scenarios'];
-      const results = await Promise.all(paths.map(probe));
-      const withData = results.filter(r => r.ok && r.count>0);
-      if (withData.length) return withData.sort((a,b)=>b.count-a.count)[0].path;
-      const ok = results.find(r => r.ok);
-      if (ok) return ok.path;
-
-      showErr(`DB read failed:\n` + results.map(r=>`${r.path}: ${r.error?.code||r.error?.message||r.error}`).join('\n'));
+      try{
+        const a = await get(dbRef(db, 'geophoto/scenarios'));
+        if (a.exists()) return 'geophoto/scenarios';
+      }catch{}
       return 'scenarios';
     }
 
-    function updateRootPill(){
-      try {
-        const s = storage;
-        const b = (s?._bucket || s?.bucket) || (firebaseConfig.storageBucket || "(default)");
-        $('rootPill').textContent = `root: ${ROOT} | bucket: ${String(b).replace(".firebasestorage.app",".appspot.com")}`;
-      } catch {}
-    }
-
-    async function switchRoot(newRoot){
-      if (!newRoot || newRoot === ROOT) return;
-      ROOT = newRoot;
-      updateRootPill();
-      if (unsubscribeScenarios) try { unsubscribeScenarios(); } catch {}
-      await loadScenarios();          // load once on the new root
-      subscribeScenarios();           // then attach live updates
-    }
-
-    /* ---------- Storage helpers (fixed) ---------- */
+    /* ---------- Storage helpers ---------- */
     function toStorageRefString(s){
       if(!s) return s;
       let v = s.trim();
       try{ v = decodeURIComponent(v); }catch{}
       if (v.startsWith('gs://')) return v;
-      // googleapis style (safe to coerce)
       let m = v.match(/^https?:\/\/firebasestorage\.googleapis\.com\/v0\/b\/([^/]+)\/o\/([^?]+)/i);
       if (m) return `gs://${m[1]}/${m[2].replace(/\+/g,' ')}`;
-      // firebasestorage.app style — if you MUST coerce, fix bucket to appspot.com
       m = v.match(/^https?:\/\/([^/]+)\.firebasestorage\.app\/o\/([^?]+)/i);
-      if (m){
-        const bucket = m[1].includes('.') ? m[1] : `${m[1]}.appspot.com`;
-        return `gs://${bucket}/${m[2].replace(/\+/g,' ')}`;
-      }
+      if (m) return `gs://${m[1]}/${m[2].replace(/\+/g,' ')}`;
       if (!/^https?:\/\//i.test(v)) return v;
       return v;
     }
-
-    // Only coerce to gs:// if the input is already gs:// or googleapis-style.
-    // For https links (incl. firebasestorage.app), prefer direct fetch.
     async function getBlobFromRefString(refStr){
       await ensureAuthed();
-      if (!refStr) throw new Error('No reference provided');
-      const isHttp = /^https?:\/\//i.test(refStr);
-      let refCandidate = refStr;
-      if (!isHttp) {
-        refCandidate = toStorageRefString(refStr);
-      } else {
-        // keep HTTPS as-is
-      }
-
-      if (/^https?:\/\//i.test(refCandidate)){
-        const r = await fetch(refCandidate, { mode:'cors', credentials:'omit', cache:'no-store' });
+      const coerced = toStorageRefString(refStr);
+      if (/^https?:\/\//i.test(coerced)){
+        const r = await fetch(coerced, { mode:'cors', credentials:'omit', cache:'no-store' });
         if (!r.ok) throw new Error('HTTP '+r.status);
         return await r.blob();
       }
-      const ref = stRef(storage, refCandidate);
+      const ref = stRef(storage, coerced);
       return await getBlob(ref);
     }
-
     function candidateOriginals(pathOrUrl){
       const out = new Set();
       if (!pathOrUrl) return [];
@@ -504,27 +436,19 @@
         sel.appendChild(o);
       });
     }
-
     async function loadScenarios(){
-      try{
-        await ensureAuthed();
-        status('Loading…');
-        const snap = await get(dbRef(db, ROOT));
-        const obj = snap.exists() ? (snap.val()||{}) : {};
-        scenarios = Object.entries(obj).map(([id,s])=>({ id, _raw:s, _stops:coerceStops(s), ...s }))
-                    .sort((a,b)=>(b.createdAt||0)-(a.createdAt||0));
-        populateScenarios();
-        status(`${scenarios.length} scenario(s)`);
-      }catch(e){
-        showErr('Read failed (rules?): ' + (e.message||e));
-        status('0 scenario(s)');
-      }
+      await ensureAuthed();
+      status('Loading…');
+      const snap = await get(dbRef(db, ROOT));
+      const obj = snap.exists() ? (snap.val()||{}) : {};
+      scenarios = Object.entries(obj).map(([id,s])=>({ id, _raw:s, _stops:coerceStops(s), ...s }))
+                  .sort((a,b)=>(b.createdAt||0)-(a.createdAt||0));
+      populateScenarios();
+      status(`${scenarios.length} scenario(s)`);
     }
-
     function subscribeScenarios(){
-      if (unsubscribeScenarios) try { unsubscribeScenarios(); } catch {}
       const ref = dbRef(db, ROOT);
-      unsubscribeScenarios = onValue(ref, snap=>{
+      onValue(ref, snap=>{
         const v=snap.val()||{};
         scenarios = Object.entries(v).map(([id,s])=>({ id, _raw:s, _stops:coerceStops(s), ...s }))
                     .sort((a,b)=>(b.createdAt||0)-(a.createdAt||0));
@@ -535,52 +459,6 @@
         }
       }, (err)=>{ showErr('Live updates blocked by rules: '+(err?.message||err)); });
     }
-
-    // ---- Root scanner UI ----
-    $('scanRoots').onclick = async ()=>{
-      await ensureAuthed();
-      const paths = [
-        'geophoto/scenarios',
-        'scenarios',
-        'geophoto/photos',
-        'photos',
-        'geophoto/images',
-        'images',
-        'training/scenarios',
-        'cases',
-        'incidents'
-      ];
-      const probe = async (path)=>{
-        try{
-          const snap = await get(dbRef(db, path));
-          const val = snap.exists() ? (snap.val()||{}) : {};
-          const keys = Object.keys(val);
-          const likeSc = keys.filter(k=>{
-            const v = val[k];
-            return v && typeof v==='object' && (Array.isArray(v.stops)||Array.isArray(v.photos)||Array.isArray(v.images));
-          }).length;
-          return { path, ok:true, keys:keys.length, likeSc };
-        }catch(e){
-          return { path, ok:false, err:(e?.code||e?.message||String(e)) };
-        }
-      };
-      const results = await Promise.all(paths.map(probe));
-      const el = $('scanResults');
-      const rows = results.map(r=>{
-        if (!r.ok) return `<tr><td>${r.path}</td><td colspan="2">❌ ${r.err}</td><td></td></tr>`;
-        const btn = `<button class="btn" data-switch="${r.path}">Use</button>`;
-        return `<tr><td>${r.path}</td><td>${r.keys}</td><td>${r.likeSc}</td><td>${btn}</td></tr>`;
-      }).join('');
-      el.innerHTML = `
-        <div class="scanRow"><strong>Root scan:</strong> Click "Use" to switch.</div>
-        <table class="scanTable">
-          <thead><tr><th>Path</th><th>#keys</th><th>Looks like scenarios</th><th></th></tr></thead>
-          <tbody>${rows}</tbody>
-        </table>`;
-      el.querySelectorAll('button[data-switch]').forEach(b=>{
-        b.onclick = async ()=>{ await switchRoot(b.dataset.switch); };
-      });
-    };
 
     /* ---------- Thumbnails ---------- */
     function dataURLFromStored(stored){
@@ -639,7 +517,7 @@
           showErr('Loaded a small thumbnail. A higher-resolution original could not be found.');
         }
       }catch(e){
-        showErr('Image load failed: '+(e.message||e));
+        showErr('Image load failed (rules?): '+(e.message||e));
       }finally{
         showLoad(false);
       }
@@ -684,33 +562,6 @@
       f.add(rect); f.add(tb); rect.moveTo(0); f.requestRenderAll();
       $('canvasInfo').textContent='Text slide';
     }
-
-    /* ---------- Textbox controls ---------- */
-    $('addTextbox').onclick = ()=>{
-      const tb = new fabric.Textbox('Notes', {
-        left: 80, top: 80, width: 320, fontSize: 24, fill:'#fff',
-        backgroundColor: 'rgba(0,0,0,0.6)', padding: 8,
-        cornerStyle:'circle', transparentCorners:false
-      });
-      tb._kind='text';
-      f.add(tb); f.setActiveObject(tb); f.requestRenderAll();
-      $('tbContent').value = tb.text;
-      $('tbFont').value = tb.fontSize || 24;
-      $('tbBgOpacity').value = 0.6;
-    };
-    $('tbApply').onclick = ()=>{
-      const o = f.getActiveObject();
-      if (!o || o.type!=='textbox') return;
-      o.text = $('tbContent').value;
-      o.fontSize = parseInt($('tbFont').value,10) || 24;
-      const op = Math.max(0, Math.min(1, parseFloat($('tbBgOpacity').value)));
-      o.backgroundColor = `rgba(0,0,0,${op})`;
-      f.requestRenderAll();
-    };
-    $('tbDelete').onclick = ()=>{
-      const o = f.getActiveObject();
-      if (o && o.type==='textbox'){ f.remove(o); f.discardActiveObject(); f.requestRenderAll(); }
-    };
 
     function serializeOverlays(){
       const out=[];
@@ -764,8 +615,7 @@
       }catch(e){ $('metaMsg').textContent=String(e.message||e); }
     };
 
-    /* ---------- Export / Save ---------- */
-    const EDIT_MAX_EDGE=1280, EDIT_THUMB_EDGE=480, EDIT_JPEG_QUALITY=0.85;
+    const EDIT_MAX_EDGE=1600, EDIT_THUMB_EDGE=480, EDIT_JPEG_QUALITY=0.85;
 
     async function dataURLFromCanvasScaled(fabricCanvas, maxEdge=EDIT_MAX_EDGE, quality=EDIT_JPEG_QUALITY){
       const raw = fabricCanvas.toDataURL({ format:'jpeg', quality:1 });
@@ -796,32 +646,11 @@
       for (let i=0;i<len;i++) buf[i] = bin.charCodeAt(i);
       return new Blob([buf], { type:mime });
     }
-
-    async function blobToImage(blob){
-      return new Promise((resolve, reject)=>{
-        const url = URL.createObjectURL(blob);
-        const img = new Image();
-        img.onload = ()=>{ URL.revokeObjectURL(url); resolve(img); };
-        img.onerror = (e)=>{ URL.revokeObjectURL(url); reject(e); };
-        img.decoding='async';
-        img.src = url;
-      });
-    }
-    async function reencodeBlobToJPEG(blob, maxEdge=1280, quality=0.85){
-      const img = await blobToImage(blob);
-      const w = img.naturalWidth, h = img.naturalHeight;
-      const s = Math.min(1, maxEdge / Math.max(w, h));
-      const outW = Math.max(1, Math.round(w*s)), outH = Math.max(1, Math.round(h*s));
-      const c = document.createElement('canvas'); c.width=outW; c.height=outH;
-      const ctx = c.getContext('2d'); ctx.imageSmoothingEnabled=true; ctx.imageSmoothingQuality='high';
-      ctx.drawImage(img, 0, 0, outW, outH);
-      return dataURLtoBlob(c.toDataURL('image/jpeg', quality));
-    }
-    async function uploadWithTimeoutResumable(ref, blob, metadata, timeoutMs=5*60*1000){
+    async function uploadWithTimeout(ref, blob, metadata){
       return new Promise((resolve,reject)=>{
         const task = uploadBytesResumable(ref, blob, metadata);
-        const killer = setTimeout(()=>{ try{ task.cancel(); }catch{}; reject(Object.assign(new Error('upload/timeout'),{code:'upload/timeout'})); }, timeoutMs);
-        task.on('state_changed', ()=>{}, (err)=>{ clearTimeout(killer); reject(err); }, ()=>{ clearTimeout(killer); resolve(); });
+        const killer = setTimeout(()=>{ try{ task.cancel(); }catch{}; reject(Object.assign(new Error('Timed out while uploading'), { code:'save/timeout-upload' })); }, 45000);
+        task.on('state_changed', ()=>{}, e=>{ clearTimeout(killer); reject(e); }, ()=>{ clearTimeout(killer); resolve(); });
       });
     }
 
@@ -849,7 +678,7 @@
         const metaFull = { contentType:'image/jpeg', cacheControl:'public,max-age=31536000,immutable' };
         const metaThmb = { contentType:'image/jpeg', cacheControl:'public,max-age=31536000,immutable' };
 
-        await uploadWithTimeoutResumable(fullRef, fullBlob, metaFull);
+        await uploadWithTimeout(fullRef, fullBlob, metaFull);
         try{ await uploadBytes(thumbRef, thumbBlob, metaThmb); }catch(e){ /* non-fatal */ }
         const fullURL  = await getDownloadURL(fullRef);
         const thumbURL = await getDownloadURL(thumbRef).catch(()=>fullURL);
@@ -863,7 +692,7 @@
           imageURL: fullURL,
           thumbURL: thumbURL||fullURL,
           storagePath: fullRef.fullPath,
-          gsUri: fullRef.fullPath,
+          gsUri: fullRef.fullPath, // path-only; we resolve via the configured storage instance
           lat: s.lat??null, lng: s.lng??null, accuracy: s.accuracy??null,
           radiusMeters: s.radiusMeters ?? 50,
           overlays: serializeOverlays(),
@@ -1008,13 +837,13 @@
         f.clear(); baseImage=null; fitCanvas();
         status('Scenario deleted.');
       }catch(e){
-        showErr('Delete failed: '+(e.message||e));
+        showErr('Delete failed (rules?): '+(e.message||e));
       }finally{
         showLoad(false);
       }
     };
 
-    /* ---------- AI helpers (mask + inpaint) ---------- */
+    /* ---------- AI helpers ---------- */
     function rectCanvasToImage(rect){
       if (!baseImage || baseImage.type!=='image') return { x:0, y:0, w:0, h:0 };
       const sx = baseImage.getScaledWidth()  / baseImage.width;
@@ -1089,6 +918,14 @@
       }
       return { dataUrl: c.toDataURL('image/png'), overlays };
     }
+    function summarizeOverlayCounts(list){
+      const counts = { fire:0, smoke:0, people:0, cars:0, hazard:0, generic:0, text:0 };
+      for (const o of list){
+        if (o.kind === 'text') counts.text++;
+        else counts[o.category || 'generic'] = (counts[o.category || 'generic'] || 0) + 1;
+      }
+      return counts;
+    }
     async function getBaseImageURLForStop(){
       const s = current._stops[stopIndex];
       if (s?.imageURL && /^https?:\/\//i.test(s.imageURL)) return s.imageURL;
@@ -1102,8 +939,20 @@
       }
       throw new Error('This stop has no accessible base image.');
     }
-
-    // Upload AI result (URL path)
+    async function saveAIResultToStorage(dataUrl){
+      const blob = await (await fetch(dataUrl)).blob();
+      const ts = Date.now();
+      const path = `scenarios/${current.id}/ai/results/${ts}_stop${stopIndex}.png`;
+      const ref = stRef(storage, path);
+      await uploadBytes(ref, blob, { contentType: 'image/png', cacheControl: 'public,max-age=31536000,immutable' });
+      const url = await getDownloadURL(ref);
+      $('aiOpen').disabled = false;
+      $('aiAdd').disabled  = false;
+      $('aiOpen').onclick = ()=> window.open(url, '_blank');
+      $('aiAdd').onclick  = ()=> addResultAsNewStop(url);
+      $('aiMsg').textContent = 'Result uploaded ✓';
+      return url;
+    }
     async function saveAIResultFromURL(imageUrl){
       let resp;
       try {
@@ -1117,27 +966,11 @@
         $('aiMsg').textContent = `AI returned a bad URL: ${imageUrl} (${resp.status}) ${txt || ""}`;
         return null;
       }
-      const original = await resp.blob();
-      let uploadBlob = await reencodeBlobToJPEG(original, 1280, 0.85);
-
+      const blob = await resp.blob();
       const ts = Date.now();
-      const path = `scenarios/${current.id}/ai/results/${ts}_stop${stopIndex}.jpg`;
+      const path = `scenarios/${current.id}/ai/results/${ts}_stop${stopIndex}.png`;
       const ref = stRef(storage, path);
-      const meta = { contentType: 'image/jpeg', cacheControl: 'public,max-age=31536000,immutable' };
-
-      try { await uploadWithTimeoutResumable(ref, uploadBlob, meta); }
-      catch (e) {
-        const msg = e?.code || e?.message || String(e);
-        if (/retry-limit-exceeded|upload\/timeout/i.test(msg)) {
-          $('aiMsg').textContent = 'Upload slow — retrying smaller…';
-          const smaller = await reencodeBlobToJPEG(original, 960, 0.80);
-          await uploadWithTimeoutResumable(ref, smaller, meta);
-        } else {
-          $('aiMsg').textContent = `Upload failed: ${msg}`;
-          return null;
-        }
-      }
-
+      await uploadBytes(ref, blob, { contentType: blob.type || 'image/png', cacheControl: 'public,max-age=31536000,immutable' });
       const url = await getDownloadURL(ref);
       $('aiOpen').disabled = false;
       $('aiAdd').disabled  = false;
@@ -1146,39 +979,6 @@
       $('aiMsg').textContent = 'Result uploaded ✓';
       return url;
     }
-
-    // Upload AI result (data URL path)
-    async function saveAIResultToStorage(dataUrl){
-      const originalBlob = await (await fetch(dataUrl)).blob();
-      let uploadBlob = await reencodeBlobToJPEG(originalBlob, 1280, 0.85);
-
-      const ts = Date.now();
-      const path = `scenarios/${current.id}/ai/results/${ts}_stop${stopIndex}.jpg`;
-      const ref = stRef(storage, path);
-      const meta = { contentType: 'image/jpeg', cacheControl: 'public,max-age=31536000,immutable' };
-
-      try{ await uploadWithTimeoutResumable(ref, uploadBlob, meta); }
-      catch(e){
-        const msg = e?.code || e?.message || String(e);
-        if (/retry-limit-exceeded|upload\/timeout/i.test(msg)) {
-          $('aiMsg').textContent = 'Upload slow — retrying smaller…';
-          const smaller = await reencodeBlobToJPEG(originalBlob, 960, 0.80);
-          await uploadWithTimeoutResumable(ref, smaller, meta);
-        } else {
-          $('aiMsg').textContent = `Upload failed: ${msg}`;
-          return null;
-        }
-      }
-
-      const url = await getDownloadURL(ref);
-      $('aiOpen').disabled = false;
-      $('aiAdd').disabled  = false;
-      $('aiOpen').onclick = ()=> window.open(url, '_blank');
-      $('aiAdd').onclick  = ()=> addResultAsNewStop(url);
-      $('aiMsg').textContent = 'Result uploaded ✓';
-      return url;
-    }
-
     async function addResultAsNewStop(url){
       if (!current || stopIndex<0) return;
       const base = current._stops[stopIndex];
@@ -1187,15 +987,22 @@
         type:'photo',
         title: (base.title||'') + ' (AI)',
         caption: 'AI composite',
-        imageURL: url, thumbURL: url,
-        storagePath: null, gsUri: null,
-        lat: base.lat ?? null, lng: base.lng ?? null, accuracy: base.accuracy ?? null,
+        imageURL: url,
+        thumbURL: url,
+        storagePath: null,
+        gsUri: null,
+        lat: base.lat ?? null,
+        lng: base.lng ?? null,
+        accuracy: base.accuracy ?? null,
         radiusMeters: base.radiusMeters ?? 50,
         overlays: [],
-        at: ts, origin: 'ai', basedOn: stopIndex
+        at: ts,
+        origin: 'ai',
+        basedOn: stopIndex
       };
       const next = current._stops.slice(); next.push(newStop);
-      const updated = Object.assign({}, current._raw); setStops(updated, next);
+      const updated = Object.assign({}, current._raw);
+      setStops(updated, next);
       await set(dbRef(db, `${ROOT}/${current.id}`), updated);
       current._raw = updated; current._stops = next;
       renderThumbs();
@@ -1212,18 +1019,85 @@
       }
     };
 
-    /* ---------- Refresh / init ---------- */
-    $('refreshBtn').onclick = async ()=>{
-      const next = await detectRoot();
-      await switchRoot(next);
+    // ---------- UPDATED “Send to AI” ----------
+    $('aiSend').onclick = async ()=>{
+      try{
+        if(!current || stopIndex<0) throw new Error('Select a stop first.');
+        $('aiMsg').textContent = 'Preparing…';
+
+        const style = $('aiStyle').value;
+        const notes = ($('aiNotes').value||'').trim();
+        const prompt =
+          (style === 'dramatic') ? `dramatic emergency scene; ${notes}` :
+          (style === 'training') ? `training drill realism; ${notes}` :
+                                   `photo-realistic; ${notes || 'make the scene photorealistic; keep layout'}`;
+
+        const strength = 0.35;
+
+        const overlays = serializeOverlaysForAI();
+        const hasOverlays = overlays && overlays.length > 0;
+
+        // EITHER send dataUrl (with overlays baked-in) OR guideUrl (no overlays)
+        let payload;
+        if (hasOverlays) {
+          $('aiMsg').textContent = 'Compositing…';
+          const composedDataUrl = await dataURLFromCanvasScaled(f, 1600, 0.95);
+          payload = { dataUrl: composedDataUrl, prompt, strength };
+        } else {
+          $('aiMsg').textContent = 'Preparing guide image…';
+          const guideUrl = await getBaseImageURLForStop();
+          payload = { guideUrl, prompt, strength };
+        }
+
+        $('aiMsg').textContent = 'Contacting AI…';
+        const r = await postAI(payload);
+        const text = await r.text().catch(()=> '');
+        let json;
+        try { json = JSON.parse(text); } catch { json = { ok:false, error: text || `HTTP ${r.status}` }; }
+
+        if (!json?.ok) {
+          $('aiMsg').textContent = `AI error: ${json?.error || 'Unknown error'}`;
+          return;
+        }
+
+        const imgField = json.image;
+        if (typeof imgField === 'string' && imgField.startsWith('data:image')) {
+          $('aiMsg').textContent = 'Uploading result…';
+          await saveAIResultToStorage(imgField);
+        } else if (imgField && typeof imgField.url === 'string') {
+          $('aiMsg').textContent = 'Uploading result…';
+          await saveAIResultFromURL(imgField.url);
+        } else {
+          $('aiMsg').textContent = 'No image returned.';
+        }
+      }catch(e){
+        $('aiMsg').textContent = e.message || String(e);
+      }
     };
 
-    (async()=>{
-      await ensureAuthed();          // auth first
+    $('aiAdd').onclick = ()=> $('aiMsg').textContent = 'Open a result first.';
+
+    /* ---------- Refresh / init ---------- */
+    $('refreshBtn').onclick = async ()=>{
       ROOT = await detectRoot();
-      updateRootPill();
+      // Show which bucket we're using (helps debug)
+      try {
+        const s = storage;
+        const b = (s?._bucket || s?.bucket) || (firebaseConfig.storageBucket || "(default)");
+        $('rootPill').textContent = `root: ${ROOT} | bucket: ${String(b).replace(".firebasestorage.app",".appspot.com")}`;
+      } catch {}
+      await loadScenarios();
+    };
+    (async()=>{
+      ROOT = await detectRoot();
+      try {
+        const s = storage;
+        const b = (s?._bucket || s?.bucket) || (firebaseConfig.storageBucket || "(default)");
+        $('rootPill').textContent = `root: ${ROOT} | bucket: ${String(b).replace(".firebasestorage.app",".appspot.com")}`;
+      } catch {}
       await loadScenarios();
       subscribeScenarios();
+      await ensureAuthed();
     })();
   </script>
 </body>
