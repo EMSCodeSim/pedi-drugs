@@ -1,7 +1,7 @@
 // netlify/functions/ai-image.mjs
 // Netlify Functions v2 (ESM): (request, context) => Response
-// Returns either a data URL (echo mode) or a direct URL from Replicate.
-// No server-side bucket uploads — the client uploads to Firebase.
+// Uses Replicate model `black-forest-labs/flux-schnell` (correct slug).
+// Falls back to echo mode if no REPLICATE_API_TOKEN is set.
 
 const CORS_HEADERS = {
   "Access-Control-Allow-Origin": "*",
@@ -15,7 +15,6 @@ export default async (request, context) => {
     if (request.method === "OPTIONS") {
       return new Response(null, { status: 204, headers: CORS_HEADERS });
     }
-
     if (request.method !== "POST") {
       return json({ ok: false, error: "Use POST" }, 405);
     }
@@ -32,9 +31,10 @@ export default async (request, context) => {
       return json({ ok: false, error: "Provide either guideUrl (public URL) or dataUrl (base64 canvas output)." }, 400);
     }
 
-    // If you have REPLICATE_API_TOKEN we call Replicate; otherwise echo back a data URL
+    // If you have REPLICATE_API_TOKEN we call Replicate; otherwise echo back a data URL.
     const AI_MODE = process.env.AI_MODE || (process.env.REPLICATE_API_TOKEN ? "replicate" : "echo");
 
+    // Helper: turn a URL into a data URL (used by echo mode if only guideUrl provided)
     async function urlToDataURL(url) {
       const r = await fetch(url, { cache: "no-store" });
       if (!r.ok) throw new Error(`Guide fetch failed: HTTP ${r.status}`);
@@ -54,11 +54,16 @@ export default async (request, context) => {
       return json({ ok: false, error: "Replicate not configured (missing REPLICATE_API_TOKEN). Set AI_MODE=echo to test." }, 500);
     }
 
+    // ✅ Correct model slug (public): black-forest-labs/flux-schnell
+    // You can override via env if desired.
     const modelOwner = process.env.REPLICATE_MODEL_OWNER || "black-forest-labs";
-    const modelName  = process.env.REPLICATE_MODEL_NAME  || "flux-1-schnell";
+    const modelName  = process.env.REPLICATE_MODEL_NAME  || "flux-schnell";
 
+    // If you included overlays on the client, dataUrl will be the composited image.
+    // Otherwise we’ll pass guideUrl (base photo).
     const inputImage = dataUrl ? dataUrl : guideUrl;
 
+    // Create prediction via the models endpoint (Replicate HTTP API)
     const createURL = `https://api.replicate.com/v1/models/${encodeURIComponent(modelOwner)}/${encodeURIComponent(modelName)}/predictions`;
     const createResp = await fetch(createURL, {
       method: "POST",
@@ -68,6 +73,8 @@ export default async (request, context) => {
       },
       body: JSON.stringify({
         input: {
+          // Many FLUX endpoints accept "prompt" and support an optional "image"
+          // (for i2i/influence). If the model ignores 'image', it will still T2I.
           prompt: prompt || "photo-realistic fire/scene composite",
           image: inputImage,
           strength
@@ -77,6 +84,7 @@ export default async (request, context) => {
 
     if (!createResp.ok) {
       const t = await createResp.text().catch(() => "");
+      // If you ever see 404 again, it’s almost always a bad owner/name slug.
       return json({ ok: false, error: `Replicate create failed: ${t || createResp.statusText}` }, createResp.status);
     }
 
