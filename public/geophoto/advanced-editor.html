@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <title>FireOps SIM — Advanced Editor (modular)</title>
+  <title>FireOps SIM — Advanced Editor</title>
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <meta name="theme-color" content="#0b0f14" />
   <style>
@@ -36,7 +36,7 @@
     .input, select, textarea{width:100%;padding:10px;border-radius:10px;border:1px solid rgba(255,255,255,.14);background:#0c1322;color:#eaf2ff}
     textarea{min-height:80px}
     .row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
-    .pill{display:inline-flex;gap:8px;align-items:center;padding:6px 10px;border-radius:999px;border:1px solid rgba(255,255,255,.14);color:var(--muted);white-space:nowrap}
+    .pill{display:inline-flex;gap:8px;align-items:center;padding:6px 10px;border-radius:999px;border:1px solid rgba(255,255,255,.14);color:var(--muted)}
 
     .thumb{width:72px;height:72px;border-radius:8px;border:1px solid rgba(255,255,255,.14);object-fit:cover;background:#0a1a2a;cursor:pointer}
     .thumb.active{outline:3px solid #2dd4bf}
@@ -48,14 +48,14 @@
     .sectionTitle{font-weight:900;margin:6px 0}
     .divider{height:1px;background:rgba(255,255,255,.08);margin:12px 0}
     .small{font-size:12px;opacity:.85}
-    #errbar{position:fixed;left:10px;bottom:10px;background:#2b0d0d;color:#ffd7d7;border:1px solid #7a2b2b;border-radius:12px;padding:8px 12px;display:none;z-index:9999;white-space:pre-wrap;max-width:92vw}
-
-    #drawer summary{cursor:pointer;list-style:none;padding:8px 10px;border:1px solid rgba(255,255,255,.14);border-radius:10px;background:#0c1528;font-weight:800}
-    #drawer[open] summary{background:#0e1a30}
+    #errbar{position:fixed;left:10px;bottom:10px;background:#2b0d0d;color:#ffd7d7;border:1px solid #7a2b2b;border-radius:12px;padding:8px 12px;display:none;z-index:9999}
 
     #loader{ position:fixed; inset:0; display:none; place-items:center; z-index:99; background:rgba(6,12,20,.55); backdrop-filter:blur(2px) }
     .spinner{ width:42px; height:42px; border-radius:999px; border:4px solid rgba(255,255,255,.25); border-top-color:#fff; animation:spin 1s linear infinite }
     @keyframes spin{ to{ transform:rotate(360deg) } }
+
+    #drawer summary{cursor:pointer;list-style:none;padding:8px 10px;border:1px solid rgba(255,255,255,.14);border-radius:10px;background:#0c1528;font-weight:800}
+    #drawer[open] summary{background:#0e1a30}
   </style>
 </head>
 <body>
@@ -105,8 +105,8 @@
             <div class="divider"></div>
             <div class="sectionTitle">Overlays</div>
             <div class="row" style="gap:6px; flex-wrap:nowrap; overflow:auto">
-              <button class="btn" id="brushFire" data-cat="fire">🔥 Fire</button>
-              <button class="btn" id="brushSmoke" data-cat="smoke">🌫️ Smoke</button>
+              <button class="btn" data-cat="fire">🔥 Fire</button>
+              <button class="btn" data-cat="smoke">🌫️ Smoke</button>
               <button class="btn" data-cat="people">🧍 People</button>
               <button class="btn" data-cat="cars">🚗 Cars</button>
               <button class="btn" data-cat="hazard">⚠️ Hazard</button>
@@ -116,6 +116,8 @@
             <div class="divider"></div>
             <div class="sectionTitle">Brush / Stamps</div>
             <div class="row">
+              <button class="btn" id="brushFire">🔥 Fire Brush</button>
+              <button class="btn" id="brushSmoke">🌫️ Smoke Brush</button>
               <button class="btn" id="brushErase">🧽 Erase Stamps</button>
               <button class="btn" id="brushOff">✖ Off</button>
             </div>
@@ -150,7 +152,6 @@
               <button class="btn" id="saveImage">Save Image to Cloud</button>
             </div>
 
-            <!-- AI Generate (beta) -->
             <div class="divider"></div>
             <div class="sectionTitle">AI Generate (beta)</div>
             <label>Return</label>
@@ -195,20 +196,52 @@
     </div>
   </main>
 
-  <!-- Fabric.js -->
+  <!-- Fabric.js (must be before module bootstrap) -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/fabric.js/5.3.0/fabric.min.js" crossorigin="anonymous"></script>
 
-  <!-- App modules -->
+  <!-- Module bootstrap: keeps files split, tries scenarios.js then scenarios (1).js -->
   <script type="module">
-    import { initFirebase, getStorageInfo } from "./firebase-core.js";
-    import { wireScenarioUI, bootScenarios } from "./scenarios.js";
-    import { wireAI } from "./ai-upload.js";
+    (async () => {
+      try {
+        // Firebase core (initializes app, exports helpers)
+        await import('./firebase-core.js');
 
-    // Init Firebase core (locked bucket) and wire everything
-    initFirebase("dailyquiz-d5279.appspot.com");
-    wireScenarioUI();
-    wireAI();
-    bootScenarios();
+        // Try primary scenarios module, fall back to "scenarios (1).js" if present
+        let scenariosMod;
+        try {
+          scenariosMod = await import('./scenarios.js');
+        } catch (e1) {
+          try {
+            scenariosMod = await import('./scenarios (1).js');
+          } catch (e2) {
+            console.error('Failed to load scenarios module', e2);
+            const pill = document.getElementById('statusPill');
+            if (pill) pill.textContent = 'Failed to load scenarios module';
+            return;
+          }
+        }
+
+        // AI module is optional; if missing, editor still works
+        let aiMod = null;
+        try { aiMod = await import('./ai-upload.js'); } catch (e) {
+          console.warn('ai-upload.js not found; AI tools disabled');
+        }
+
+        const { wireScenarioUI, bootScenarios } = scenariosMod;
+        wireScenarioUI();
+        await bootScenarios();
+        if (aiMod?.wireAI) aiMod.wireAI();
+
+        // Brush size readout sync
+        const bs = document.getElementById('brushSize');
+        const rd = document.getElementById('brushSizeReadout');
+        if (bs && rd) bs.addEventListener('input', () => { rd.textContent = (parseInt(bs.value,10)||120)+' px'; });
+      } catch (err) {
+        console.error(err);
+        const eb = document.getElementById('errbar');
+        if (eb) { eb.textContent = String(err.message || err); eb.style.display = 'block'; }
+      }
+    })();
   </script>
 </body>
 </html>
