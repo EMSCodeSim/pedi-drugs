@@ -228,9 +228,17 @@
 
     /* ---------- Firebase ---------- */
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-app.js";
-    import { getDatabase, ref as dbRef, get, set, onValue, remove } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-database.js";
-    import { getStorage, ref as stRef, uploadBytesResumable, uploadBytes, getDownloadURL, getBlob, deleteObject } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-storage.js";
-    import { getAuth, signInAnonymously, onAuthStateChanged, setPersistence, browserLocalPersistence, browserSessionPersistence, inMemoryPersistence } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-auth.js";
+    import {
+      getDatabase, ref as dbRef, get, set, onValue, remove
+    } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-database.js";
+    import {
+      getStorage, ref as stRef, uploadBytesResumable, uploadBytes, getDownloadURL,
+      getBlob, deleteObject, setMaxUploadRetryTime, setMaxOperationRetryTime
+    } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-storage.js";
+    import {
+      getAuth, signInAnonymously, onAuthStateChanged,
+      setPersistence, browserLocalPersistence, browserSessionPersistence, inMemoryPersistence
+    } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-auth.js";
 
     const firebaseConfig = {
       apiKey:"AIzaSyDM6DpRSeZueVKRpbyJyDmhf8WY66KyCDk",
@@ -244,10 +252,9 @@
     const appFB = initializeApp(firebaseConfig);
 
     /* -------- Storage bucket selection (robust) --------
-       ⚠️ Set EXPLICIT_BUCKET to your real Firebase bucket name when in doubt.
        Firebase buckets are <project-id>.appspot.com, NOT *.firebasestorage.app
     */
-    const EXPLICIT_BUCKET = ""; // e.g. "dailyquiz-d5279.appspot.com" or leave "" to auto-detect
+    const EXPLICIT_BUCKET = "dailyquiz-d5279.appspot.com"; // set to your real bucket
     function toAppspot(bucketOrHost = ""){ return bucketOrHost.replace(".firebasestorage.app", ".appspot.com"); }
     const candidates = [
       toAppspot(EXPLICIT_BUCKET).trim(),
@@ -259,6 +266,9 @@
     } else {
       storage = getStorage(appFB);
     }
+    // Give flaky connections generous time (uploads + ops)
+    setMaxUploadRetryTime(storage, 5 * 60 * 1000);
+    setMaxOperationRetryTime(storage, 5 * 60 * 1000);
 
     const db = getDatabase(appFB);
     const auth = getAuth(appFB);
@@ -615,7 +625,8 @@
       }catch(e){ $('metaMsg').textContent=String(e.message||e); }
     };
 
-    const EDIT_MAX_EDGE=1600, EDIT_THUMB_EDGE=480, EDIT_JPEG_QUALITY=0.85;
+    // Smaller, classroom/phone-friendly assets
+    const EDIT_MAX_EDGE=1280, EDIT_THUMB_EDGE=480, EDIT_JPEG_QUALITY=0.85;
 
     async function dataURLFromCanvasScaled(fabricCanvas, maxEdge=EDIT_MAX_EDGE, quality=EDIT_JPEG_QUALITY){
       const raw = fabricCanvas.toDataURL({ format:'jpeg', quality:1 });
@@ -646,11 +657,34 @@
       for (let i=0;i<len;i++) buf[i] = bin.charCodeAt(i);
       return new Blob([buf], { type:mime });
     }
-    async function uploadWithTimeout(ref, blob, metadata){
+
+    // Re-encode arbitrary image blobs → upload-friendly JPEG
+    async function blobToImage(blob){
+      return new Promise((resolve, reject)=>{
+        const url = URL.createObjectURL(blob);
+        const img = new Image();
+        img.onload = ()=>{ URL.revokeObjectURL(url); resolve(img); };
+        img.onerror = (e)=>{ URL.revokeObjectURL(url); reject(e); };
+        img.decoding='async';
+        img.src = url;
+      });
+    }
+    async function reencodeBlobToJPEG(blob, maxEdge=1280, quality=0.85){
+      const img = await blobToImage(blob);
+      const w = img.naturalWidth, h = img.naturalHeight;
+      const s = Math.min(1, maxEdge / Math.max(w, h));
+      const outW = Math.max(1, Math.round(w*s)), outH = Math.max(1, Math.round(h*s));
+      const c = document.createElement('canvas'); c.width=outW; c.height=outH;
+      const ctx = c.getContext('2d'); ctx.imageSmoothingEnabled=true; ctx.imageSmoothingQuality='high';
+      ctx.drawImage(img, 0, 0, outW, outH);
+      return dataURLtoBlob(c.toDataURL('image/jpeg', quality));
+    }
+
+    async function uploadWithTimeoutResumable(ref, blob, metadata, timeoutMs=5*60*1000){
       return new Promise((resolve,reject)=>{
         const task = uploadBytesResumable(ref, blob, metadata);
-        const killer = setTimeout(()=>{ try{ task.cancel(); }catch{}; reject(Object.assign(new Error('Timed out while uploading'), { code:'save/timeout-upload' })); }, 45000);
-        task.on('state_changed', ()=>{}, e=>{ clearTimeout(killer); reject(e); }, ()=>{ clearTimeout(killer); resolve(); });
+        const killer = setTimeout(()=>{ try{ task.cancel(); }catch{}; reject(Object.assign(new Error('upload/timeout'),{code:'upload/timeout'})); }, timeoutMs);
+        task.on('state_changed', ()=>{}, (err)=>{ clearTimeout(killer); reject(err); }, ()=>{ clearTimeout(killer); resolve(); });
       });
     }
 
@@ -678,7 +712,7 @@
         const metaFull = { contentType:'image/jpeg', cacheControl:'public,max-age=31536000,immutable' };
         const metaThmb = { contentType:'image/jpeg', cacheControl:'public,max-age=31536000,immutable' };
 
-        await uploadWithTimeout(fullRef, fullBlob, metaFull);
+        await uploadWithTimeoutResumable(fullRef, fullBlob, metaFull);
         try{ await uploadBytes(thumbRef, thumbBlob, metaThmb); }catch(e){ /* non-fatal */ }
         const fullURL  = await getDownloadURL(fullRef);
         const thumbURL = await getDownloadURL(thumbRef).catch(()=>fullURL);
@@ -692,7 +726,7 @@
           imageURL: fullURL,
           thumbURL: thumbURL||fullURL,
           storagePath: fullRef.fullPath,
-          gsUri: fullRef.fullPath, // path-only; we resolve via the configured storage instance
+          gsUri: fullRef.fullPath,
           lat: s.lat??null, lng: s.lng??null, accuracy: s.accuracy??null,
           radiusMeters: s.radiusMeters ?? 50,
           overlays: serializeOverlays(),
@@ -843,7 +877,7 @@
       }
     };
 
-    /* ---------- AI helpers ---------- */
+    /* ---------- AI helpers (mask + inpaint) ---------- */
     function rectCanvasToImage(rect){
       if (!baseImage || baseImage.type!=='image') return { x:0, y:0, w:0, h:0 };
       const sx = baseImage.getScaledWidth()  / baseImage.width;
@@ -918,14 +952,6 @@
       }
       return { dataUrl: c.toDataURL('image/png'), overlays };
     }
-    function summarizeOverlayCounts(list){
-      const counts = { fire:0, smoke:0, people:0, cars:0, hazard:0, generic:0, text:0 };
-      for (const o of list){
-        if (o.kind === 'text') counts.text++;
-        else counts[o.category || 'generic'] = (counts[o.category || 'generic'] || 0) + 1;
-      }
-      return counts;
-    }
     async function getBaseImageURLForStop(){
       const s = current._stops[stopIndex];
       if (s?.imageURL && /^https?:\/\//i.test(s.imageURL)) return s.imageURL;
@@ -939,20 +965,8 @@
       }
       throw new Error('This stop has no accessible base image.');
     }
-    async function saveAIResultToStorage(dataUrl){
-      const blob = await (await fetch(dataUrl)).blob();
-      const ts = Date.now();
-      const path = `scenarios/${current.id}/ai/results/${ts}_stop${stopIndex}.png`;
-      const ref = stRef(storage, path);
-      await uploadBytes(ref, blob, { contentType: 'image/png', cacheControl: 'public,max-age=31536000,immutable' });
-      const url = await getDownloadURL(ref);
-      $('aiOpen').disabled = false;
-      $('aiAdd').disabled  = false;
-      $('aiOpen').onclick = ()=> window.open(url, '_blank');
-      $('aiAdd').onclick  = ()=> addResultAsNewStop(url);
-      $('aiMsg').textContent = 'Result uploaded ✓';
-      return url;
-    }
+
+    // Upload AI result (URL path) with re-encode + resumable
     async function saveAIResultFromURL(imageUrl){
       let resp;
       try {
@@ -966,11 +980,28 @@
         $('aiMsg').textContent = `AI returned a bad URL: ${imageUrl} (${resp.status}) ${txt || ""}`;
         return null;
       }
-      const blob = await resp.blob();
+      const original = await resp.blob();
+      let uploadBlob = await reencodeBlobToJPEG(original, 1280, 0.85);
+
       const ts = Date.now();
-      const path = `scenarios/${current.id}/ai/results/${ts}_stop${stopIndex}.png`;
+      const path = `scenarios/${current.id}/ai/results/${ts}_stop${stopIndex}.jpg`;
       const ref = stRef(storage, path);
-      await uploadBytes(ref, blob, { contentType: blob.type || 'image/png', cacheControl: 'public,max-age=31536000,immutable' });
+      const meta = { contentType: 'image/jpeg', cacheControl: 'public,max-age=31536000,immutable' };
+
+      try {
+        await uploadWithTimeoutResumable(ref, uploadBlob, meta);
+      } catch (e) {
+        const msg = e?.code || e?.message || String(e);
+        if (/retry-limit-exceeded|upload\/timeout/i.test(msg)) {
+          $('aiMsg').textContent = 'Upload slow — retrying smaller…';
+          const smaller = await reencodeBlobToJPEG(original, 960, 0.80);
+          await uploadWithTimeoutResumable(ref, smaller, meta);
+        } else {
+          $('aiMsg').textContent = `Upload failed: ${msg}`;
+          return null;
+        }
+      }
+
       const url = await getDownloadURL(ref);
       $('aiOpen').disabled = false;
       $('aiAdd').disabled  = false;
@@ -979,6 +1010,40 @@
       $('aiMsg').textContent = 'Result uploaded ✓';
       return url;
     }
+
+    // Upload AI result (data URL path) with re-encode + resumable
+    async function saveAIResultToStorage(dataUrl){
+      const originalBlob = await (await fetch(dataUrl)).blob();
+      let uploadBlob = await reencodeBlobToJPEG(originalBlob, 1280, 0.85);
+
+      const ts = Date.now();
+      const path = `scenarios/${current.id}/ai/results/${ts}_stop${stopIndex}.jpg`;
+      const ref = stRef(storage, path);
+      const meta = { contentType: 'image/jpeg', cacheControl: 'public,max-age=31536000,immutable' };
+
+      try{
+        await uploadWithTimeoutResumable(ref, uploadBlob, meta);
+      }catch(e){
+        const msg = e?.code || e?.message || String(e);
+        if (/retry-limit-exceeded|upload\/timeout/i.test(msg)) {
+          $('aiMsg').textContent = 'Upload slow — retrying smaller…';
+          const smaller = await reencodeBlobToJPEG(originalBlob, 960, 0.80);
+          await uploadWithTimeoutResumable(ref, smaller, meta);
+        } else {
+          $('aiMsg').textContent = `Upload failed: ${msg}`;
+          return null;
+        }
+      }
+
+      const url = await getDownloadURL(ref);
+      $('aiOpen').disabled = false;
+      $('aiAdd').disabled  = false;
+      $('aiOpen').onclick = ()=> window.open(url, '_blank');
+      $('aiAdd').onclick  = ()=> addResultAsNewStop(url);
+      $('aiMsg').textContent = 'Result uploaded ✓';
+      return url;
+    }
+
     async function addResultAsNewStop(url){
       if (!current || stopIndex<0) return;
       const base = current._stops[stopIndex];
@@ -987,22 +1052,15 @@
         type:'photo',
         title: (base.title||'') + ' (AI)',
         caption: 'AI composite',
-        imageURL: url,
-        thumbURL: url,
-        storagePath: null,
-        gsUri: null,
-        lat: base.lat ?? null,
-        lng: base.lng ?? null,
-        accuracy: base.accuracy ?? null,
+        imageURL: url, thumbURL: url,
+        storagePath: null, gsUri: null,
+        lat: base.lat ?? null, lng: base.lng ?? null, accuracy: base.accuracy ?? null,
         radiusMeters: base.radiusMeters ?? 50,
         overlays: [],
-        at: ts,
-        origin: 'ai',
-        basedOn: stopIndex
+        at: ts, origin: 'ai', basedOn: stopIndex
       };
       const next = current._stops.slice(); next.push(newStop);
-      const updated = Object.assign({}, current._raw);
-      setStops(updated, next);
+      const updated = Object.assign({}, current._raw); setStops(updated, next);
       await set(dbRef(db, `${ROOT}/${current.id}`), updated);
       current._raw = updated; current._stops = next;
       renderThumbs();
@@ -1019,7 +1077,7 @@
       }
     };
 
-    // ---------- UPDATED “Send to AI” ----------
+    // ---------- “Send to AI” (uses inpaint if mask present; else echo) ----------
     $('aiSend').onclick = async ()=>{
       try{
         if(!current || stopIndex<0) throw new Error('Select a stop first.');
@@ -1030,35 +1088,30 @@
         const prompt =
           (style === 'dramatic') ? `dramatic emergency scene; ${notes}` :
           (style === 'training') ? `training drill realism; ${notes}` :
-                                   `photo-realistic; ${notes || 'make the scene photorealistic; keep layout'}`;
-
-        const strength = 0.35;
+                                   `photo-realistic; ${notes || 'keep original scene; realistic lighting'}`;
 
         const overlays = serializeOverlaysForAI();
-        const hasOverlays = overlays && overlays.length > 0;
+        const hasOverlays = overlays.length > 0;
 
-        // EITHER send dataUrl (with overlays baked-in) OR guideUrl (no overlays)
         let payload;
         if (hasOverlays) {
-          $('aiMsg').textContent = 'Compositing…';
-          const composedDataUrl = await dataURLFromCanvasScaled(f, 1600, 0.95);
-          payload = { dataUrl: composedDataUrl, prompt, strength };
+          $('aiMsg').textContent = 'Building mask…';
+          const { dataUrl: maskDataUrl } = buildMaskDataURL();
+          $('aiMsg').textContent = 'Fetching base image…';
+          const baseUrl = await getBaseImageURLForStop();
+          payload = { mode:'inpaint', image: baseUrl, mask: maskDataUrl, prompt };
         } else {
-          $('aiMsg').textContent = 'Preparing guide image…';
-          const guideUrl = await getBaseImageURLForStop();
-          payload = { guideUrl, prompt, strength };
+          // No overlays → don’t T2I. Return current image back (keeps it anchored).
+          $('aiMsg').textContent = 'No overlays — sending current image…';
+          const composed = await dataURLFromCanvasScaled(f, 1280, 0.9);
+          payload = { mode:'echo', image: composed, prompt };
         }
 
         $('aiMsg').textContent = 'Contacting AI…';
         const r = await postAI(payload);
         const text = await r.text().catch(()=> '');
-        let json;
-        try { json = JSON.parse(text); } catch { json = { ok:false, error: text || `HTTP ${r.status}` }; }
-
-        if (!json?.ok) {
-          $('aiMsg').textContent = `AI error: ${json?.error || 'Unknown error'}`;
-          return;
-        }
+        let json; try { json = JSON.parse(text); } catch { json = { ok:false, error: text || `HTTP ${r.status}` }; }
+        if (!json?.ok) { $('aiMsg').textContent = `AI error: ${json.error||'Unknown'}`; return; }
 
         const imgField = json.image;
         if (typeof imgField === 'string' && imgField.startsWith('data:image')) {
@@ -1080,7 +1133,6 @@
     /* ---------- Refresh / init ---------- */
     $('refreshBtn').onclick = async ()=>{
       ROOT = await detectRoot();
-      // Show which bucket we're using (helps debug)
       try {
         const s = storage;
         const b = (s?._bucket || s?.bucket) || (firebaseConfig.storageBucket || "(default)");
