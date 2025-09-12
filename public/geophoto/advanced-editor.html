@@ -219,10 +219,8 @@
     const AI_PRIMARY = "/api/ai-image";
     const AI_FALLBACK = "/.netlify/functions/ai-image";
     async function postAI(payload){
-      // Try primary
       let r = await fetch(AI_PRIMARY, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload) });
       if (r.status === 404) {
-        // retry fallback path if redirects not configured yet
         r = await fetch(AI_FALLBACK, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload) });
       }
       return r;
@@ -245,9 +243,23 @@
     };
     const appFB = initializeApp(firebaseConfig);
 
-    /* Force classic bucket for SDK-auth */
-    const FORCE_BUCKET = "dailyquiz-d5279.appspot.com";
-    const storage = getStorage(appFB, `gs://${FORCE_BUCKET}`);
+    /* -------- Storage bucket selection (robust) --------
+       ⚠️ Set EXPLICIT_BUCKET to your real Firebase bucket name when in doubt.
+       Firebase buckets are <project-id>.appspot.com, NOT *.firebasestorage.app
+    */
+    const EXPLICIT_BUCKET = ""; // e.g. "dailyquiz-d5279.appspot.com" or leave "" to auto-detect
+    function toAppspot(bucketOrHost = ""){ return bucketOrHost.replace(".firebasestorage.app", ".appspot.com"); }
+    const candidates = [
+      toAppspot(EXPLICIT_BUCKET).trim(),
+      toAppspot((firebaseConfig.storageBucket || "").trim()),
+    ].filter(Boolean);
+    let storage;
+    if (candidates.length){
+      storage = getStorage(appFB, `gs://${candidates[0]}`);
+    } else {
+      storage = getStorage(appFB);
+    }
+
     const db = getDatabase(appFB);
     const auth = getAuth(appFB);
 
@@ -680,7 +692,7 @@
           imageURL: fullURL,
           thumbURL: thumbURL||fullURL,
           storagePath: fullRef.fullPath,
-          gsUri: `gs://${FORCE_BUCKET}/${fullRef.fullPath}`,
+          gsUri: fullRef.fullPath, // path-only; we resolve via the configured storage instance
           lat: s.lat??null, lng: s.lng??null, accuracy: s.accuracy??null,
           radiusMeters: s.radiusMeters ?? 50,
           overlays: serializeOverlays(),
@@ -831,17 +843,15 @@
       }
     };
 
-    /* ---------- AI helpers merged from working build ---------- */
-    function bboxForObjectCanvas(o){
-      // Map canvas rect to original image coordinates
-      if (!baseImage || baseImage.type!=='image') return { x:0,y:0,w:0,h:0 };
+    /* ---------- AI helpers ---------- */
+    function rectCanvasToImage(rect){
+      if (!baseImage || baseImage.type!=='image') return { x:0, y:0, w:0, h:0 };
       const sx = baseImage.getScaledWidth()  / baseImage.width;
       const sy = baseImage.getScaledHeight() / baseImage.height;
-      const r = o.getBoundingRect(true, true);
-      const x = (r.left - baseImage.left) / sx;
-      const y = (r.top  - baseImage.top ) / sy;
-      const w = r.width  / sx;
-      const h = r.height / sy;
+      const x = (rect.left - baseImage.left) / sx;
+      const y = (rect.top  - baseImage.top ) / sy;
+      const w = rect.width  / sx;
+      const h = rect.height / sy;
       const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
       const X = clamp(Math.round(x), 0, Math.round(baseImage.width));
       const Y = clamp(Math.round(y), 0, Math.round(baseImage.height));
@@ -849,6 +859,7 @@
       const H = clamp(Math.round(h), 0, Math.round(baseImage.height - Y));
       return { x:X, y:Y, w:W, h:H };
     }
+    function bboxForObject(o){ return rectCanvasToImage(o.getBoundingRect(true, true)); }
     function inferCatFromSrc(src){
       if (!src || typeof src !== 'string') return 'generic';
       const s = src.toLowerCase();
@@ -867,7 +878,7 @@
             kind: 'image',
             category: inferCatFromSrc(src),
             src,
-            bbox: bboxForObjectCanvas(o),
+            bbox: bboxForObject(o),
             angle: o.angle||0,
             opacity: o.opacity??1,
             flipX: !!o.flipX,
@@ -878,7 +889,7 @@
           return {
             kind: 'text',
             text: o.text || '',
-            bbox: bboxForObjectCanvas(o),
+            bbox: bboxForObject(o),
             angle: o.angle||0,
             opacity: o.opacity??1,
             fontSize: o.fontSize||24,
@@ -928,7 +939,6 @@
       }
       throw new Error('This stop has no accessible base image.');
     }
-
     async function saveAIResultToStorage(dataUrl){
       const blob = await (await fetch(dataUrl)).blob();
       const ts = Date.now();
@@ -944,7 +954,19 @@
       return url;
     }
     async function saveAIResultFromURL(imageUrl){
-      const blob = await (await fetch(imageUrl, { mode:'cors', credentials:'omit', cache:'no-store' })).blob();
+      let resp;
+      try {
+        resp = await fetch(imageUrl, { mode:'cors', credentials:'omit', cache:'no-store' });
+      } catch (e) {
+        $('aiMsg').textContent = `AI returned an unreachable URL (network): ${imageUrl}`;
+        return null;
+      }
+      if (!resp.ok) {
+        const txt = await resp.text().catch(()=> "");
+        $('aiMsg').textContent = `AI returned a bad URL: ${imageUrl} (${resp.status}) ${txt || ""}`;
+        return null;
+      }
+      const blob = await resp.blob();
       const ts = Date.now();
       const path = `scenarios/${current.id}/ai/results/${ts}_stop${stopIndex}.png`;
       const ref = stRef(storage, path);
@@ -1005,7 +1027,6 @@
 
         const style = $('aiStyle').value;
         const notes = ($('aiNotes').value||'').trim();
-
         const prompt =
           (style === 'dramatic') ? `dramatic emergency scene; ${notes}` :
           (style === 'training') ? `training drill realism; ${notes}` :
@@ -1016,9 +1037,7 @@
         const overlays = serializeOverlaysForAI();
         const hasOverlays = overlays && overlays.length > 0;
 
-        // Build payload the way the Netlify function expects:
-        //   EITHER { dataUrl, prompt, strength }  (when overlays exist)
-        //   OR     { guideUrl, prompt, strength } (when no overlays exist)
+        // EITHER send dataUrl (with overlays baked-in) OR guideUrl (no overlays)
         let payload;
         if (hasOverlays) {
           $('aiMsg').textContent = 'Compositing…';
@@ -1041,7 +1060,6 @@
           return;
         }
 
-        // Accept { image: <dataUrl> } or { image: { url: "https://..." } }
         const imgField = json.image;
         if (typeof imgField === 'string' && imgField.startsWith('data:image')) {
           $('aiMsg').textContent = 'Uploading result…';
@@ -1062,12 +1080,21 @@
     /* ---------- Refresh / init ---------- */
     $('refreshBtn').onclick = async ()=>{
       ROOT = await detectRoot();
-      $('rootPill').textContent = `root: ${ROOT}`;
+      // Show which bucket we're using (helps debug)
+      try {
+        const s = storage;
+        const b = (s?._bucket || s?.bucket) || (firebaseConfig.storageBucket || "(default)");
+        $('rootPill').textContent = `root: ${ROOT} | bucket: ${String(b).replace(".firebasestorage.app",".appspot.com")}`;
+      } catch {}
       await loadScenarios();
     };
     (async()=>{
       ROOT = await detectRoot();
-      $('rootPill').textContent = `root: ${ROOT}`;
+      try {
+        const s = storage;
+        const b = (s?._bucket || s?.bucket) || (firebaseConfig.storageBucket || "(default)");
+        $('rootPill').textContent = `root: ${ROOT} | bucket: ${String(b).replace(".firebasestorage.app",".appspot.com")}`;
+      } catch {}
       await loadScenarios();
       subscribeScenarios();
       await ensureAuthed();
