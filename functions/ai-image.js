@@ -1,7 +1,7 @@
-// netlify/functions/ai-image.mjs
-// Netlify Functions v2 (ESM): (request, context) => Response
-// Uses Replicate model `black-forest-labs/flux-schnell` (correct slug).
-// Falls back to echo mode if no REPLICATE_API_TOKEN is set.
+// Netlify Functions v2 (ESM): (request) => Response
+// - Uses FLUX Fill (inpaint) when a mask is provided
+// - Otherwise echoes the provided image back as a data URL
+// - No server-side bucket uploads; the client uploads to Firebase
 
 const CORS_HEADERS = {
   "Access-Control-Allow-Origin": "*",
@@ -9,136 +9,93 @@ const CORS_HEADERS = {
   "Access-Control-Allow-Headers": "Content-Type, Authorization"
 };
 
-export default async (request, context) => {
+export default async (request) => {
   try {
-    // --- CORS preflight ---
-    if (request.method === "OPTIONS") {
-      return new Response(null, { status: 204, headers: CORS_HEADERS });
-    }
-    if (request.method !== "POST") {
-      return json({ ok: false, error: "Use POST" }, 405);
-    }
+    if (request.method === "OPTIONS") return new Response(null, { status: 204, headers: CORS_HEADERS });
+    if (request.method !== "POST")    return json({ ok:false, error:"Use POST" }, 405);
 
-    let payload;
-    try {
-      payload = await request.json();
-    } catch {
-      return json({ ok: false, error: "Invalid JSON body" }, 400);
-    }
+    let p; try { p = await request.json(); } catch { return json({ ok:false, error:"Invalid JSON body" }, 400); }
 
-    const { dataUrl, guideUrl, prompt = "", strength = 0.35 } = payload || {};
-    if (!dataUrl && !guideUrl) {
-      return json({ ok: false, error: "Provide either guideUrl (public URL) or dataUrl (base64 canvas output)." }, 400);
-    }
+    // Accept legacy and new fields
+    const mode   = p.mode || null;
+    const image  = p.image || p.dataUrl || p.guideUrl || null; // URL or data URL
+    const mask   = p.mask  || p.maskDataUrl || null;
+    const prompt = (p.prompt || "").trim();
+    if (!image) return json({ ok:false, error:"Provide image (URL or data URL)." }, 400);
 
-    // If you have REPLICATE_API_TOKEN we call Replicate; otherwise echo back a data URL.
     const AI_MODE = process.env.AI_MODE || (process.env.REPLICATE_API_TOKEN ? "replicate" : "echo");
 
-    // Helper: turn a URL into a data URL (used by echo mode if only guideUrl provided)
-    async function urlToDataURL(url) {
-      const r = await fetch(url, { cache: "no-store" });
-      if (!r.ok) throw new Error(`Guide fetch failed: HTTP ${r.status}`);
-      const buf = Buffer.from(await r.arrayBuffer());
-      const mime = r.headers.get("content-type") || "image/png";
-      return `data:${mime};base64,${buf.toString("base64")}`;
-    }
+    // If mask is present and Replicate is configured → use FLUX Fill
+    if (mask && AI_MODE === "replicate") {
+      const token = process.env.REPLICATE_API_TOKEN;
+      if (!token) return json({ ok:false, error:"Missing REPLICATE_API_TOKEN" }, 500);
 
-    if (AI_MODE === "echo") {
-      const outDataUrl = dataUrl || await urlToDataURL(guideUrl);
-      return json({ ok: true, image: outDataUrl, mode: "echo" });
-    }
+      const owner = process.env.REPLICATE_MODEL_OWNER || "black-forest-labs";
+      const name  = process.env.REPLICATE_MODEL_NAME  || "flux-fill-dev"; // inpainting
+      const createURL = `https://api.replicate.com/v1/models/${encodeURIComponent(owner)}/${encodeURIComponent(name)}/predictions`;
 
-    // --- Replicate path (no server-side S3 writes) ---
-    const REPLICATE_API_TOKEN = process.env.REPLICATE_API_TOKEN;
-    if (!REPLICATE_API_TOKEN) {
-      return json({ ok: false, error: "Replicate not configured (missing REPLICATE_API_TOKEN). Set AI_MODE=echo to test." }, 500);
-    }
-
-    // ✅ Correct model slug (public): black-forest-labs/flux-schnell
-    // You can override via env if desired.
-    const modelOwner = process.env.REPLICATE_MODEL_OWNER || "black-forest-labs";
-    const modelName  = process.env.REPLICATE_MODEL_NAME  || "flux-schnell";
-
-    // If you included overlays on the client, dataUrl will be the composited image.
-    // Otherwise we’ll pass guideUrl (base photo).
-    const inputImage = dataUrl ? dataUrl : guideUrl;
-
-    // Create prediction via the models endpoint (Replicate HTTP API)
-    const createURL = `https://api.replicate.com/v1/models/${encodeURIComponent(modelOwner)}/${encodeURIComponent(modelName)}/predictions`;
-    const createResp = await fetch(createURL, {
-      method: "POST",
-      headers: {
-        "Authorization": `Token ${REPLICATE_API_TOKEN}`,
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({
-        input: {
-          // Many FLUX endpoints accept "prompt" and support an optional "image"
-          // (for i2i/influence). If the model ignores 'image', it will still T2I.
-          prompt: prompt || "photo-realistic fire/scene composite",
-          image: inputImage,
-          strength
-        }
-      })
-    });
-
-    if (!createResp.ok) {
-      const t = await createResp.text().catch(() => "");
-      // If you ever see 404 again, it’s almost always a bad owner/name slug.
-      return json({ ok: false, error: `Replicate create failed: ${t || createResp.statusText}` }, createResp.status);
-    }
-
-    const created = await createResp.json();
-    const pollURL = created?.urls?.get || created?.href;
-    if (!pollURL) {
-      return json({ ok: false, error: "Replicate did not return a poll URL." }, 502);
-    }
-
-    // Poll for completion (up to ~90s)
-    const started = Date.now();
-    let outputUrl = null;
-    while (Date.now() - started < 90000) {
-      await sleep(1200);
-      const pollResp = await fetch(pollURL, {
-        headers: { "Authorization": `Token ${REPLICATE_API_TOKEN}` }
+      const createResp = await fetch(createURL, {
+        method: "POST",
+        headers: { "Authorization": `Token ${token}`, "Content-Type": "application/json" },
+        body: JSON.stringify({
+          input: {
+            prompt: prompt || "make edits that blend naturally",
+            image,  // URL or data URL of the base image
+            mask    // data URL: white = change, black = keep
+          }
+        })
       });
-      if (!pollResp.ok) {
-        const t = await pollResp.text().catch(() => "");
-        return json({ ok: false, error: `Replicate poll failed: ${t || pollResp.statusText}` }, pollResp.status);
+      if (!createResp.ok) {
+        const t = await createResp.text().catch(()=> "");
+        return json({ ok:false, error:`Replicate create failed: ${t || createResp.statusText}` }, createResp.status);
       }
-      const j = await pollResp.json();
-      if (j.status === "succeeded") {
-        const out = j.output;
-        if (Array.isArray(out)) outputUrl = out[out.length - 1];
-        else if (typeof out === "string") outputUrl = out;
-        else if (out && out.image) outputUrl = out.image;
-        break;
-      } else if (j.status === "failed" || j.status === "canceled") {
-        return json({ ok: false, error: `Replicate job ${j.status}. ${j.error || ""}`.trim() }, 502);
+      const created = await createResp.json();
+      const pollURL = created?.urls?.get || created?.href;
+      if (!pollURL) return json({ ok:false, error:"Replicate did not return a poll URL." }, 502);
+
+      const started = Date.now();
+      let outputUrl = null;
+      while (Date.now() - started < 90000) {
+        await sleep(1200);
+        const poll = await fetch(pollURL, { headers: { "Authorization": `Token ${token}` } });
+        if (!poll.ok) {
+          const t = await poll.text().catch(()=> "");
+          return json({ ok:false, error:`Replicate poll failed: ${t || poll.statusText}` }, poll.status);
+        }
+        const j = await poll.json();
+        if (j.status === "succeeded") {
+          const out = j.output;
+          outputUrl = Array.isArray(out) ? out[out.length-1] : (typeof out === "string" ? out : out?.image || null);
+          break;
+        }
+        if (j.status === "failed" || j.status === "canceled") {
+          return json({ ok:false, error:`Replicate job ${j.status}. ${j.error || ""}`.trim() }, 502);
+        }
       }
-      // else "starting"/"processing" -> continue polling
+      if (!outputUrl) return json({ ok:false, error:"Timed out waiting for Replicate output." }, 504);
+      return json({ ok:true, image:{ url: outputUrl }, mode:"replicate-fill" });
     }
 
-    if (!outputUrl) {
-      return json({ ok: false, error: "Timed out waiting for Replicate output." }, 504);
-    }
-
-    // Return a direct URL; your client uploads to Firebase Storage.
-    return json({ ok: true, image: { url: outputUrl }, mode: "replicate" });
+    // No mask or no Replicate token → echo back an image the client can upload
+    const outDataUrl = await toDataURL(image);
+    return json({ ok:true, image: outDataUrl, mode: mask ? "echo-fill" : (mode === "echo" ? "echo" : "pass-through") });
 
   } catch (err) {
-    return json({ ok: false, error: (err?.message || String(err)) }, 500);
+    return json({ ok:false, error: err?.message || String(err) }, 500);
   }
 };
 
 /* ---------- helpers ---------- */
-function json(obj, status = 200) {
-  return new Response(JSON.stringify(obj), {
-    status,
-    headers: {
-      ...CORS_HEADERS,
-      "Content-Type": "application/json; charset=utf-8"
-    }
-  });
+function json(obj, status=200){
+  return new Response(JSON.stringify(obj), { status, headers: { ...CORS_HEADERS, "Content-Type":"application/json; charset=utf-8" }});
 }
-function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+function sleep(ms){ return new Promise(r=>setTimeout(r,ms)); }
+async function toDataURL(urlOrData){
+  const s = String(urlOrData||'');
+  if (s.startsWith('data:')) return s;
+  const r = await fetch(s, { cache:"no-store" });
+  if (!r.ok) throw new Error(`Guide fetch failed: HTTP ${r.status}`);
+  const buf = Buffer.from(await r.arrayBuffer());
+  const mime = r.headers.get("content-type") || "image/png";
+  return `data:${mime};base64,${buf.toString("base64")}`;
+}
