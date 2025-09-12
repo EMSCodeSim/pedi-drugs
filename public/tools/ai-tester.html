@@ -1,0 +1,47 @@
+<!doctype html>
+<meta charset="utf-8" />
+<title>AI Tester</title>
+<style>
+  body { font-family: system-ui, sans-serif; margin: 24px; max-width: 780px; }
+  input, button, textarea { width: 100%; margin: 8px 0; }
+  img { max-width: 100%; display: block; margin-top: 12px; }
+  code { white-space: pre-wrap; display: block; padding: 8px; background: #111; color: #0f0; border-radius: 6px; }
+</style>
+
+<h1>AI Tester</h1>
+
+<label>Guide URL</label>
+<input id="guideUrl" value="https://picsum.photos/seed/house/1024/768" />
+
+<label>Prompt</label>
+<textarea id="prompt">make the scene photorealistic; keep layout</textarea>
+
+<label>Strength (0..1)</label>
+<input id="strength" type="number" step="0.05" min="0" max="1" value="0.35" />
+
+<button id="send">Send to AI</button>
+
+<h2>Response</h2>
+<code id="out"></code>
+<img id="img" alt="result" />
+
+<script>
+  // Use the local proxy so requests originate from fireopssim.com (no GitHub CSP)
+  const FN = "/api/ai-image";
+
+  document.getElementById("send").onclick = async () => {
+    const guideUrl = document.getElementById("guideUrl").value.trim();
+    const prompt   = document.getElementById("prompt").value.trim();
+    const strength = parseFloat(document.getElementById("strength").value) || 0.35;
+
+    const r = await fetch(FN, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ guideUrl, prompt, strength })
+    });
+
+    const data = await r.json().catch(() => ({}));
+    document.getElementById("out").textContent = JSON.stringify(data, null, 2);
+    if (data?.ok && data?.image?.url) document.getElementById("img").src = data.image.url;
+  };
+</script>
