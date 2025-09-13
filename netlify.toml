@@ -1,10 +1,12 @@
-[functions]
-  # Pick ONE folder. If your function file is at /functions/ai-image.js, use this:
-  directory = "functions"
+# keep your existing content ABOVE/BELOW — do not delete it
 
-# Make the nice /api/ path hit the Netlify function too.
+[functions]
+  # point to the ONE folder you actually use
+  directory = "functions"      # or "netlify/functions" if that's where ai-image.js lives
+
+# Map only this exact path to the function (nothing else).
 [[redirects]]
   from = "/api/ai-image"
   to = "/.netlify/functions/ai-image"
   status = 200
-  force = true
+  force = false
