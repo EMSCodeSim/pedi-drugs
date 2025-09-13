@@ -1,245 +1,293 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <title>FireOps SIM — Advanced Editor</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <meta name="theme-color" content="#0b0f14" />
+  <title>Advanced Photo Editor (Scenarios)</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
   <style>
-    :root{ --bg:#0b0f14;--bg2:#0e1421;--card:#0f1624;--edge:rgba(255,255,255,.10); --text:#eaf2ff;--muted:#93a0b5;--blue:#0a84ff; }
-    *{box-sizing:border-box}
-    html,body{
-      margin:0;height:100%;color:var(--text);
-      font-family:system-ui,-apple-system,Segoe UI,Roboto,Inter,Arial,sans-serif;
-      background:
-        radial-gradient(1400px 700px at 15% -15%, rgba(10,132,255,.28), transparent 60%),
-        radial-gradient(1200px 600px at 110% 0%, rgba(255,59,48,.22), transparent 60%),
-        linear-gradient(165deg, var(--bg2), var(--bg) 55%)
+    :root {
+      --bg: #07131c;
+      --panel: #0b2130;
+      --muted: #a9bac6;
+      --accent: #2da3ff;
+      --text: #e8f2f9;
+      --border: rgba(255,255,255,0.12);
+      --pill: rgba(255,255,255,0.12);
+      --danger: #ff5d5d;
+      --ok: #25d366;
     }
-
-    .topbar{position:sticky;top:0;z-index:40;background:rgba(12,15,22,.78);backdrop-filter:blur(6px) saturate(120%);border-bottom:1px solid rgba(255,255,255,.08)}
-    .topnav{max-width:1300px;margin:0 auto;padding:10px 16px;display:flex;gap:12px;align-items:center}
-    .brand{font-weight:900}
-    .spacer{flex:1}
-    .btn{appearance:none;border:1px solid rgba(255,255,255,.16);background:linear-gradient(180deg,#142238,#0f1930);color:#fff;border-radius:12px;padding:9px 12px;font-weight:800;cursor:pointer}
-    .btn[disabled]{opacity:.6;cursor:not-allowed}
-
-    main{max-width:1300px;margin:16px auto 40px;padding:0 16px}
-    .app{display:grid;grid-template-columns:360px 1fr;gap:12px;align-items:start}
-    .app.toolsCollapsed{grid-template-columns:0 1fr}
-    .app.toolsCollapsed #tools{display:none}
-    .col{background:var(--card);border:1px solid var(--edge);border-radius:16px;padding:12px;min-height:140px}
-    #tools{overflow:auto;max-height:calc(100vh - 160px)}
-    .hidden{display:none!important}
-
-    label{display:block;margin:8px 0 6px 2px;font-size:12px;color:var(--muted)}
-    .input, select, textarea{width:100%;padding:10px;border-radius:10px;border:1px solid rgba(255,255,255,.14);background:#0c1322;color:#eaf2ff}
-    textarea{min-height:80px}
-    .row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
-    .pill{display:inline-flex;gap:8px;align-items:center;padding:6px 10px;border-radius:999px;border:1px solid rgba(255,255,255,.14);color:var(--muted)}
-
-    .thumb{width:72px;height:72px;border-radius:8px;border:1px solid rgba(255,255,255,.14);object-fit:cover;background:#0a1a2a;cursor:pointer}
-    .thumb.active{outline:3px solid #2dd4bf}
-    #thumbRow{display:flex;gap:8px;overflow:auto;padding:8px;border:1px solid rgba(255,255,255,.12);border-radius:10px;background:#0a1a2a}
-
-    .canvasWrap{position:relative;border:1px solid rgba(255,255,255,.12);border-radius:12px;overflow:hidden;background:#061621}
-    #c{width:100%;height:calc(100vh - 280px);display:block}
-
-    .sectionTitle{font-weight:900;margin:6px 0}
-    .divider{height:1px;background:rgba(255,255,255,.08);margin:12px 0}
-    .small{font-size:12px;opacity:.85}
-    #errbar{position:fixed;left:10px;bottom:10px;background:#2b0d0d;color:#ffd7d7;border:1px solid #7a2b2b;border-radius:12px;padding:8px 12px;display:none;z-index:9999}
-
-    #loader{ position:fixed; inset:0; display:none; place-items:center; z-index:99; background:rgba(6,12,20,.55); backdrop-filter:blur(2px) }
-    .spinner{ width:42px; height:42px; border-radius:999px; border:4px solid rgba(255,255,255,.25); border-top-color:#fff; animation:spin 1s linear infinite }
-    @keyframes spin{ to{ transform:rotate(360deg) } }
-
-    #drawer summary{cursor:pointer;list-style:none;padding:8px 10px;border:1px solid rgba(255,255,255,.14);border-radius:10px;background:#0c1528;font-weight:800}
-    #drawer[open] summary{background:#0e1a30}
+    * { box-sizing: border-box; }
+    html, body { height: 100%; margin: 0; background: var(--bg); color: var(--text); font: 14px/1.4 system-ui, -apple-system, Segoe UI, Roboto, Inter, Arial, sans-serif; }
+    a { color: var(--accent); text-decoration: none; }
+    .app { padding: 12px; }
+    .topbar { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; flex-wrap: wrap; }
+    .pill { display: inline-block; background: var(--pill); padding: 6px 10px; border-radius: 999px; }
+    .pill.small { font-size: 12px; padding: 4px 8px; }
+    .btn, button { background: #123044; border: 1px solid var(--border); color: var(--text); padding: 8px 10px; border-radius: 8px; cursor: pointer; }
+    button[disabled] { opacity: 0.5; cursor: not-allowed; }
+    .muted { color: var(--muted); }
+    .grid { display: grid; grid-template-columns: 340px 1fr; gap: 12px; }
+    .toolsCollapsed .grid { grid-template-columns: 1fr; }
+    .col { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 12px; min-height: 200px; }
+    .block { border: 1px solid var(--border); border-radius: 10px; padding: 10px; margin-bottom: 12px; }
+    .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+    label { display: block; margin: 2px 0 6px; font-weight: 600; }
+    input[type="text"], input[type="number"], select, textarea {
+      width: 100%; background: #0f2738; color: var(--text); border: 1px solid var(--border);
+      border-radius: 8px; padding: 8px;
+    }
+    textarea { min-height: 70px; }
+    .thumb-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+    .thumb { width: 100%; aspect-ratio: 1/1; object-fit: cover; border-radius: 8px; border: 2px solid transparent; background: #092033; }
+    .thumb.active { border-color: var(--accent); }
+    .shelf { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-top: 8px; }
+    .btn-row { display: flex; gap: 6px; flex-wrap: wrap; }
+    #errbar { display: none; background: #2b0a0a; border: 1px solid #4a1515; color: #ffdede; padding: 8px 10px; border-radius: 8px; margin-bottom: 10px; }
+    #loader { display: none; position: absolute; inset: 0; background: rgba(3,8,12,0.55); place-items: center; border-radius: 12px; }
+    .viewer-wrap { position: relative; }
+    .spinner { width: 36px; height: 36px; border: 4px solid rgba(255,255,255,0.2); border-top-color: var(--accent); border-radius: 50%; animation: spin 1s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    /* canvas should stretch nicely */
+    #c { width: 100%; height: 640px; display: block; background: #061621; border-radius: 8px; border: 1px solid var(--border); }
+    .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
   </style>
 </head>
 <body>
-  <div id="errbar"></div>
-  <div id="loader"><div class="spinner"></div></div>
-
-  <div class="topbar">
-    <div class="topnav">
-      <div class="brand">FireOps SIM — Advanced Editor</div>
-      <div class="spacer"></div>
-      <span id="authPill" class="pill">Auth: connecting…</span>
+  <div id="app" class="app">
+    <div class="topbar">
+      <span id="authPill" class="pill">Auth: …</span>
+      <span id="statusPill" class="pill">Idle</span>
+      <span id="rootPill" class="pill">root: …</span>
+      <button id="refreshBtn" class="btn">Refresh</button>
       <button id="toggleTools" class="btn">Hide Tools</button>
+    </div>
+
+    <div class="grid">
+      <!-- LEFT: Tools + Scenario + Thumbs + Meta -->
+      <div class="col">
+        <div class="block">
+          <label for="scenarioSel">Scenario</label>
+          <div class="row">
+            <select id="scenarioSel" style="flex:1 1 auto"></select>
+            <button id="deleteScenario" class="btn" style="background:#331616;border-color:#5b2424;">Delete</button>
+          </div>
+        </div>
+
+        <div id="thumbRow" class="thumb-row"></div>
+
+        <div id="tools" class="block">
+          <div class="row" style="justify-content: space-between;">
+            <h3 style="margin:0;">Overlays</h3>
+            <div class="btn-row">
+              <button class="btn" data-cat="fire">Fire</button>
+              <button class="btn" data-cat="smoke">Smoke</button>
+              <button class="btn" data-cat="people">People</button>
+              <button class="btn" data-cat="cars">Cars</button>
+              <button class="btn" data-cat="hazard">Hazard</button>
+            </div>
+          </div>
+          <div id="overlayShelf" class="shelf"></div>
+
+          <hr style="border:none;border-top:1px solid var(--border); margin:10px 0;"/>
+
+          <h3 style="margin:0 0 6px;">Brush</h3>
+          <div class="btn-row">
+            <button id="brushFire" class="btn">🔥 Fire</button>
+            <button id="brushSmoke" class="btn">💨 Smoke</button>
+            <button id="brushErase" class="btn">❌ Erase</button>
+            <button id="brushOff" class="btn">✋ Off</button>
+          </div>
+          <div class="row" style="margin-top:6px;">
+            <label for="brushSize" style="margin:0;">Size</label>
+            <input type="range" id="brushSize" min="40" max="300" value="120" style="flex:1 1 auto;">
+            <span id="brushSizeReadout" class="pill small">120 px</span>
+          </div>
+
+          <hr style="border:none;border-top:1px solid var(--border); margin:10px 0;"/>
+
+          <h3 style="margin:0 0 6px;">Text</h3>
+          <div class="btn-row">
+            <button id="addTextbox" class="btn">+ Text Box</button>
+            <button id="tbApply" class="btn">Apply</button>
+            <button id="tbDelete" class="btn" style="background:#331616;border-color:#5b2424;">Delete</button>
+          </div>
+          <div class="two-col" style="margin-top:6px;">
+            <textarea id="tbContent" placeholder="Text…"></textarea>
+            <div>
+              <label>Font size</label>
+              <input id="tbFont" type="number" value="24" />
+              <label>BG opacity (0–1)</label>
+              <input id="tbBgOpacity" type="text" value="0.6" />
+            </div>
+          </div>
+
+          <hr style="border:none;border-top:1px solid var(--border); margin:10px 0;"/>
+
+          <h3 style="margin:0 0 6px;">Selection</h3>
+          <div class="btn-row">
+            <button id="bringFront" class="btn">Bring Front</button>
+            <button id="sendBack" class="btn">Send Back</button>
+            <button id="flipSelH" class="btn">Flip H</button>
+            <button id="flipSelV" class="btn">Flip V</button>
+            <button id="deleteObj" class="btn" style="background:#331616;border-color:#5b2424;">Delete</button>
+          </div>
+
+          <hr style="border:none;border-top:1px solid var(--border); margin:10px 0;"/>
+
+          <h3 style="margin:0 0 6px;">Export & Save</h3>
+          <div class="btn-row">
+            <button id="exportPNG" class="btn">Export JPEG</button>
+            <button id="saveImage" class="btn">Save to Cloud</button>
+          </div>
+        </div>
+
+        <div class="block">
+          <h3 style="margin:0 0 6px;">Meta</h3>
+          <label>Title</label>
+          <input id="stopTitle" type="text" placeholder="Title…" />
+          <label>Caption</label>
+          <input id="stopCaption" type="text" placeholder="Caption…" />
+          <div class="two-col">
+            <div>
+              <label>Lat</label>
+              <input id="stopLat" type="text" />
+            </div>
+            <div>
+              <label>Lng</label>
+              <input id="stopLng" type="text" />
+            </div>
+          </div>
+          <label>Radius (m)</label>
+          <input id="stopRadius" type="number" min="5" max="1000" value="50" />
+          <div class="btn-row" style="margin-top:6px;">
+            <button id="useGPS" class="btn">Use GPS</button>
+            <button id="saveMeta" class="btn">Save Meta</button>
+            <span id="metaMsg" class="muted"></span>
+          </div>
+        </div>
+      </div>
+
+      <!-- RIGHT: Viewer + AI -->
+      <div class="col viewer">
+        <div id="errbar"></div>
+        <div class="viewer-wrap">
+          <div id="loader"><div class="spinner"></div></div>
+          <canvas id="c" width="1600" height="900"></canvas>
+        </div>
+        <div class="row" style="margin-top:6px;">
+          <span class="pill small">Canvas:</span>
+          <span id="canvasInfo" class="muted">—</span>
+          <span style="flex:1 1 auto;"></span>
+          <div class="btn-row">
+            <button id="fit" class="btn">Fit</button>
+            <button id="zoomIn" class="btn">＋</button>
+            <button id="zoomOut" class="btn">－</button>
+            <button id="rotateL" class="btn">⟲</button>
+            <button id="rotateR" class="btn">⟳</button>
+          </div>
+        </div>
+
+        <div class="block">
+          <h3 style="margin:0 0 6px;">AI</h3>
+          <div class="two-col">
+            <div>
+              <label>Return</label>
+              <select id="aiReturn">
+                <option value="photo">Photo</option>
+                <option value="overlays">Overlays PNG</option>
+              </select>
+            </div>
+            <div>
+              <label>Style</label>
+              <select id="aiStyle">
+                <option value="realistic">Realistic</option>
+                <option value="dramatic">Dramatic</option>
+                <option value="training">Training</option>
+              </select>
+            </div>
+          </div>
+          <label>Notes</label>
+          <textarea id="aiNotes" placeholder="Describe changes, emphasis, constraints…"></textarea>
+          <div class="btn-row" style="margin-top:6px;">
+            <button id="aiPreview" class="btn">Preview</button>
+            <button id="aiSend" class="btn" style="background:#123c59;">Send to AI</button>
+            <button id="aiOpen" class="btn" disabled>Open Result</button>
+            <button id="aiAdd" class="btn" disabled>Add as Stop</button>
+          </div>
+          <div id="aiMsg" class="muted" style="margin-top:6px;">—</div>
+        </div>
+      </div>
     </div>
   </div>
 
-  <main>
-    <div class="app" id="app">
-      <aside class="col" id="tools">
-        <details id="drawer" open>
-          <summary>Editing Tools (collapse/expand)</summary>
-          <div style="margin-top:10px">
-            <div class="sectionTitle">Scenario</div>
-            <label>Choose scenario</label>
-            <select id="scenarioSel"><option value="">Select scenario…</option></select>
-            <div class="row" style="margin-top:6px">
-              <button class="btn" id="refreshBtn">Refresh</button>
-              <button class="btn" id="deleteScenario" style="background:#2a0f14;border-color:#7a2b2b">Delete Scenario</button>
-              <span id="statusPill" class="pill">Loading…</span>
-              <span id="rootPill" class="pill small">root: …</span>
-            </div>
+  <!-- Fabric.js (global) -->
+  <script src="https://cdn.jsdelivr.net/npm/fabric@5.3.0/dist/fabric.min.js"></script>
 
-            <div class="divider"></div>
-            <div class="sectionTitle">Stop meta</div>
-            <label>Title</label><input class="input" id="stopTitle" />
-            <label>Caption</label><textarea id="stopCaption"></textarea>
-            <div class="row">
-              <div style="flex:1"><label>Latitude</label><input class="input" id="stopLat" /></div>
-              <div style="flex:1"><label>Longitude</label><input class="input" id="stopLng" /></div>
-            </div>
-            <label>Radius (meters)</label><input class="input" id="stopRadius" value="50" />
-            <div class="row" style="margin-top:6px">
-              <button class="btn" id="useGPS">Use my location</button>
-              <button class="btn" id="saveMeta">Save Meta</button>
-            </div>
-            <div id="metaMsg" class="pill small" style="margin-top:6px">Ready</div>
-
-            <div class="divider"></div>
-            <div class="sectionTitle">Overlays</div>
-            <div class="row" style="gap:6px; flex-wrap:nowrap; overflow:auto">
-              <button class="btn" data-cat="fire">🔥 Fire</button>
-              <button class="btn" data-cat="smoke">🌫️ Smoke</button>
-              <button class="btn" data-cat="people">🧍 People</button>
-              <button class="btn" data-cat="cars">🚗 Cars</button>
-              <button class="btn" data-cat="hazard">⚠️ Hazard</button>
-            </div>
-            <div id="overlayShelf" style="margin-top:8px; display:grid; grid-template-columns:repeat(3, 1fr); gap:8px"></div>
-
-            <div class="divider"></div>
-            <div class="sectionTitle">Brush / Stamps</div>
-            <div class="row">
-              <button class="btn" id="brushFire">🔥 Fire Brush</button>
-              <button class="btn" id="brushSmoke">🌫️ Smoke Brush</button>
-              <button class="btn" id="brushErase">🧽 Erase Stamps</button>
-              <button class="btn" id="brushOff">✖ Off</button>
-            </div>
-            <label>Brush Size <span id="brushSizeReadout" class="pill" style="margin-left:6px">120 px</span></label>
-            <input id="brushSize" type="range" min="24" max="320" step="4" value="120" />
-
-            <div class="divider"></div>
-            <div class="sectionTitle">Text on Photo</div>
-            <div class="row"><button class="btn" id="addTextbox">+ Add Text Box</button></div>
-            <label>Selected Text</label><textarea id="tbContent" placeholder="Type notes…"></textarea>
-            <label>Font Size</label><input id="tbFont" type="range" min="12" max="72" step="1" value="24" />
-            <label>Background Opacity</label><input id="tbBgOpacity" type="range" min="0" max="1" step="0.05" value="0.6" />
-            <div class="row" style="margin-top:6px">
-              <button class="btn" id="tbApply">Apply</button>
-              <button class="btn" id="tbDelete" style="background:#2a0f14;border-color:#7a2b2b">Delete</button>
-            </div>
-
-            <div class="divider"></div>
-            <div class="sectionTitle">Selected Overlay</div>
-            <div class="row">
-              <button class="btn" id="flipSelH">Flip H</button>
-              <button class="btn" id="flipSelV">Flip V</button>
-              <button class="btn" id="bringFront">Bring Front</button>
-              <button class="btn" id="sendBack">Send Back</button>
-              <button class="btn" id="deleteObj" style="background:#2a0f14;border-color:#7a2b2b">Delete</button>
-            </div>
-
-            <div class="divider"></div>
-            <div class="sectionTitle">Export / Save</div>
-            <div class="row">
-              <button class="btn" id="exportPNG">Export PNG/JPEG</button>
-              <button class="btn" id="saveImage">Save Image to Cloud</button>
-            </div>
-
-            <div class="divider"></div>
-            <div class="sectionTitle">AI Generate (beta)</div>
-            <label>Return</label>
-            <select id="aiReturn" class="input">
-              <option value="photo">Composite Photo</option>
-              <option value="overlays">Overlays Only (PNG)</option>
-            </select>
-            <label>Style</label>
-            <select id="aiStyle" class="input">
-              <option value="realistic">Photo-realistic</option>
-              <option value="dramatic">Dramatic Incident</option>
-              <option value="training">Training Drill</option>
-            </select>
-            <label>Scene Notes (optional)</label>
-            <textarea id="aiNotes" class="input" placeholder="e.g., light wind from north, 2 occupants, late evening lighting"></textarea>
-            <div class="row" style="margin-top:6px">
-              <button class="btn" id="aiPreview">Preview Payload</button>
-              <button class="btn" id="aiSend">Send to AI</button>
-              <button class="btn" id="aiOpen" disabled>Open Result</button>
-              <button class="btn" id="aiAdd" disabled>Add as New Stop</button>
-            </div>
-            <div id="aiMsg" class="pill small" style="margin-top:6px">Idle</div>
-          </div>
-        </details>
-      </aside>
-
-      <section class="col">
-        <div class="sectionTitle">Photos in Scenario (click to load in viewer)</div>
-        <div id="thumbRow"></div>
-
-        <div class="row" style="margin:10px 0">
-          <button class="btn" id="fit">Fit</button>
-          <button class="btn" id="zoomIn">Zoom +</button>
-          <button class="btn" id="zoomOut">Zoom −</button>
-          <button class="btn" id="rotateL">Rotate ⟳</button>
-          <button class="btn" id="rotateR">Rotate ⟲</button>
-          <span class="pill" id="canvasInfo">Canvas</span>
-        </div>
-
-        <div class="canvasWrap"><canvas id="c"></canvas></div>
-      </section>
-    </div>
-  </main>
-
-  <!-- Fabric.js (must be before module bootstrap) -->
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/fabric.js/5.3.0/fabric.min.js" crossorigin="anonymous"></script>
-
-  <!-- Module bootstrap: keeps files split, tries scenarios.js then scenarios (1).js -->
+  <!-- Robust module boot: tries both scenarios.js and "scenarios (1).js" -->
   <script type="module">
     (async () => {
-      try {
-        // Firebase core (initializes app, exports helpers)
-        await import('./firebase-core.js');
+      const showErr = (msg) => {
+        const b = document.getElementById('errbar');
+        if (b) { b.style.display = 'block'; b.textContent = msg; }
+        console.error(msg);
+      };
 
-        // Try primary scenarios module, fall back to "scenarios (1).js" if present
-        let scenariosMod;
+      // Try a few likely paths for scenarios module
+      const candidates = [
+        './scenarios.js',
+        './scenarios%20(1).js',  // URL-encoded space
+        './scenarios (1).js'     // raw space (if server allows)
+      ];
+      let scenariosMod = null, used = null, lastErr = null;
+      for (const p of candidates) {
         try {
-          scenariosMod = await import('./scenarios.js');
-        } catch (e1) {
-          try {
-            scenariosMod = await import('./scenarios (1).js');
-          } catch (e2) {
-            console.error('Failed to load scenarios module', e2);
-            const pill = document.getElementById('statusPill');
-            if (pill) pill.textContent = 'Failed to load scenarios module';
-            return;
-          }
+          scenariosMod = await import(p + '?v=' + Date.now()); // cache-bust
+          used = p;
+          console.log('[boot] scenarios module loaded from', p);
+          break;
+        } catch (e) {
+          lastErr = e;
+          console.warn('[boot] failed to import', p, e);
         }
+      }
+      if (!scenariosMod) {
+        showErr('Could not import scenarios module. Last error: ' + (lastErr?.message || String(lastErr)));
+        return;
+      }
+      const { wireScenarioUI, bootScenarios } = scenariosMod;
+      if (typeof wireScenarioUI !== 'function' || typeof bootScenarios !== 'function') {
+        showErr(`Module "${used}" loaded but missing exports wireScenarioUI/bootScenarios.`);
+        return;
+      }
 
-        // AI module is optional; if missing, editor still works
-        let aiMod = null;
-        try { aiMod = await import('./ai-upload.js'); } catch (e) {
-          console.warn('ai-upload.js not found; AI tools disabled');
-        }
+      // Import AI wiring
+      let ai;
+      try {
+        ai = await import('./ai-upload.js?v=' + Date.now());
+      } catch (e) {
+        showErr('Failed to import ai-upload.js: ' + (e?.message || String(e)));
+        return;
+      }
+      if (typeof ai.wireAI !== 'function') {
+        showErr('ai-upload.js loaded but missing wireAI() export.');
+        return;
+      }
 
-        const { wireScenarioUI, bootScenarios } = scenariosMod;
-        wireScenarioUI();
+      // Import firebase-core.js (not strictly required to import here if scenarios.js imports it, but this will surface path errors early)
+      try {
+        await import('./firebase-core.js?v=' + Date.now());
+      } catch (e) {
+        showErr('Failed to import firebase-core.js: ' + (e?.message || String(e)));
+        return;
+      }
+
+      // Boot sequence
+      try {
         await bootScenarios();
-        if (aiMod?.wireAI) aiMod.wireAI();
-
-        // Brush size readout sync
-        const bs = document.getElementById('brushSize');
-        const rd = document.getElementById('brushSizeReadout');
-        if (bs && rd) bs.addEventListener('input', () => { rd.textContent = (parseInt(bs.value,10)||120)+' px'; });
-      } catch (err) {
-        console.error(err);
-        const eb = document.getElementById('errbar');
-        if (eb) { eb.textContent = String(err.message || err); eb.style.display = 'block'; }
+        wireScenarioUI();
+        ai.wireAI();
+      } catch (e) {
+        showErr('Boot failed: ' + (e?.message || String(e)));
       }
     })();
   </script>
