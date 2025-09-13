@@ -1,5 +1,4 @@
-// scenarios.js — spinner-proof scenario loader with graceful fallbacks
-// Keep files split: this imports only from firebase-core.js
+// scenarios.js — robust loader + full editor wiring (keep files split)
 
 import {
   getFirebase, ensureAuthed, getStorageInfo,
@@ -11,7 +10,7 @@ import {
 } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-database.js";
 
 import {
-  ref as stRef, getDownloadURL, uploadBytesResumable, deleteObject
+  ref as stRef, getDownloadURL, getBlob as sdkGetBlob, uploadBytesResumable, deleteObject
 } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-storage.js";
 
 /* ---------------- tiny DOM helpers ---------------- */
@@ -25,14 +24,13 @@ export function showError(msg){ const b=errbar(); if(!b) return; b.textContent=S
 export function hideError(){ const b=errbar(); if(!b) return; b.style.display='none'; }
 export function showLoad(on){ const l=$("loader"); if(l) l.style.display = on ? "grid" : "none"; }
 function setAIEnabled(on){
-  const btns = ["aiPreview","aiSend","aiOpen","aiAdd"].map($).filter(Boolean);
-  btns.forEach(b => b.disabled = !on);
+  ["aiPreview","aiSend","aiOpen","aiAdd"].forEach(id=>{ const b=$(id); if(b) b.disabled = !on; });
 }
 
 /* ---------------- canvas ---------------- */
 export const f = new fabric.Canvas("c", { backgroundColor:"#061621", preserveObjectStacking:true });
 let baseImage = null;
-let baseTainted = false; // true if we had to load via direct URL without CORS
+let baseTainted = false; // if true, export/AI disabled
 
 function blobToObjectURL(b){ return URL.createObjectURL(b); }
 function revokeURL(u){ try{ URL.revokeObjectURL(u); }catch{} }
@@ -52,11 +50,11 @@ async function setBaseFromBlob(blob){
       $("canvasInfo").textContent=`Image ${Math.round(img.width)}×${Math.round(img.height)} | shown ${Math.round(img.width*s)}×${Math.round(img.height*s)}`;
       baseTainted = false; setAIEnabled(true);
       resolve({ naturalW: img.width, naturalH: img.height });
-    }, { crossOrigin:"anonymous" }); // safe when blob URL
+    }, { crossOrigin:"anonymous" }); // safe for blob URLs
   });
 }
 
-// Last-chance fallback: load a URL directly (no CORS); canvas becomes tainted.
+// Last-chance fallback: direct URL (taints canvas; keeps editor usable)
 async function setBaseFromDirectURL(url){
   return new Promise((resolve, reject)=>{
     fabric.Image.fromURL(url, img=>{
@@ -68,10 +66,9 @@ async function setBaseFromDirectURL(url){
       img.scale(s); img.set({ left:(cw-img.width*s)/2, top:(ch-img.height*s)/2 });
       f.add(img); img.moveTo(0); f.requestRenderAll();
       $("canvasInfo").textContent=`Image (cross-origin) ${Math.round(img.width)}×${Math.round(img.height)} — export disabled`;
-      baseTainted = true;  // we cannot toDataURL; disable AI/export
-      setAIEnabled(false);
+      baseTainted = true; setAIEnabled(false);
       resolve({ naturalW: img.width, naturalH: img.height });
-    } /* IMPORTANT: no crossOrigin here to guarantee it loads */, null);
+    } /* intentionally no crossOrigin */, null);
   });
 }
 
@@ -107,7 +104,7 @@ export function fitCanvas(){
 }
 addEventListener("resize", fitCanvas);
 
-/* ---------------- robust image resolution ---------------- */
+/* ---------------- robust image resolution (avoid taint) ---------------- */
 function withTimeout(promise, ms, label="timeout"){
   return Promise.race([
     promise,
@@ -115,18 +112,42 @@ function withTimeout(promise, ms, label="timeout"){
   ]);
 }
 
-/** Resolve any ref (http/gs/path) → download URL via SDK (or pass-through HTTP). */
-async function toDownloadURL(refStr){
-  const { storage } = getFirebase();
-  const s = (refStr||"").trim();
-  if (!s) throw new Error("empty-ref");
-  if (/^https?:\/\//i.test(s)) return s; // already a URL
-  const coerced = toStorageRefString(s); // gs://bucket/path OR bucket/path
-  const ref = stRef(storage, coerced);
-  return await getDownloadURL(ref);
+const FB_GAPI = /^https?:\/\/firebasestorage\.googleapis\.com\/v0\/b\/([^/]+)\/o\/([^?]+)/i;
+const FB_APP  = /^https?:\/\/([^/]+)\.firebasestorage\.app\/o\/([^?]+)/i;
+
+function parseFirebaseURL(url){
+  let m = url.match(FB_GAPI);
+  if (m) return { bucket: (m[1]||"").replace(".firebasestorage.app",".appspot.com"), object: m[2].replace(/\+/g," ") };
+  m = url.match(FB_APP);
+  if (m) return { bucket: (m[1]+".firebasestorage.app").replace(".firebasestorage.app",".appspot.com"), object: m[2].replace(/\+/g," ") };
+  return null;
 }
 
-/** Try multiple candidates. If all fail, return {blob:null, url:httpURL} for a direct-URL fallback. */
+async function getBlobSDKFirst(refLike, timeoutMs=20000){
+  const { storage } = getFirebase();
+  const s = (refLike||"").trim();
+  if (!s) throw new Error("empty-ref");
+  // data URL fast path
+  if (/^data:/i.test(s)){
+    const r = await fetch(s); const b = await r.blob(); return b;
+  }
+  // If http(s) and from Firebase domains, convert to SDK ref
+  if (/^https?:\/\//i.test(s)){
+    const parsed = parseFirebaseURL(s);
+    if (parsed){
+      const ref = stRef(storage, `gs://${parsed.bucket}/${parsed.object}`);
+      return await withTimeout(sdkGetBlob(ref), timeoutMs, "storage/getblob-timeout");
+    }
+    // non-Firebase host → try fetch (may fail CORS)
+    const r = await withTimeout(fetch(s, { mode:"cors", credentials:"omit", cache:"no-store" }), timeoutMs, "fetch/timeout");
+    if (!r.ok) throw new Error("HTTP "+r.status);
+    return await r.blob();
+  }
+  // Otherwise assume gs:// or bucket/path
+  const ref = stRef(storage, toStorageRefString(s));
+  return await withTimeout(sdkGetBlob(ref), timeoutMs, "storage/getblob-timeout");
+}
+
 async function resolveForStop(stop, timeoutMs=22000){
   const seeds = [
     stop.imageURL, stop.gsUri, stop.storagePath, stop.thumbURL,
@@ -140,31 +161,19 @@ async function resolveForStop(stop, timeoutMs=22000){
     const k=String(c).trim(); if(!k || seen.has(k)) return false; seen.add(k); return true;
   }).slice(0, 16);
 
-  let lastURLError = null;
+  let lastPlainHTTP = null;
   for (let i=0;i<cands.length;i++){
     const c = cands[i];
     try{
-      // If it's a data: URL, decode directly (fast path)
-      if (/^data:/i.test(c)){
-        const resp = await fetch(c);
-        const bl = await resp.blob();
-        if (bl && bl.size>0) return { blob: bl, urlUsed: c, directFallbackUrl: null };
-        continue;
-      }
-      const url = await withTimeout(toDownloadURL(c), Math.min(7000, timeoutMs-3000), "downloadurl/timeout");
-      const r = await withTimeout(fetch(url, { mode:"cors", credentials:"omit", cache:"no-store" }), timeoutMs, "fetch/timeout");
-      if (!r.ok) throw new Error("HTTP "+r.status);
-      const blob = await r.blob();
-      if (blob && blob.size>0) return { blob, urlUsed: url, directFallbackUrl: null };
+      const bl = await getBlobSDKFirst(c, timeoutMs);
+      if (bl && bl.size>0) return { blob: bl, urlUsed: c, directFallbackUrl: null };
     }catch(e){
-      lastURLError = (typeof c==="string" && /^https?:\/\//i.test(c)) ? c : lastURLError;
-      console.warn(`[stop-image] ${i+1}/${cands.length} failed`, { candidate:c, err:e?.code||e?.message||e });
+      if (typeof c==="string" && /^https?:\/\//i.test(c)) lastPlainHTTP = c;
+      console.warn(`[stop-image] try ${i+1}/${cands.length} failed`, { candidate:c, err:e?.code||e?.message||e });
     }
   }
-
-  // Nothing loaded as blob — if we saw at least one HTTP candidate, allow a direct URL fallback
-  if (lastURLError) return { blob: null, urlUsed: null, directFallbackUrl: lastURLError };
-
+  // Allow last-chance direct URL if we saw any http candidate
+  if (lastPlainHTTP) return { blob:null, urlUsed:null, directFallbackUrl:lastPlainHTTP };
   throw new Error("no-image-candidate-succeeded");
 }
 
@@ -284,44 +293,38 @@ export async function loadStop(i){
     showLoad(true);
     await ensureAuthed();
 
-    // 1) resolve blob or direct-URL fallback (never throws unless *no* candidates exist)
     const result = await resolveForStop(s, 22000);
 
     if (result.blob){
       await setBaseFromBlob(result.blob);
     } else if (result.directFallbackUrl){
-      // load directly (canvas tainted, AI disabled)
       await setBaseFromDirectURL(result.directFallbackUrl);
       showError('Base image loaded via cross-origin fallback. Export/AI disabled for this stop.');
     } else {
       throw new Error('no-image-candidate-succeeded');
     }
 
-    // 2) try to upgrade tiny images (best-effort; never throws)
+    // best-effort tiny upgrade (never throws)
     const minGood = 480;
-    const dims = baseImage ? { naturalW: baseImage.width, naturalH: baseImage.height } : { naturalW:0, naturalH:0 };
-    if (!baseTainted && (dims.naturalW < minGood && dims.naturalH < minGood)){
+    const naturalW = baseImage?.width || 0, naturalH = baseImage?.height || 0;
+    if (!baseTainted && (naturalW < minGood && naturalH < minGood)){
       const extras = candidateOriginals(result.urlUsed || s.imageURL || s.thumbURL || s.storagePath || s.gsUri).slice(0, 6);
       for (const c of extras){
         try{
-          const url = await withTimeout(toDownloadURL(c), 6000, "downloadurl/timeout");
-          const r = await withTimeout(fetch(url, { mode:"cors", credentials:"omit", cache:"no-store" }), 12000, "fetch/timeout");
-          if (!r.ok) continue;
-          const bl2 = await r.blob();
+          const bl2 = await getBlobSDKFirst(c, 12000);
           const d2 = await setBaseFromBlob(bl2);
           if (d2.naturalW >= minGood || d2.naturalH >= minGood) break;
         }catch{}
       }
     }
   }catch(e){
-    // Final fallback: embedded data if present
     if (s.imageData?.data){
       try{
         const bl = await (await fetch(`data:image/${s.imageData.format||'jpeg'};base64,${s.imageData.data}`)).blob();
         await setBaseFromBlob(bl);
         showError('Loaded embedded image; original not available.');
       }catch{
-        showError('Image load failed completely for this stop.');
+        showError('Image load failed for this stop.');
       }
     }else{
       showError('Image load failed for this stop.');
@@ -330,7 +333,7 @@ export async function loadStop(i){
     showLoad(false);
   }
 
-  // Render overlays (best-effort)
+  // overlays (best-effort)
   if (Array.isArray(s.overlays)){
     for (const ov of s.overlays){
       if (ov?.kind==='text'){
@@ -361,15 +364,15 @@ export async function loadStop(i){
 export async function getGuideImageURLForCurrentStop(){
   if (!current || stopIndex<0) throw new Error('No stop selected');
   const s = current._stops[stopIndex];
-
-  // If we loaded via tainted direct URL, provide a usable guide URL anyway
   if (s?.imageURL && /^https?:\/\//i.test(s.imageURL)) return s.imageURL;
-
-  // Else resolve a download URL from any stored ref
   const ref = s.gsUri || s.storagePath || s.thumbURL || s.imageURL;
-  if (ref) return await toDownloadURL(ref);
-
-  // As a last resort, if embedded exists, return the data URL
+  if (ref){
+    try{
+      const { storage } = getFirebase();
+      const r = stRef(storage, toStorageRefString(ref));
+      return await getDownloadURL(r);
+    }catch{}
+  }
   if (s?.imageData?.data){
     return `data:image/${s.imageData.format||'jpeg'};base64,${s.imageData.data}`;
   }
@@ -384,8 +387,7 @@ export async function getCompositeDataURL(maxEdge = 1600, quality = 0.95){
   const s = Math.min(1, maxEdge / Math.max(w, h));
   const outW = Math.round(w*s), outH = Math.round(h*s);
   const c = document.createElement('canvas'); c.width=outW; c.height=outH;
-  const ctx = c.getContext('2d');
-  ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = 'high';
+  const ctx = c.getContext('2d'); ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = 'high';
   ctx.drawImage(img, 0, 0, outW, outH);
   return c.toDataURL('image/jpeg', quality);
 }
@@ -439,7 +441,156 @@ export async function addResultAsNewStop(url){
 export function getCurrent(){ return current; }
 export function getStopIndex(){ return stopIndex; }
 
-/* ---------------- UI wiring ---------------- */
+/* ---------------- Editor wiring: overlays, brushes, text, selection ---------------- */
+function addOverlay(src){
+  fabric.Image.fromURL(src, img=>{
+    const cw=f.getWidth(), ch=f.getHeight(), targetW=cw*0.28, scale=targetW/img.width;
+    img.scale(scale);
+    img.set({
+      left:cw/2-(img.width*img.scaleX)/2, top:ch/2-(img.height*img.scaleY)/2,
+      cornerStyle:'circle', transparentCorners:false, shadow:'rgba(0,0,0,0.35) 0 6px 16px', erasable:true
+    });
+    f.add(img); f.setActiveObject(img); f.requestRenderAll();
+  }, { crossOrigin:'anonymous' });
+}
+
+async function listOverlays(cat){
+  try{
+    const r = await fetch('https://fireopssim.com/geophoto/overlays/manifest.json', { cache:'no-store' });
+    if (r.ok){
+      const j = await r.json();
+      const folder = {fire:'fire', smoke:'smoke', people:'people', cars:'cars', hazard:'hazard'}[cat]||'fire';
+      if (Array.isArray(j[folder])) return j[folder].map(name=>`https://fireopssim.com/geophoto/overlays/${folder}/${name}`);
+    }
+  }catch{}
+  // fallback: probe common names (short list)
+  const folder = {fire:'fire', smoke:'smoke', people:'people', cars:'cars', hazard:'hazard'}[cat]||'fire';
+  const base = `https://fireopssim.com/geophoto/overlays/${folder}/`;
+  const names = ['1.png','2.png','3.png','4.png','5.png'];
+  return names.map(n=>base+n);
+}
+
+function wireOverlayShelf(){
+  const shelf = $("overlayShelf");
+  const buttons = Array.from(document.querySelectorAll('#tools [data-cat]'));
+  async function render(cat){
+    shelf.innerHTML = '';
+    const urls = await listOverlays(cat);
+    if (!urls.length){ shelf.innerHTML='<div class="pill small">No overlays found</div>'; return; }
+    urls.forEach(u=>{
+      const cell=document.createElement('div'); cell.style.border='1px solid rgba(255,255,255,.14)'; cell.style.borderRadius='10px'; cell.style.padding='4px'; cell.style.background='#0b2130';
+      const img=new Image(); img.src=u; img.alt='overlay'; img.style.width='100%'; img.style.display='block';
+      img.onclick=()=> addOverlay(u);
+      cell.appendChild(img); shelf.appendChild(cell);
+    });
+  }
+  buttons.forEach(b=> b.addEventListener('click', ()=> render(b.dataset.cat)));
+  render('fire');
+}
+
+function wireBrushes(){
+  let brushMode='off', pointerDown=false, lastStamp=null;
+  const brushSize=$("brushSize"), brushSizeReadout=$("brushSizeReadout");
+  const dist=(a,b)=>Math.hypot(a.x-b.x, a.y-b.y);
+  async function randomOverlay(cat){
+    const urls = await listOverlays(cat);
+    if (!urls.length) return null;
+    return urls[Math.floor(Math.random()*urls.length)];
+  }
+  async function stampAt(p, cat){
+    const file = await randomOverlay(cat); if(!file) return;
+    const R=(parseInt(brushSize.value,10)||120)/2;
+    if (lastStamp && dist(p,lastStamp) < R*0.6) return; lastStamp=p;
+    fabric.Image.fromURL(file, img=>{
+      const baseW=img.width||200, scale=(R*2)/baseW, j=0.75+Math.random()*0.5;
+      img.scale(scale*j);
+      img.set({
+        left:p.x-(img.width*img.scaleX)/2, top:p.y-(img.height*img.scaleY)/2, angle:(Math.random()*30-15),
+        opacity:0.9, cornerStyle:'circle', transparentCorners:false, erasable:true, selectable:false, evented:false
+      });
+      f.add(img); f.requestRenderAll();
+    }, { crossOrigin:'anonymous' });
+  }
+  function eraseStampsAt(p){
+    const R=(parseInt(brushSize.value,10)||120)/2;
+    const targets = f.getObjects('image').filter(o => o!==baseImage);
+    for (const obj of targets){
+      const cx=obj.left + (obj.width*obj.scaleX)/2, cy=obj.top + (obj.height*obj.scaleY)/2;
+      if (Math.hypot(cx-p.x, cy-p.y) <= R) f.remove(obj);
+    }
+    f.requestRenderAll();
+  }
+
+  $("brushFire").onclick = ()=> brushMode='fire';
+  $("brushSmoke").onclick= ()=> brushMode='smoke';
+  $("brushErase").onclick= ()=> brushMode='erase';
+  $("brushOff").onclick  = ()=> brushMode='off';
+  brushSize.oninput=()=> brushSizeReadout.textContent=(parseInt(brushSize.value,10)||120)+' px';
+
+  f.on('mouse:down', (e)=>{ pointerDown=true; const p=f.getPointer(e.e); if(brushMode==='fire') stampAt(p,'fire'); else if(brushMode==='smoke') stampAt(p,'smoke'); else if(brushMode==='erase') eraseStampsAt(p); });
+  f.on('mouse:move', (e)=>{ if(!pointerDown) return; const p=f.getPointer(e.e); if(brushMode==='fire') stampAt(p,'fire'); else if(brushMode==='smoke') stampAt(p,'smoke'); else if(brushMode==='erase') eraseStampsAt(p); });
+  f.on('mouse:up', ()=>{ pointerDown=false; });
+}
+
+function wireTextTools(){
+  $("addTextbox").onclick = ()=>{
+    const tb = new fabric.Textbox("New note", {
+      left: Math.max(20, f.getWidth()*0.1),
+      top:  Math.max(20, f.getHeight()*0.1),
+      width: Math.min(480, Math.floor(f.getWidth()*0.6)),
+      fontSize: 24,
+      fill: "#fff",
+      backgroundColor: "rgba(0,0,0,0.6)",
+      padding: 8,
+      cornerStyle:'circle', transparentCorners:false
+    });
+    f.add(tb); f.setActiveObject(tb); f.requestRenderAll();
+    $("tbContent").value = tb.text;
+    $("tbFont").value = String(tb.fontSize||24);
+    $("tbBgOpacity").value = "0.6";
+  };
+
+  $("tbApply").onclick = ()=>{
+    const o = f.getActiveObject();
+    if (!o || o.type!=='textbox') return;
+    o.text = $("tbContent").value || '';
+    o.fontSize = parseInt($("tbFont").value||"24",10);
+    const op = Math.max(0, Math.min(1, parseFloat($("tbBgOpacity").value||"0.6")));
+    o.backgroundColor = `rgba(0,0,0,${op})`;
+    f.requestRenderAll();
+  };
+  $("tbDelete").onclick = ()=>{
+    const o = f.getActiveObject();
+    if (o && o.type==='textbox'){ f.remove(o); f.discardActiveObject(); f.requestRenderAll(); }
+  };
+}
+
+function wireSelectionTools(){
+  $("bringFront").onclick = ()=>{ const o=f.getActiveObject(); if(o){ o.bringToFront(); f.requestRenderAll(); } };
+  $("sendBack").onclick  = ()=>{ const o=f.getActiveObject(); if(o){ o.sendToBack(); f.requestRenderAll(); } };
+  $("deleteObj").onclick = ()=>{ const o=f.getActiveObject(); if(o){ f.remove(o); f.discardActiveObject(); f.requestRenderAll(); } };
+  $("flipSelH").onclick  = ()=>{ const o=f.getActiveObject(); if(o){ o.set('flipX', !o.flipX); f.requestRenderAll(); } };
+  $("flipSelV").onclick  = ()=>{ const o=f.getActiveObject(); if(o){ o.set('flipY', !o.flipY); f.requestRenderAll(); } };
+}
+
+function wireViewerControls(){
+  $("fit").onclick = ()=>{
+    if (baseImage && baseImage.type==='image'){
+      const cw=f.getWidth(), ch=f.getHeight(), s=Math.min(cw/baseImage.width, ch/baseImage.height);
+      baseImage.scale(s); baseImage.set({ left:(cw-baseImage.width*s)/2, top:(ch-baseImage.height*s)/2 });
+      f.requestRenderAll();
+    } else if (baseImage && baseImage.type==='rect'){
+      const t=f.getObjects('textbox').find(o=>o.isBaseText);
+      setBaseAsTextSlide(t?t.text:'', t?t.fontSize:34);
+    }
+  };
+  $("zoomIn").onclick = ()=> f.setZoom(f.getZoom()*1.1);
+  $("zoomOut").onclick= ()=> f.setZoom(f.getZoom()/1.1);
+  $("rotateL").onclick = ()=>{ if(baseImage && baseImage.rotate){ baseImage.rotate((baseImage.angle||0)+90); f.requestRenderAll(); } };
+  $("rotateR").onclick = ()=>{ if(baseImage && baseImage.rotate){ baseImage.rotate((baseImage.angle||0)-90); f.requestRenderAll(); } };
+}
+
+/* ---------------- UI wiring (entry) ---------------- */
 export function wireScenarioUI(){
   $("toggleTools").onclick = ()=>{
     const app = $("app");
@@ -477,6 +628,7 @@ export function wireScenarioUI(){
       const lng = $("stopLng").value.trim()==='' ? null : parseFloat($("stopLng").value);
       s.lat = lat; s.lng = lng;
       s.radiusMeters = Math.max(5, Math.min(1000, Math.round(parseInt($("stopRadius").value || "50", 10))));
+      // serialize overlays
       s.overlays = f.getObjects().filter(o=>o!==baseImage && !o.isBaseText).map(o=>{
         if (o.type==='textbox'){
           return {
@@ -540,6 +692,13 @@ export function wireScenarioUI(){
     const sel=$("scenarioSel");
     if (sel && !sel.value && scenarios.length){ sel.value=scenarios[0].id; sel.dispatchEvent(new Event('change')); }
   };
+
+  // viewer & editor tools
+  wireViewerControls();
+  wireOverlayShelf();
+  wireBrushes();
+  wireTextTools();
+  wireSelectionTools();
 }
 
 /* ---------------- boot ---------------- */
