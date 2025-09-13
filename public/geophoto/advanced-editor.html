@@ -2,329 +2,150 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <title>Advanced Photo Editor (Scenarios)</title>
+  <title>Advanced Photo Editor</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
+
   <style>
-    :root {
-      --bg: #07131c; --panel: #0b2130; --muted: #a9bac6; --accent: #2da3ff;
-      --text: #e8f2f9; --border: rgba(255,255,255,0.12); --pill: rgba(255,255,255,0.12);
+    :root { --bg:#0f1115; --panel:#171923; --text:#e6e6e6; --muted:#a4a8b3; --accent:#6aa3ff; }
+    html,body { height:100%; margin:0; background:var(--bg); color:var(--text); font:14px/1.35 system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif; }
+    .app { display:flex; height:100%; }
+    .left { flex: 1 1 auto; display:flex; align-items:center; justify-content:center; background:#0c0e13; }
+    .right { width:360px; background:var(--panel); border-left:1px solid #232634; padding:16px; overflow:auto; }
+    h1 { font-size:16px; margin:0 0 12px; color:#fff; }
+    .grp { margin-bottom:16px; }
+    label { display:block; font-size:12px; color:var(--muted); margin:0 0 6px; }
+    input[type="text"], textarea, select {
+      width:100%; box-sizing:border-box; background:#131621; color:#e8e8e8;
+      border:1px solid #272b3a; padding:8px 10px; border-radius:8px; outline:none;
     }
-    *{box-sizing:border-box} html,body{height:100%;margin:0;background:var(--bg);color:var(--text);
-      font:14px/1.4 system-ui,-apple-system,Segoe UI,Roboto,Inter,Arial,sans-serif}
-    a{color:var(--accent);text-decoration:none}
-    .app{padding:12px}
-    .topbar{display:flex;align-items:center;gap:8px;margin-bottom:10px;flex-wrap:wrap}
-    .pill{display:inline-block;background:var(--pill);padding:6px 10px;border-radius:999px}
-    .pill.small{font-size:12px;padding:4px 8px}
-    .btn,button{background:#123044;border:1px solid var(--border);color:var(--text);padding:8px 10px;border-radius:8px;cursor:pointer}
-    button[disabled]{opacity:.5;cursor:not-allowed}
-    .muted{color:var(--muted)}
-    .grid{display:grid;grid-template-columns:340px 1fr;gap:12px}
-    .toolsCollapsed .grid{grid-template-columns:1fr}
-    .col{background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:12px;min-height:200px;position:relative}
-    .block{border:1px solid var(--border);border-radius:10px;padding:10px;margin-bottom:12px}
-    .row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
-    label{display:block;margin:2px 0 6px;font-weight:600}
-    input[type="text"],input[type="number"],select,textarea{
-      width:100%;background:#0f2738;color:var(--text);border:1px solid var(--border);border-radius:8px;padding:8px}
-    textarea{min-height:70px}
-    .thumb-row{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
-    .thumb{width:100%;aspect-ratio:1/1;object-fit:cover;border-radius:8px;border:2px solid transparent;background:#092033}
-    .thumb.active{border-color:var(--accent)}
-    .shelf{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-top:8px}
-    .btn-row{display:flex;gap:6px;flex-wrap:wrap}
-    #errbar{display:none;background:#2b0a0a;border:1px solid #4a1515;color:#ffdede;padding:8px 10px;border-radius:8px;margin-bottom:10px}
-    #loader{display:none;position:absolute;inset:0;background:rgba(3,8,12,0.55);place-items:center;border-radius:12px}
-    .viewer-wrap{position:relative}
-    .spinner{width:36px;height:36px;border:4px solid rgba(255,255,255,.2);border-top-color:var(--accent);border-radius:50%;animation:spin 1s linear infinite}
-    @keyframes spin{to{transform:rotate(360deg)}}
-    #c{width:100%;height:640px;display:block;background:#061621;border-radius:8px;border:1px solid var(--border)}
-    .two-col{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+    textarea { min-height:86px; resize:vertical; }
+    .row { display:flex; gap:8px; }
+    .row > * { flex:1 1 0; }
+    .btnbar { display:flex; gap:8px; margin-top:8px; }
+    button {
+      background:#1f2534; color:#e8f0ff; border:1px solid #2b3246; padding:9px 12px;
+      border-radius:10px; cursor:pointer; transition:transform .05s ease, background .15s ease;
+    }
+    button:hover { background:#252c40; }
+    button:active { transform: translateY(1px); }
+    button[disabled] { opacity:.5; cursor:not-allowed; }
+    .status { margin-top:8px; font-size:12px; color:#b9c3d9; min-height:1.4em; }
+    .sep { height:1px; background:#262a38; margin:16px 0; }
+    .thumbWrap { width:92%; max-width:960px; aspect-ratio:16/9; background:#0a0d13; border:1px dashed #283048; border-radius:12px; display:flex; align-items:center; justify-content:center; color:#3e465e; }
   </style>
 </head>
 <body>
-  <div id="app" class="app">
-    <div class="topbar">
-      <span id="authPill" class="pill">Auth: …</span>
-      <span id="statusPill" class="pill">Idle</span>
-      <span id="rootPill" class="pill">root: …</span>
-      <button id="refreshBtn" class="btn">Refresh</button>
-      <button id="toggleTools" class="btn">Hide Tools</button>
-    </div>
+  <div class="app">
+    <main class="left">
+      <!-- Your canvas/viewer goes here. The scenarios module should handle rendering. -->
+      <div class="thumbWrap">
+        <div>Viewer / Canvas area</div>
+      </div>
+    </main>
 
-    <div class="grid">
-      <!-- LEFT -->
-      <div class="col">
-        <div class="block">
-          <label for="scenarioSel">Scenario</label>
-          <div class="row">
-            <select id="scenarioSel" style="flex:1 1 auto"></select>
-            <button id="deleteScenario" class="btn" style="background:#331616;border-color:#5b2424;">Delete</button>
-          </div>
+    <aside class="right">
+      <h1>AI Controls</h1>
+
+      <div class="grp">
+        <label for="aiReturn">Return</label>
+        <select id="aiReturn">
+          <option value="photo" selected>Photo</option>
+          <option value="overlays">Overlays (transparent)</option>
+        </select>
+      </div>
+
+      <div class="grp row">
+        <div>
+          <label for="aiStyle">Style</label>
+          <select id="aiStyle">
+            <option value="realistic" selected>Realistic</option>
+            <option value="cinematic">Cinematic</option>
+            <option value="vivid">Vivid</option>
+            <option value="illustrative">Illustrative</option>
+          </select>
         </div>
-
-        <div id="thumbRow" class="thumb-row"></div>
-
-        <div id="tools" class="block">
-          <div class="row" style="justify-content:space-between;">
-            <h3 style="margin:0;">Overlays</h3>
-            <div class="btn-row">
-              <button class="btn" data-cat="fire">Fire</button>
-              <button class="btn" data-cat="smoke">Smoke</button>
-              <button class="btn" data-cat="people">People</button>
-              <button class="btn" data-cat="cars">Cars</button>
-              <button class="btn" data-cat="hazard">Hazard</button>
-            </div>
-          </div>
-          <div id="overlayShelf" class="shelf"></div>
-
-          <hr style="border:none;border-top:1px solid var(--border);margin:10px 0;"/>
-
-          <h3 style="margin:0 0 6px;">Brush</h3>
-          <div class="btn-row">
-            <button id="brushFire" class="btn">🔥 Fire</button>
-            <button id="brushSmoke" class="btn">💨 Smoke</button>
-            <button id="brushErase" class="btn">❌ Erase</button>
-            <button id="brushOff" class="btn">✋ Off</button>
-          </div>
-          <div class="row" style="margin-top:6px;">
-            <label for="brushSize" style="margin:0;">Size</label>
-            <input type="range" id="brushSize" min="40" max="300" value="120" style="flex:1 1 auto;">
-            <span id="brushSizeReadout" class="pill small">120 px</span>
-          </div>
-
-          <hr style="border:none;border-top:1px solid var(--border);margin:10px 0;"/>
-
-          <h3 style="margin:0 0 6px;">Text</h3>
-          <div class="btn-row">
-            <button id="addTextbox" class="btn">+ Text Box</button>
-            <button id="tbApply" class="btn">Apply</button>
-            <button id="tbDelete" class="btn" style="background:#331616;border-color:#5b2424;">Delete</button>
-          </div>
-          <div class="two-col" style="margin-top:6px;">
-            <textarea id="tbContent" placeholder="Text…"></textarea>
-            <div>
-              <label>Font size</label>
-              <input id="tbFont" type="number" value="24" />
-              <label>BG opacity (0–1)</label>
-              <input id="tbBgOpacity" type="text" value="0.6" />
-            </div>
-          </div>
-
-          <hr style="border:none;border-top:1px solid var(--border);margin:10px 0;"/>
-
-          <h3 style="margin:0 0 6px;">Selection</h3>
-          <div class="btn-row">
-            <button id="bringFront" class="btn">Bring Front</button>
-            <button id="sendBack" class="btn">Send Back</button>
-            <button id="flipSelH" class="btn">Flip H</button>
-            <button id="flipSelV" class="btn">Flip V</button>
-            <button id="deleteObj" class="btn" style="background:#331616;border-color:#5b2424;">Delete</button>
-          </div>
-
-          <hr style="border:none;border-top:1px solid var(--border);margin:10px 0;"/>
-
-          <h3 style="margin:0 0 6px;">Export & Save</h3>
-          <div class="btn-row">
-            <button id="exportPNG" class="btn">Export JPEG</button>
-            <button id="saveImage" class="btn">Save to Cloud</button>
-          </div>
-        </div>
-
-        <div class="block">
-          <h3 style="margin:0 0 6px;">Meta</h3>
-          <label>Title</label>
-          <input id="stopTitle" type="text" placeholder="Title…" />
-          <label>Caption</label>
-          <input id="stopCaption" type="text" placeholder="Caption…" />
-          <div class="two-col">
-            <div>
-              <label>Lat</label>
-              <input id="stopLat" type="text" />
-            </div>
-            <div>
-              <label>Lng</label>
-              <input id="stopLng" type="text" />
-            </div>
-          </div>
-          <label>Radius (m)</label>
-          <input id="stopRadius" type="number" min="5" max="1000" value="50" />
-          <div class="btn-row" style="margin-top:6px;">
-            <button id="useGPS" class="btn">Use GPS</button>
-            <button id="saveMeta" class="btn">Save Meta</button>
-            <span id="metaMsg" class="muted"></span>
-          </div>
+        <div>
+          <label for="aiStrength">Strength</label>
+          <input id="aiStrength" type="text" value="0.35" />
         </div>
       </div>
 
-      <!-- RIGHT -->
-      <div class="col viewer">
-        <div id="errbar"></div>
-        <div class="viewer-wrap">
-          <div id="loader"><div class="spinner"></div></div>
-          <canvas id="c" width="1600" height="900"></canvas>
-        </div>
-        <div class="row" style="margin-top:6px;">
-          <span class="pill small">Canvas:</span>
-          <span id="canvasInfo" class="muted">—</span>
-          <span style="flex:1 1 auto;"></span>
-          <div class="btn-row">
-            <button id="fit" class="btn">Fit</button>
-            <button id="zoomIn" class="btn">＋</button>
-            <button id="zoomOut" class="btn">－</button>
-            <button id="rotateL" class="btn">⟲</button>
-            <button id="rotateR" class="btn">⟳</button>
-          </div>
-        </div>
+      <div class="grp">
+        <label for="aiNotes">Prompt / Notes</label>
+        <textarea id="aiNotes" placeholder="Describe changes you'd like…"></textarea>
+      </div>
 
-        <div class="block">
-          <h3 style="margin:0 0 6px;">AI</h3>
-          <div class="two-col">
-            <div>
-              <label>Return</label>
-              <select id="aiReturn">
-                <option value="photo">Photo</option>
-                <option value="overlays">Overlays PNG</option>
-              </select>
-            </div>
-            <div>
-              <label>Style</label>
-              <select id="aiStyle">
-                <option value="realistic">Realistic</option>
-                <option value="dramatic">Dramatic</option>
-                <option value="training">Training</option>
-              </select>
-            </div>
-          </div>
-          <label>Notes</label>
-          <textarea id="aiNotes" placeholder="Describe changes, emphasis, constraints…"></textarea>
-          <div class="btn-row" style="margin-top:6px;">
-            <button id="aiPreview" class="btn">Preview</button>
-            <button id="aiSend" class="btn" style="background:#123c59;">Send to AI</button>
-            <button id="aiOpen" class="btn" disabled>Open Result</button>
-            <button id="aiAdd" class="btn" disabled>Add as Stop</button>
-          </div>
-          <div id="aiMsg" class="muted" style="margin-top:6px;">—</div>
+      <div class="btnbar">
+        <button id="aiPreview" type="button">Preview</button>
+        <button id="aiSend" type="button">Send to AI</button>
+      </div>
+      <div class="btnbar">
+        <button id="aiOpen" type="button" disabled>Open Result</button>
+        <button id="aiAdd" type="button" disabled>Add as New Stop</button>
+      </div>
+
+      <div id="aiMsg" class="status">AI ready</div>
+
+      <div class="sep"></div>
+
+      <div class="grp">
+        <label>Endpoint (optional override)</label>
+        <input id="aiEndpoint" type="text" placeholder="/.netlify/functions/ai-image" />
+        <div class="btnbar">
+          <button type="button" onclick="
+            (function(){
+              var v=document.getElementById('aiEndpoint').value.trim();
+              if(!v){ delete window.__AI_ENDPOINTS__; document.getElementById('aiMsg').textContent='Cleared custom endpoint'; return; }
+              window.__AI_ENDPOINTS__=[v];
+              document.getElementById('aiMsg').textContent='Using custom endpoint: '+v;
+            })();
+          ">Use Endpoint</button>
+          <button type="button" onclick="delete window.__AI_ENDPOINTS__; document.getElementById('aiMsg').textContent='Using default endpoints';">Reset</button>
         </div>
       </div>
-    </div>
+    </aside>
   </div>
 
-  <!-- Fabric.js -->
-  <script src="https://cdn.jsdelivr.net/npm/fabric@5.3.0/dist/fabric.min.js"></script>
+  <!-- ====================== SCRIPT LOADING (legacy, no modules) ====================== -->
 
-  <!-- Robust module boot -->
-  <script type="module">
-    (async () => {
-      const showErr = (msg) => {
-        const b = document.getElementById('errbar');
-        if (b) { b.style.display = 'block'; b.textContent = msg; }
-        console.error(msg);
-      };
-
-      // Generate path candidates from current location
-      const here = new URL('.', location.href);          // same dir
-      const parent = new URL('..', location.href);       // parent dir
-      const root = new URL('/', location.href);          // site root
-      // Common subfolder on your domain based on your error path:
-      const geo = new URL('/geophoto/', location.href);  // /geophoto/
-
-      const bases = [here, parent, root, geo];
-      const names = [
-        'scenarios.js',
-        'scenarios%20(1).js',
-        'scenarios (1).js'
+  <!-- (A) Try to load your scenarios file. If your file is named 'scenarios.js', change the src below accordingly.
+         This loader tries 'scenarios (1).js' first, then falls back to 'scenarios.js'. -->
+  <script>
+    (function(){
+      function loadScript(src, onload, onerror){
+        var s = document.createElement('script');
+        s.src = src; s.defer = true; s.onload = onload; s.onerror = onerror || function(){};
+        document.head.appendChild(s);
+      }
+      function tryLoadList(list, done){
+        (function next(i){
+          if (i>=list.length) return done(false);
+          loadScript(list[i], function(){ done(true, list[i]); }, function(){ next(i+1); });
+        })(0);
+      }
+      // URL-encoded name handles the space + parentheses
+      var candidates = [
+        "./scenarios%20(1).js",
+        "./scenarios.js"
       ];
-
-      async function tryImport(paths) {
-        let lastErr = null;
-        for (const p of paths) {
-          try {
-            // quick preflight to catch 404/HTML
-            const res = await fetch(p + (p.includes('?') ? '' : `?v=${Date.now()}`), { cache: 'no-store' });
-            if (!res.ok) { console.warn('[boot] 404', p); continue; }
-            const ct = res.headers.get('content-type') || '';
-            if (!/javascript|ecmascript|text\/plain/i.test(ct)) {
-              console.warn('[boot] wrong MIME', ct, 'for', p);
-              // still attempt to import; some hosts mislabel as text/plain
-            }
-            const mod = await import(p + (p.includes('?') ? '' : `?v=${Date.now()}`));
-            console.log('[boot] imported', p);
-            return { mod, path: p };
-          } catch (e) {
-            lastErr = e;
-            console.warn('[boot] import failed', p, e);
-          }
+      tryLoadList(candidates, function(ok, used){
+        if (!ok) {
+          console.warn("[html] Failed to load scenarios module from", candidates);
+        } else {
+          console.log("[html] Scenarios loaded:", used);
         }
-        throw lastErr || new Error('No module found');
-      }
-
-      // Build all candidate paths
-      const scenarioPaths = [];
-      for (const b of bases) {
-        for (const n of names) {
-          scenarioPaths.push(new URL(n, b).href);
-        }
-        // Also try a js/ subfolder under each base
-        for (const n of names) {
-          scenarioPaths.push(new URL('js/' + n, b).href);
-        }
-      }
-
-      let scenariosMod, usedScenarioPath;
-      try {
-        const res = await tryImport(scenarioPaths);
-        scenariosMod = res.mod;
-        usedScenarioPath = res.path;
-      } catch (e) {
-        showErr('Could not import scenarios module. Last error: ' + (e?.message || String(e)));
-        return;
-      }
-
-      const { wireScenarioUI, bootScenarios } = scenariosMod;
-      if (typeof wireScenarioUI !== 'function' || typeof bootScenarios !== 'function') {
-        showErr(`Module loaded from "${usedScenarioPath}" but missing exports wireScenarioUI/bootScenarios.`);
-        return;
-      }
-
-      // ai-upload
-      const aiNames = ['ai-upload.js', 'js/ai-upload.js'];
-      const aiPaths = [].concat(
-        ...[here, parent, root, geo].map(base => aiNames.map(n => new URL(n, base).href))
-      );
-      let aiMod;
-      try {
-        aiMod = (await tryImport(aiPaths)).mod;
-      } catch (e) {
-        showErr('Failed to import ai-upload.js: ' + (e?.message || String(e)));
-        return;
-      }
-      if (typeof aiMod.wireAI !== 'function') {
-        showErr('ai-upload.js loaded but missing wireAI() export.');
-        return;
-      }
-
-      // firebase-core (optional preflight to surface path errors early)
-      const fbNames = ['firebase-core.js', 'js/firebase-core.js'];
-      const fbPaths = [].concat(
-        ...[here, parent, root, geo].map(base => fbNames.map(n => new URL(n, base).href))
-      );
-      try {
-        await tryImport(fbPaths);
-      } catch (e) {
-        showErr('Failed to import firebase-core.js: ' + (e?.message || String(e)));
-        return;
-      }
-
-      // Boot
-      try {
-        await bootScenarios();
-        wireScenarioUI();
-        aiMod.wireAI();
-      } catch (e) {
-        showErr('Boot failed: ' + (e?.message || String(e)));
-      }
+      });
     })();
+  </script>
+
+  <!-- (B) Load the legacy AI client (no modules). It exposes window.wireAI and auto-inits. -->
+  <script defer src="./ai-upload.legacy.js"></script>
+
+  <!-- (C) (Optional) Kick the wiring once DOM is ready (legacy file also auto-wires). -->
+  <script>
+    document.addEventListener('DOMContentLoaded', function(){
+      if (window.wireAI) window.wireAI();
+    });
   </script>
 </body>
 </html>
