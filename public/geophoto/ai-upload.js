@@ -1,12 +1,14 @@
-// ai-upload.js — exports wireAI(), attaches to existing scenarios, robust result parsing
-// - Accepts { ok, image, mode } where `image` may be absolute URL, relative URL, dataURL, or raw base64
-// - Pings Netlify endpoint first so a network call is always visible
-// - Auto-selects first stop if none selected, verbose status
+// ai-upload.js — streaming-aware "Send to AI"
+// - Reuses window.__SCENARIOS so state stays consistent
+// - Exports wireAI() and auto-inits safely
+// - Streams Netlify responses (SSE/NDJSON/text) and parses JSON as soon as it appears
+// - Normalizes result: absolute/relative URL, dataURL, raw base64
+// - Verbose UI status via #aiMsg or scenarios.setAIStatus
 
 import { ensureAuthed, uploadSmallText, getFirebase } from "./firebase-core.js";
 import { ref as stRef, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-storage.js";
 
-/* ---------------- DOM + status helpers ---------------- */
+/* ---------- DOM + status ---------- */
 function $(id){ return document.getElementById(id); }
 let __scn = (typeof window !== "undefined" && window.__SCENARIOS) || null;
 
@@ -17,20 +19,17 @@ function updateStatus(text){
 }
 function labelBtnWired(btn){ try{ if (btn){ btn.dataset.wired="1"; btn.title="wired"; } }catch{} }
 
-/* ---------------- obtain scenarios instance (reuse first, then import) ---------------- */
+/* ---------- scenarios instance (reuse first, then import) ---------- */
 async function loadScenariosModule(){
   if (__scn) return __scn;
-
   if (typeof window !== "undefined" && window.__SCENARIOS){
     __scn = window.__SCENARIOS;
     console.log("[ai] attached to window.__SCENARIOS");
     return __scn;
   }
-
   const bases = [ new URL(".", import.meta.url), new URL("./", location.href) ];
   const names = ["scenarios.js","scenarios (1).js","scenarios%20(1).js"]; // no cache-busting to avoid forking module
   let lastErr=null;
-
   for (const b of bases){
     for (const n of names){
       const u = new URL(n, b).href;
@@ -54,7 +53,7 @@ async function loadScenariosModule(){
   return null;
 }
 
-/* ---------------- utils ---------------- */
+/* ---------- utils ---------- */
 function withTimeout(promise, ms, label="timeout"){
   return Promise.race([
     promise,
@@ -72,7 +71,7 @@ async function uploadToInbox(blob, ext="jpg"){
   return await getDownloadURL(stRef(storage, path));
 }
 
-/* ---------------- endpoint discovery & ping ---------------- */
+/* ---------- endpoints & ping ---------- */
 const DEFAULT_ENDPOINTS = [
   "/.netlify/functions/ai-image",
   "/api/ai-image",
@@ -104,17 +103,14 @@ async function pingEndpoints(timeoutMs=4000){
   return null;
 }
 
-/* ---------------- ensure a stop is selected (auto-open #0) ---------------- */
+/* ---------- ensure a stop is selected (auto-open #0) ---------- */
 async function ensureStopSelectedOrAutoOpen(){
   if (!__scn) await loadScenariosModule();
   if (!__scn) { updateStatus("No scenarios module — cannot resolve guide image."); return false; }
-
   const cur = __scn.getCurrent?.();
   const idx = __scn.getStopIndex?.();
-
   if (!cur){ updateStatus("Select a scenario from the dropdown first."); return false; }
   if (idx != null && idx >= 0) return true;
-
   const stops = cur._stops;
   if (Array.isArray(stops) && stops.length){
     updateStatus("No stop selected — opening first photo…");
@@ -125,7 +121,7 @@ async function ensureStopSelectedOrAutoOpen(){
   return false;
 }
 
-/* ---------------- guide building (URL-first) ---------------- */
+/* ---------- guide building (URL-first) ---------- */
 async function guessGuideURLFast(){
   const live = __scn?.getLastLoadedBaseURL?.();
   if (live && (/^https?:\/\//i.test(live) || live.startsWith("data:") || live.startsWith("blob:"))) return live;
@@ -144,98 +140,151 @@ async function buildGuideFast({ wantComposite }){
   return { guideURL, compositeURL };
 }
 
-/* ---------------- Result normalization ---------------- */
+/* ---------- result normalization ---------- */
 function looksLikeBase64Image(s){
   if (typeof s !== "string" || s.length < 32) return false;
-  // Common starts: JPEG "/9j/", PNG "iVBORw0KGgo", GIF "R0lGOD", WebP "UklGR"
   return s.startsWith("/9j/") || s.startsWith("iVBORw0") || s.startsWith("R0lGOD") || s.startsWith("UklGR");
 }
-
-// Accepts many shapes and resolves to either a final absolute URL or a dataURL
 async function normalizeAIResponse(json, endpoint){
   const ep = endpoint || location.origin;
-
-  // 1) Direct candidates (strings or nested objects)
   const pool = [];
   const push = (v)=>{ if (v==null) return; if (typeof v === "string" || (typeof v === "object" && v.url)) pool.push(v); };
-
-  push(json.url);
-  push(json.result);
-  push(json.output);
-  push(json.image_url);
-  push(json.image);
-  push(json.href);
-  push(json.link);
-  push(json.compositeURL);
-  push(json.composited_url);
-
-  // If `image` was an object like {url:"...", mime:"image/png"}
+  push(json.url); push(json.result); push(json.output); push(json.image_url); push(json.image); push(json.href); push(json.link);
+  push(json.compositeURL); push(json.composited_url);
   for (let i=0;i<pool.length;i++){
     const item = pool[i];
     const val = (typeof item === "object" && item.url) ? item.url : item;
     if (typeof val !== "string") continue;
-
     if (/^https?:\/\//i.test(val)) return { finalURL: val };
     if (val.startsWith("data:image/")) return { dataURL: val };
-
-    // relative path?
     if (val.startsWith("/") || val.startsWith("./") || val.startsWith("../")){
       try{ return { finalURL: new URL(val, ep).href }; }catch{}
     }
-
-    // raw base64?
     if (looksLikeBase64Image(val)) {
       const mime = (typeof item === "object" && item.mime) ? item.mime : "image/jpeg";
       return { dataURL: `data:${mime};base64,${val}` };
     }
   }
-
-  // 2) Explicit base64/data keys
   const b64 = json.dataURL || json.data_url || json.base64 || json.b64 || json.imageBase64 || json.image_b64 || json.output_b64;
   if (typeof b64 === "string" && b64.length){
     if (b64.startsWith("data:image/")) return { dataURL: b64 };
     const mime = json.mime || json.contentType || "image/jpeg";
     return { dataURL: `data:${mime};base64,${b64}` };
   }
-
-  // 3) Some functions reply {ok:true} only (no asset) — treat as error
   return null;
 }
 
-/* ---------------- AI POST ---------------- */
+/* ---------- streaming-aware POST ---------- */
 async function postAI(payload, preferredUrl){
   const endpoints = preferredUrl ? [preferredUrl, ...getCandidateEndpoints().filter(u=>u!==preferredUrl)] : getCandidateEndpoints();
-  const headers = { "content-type":"application/json", "accept":"application/json" };
+  const headers = { "content-type":"application/json", "accept":"application/json,text/event-stream,text/plain,application/x-ndjson" };
   const body = JSON.stringify(payload);
 
   for (const url of endpoints){
     try{
       console.log("[ai] POST →", url, { keys:Object.keys(payload) });
-      const ctl=new AbortController(); const tid=setTimeout(()=>ctl.abort(), 20000);
-      const r = await fetch(url, { method:"POST", headers, body, signal:ctl.signal, cache:"no-store", mode:"cors", credentials:"omit" });
-      clearTimeout(tid);
 
-      const ct = r.headers.get("content-type") || "";
-      const text = await r.text();
+      // overall hard timeout
+      const ctl = new AbortController();
+      const hardMs = 120000; // 2 min
+      const hardTimer = setTimeout(()=>ctl.abort(), hardMs);
+
+      const r = await fetch(url, { method:"POST", headers, body, signal:ctl.signal, cache:"no-store", mode:"cors", credentials:"omit" });
+      const ct = (r.headers.get("content-type") || "").toLowerCase();
+      const te = (r.headers.get("transfer-encoding") || "").toLowerCase();
+      const cl = r.headers.get("content-length") || "";
 
       if (!r.ok){
+        clearTimeout(hardTimer);
+        const text = await r.text().catch(()=> "");
         let msg = text; try{ msg = JSON.stringify(JSON.parse(text)); }catch{}
         throw Object.assign(new Error(`${r.status} ${msg.slice(0,800)}`), { status:r.status, url });
       }
-      if (ct.startsWith("image/")) throw new Error("Function returned binary image. Return JSON { url: 'https://...' }");
 
-      let json = {};
-      try{ json = JSON.parse(text); }catch{}
-      return { endpoint:url, json };
+      // Fast path: non-streaming JSON with content-length
+      if (ct.includes("application/json") && cl && !te && r.body == null){
+        clearTimeout(hardTimer);
+        const text = await withTimeout(r.text(), 30000, "json/timeout");
+        let json={}; try{ json = JSON.parse(text); }catch{}
+        return { endpoint:url, json };
+      }
+
+      // Streaming / unknown-length path
+      updateStatus("AI: streaming…");
+      const reader = r.body?.getReader?.();
+      if (!reader){
+        // Fallback: just read with a timeout
+        const text = await withTimeout(r.text(), 60000, "stream/timeout");
+        clearTimeout(hardTimer);
+        let json={}; try{ json = JSON.parse(text); }catch{}
+        return { endpoint:url, json };
+      }
+
+      const decoder = new TextDecoder();
+      let buf = "";
+      let lastProgressAt = Date.now();
+      const idleMs = 15000; // if no bytes for 15s, consider stalled → abort
+      let idleTimer = setTimeout(()=>ctl.abort(), idleMs);
+
+      function resetIdle(){ clearTimeout(idleTimer); idleTimer = setTimeout(()=>ctl.abort(), idleMs); }
+
+      while (true){
+        const { done, value } = await reader.read();
+        resetIdle();
+        if (done) break;
+        buf += decoder.decode(value, { stream:true });
+
+        // Process chunk as lines (SSE/NDJSON/plain)
+        const lines = buf.split(/\r?\n/);
+        buf = lines.pop(); // remainder
+
+        for (const raw of lines){
+          const line = raw.replace(/^data:\s*/,'').trim(); // handle "data: {...}"
+          if (!line) continue;
+
+          // Progress hints
+          if (/^\{/.test(line) === false){
+            if (Date.now() - lastProgressAt > 750){
+              updateStatus("AI: " + line.slice(0,120));
+              lastProgressAt = Date.now();
+            }
+            continue;
+          }
+
+          // Try parse JSON
+          try{
+            const j = JSON.parse(line);
+            if (j.status || j.progress != null){
+              const pct = (typeof j.progress === "number") ? ` ${Math.round(j.progress*100)}%` : "";
+              updateStatus(`AI: ${j.status || "working"}${pct}`);
+            }
+            // If it already contains an image/url key, we're done early
+            if (j.image || j.url || j.result || j.output || j.dataURL || j.data_url || j.image_url || j.compositeURL){
+              clearTimeout(hardTimer); clearTimeout(idleTimer);
+              try{ await reader.cancel(); }catch{}
+              return { endpoint:url, json:j };
+            }
+          }catch{ /* ignore non-JSON lines */ }
+        }
+      }
+
+      // Stream ended: try to parse any leftover buffer as JSON
+      clearTimeout(hardTimer); clearTimeout(idleTimer);
+      const tail = (buf || "").trim();
+      if (tail){
+        try{ return { endpoint:url, json: JSON.parse(tail) }; }catch{}
+      }
+      throw new Error("AI stream ended without JSON result");
     }catch(e){
       console.warn("[ai] POST failed", url, e?.message||e);
-      // try next
+      // try next endpoint
+      updateStatus("AI endpoint failed, trying next…");
     }
   }
   throw new Error("All AI endpoints failed.");
 }
 
-/* ---------------- main wiring ---------------- */
+/* ---------- main wiring ---------- */
 function bindButtons(){
   const btnPreview = $("aiPreview");
   const btnSend    = $("aiSend");
@@ -306,8 +355,8 @@ function bindButtons(){
       };
 
       const res = await postAI(payload, ping?.url);
-      const norm = await normalizeAIResponse(res.json || {}, res.endpoint);
 
+      const norm = await normalizeAIResponse(res.json || {}, res.endpoint);
       if (!norm){
         const keys = Object.keys(res.json || {}).join(", ") || "(no keys)";
         throw new Error("AI did not return a usable image. Received keys: " + keys);
@@ -321,7 +370,6 @@ function bindButtons(){
         const ext  = norm.dataURL.includes("png") ? "png" : "jpg";
         finalURL = await uploadToInbox(blob, ext);
       }
-
       if (!finalURL) throw new Error("Could not resolve final image URL.");
 
       if (btnOpen){ btnOpen.disabled=false; btnOpen.onclick=()=> window.open(finalURL,"_blank"); }
@@ -341,7 +389,7 @@ function bindButtons(){
   updateStatus("AI ready");
 }
 
-/* ---------------- export + auto-init ---------------- */
+/* ---------- export + auto-init ---------- */
 export function wireAI(){ bindButtons(); }
 function start(){ try{ bindButtons(); }catch(e){ console.error("[ai] bind error", e); } }
 if (document.readyState === "loading"){ document.addEventListener("DOMContentLoaded", start, { once:true }); }
