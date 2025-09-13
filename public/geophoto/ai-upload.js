@@ -1,41 +1,49 @@
 // functions/ai-image.js  (CommonJS / Netlify Functions)
-// Minimal, reliable handler to unblock the client.
-// - Handles CORS + OPTIONS preflight
-// - Accepts { dataUrl, image, guideURL, prompt, strength, ping }
-// - Returns ONE final JSON with an `image` the client can display
+// Robust: handles CORS, OPTIONS preflight, GET ping, POST (echo image or dataUrl)
+// Returns ONE final JSON with an `image` so your UI can finish.
 
-const CORS_HEADERS = {
+const CORS = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Methods": "POST, OPTIONS",
+  "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
   "Access-Control-Allow-Headers": "Content-Type, X-Requested-With, X-AI-Ping",
   "Access-Control-Max-Age": "86400"
 };
 
-function json(bodyObj, statusCode = 200, extra = {}) {
+function reply(statusCode, obj) {
   return {
     statusCode,
-    headers: { ...CORS_HEADERS, "Content-Type": "application/json", ...extra },
-    body: JSON.stringify(bodyObj)
+    headers: { ...CORS, "Content-Type": "application/json" },
+    body: JSON.stringify(obj)
   };
 }
 
 exports.handler = async (event) => {
-  // Preflight
+  // CORS preflight
   if (event.httpMethod === "OPTIONS") {
-    return { statusCode: 204, headers: CORS_HEADERS };
+    return { statusCode: 204, headers: CORS };
   }
 
-  // Only POST
+  // Lightweight GET ping in the browser:
+  // https://YOURDOMAIN/.netlify/functions/ai-image?ping=1
+  if (event.httpMethod === "GET") {
+    const url = new URL(event.rawUrl || `http://x${event.path}`);
+    if (url.searchParams.get("ping")) {
+      return reply(200, { ok: true, pong: true, method: "GET", t: Date.now() });
+    }
+    // For plain GET without ping, show method not allowed so it’s clear it exists.
+    return reply(405, { ok: false, error: "Use POST for AI; GET ?ping=1 for healthcheck" });
+  }
+
   if (event.httpMethod !== "POST") {
-    return json({ ok: false, error: "Method not allowed" }, 405);
+    return reply(405, { ok: false, error: "Method not allowed" });
   }
 
-  // Ping path
+  // Parse body (tolerant)
+  let body = {};
+  try { body = JSON.parse(event.body || "{}"); } catch {}
   const pingHeader = event.headers && (event.headers["x-ai-ping"] || event.headers["X-AI-Ping"]);
-  let body;
-  try { body = JSON.parse(event.body || "{}"); } catch { body = {}; }
   if (pingHeader || body.ping === true) {
-    return json({ ok: true, pong: true, t: Date.now() }, 200);
+    return reply(200, { ok: true, pong: true, method: "POST", t: Date.now() });
   }
 
   try {
@@ -47,11 +55,11 @@ exports.handler = async (event) => {
       null;
 
     if (!chosen) {
-      return json({ ok: false, error: "No image provided (expected dataUrl, image, or guideURL)" }, 400);
+      return reply(400, { ok: false, error: "No image provided (expected dataUrl, image, or guideURL)" });
     }
 
-    // Echo a usable image now. Replace with your real AI pipeline later.
-    return json({
+    // ✅ Echo a usable image now. Replace with your real AI pipeline later.
+    return reply(200, {
       ok: true,
       image: chosen,
       mode: "photo",
@@ -60,10 +68,10 @@ exports.handler = async (event) => {
         hasGuideURL: !!guideURL,
         hasImage: !!image,
         prompt: prompt || "",
-        strength: (typeof strength === "number") ? strength : null
+        strength: typeof strength === "number" ? strength : null
       }
-    }, 200);
+    });
   } catch (e) {
-    return json({ ok: false, error: e && (e.message || String(e)) }, 500);
+    return reply(500, { ok: false, error: e && (e.message || String(e)) });
   }
 };
