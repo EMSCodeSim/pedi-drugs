@@ -1,80 +1,90 @@
-// ai-upload.js
-// Handles the AI panel: Preview / Send / Open / Add
-// Works with scenarios.js + firebase-core.js (split-file setup)
+// ai-upload.js — robust AI wiring (URL-first payload + detailed errors)
 
-import { ensureAuthed, uploadSmallText } from "./firebase-core.js";
+import { ensureAuthed, uploadSmallText, getFirebase } from "./firebase-core.js";
 import {
   getGuideImageURLForCurrentStop,
   getCompositeDataURL,
-  saveResultBlobToStorage,
   addResultAsNewStop,
   setAIStatus,
-  // hasOverlays is optional; if not exported we soft-fallback below
-  hasOverlays as _hasOverlaysOptional
+  hasOverlays as _hasOverlays,
+  getCurrent
 } from "./scenarios.js";
+import { ref as stRef, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-storage.js";
 
-const AI_PRIMARY = "/api/ai-image";
+const AI_PRIMARY  = "/api/ai-image";
 const AI_FALLBACK = "/.netlify/functions/ai-image";
 
-// ---------- helpers ----------
 function $(id){ return document.getElementById(id); }
-function hasOverlaysSafe(){
-  try { return typeof _hasOverlaysOptional === "function" ? _hasOverlaysOptional() : false; }
-  catch { return false; }
-}
-async function toBlobFromDataURL(dataURL){
-  const res = await fetch(dataURL);
-  return await res.blob();
-}
-function pick(val, fallback){ return (val===undefined || val===null || val==="") ? fallback : val; }
+function hasOverlaysSafe(){ try { return !!_hasOverlays(); } catch { return false; } }
+function pick(v, d){ return (v===undefined || v===null || v==="") ? d : v; }
 
-async function postAI(payload) {
-  const headers = { "content-type": "application/json" };
+async function toBlobFromDataURL(dataURL){ const r = await fetch(dataURL); return await r.blob(); }
+
+// Upload a blob to a temp “inbox” path so we can pass a URL to the AI function
+async function uploadToInbox(blob, ext = "jpg"){
+  const { storage } = getFirebase();
+  const cur = getCurrent();
+  const id = cur?.id || "scratch";
+  const ts = Date.now();
+  const path = `scenarios/${id}/ai/inbox/${ts}.${ext}`;
+  await uploadBytes(stRef(storage, path), blob, { contentType: ext==="png" ? "image/png" : "image/jpeg", cacheControl: "no-store" });
+  return await getDownloadURL(stRef(storage, path));
+}
+
+// Prefer URL payloads (smaller, avoids function body size limits)
+async function buildGuide({ wantComposite }){
+  // Always provide a guideURL
+  const guideURL = await getGuideImageURLForCurrentStop();
+
+  // Optionally also provide a compositeURL (uploaded preview of canvas) if possible
+  let compositeURL = null;
+  if (wantComposite) {
+    try {
+      const dataURL = await getCompositeDataURL(1280, 0.92);
+      const blob = await toBlobFromDataURL(dataURL);
+      compositeURL = await uploadToInbox(blob, "jpg");
+    } catch {
+      // Canvas might be tainted (or user didn’t edit) — that’s fine, we’ll just send guideURL
+    }
+  }
+  return { guideURL, compositeURL };
+}
+
+// POST helper that shows detailed error text instead of just “400”
+async function postAI(payload){
+  const headers = { "content-type": "application/json", "accept": "application/json" };
   const body = JSON.stringify(payload);
 
-  // Try primary, then fallback
-  let r;
-  try {
-    r = await fetch(AI_PRIMARY, { method: "POST", headers, body });
-    if (!r.ok) throw new Error("primary " + r.status);
-  } catch (e) {
-    r = await fetch(AI_FALLBACK, { method: "POST", headers, body });
-    if (!r.ok) throw new Error("fallback " + r.status);
-  }
+  const tryEndpoint = async (url) => {
+    const r = await fetch(url, { method: "POST", headers, body });
+    const ct = r.headers.get("content-type") || "";
+    const text = await r.text(); // read once
 
-  // If the function returns an image directly, capture as blob
-  const ct = r.headers.get("content-type") || "";
-  if (ct.startsWith("image/")) {
-    const blob = await r.blob();
-    return { type: "image", blob };
-  }
-
-  // Otherwise expect JSON with at least { url } or { dataURL }
-  const j = await r.json().catch(() => ({}));
-  return { type: "json", json: j };
-}
-
-// Try a few “safe” ways to get something we can send the AI:
-// - Prefer guide image URL (download URL from storage).
-// - Optionally composite of current canvas (if not cross-origin tainted).
-async function buildGuide({ wantComposite }) {
-  try {
-    if (wantComposite) {
-      // getCompositeDataURL throws if canvas is tainted (we handle below)
-      const dataURL = await getCompositeDataURL(1600, 0.95);
-      const blob = await toBlobFromDataURL(dataURL);
-      return { kind: "composite", blob, dataURL };
+    if (!r.ok) {
+      // try to surface JSON error messages if any
+      let errMsg = text;
+      try { errMsg = JSON.stringify(JSON.parse(text)); } catch {}
+      throw new Error(`${url} ${r.status} ${errMsg.slice(0, 800)}`);
     }
-  } catch (e) {
-    // Fall through to guide URL path
-  }
 
-  // Fallback: a direct guide image URL (doesn’t taint canvas)
-  const guideURL = await getGuideImageURLForCurrentStop();
-  return { kind: "guideURL", url: guideURL };
+    if (ct.startsWith("image/")) {
+      // Convert previously-read text back into a Blob is tricky; instead, re-fetch the URL via a signed redirect if provided.
+      // Most functions won’t inline binary with text path. If yours does, adapt here to stream the response instead of reading text.
+      throw new Error("Function returned image with text body; please return JSON {url} or stream the image.");
+    }
+
+    try { return { type: "json", json: JSON.parse(text) }; }
+    catch { return { type: "json", json: {} }; }
+  };
+
+  try {
+    return await tryEndpoint(AI_PRIMARY);
+  } catch (e1) {
+    // fall back
+    return await tryEndpoint(AI_FALLBACK);
+  }
 }
 
-// ---------- main wiring ----------
 export function wireAI(){
   const btnPreview = $("aiPreview");
   const btnSend    = $("aiSend");
@@ -82,34 +92,27 @@ export function wireAI(){
   const btnAdd     = $("aiAdd");
 
   if (!btnPreview || !btnSend || !btnOpen || !btnAdd) {
-    console.warn("[ai-upload] missing AI buttons in DOM");
+    console.warn("[ai-upload] Missing buttons");
     return;
   }
 
-  // initial state
   btnOpen.disabled = true;
   btnAdd.disabled  = true;
 
   btnPreview.onclick = async () => {
     try {
       await ensureAuthed();
-      // lightweight healthcheck write (optional)
-      try {
-        await uploadSmallText(`healthchecks/ai_preview_${Date.now()}.txt`, "ok");
-      } catch {}
+      try { await uploadSmallText(`healthchecks/ai_preview_${Date.now()}.txt`, "ok"); } catch {}
       const kind  = $("aiReturn")?.value || "photo";
       const style = $("aiStyle")?.value  || "realistic";
       const notes = $("aiNotes")?.value  || "";
-      const overlayFlag = hasOverlaysSafe();
-
-      setAIStatus(`Preview: return=${kind}, style=${style}, overlays=${overlayFlag ? "yes" : "no"}${notes ? " | notes ✓" : ""}`);
+      setAIStatus(`Preview ready • return=${kind} • style=${style}${notes ? " • notes ✓" : ""}`);
     } catch (e) {
       setAIStatus("Preview failed: " + (e?.message || e));
     }
   };
 
   btnSend.onclick = async () => {
-    // guard against double clicks
     btnSend.disabled = true;
     btnOpen.disabled = true;
     btnAdd.disabled  = true;
@@ -118,73 +121,69 @@ export function wireAI(){
       await ensureAuthed();
 
       const kind  = $("aiReturn")?.value || "photo";      // "photo" | "overlays"
-      const style = $("aiStyle")?.value  || "realistic";  // "realistic" | "dramatic" | "training"
+      const style = $("aiStyle")?.value  || "realistic";
       const notes = $("aiNotes")?.value  || "";
-
-      // Build “guide” material:
-      // - If kind=photo, we prefer a local composite (if allowed), else guide URL
-      // - If kind=overlays, we only pass a guide URL + intent (server should return transparent PNG)
       const wantComposite = (kind === "photo");
+
       setAIStatus("Preparing guide…");
-      const guide = await buildGuide({ wantComposite });
+      const { guideURL, compositeURL } = await buildGuide({ wantComposite });
 
-      // Construct payload for the function (keep this generic & tolerant)
+      // Build a very tolerant payload (lots of synonyms)
       const payload = {
-        returnType: kind,         // "photo" or "overlays"
-        style: style,             // stylistic hint
-        notes: pick(notes, ""),   // free text notes
-        hasOverlays: !!hasOverlaysSafe()
-      };
+        // canonical
+        returnType: kind,                // "photo" | "overlays"
+        style,
+        notes: pick(notes, ""),
+        hasOverlays: hasOverlaysSafe(),
 
-      if (guide.kind === "guideURL") {
-        payload.guideURL = guide.url;
-      } else if (guide.kind === "composite") {
-        // Send as base64 to keep a single POST (avoids separate upload permissioning)
-        const b64 = await new Promise((resolve, reject)=>{
-          const reader = new FileReader();
-          reader.onerror = reject;
-          reader.onloadend = () => resolve(String(reader.result).split(",")[1] || "");
-          reader.readAsDataURL(guide.blob);
-        });
-        payload.compositeBase64 = b64; // image/jpeg base64
-      }
+        // synonyms many server funcs accept
+        return: kind,
+        mode: kind === "overlays" ? "overlays" : "photo",
+        overlaysOnly: kind === "overlays",
+        transparent: kind === "overlays",
+        style_preset: style,
+        prompt: pick(notes, ""),
+
+        // guide URL (many aliases)
+        guideURL, guideUrl: guideURL, imageURL: guideURL, image_url: guideURL,
+        input: guideURL, reference: guideURL, src: guideURL,
+
+        // optional composite URL (preview of canvas)
+        compositeURL,
+        composite_url: compositeURL
+      };
 
       setAIStatus("Contacting AI…");
       const res = await postAI(payload);
 
-      // Interpret the response
-      let finalURL = null;
+      // Expect JSON with a result URL or dataURL
+      const j = res.json || {};
+      const url = j.url || j.result || j.image || j.output || j.image_url || j.composited_url || j.compositeURL || null;
+      const dataURL = j.dataURL || j.data_url || null;
 
-      if (res.type === "image") {
-        // Image blob directly returned → upload to storage for a permanent URL
-        setAIStatus("Uploading result…");
-        const url = await saveResultBlobToStorage(res.blob);
+      let finalURL = null;
+      if (url && /^https?:\/\//i.test(url)) {
         finalURL = url;
-      } else if (res.type === "json") {
-        const j = res.json || {};
-        // Prefer explicit url; else accept dataURL (upload it); else error
-        if (j.url && /^https?:\/\//i.test(j.url)) {
-          finalURL = j.url;
-        } else if (j.dataURL && j.dataURL.startsWith("data:image/")) {
-          const blob = await toBlobFromDataURL(j.dataURL);
-          finalURL = await saveResultBlobToStorage(blob);
-        } else if (j.result && /^https?:\/\//i.test(j.result)) {
-          finalURL = j.result;
-        } else {
-          throw new Error("AI did not return a result URL.");
-        }
+      } else if (dataURL && dataURL.startsWith("data:image/")) {
+        // Upload dataURL to storage to get a durable URL
+        const blob = await toBlobFromDataURL(dataURL);
+        finalURL = await uploadToInbox(blob, dataURL.includes("png") ? "png" : "jpg");
+      } else {
+        throw new Error("AI did not return a URL. Received: " + JSON.stringify(j).slice(0, 500));
       }
 
-      // Enable buttons; allow user to open/add the result
       btnOpen.disabled = false;
       btnAdd.disabled  = false;
       btnOpen.onclick  = () => window.open(finalURL, "_blank");
-      btnAdd.onclick   = async () => { try { await addResultAsNewStop(finalURL); setAIStatus("Result added as a new stop ✓"); } catch (e) { setAIStatus("Add failed: " + (e?.message||e)); } };
+      btnAdd.onclick   = async () => {
+        try { await addResultAsNewStop(finalURL); setAIStatus("Result added as a new stop ✓"); }
+        catch (e) { setAIStatus("Add failed: " + (e?.message || e)); }
+      };
 
       setAIStatus("AI result ready ✓");
     } catch (e) {
       console.error("[ai-upload] send failed", e);
-      setAIStatus("Send failed: " + (e?.message || e));
+      setAIStatus(String(e?.message || e));
     } finally {
       btnSend.disabled = false;
     }
