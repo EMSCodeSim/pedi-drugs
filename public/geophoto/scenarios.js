@@ -1,4 +1,4 @@
-// scenarios.js — robust scenario loader + editor wiring (no syntax gotchas)
+// scenarios.js — robust scenario loader + editor wiring
 
 import {
   getFirebase,
@@ -715,8 +715,8 @@ function wireTextTools(){
       cornerStyle:"circle", transparentCorners:false
     });
     f.add(tb); f.setActiveObject(tb); f.requestRenderAll();
-    if (tContent) tContent.value = tb.text;
-    if (tFont) tFont.value = String(tb.fontSize || 24);
+    if (tContent) tContent.value = "New note";
+    if (tFont) tFont.value = "24";
     if (tBg) tBg.value = "0.6";
   };
 
@@ -965,3 +965,23 @@ export async function bootScenarios(){
   const uid = (await ensureAuthed()).uid || "anon";
   setAuthPill("anon ✔ (" + String(uid).slice(0,8) + ")");
 }
+
+/* ---------------- expose a single shared instance to avoid duplicate state ---------------- */
+const __SCENARIOS_API__ = {
+  // status + UI helpers
+  setAIStatus, setAuthPill, setStatus, setRootPill,
+  // canvas + export
+  f, isCanvasTainted, getLastLoadedBaseURL, getCompositeDataURL,
+  // scenario + stop control
+  getCurrent, getStopIndex, loadStop, hasOverlays,
+  // guide / results
+  getGuideImageURLForCurrentStop, saveResultBlobToStorage, addResultAsNewStop,
+  // boot + ui
+  wireScenarioUI, bootScenarios
+};
+
+if (typeof window !== "undefined") {
+  window.__SCENARIOS = __SCENARIOS_API__;
+}
+
+export default __SCENARIOS_API__;
