@@ -1,9 +1,10 @@
-// ai-upload.js — streaming-aware "Send to AI"
-// - Reuses window.__SCENARIOS so state stays consistent
-// - Exports wireAI() and auto-inits safely
-// - Streams Netlify responses (SSE/NDJSON/text) and parses JSON as soon as it appears
+// ai-upload.js — streaming-aware + sends `image` key
+// - Reuses window.__SCENARIOS (no duplicate state)
+// - Exports wireAI() and also auto-inits
+// - Adds `image: guideURL` to payload (common server expectation)
+// - Detects empty/quiet streams (≤6s no bytes) and surfaces a clear error
+// - Prints response headers + first bytes for debugging
 // - Normalizes result: absolute/relative URL, dataURL, raw base64
-// - Verbose UI status via #aiMsg or scenarios.setAIStatus
 
 import { ensureAuthed, uploadSmallText, getFirebase } from "./firebase-core.js";
 import { ref as stRef, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-storage.js";
@@ -19,7 +20,7 @@ function updateStatus(text){
 }
 function labelBtnWired(btn){ try{ if (btn){ btn.dataset.wired="1"; btn.title="wired"; } }catch{} }
 
-/* ---------- scenarios instance (reuse first, then import) ---------- */
+/* ---------- scenarios instance ---------- */
 async function loadScenariosModule(){
   if (__scn) return __scn;
   if (typeof window !== "undefined" && window.__SCENARIOS){
@@ -28,7 +29,7 @@ async function loadScenariosModule(){
     return __scn;
   }
   const bases = [ new URL(".", import.meta.url), new URL("./", location.href) ];
-  const names = ["scenarios.js","scenarios (1).js","scenarios%20(1).js"]; // no cache-busting to avoid forking module
+  const names = ["scenarios.js","scenarios (1).js","scenarios%20(1).js"];
   let lastErr=null;
   for (const b of bases){
     for (const n of names){
@@ -49,8 +50,7 @@ async function loadScenariosModule(){
     }
   }
   console.warn("[ai] Could not load scenarios module.", lastErr?.message||lastErr||"");
-  __scn = null;
-  return null;
+  __scn = null; return null;
 }
 
 /* ---------- utils ---------- */
@@ -63,8 +63,7 @@ function withTimeout(promise, ms, label="timeout"){
 async function toBlobFromDataURL(dataURL){ const r=await fetch(dataURL); return await r.blob(); }
 async function uploadToInbox(blob, ext="jpg"){
   const { storage } = getFirebase();
-  let curId="scratch";
-  try{ const cur = __scn?.getCurrent?.(); if (cur?.id) curId=cur.id; }catch{}
+  let curId="scratch"; try{ const cur = __scn?.getCurrent?.(); if (cur?.id) curId=cur.id; }catch{}
   const ts=Date.now();
   const path=`scenarios/${curId}/ai/inbox/${ts}.${ext}`;
   await uploadBytes(stRef(storage, path), blob, { contentType: ext==="png"?"image/png":"image/jpeg", cacheControl:"no-store" });
@@ -103,12 +102,11 @@ async function pingEndpoints(timeoutMs=4000){
   return null;
 }
 
-/* ---------- ensure a stop is selected (auto-open #0) ---------- */
+/* ---------- ensure a stop is selected ---------- */
 async function ensureStopSelectedOrAutoOpen(){
   if (!__scn) await loadScenariosModule();
   if (!__scn) { updateStatus("No scenarios module — cannot resolve guide image."); return false; }
-  const cur = __scn.getCurrent?.();
-  const idx = __scn.getStopIndex?.();
+  const cur = __scn.getCurrent?.(); const idx = __scn.getStopIndex?.();
   if (!cur){ updateStatus("Select a scenario from the dropdown first."); return false; }
   if (idx != null && idx >= 0) return true;
   const stops = cur._stops;
@@ -117,11 +115,10 @@ async function ensureStopSelectedOrAutoOpen(){
     try{ await __scn.loadStop?.(0); return true; }
     catch(e){ updateStatus("Could not open first stop: " + (e?.message||e)); return false; }
   }
-  updateStatus("This scenario has no photos/slides.");
-  return false;
+  updateStatus("This scenario has no photos/slides."); return false;
 }
 
-/* ---------- guide building (URL-first) ---------- */
+/* ---------- guide building ---------- */
 async function guessGuideURLFast(){
   const live = __scn?.getLastLoadedBaseURL?.();
   if (live && (/^https?:\/\//i.test(live) || live.startsWith("data:") || live.startsWith("blob:"))) return live;
@@ -186,13 +183,15 @@ async function postAI(payload, preferredUrl){
 
       // overall hard timeout
       const ctl = new AbortController();
-      const hardMs = 120000; // 2 min
-      const hardTimer = setTimeout(()=>ctl.abort(), hardMs);
+      const HARD_MS = 120000;
+      const hardTimer = setTimeout(()=>ctl.abort(), HARD_MS);
 
       const r = await fetch(url, { method:"POST", headers, body, signal:ctl.signal, cache:"no-store", mode:"cors", credentials:"omit" });
-      const ct = (r.headers.get("content-type") || "").toLowerCase();
-      const te = (r.headers.get("transfer-encoding") || "").toLowerCase();
-      const cl = r.headers.get("content-length") || "";
+
+      // debug headers
+      const hdrs = {};
+      r.headers.forEach((v,k)=> hdrs[k]=v);
+      console.log("[ai] resp headers", hdrs);
 
       if (!r.ok){
         clearTimeout(hardTimer);
@@ -201,10 +200,15 @@ async function postAI(payload, preferredUrl){
         throw Object.assign(new Error(`${r.status} ${msg.slice(0,800)}`), { status:r.status, url });
       }
 
-      // Fast path: non-streaming JSON with content-length
+      const ct = (r.headers.get("content-type") || "").toLowerCase();
+      const te = (r.headers.get("transfer-encoding") || "").toLowerCase();
+      const cl = r.headers.get("content-length") || "";
+
+      // Quick JSON path
       if (ct.includes("application/json") && cl && !te && r.body == null){
         clearTimeout(hardTimer);
-        const text = await withTimeout(r.text(), 30000, "json/timeout");
+        const text = await withTimeout(r.text(), 15000, "json/timeout");
+        console.log("[ai] resp body (json, length)", text.slice(0,300));
         let json={}; try{ json = JSON.parse(text); }catch{}
         return { endpoint:url, json };
       }
@@ -213,36 +217,42 @@ async function postAI(payload, preferredUrl){
       updateStatus("AI: streaming…");
       const reader = r.body?.getReader?.();
       if (!reader){
-        // Fallback: just read with a timeout
-        const text = await withTimeout(r.text(), 60000, "stream/timeout");
+        // No stream reader available: read all (with timeout)
+        const text = await withTimeout(r.text(), 15000, "stream/timeout");
         clearTimeout(hardTimer);
+        console.log("[ai] resp body (text)", text.slice(0,300));
         let json={}; try{ json = JSON.parse(text); }catch{}
         return { endpoint:url, json };
       }
 
       const decoder = new TextDecoder();
       let buf = "";
+      let firstBytesShown = false;
       let lastProgressAt = Date.now();
-      const idleMs = 15000; // if no bytes for 15s, consider stalled → abort
-      let idleTimer = setTimeout(()=>ctl.abort(), idleMs);
 
-      function resetIdle(){ clearTimeout(idleTimer); idleTimer = setTimeout(()=>ctl.abort(), idleMs); }
+      // idle timer: if no bytes for 6s, bail
+      const IDLE_MS = 6000;
+      let idleTimer = setTimeout(()=>ctl.abort(), IDLE_MS);
+      function resetIdle(){ clearTimeout(idleTimer); idleTimer = setTimeout(()=>ctl.abort(), IDLE_MS); }
 
       while (true){
         const { done, value } = await reader.read();
         resetIdle();
         if (done) break;
-        buf += decoder.decode(value, { stream:true });
+        const chunk = decoder.decode(value, { stream:true });
+        buf += chunk;
 
-        // Process chunk as lines (SSE/NDJSON/plain)
-        const lines = buf.split(/\r?\n/);
-        buf = lines.pop(); // remainder
+        if (!firstBytesShown){
+          console.log("[ai] first bytes:", chunk.slice(0,200));
+          firstBytesShown = true;
+        }
 
+        // Process lines (SSE/NDJSON/plain)
+        const lines = buf.split(/\r?\n/); buf = lines.pop();
         for (const raw of lines){
-          const line = raw.replace(/^data:\s*/,'').trim(); // handle "data: {...}"
+          const line = raw.replace(/^data:\s*/,'').trim();
           if (!line) continue;
 
-          // Progress hints
           if (/^\{/.test(line) === false){
             if (Date.now() - lastProgressAt > 750){
               updateStatus("AI: " + line.slice(0,120));
@@ -251,33 +261,30 @@ async function postAI(payload, preferredUrl){
             continue;
           }
 
-          // Try parse JSON
           try{
             const j = JSON.parse(line);
             if (j.status || j.progress != null){
               const pct = (typeof j.progress === "number") ? ` ${Math.round(j.progress*100)}%` : "";
               updateStatus(`AI: ${j.status || "working"}${pct}`);
             }
-            // If it already contains an image/url key, we're done early
             if (j.image || j.url || j.result || j.output || j.dataURL || j.data_url || j.image_url || j.compositeURL){
               clearTimeout(hardTimer); clearTimeout(idleTimer);
               try{ await reader.cancel(); }catch{}
               return { endpoint:url, json:j };
             }
-          }catch{ /* ignore non-JSON lines */ }
+          }catch{ /* ignore */ }
         }
       }
 
-      // Stream ended: try to parse any leftover buffer as JSON
       clearTimeout(hardTimer); clearTimeout(idleTimer);
       const tail = (buf || "").trim();
       if (tail){
+        console.log("[ai] stream tail:", tail.slice(0,200));
         try{ return { endpoint:url, json: JSON.parse(tail) }; }catch{}
       }
-      throw new Error("AI stream ended without JSON result");
+      throw new Error("AI stream ended with no JSON (empty body).");
     }catch(e){
       console.warn("[ai] POST failed", url, e?.message||e);
-      // try next endpoint
       updateStatus("AI endpoint failed, trying next…");
     }
   }
@@ -343,19 +350,24 @@ function bindButtons(){
 
       const hasOv = (()=>{ try { return !!__scn?.hasOverlays?.(); } catch { return false; } })();
 
+      // IMPORTANT: include `image` for servers that expect it
       const payload = {
+        // canonical
         returnType: kind, style, notes: notes||"", hasOverlays: hasOv,
         guideURL, compositeURL,
-        // synonyms for varied backends
-        return: kind, mode: (kind==="overlays"?"overlays":"photo"),
+        // common synonyms (inputs)
+        image: guideURL,                  // ← added
+        return: kind, mode:(kind==="overlays"?"overlays":"photo"),
         overlaysOnly: kind==="overlays", transparent: kind==="overlays",
         style_preset: style, prompt: notes||"",
         guideUrl: guideURL, imageURL: guideURL, image_url: guideURL, input: guideURL, reference: guideURL, src: guideURL,
         composite_url: compositeURL
       };
 
-      const res = await postAI(payload, ping?.url);
+      // expose last payload for debugging
+      window.__AI_LAST_PAYLOAD__ = payload;
 
+      const res = await postAI(payload, ping?.url);
       const norm = await normalizeAIResponse(res.json || {}, res.endpoint);
       if (!norm){
         const keys = Object.keys(res.json || {}).join(", ") || "(no keys)";
