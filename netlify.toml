@@ -1,28 +1,10 @@
-# ---------- Build ----------
-[build]
-  command = "echo Building static site"
-  publish = "public"
-
-[build.environment]
-  NODE_VERSION = "20"
-
-# ---------- Functions ----------
 [functions]
+  # Pick ONE folder. If your function file is at /functions/ai-image.js, use this:
   directory = "functions"
-  node_bundler = "esbuild"
-  external_node_modules = ["firebase-admin"]
 
-# ---------- Redirects (order matters) ----------
-# Pretty function path
+# Make the nice /api/ path hit the Netlify function too.
 [[redirects]]
-  from = "/functions/*"
-  to   = "/.netlify/functions/:splat"
+  from = "/api/ai-image"
+  to = "/.netlify/functions/ai-image"
   status = 200
-  force  = true
-
-# Local API proxy so your pages can call /api/ai-image
-[[redirects]]
-  from = "/api/*"
-  to   = "/.netlify/functions/:splat"
-  status = 200
-  force  = true
+  force = true
