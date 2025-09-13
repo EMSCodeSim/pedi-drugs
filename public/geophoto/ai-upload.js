@@ -1,13 +1,15 @@
-// ai-upload.js — no-stall "Send to AI" (guide-only fallback + timeouts + clear errors)
+// ai-upload.js — no-stall "Send to AI" using lastBaseURL fast path
 
 import { ensureAuthed, uploadSmallText, getFirebase } from "./firebase-core.js";
 import {
-  getGuideImageURLForCurrentStop,
-  getCompositeDataURL,
   addResultAsNewStop,
   setAIStatus,
   hasOverlays as _hasOverlays,
-  getCurrent
+  getCurrent,
+  getGuideImageURLForCurrentStop,   // still available
+  getCompositeDataURL,               // for optional preview composite
+  getLastLoadedBaseURL,              // <- NEW fast path
+  isCanvasTainted                    // <- know if composite is allowed
 } from "./scenarios.js";
 import { ref as stRef, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-storage.js";
 
@@ -18,7 +20,7 @@ function $(id){ return document.getElementById(id); }
 function hasOverlaysSafe(){ try { return !!_hasOverlays(); } catch { return false; } }
 function pick(v, d){ return (v===undefined || v===null || v==="") ? d : v; }
 
-// ---------- small utils ----------
+// ---------- utils ----------
 function withTimeout(promise, ms, label="timeout"){
   return Promise.race([
     promise,
@@ -38,28 +40,43 @@ async function uploadToInbox(blob, ext = "jpg"){
   return await getDownloadURL(stRef(storage, path));
 }
 
-// Build guide quickly. Never stalls: composite attempt ≤ 3s, upload ≤ 7s, overall ≤ 10s
-async function buildGuideFast({ wantComposite }){
-  // Always grab a guide URL first; this should be fast and reliable
-  const guideURL = await withTimeout(getGuideImageURLForCurrentStop(), 7000, "guideurl/timeout");
+// FAST: get a usable guide URL without storage lookups if possible
+async function guessGuideURLFast(){
+  // 0) last URL the loader actually used (http/blob/data) — instant
+  const live = getLastLoadedBaseURL();
+  if (live && (/^https?:\/\//i.test(live) || live.startsWith('data:') || live.startsWith('blob:'))) return live;
 
+  // 1) obvious fields on the current stop
+  const cur = getCurrent();
+  const s = cur?._stops?.[cur ? cur._stops.indexOf(cur._stops.find((x)=>x)) : -1]; // not used; we only need `cur` to exist
+  // Prefer direct URLs if present
+  const stop = cur?._stops?.find((_, idx) => idx === (cur._stops ? cur._stops.indexOf(cur._stops[idx]) : -1)) || null; // not needed – keep simple
+
+  // Just call the existing helper with a short timeout (it knows about gs/path -> downloadURL)
+  return await withTimeout(getGuideImageURLForCurrentStop(), 4000, "guideurl/timeout");
+}
+
+// Build guide quickly. Never stalls: overall ≤ 10s
+async function buildGuideFast({ wantComposite }){
+  // Always get a guide URL first (≤ 6s)
+  const guideURL = await withTimeout(guessGuideURLFast(), 6000, "guideurl/timeout");
+
+  // Optional composite preview of canvas (≤ 7s total for render+upload)
   let compositeURL = null;
-  if (wantComposite){
+  if (wantComposite && !isCanvasTainted()){
     try {
-      // 1) render composite (≤ 3s)
       const dataURL = await withTimeout(getCompositeDataURL(1280, 0.92), 3000, "composite/timeout");
-      // 2) upload composite (≤ 7s)
       const blob = await toBlobFromDataURL(dataURL);
-      compositeURL = await withTimeout(uploadToInbox(blob, "jpg"), 7000, "upload/timeout");
+      compositeURL = await withTimeout(uploadToInbox(blob, "jpg"), 4000, "upload/timeout");
     } catch (e) {
-      // fine — continue with guide-only
+      // Fine — we’ll proceed with guide-only
       console.warn("[ai] composite skipped:", e?.code || e?.message || e);
     }
   }
   return { guideURL, compositeURL };
 }
 
-// POST helper that shows server error text, not just a status code
+// POST helper that surfaces server error text
 async function postAI(payload){
   const headers = { "content-type": "application/json", "accept": "application/json" };
   const body = JSON.stringify(payload);
@@ -74,7 +91,6 @@ async function postAI(payload){
       throw new Error(`${url} ${r.status} ${msg.slice(0, 800)}`);
     }
     if (ct.startsWith("image/")) {
-      // Your function should return JSON {url: "..."}; if it returns raw image, adjust server or stream here instead.
       throw new Error("Function returned raw image; please return JSON {url}.");
     }
     try { return JSON.parse(text); } catch { return {}; }
@@ -122,7 +138,7 @@ export function wireAI(){
       const kind  = $("aiReturn")?.value || "photo";      // "photo" | "overlays"
       const style = $("aiStyle")?.value  || "realistic";
       const notes = $("aiNotes")?.value  || "";
-      const wantComposite = (kind === "photo"); // fast attempt; falls back automatically
+      const wantComposite = (kind === "photo");
 
       setAIStatus("Preparing guide…");
 
