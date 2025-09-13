@@ -1,5 +1,5 @@
-// scenarios.js — robust scenario loader (keep files split)
-// Uses proven logic + stronger image resolution to stop the spinner loop.
+// scenarios.js — spinner-proof scenario loader with graceful fallbacks
+// Keep files split: this imports only from firebase-core.js
 
 import {
   getFirebase, ensureAuthed, getStorageInfo,
@@ -11,7 +11,7 @@ import {
 } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-database.js";
 
 import {
-  ref as stRef, getDownloadURL, uploadBytesResumable, uploadBytes, deleteObject
+  ref as stRef, getDownloadURL, uploadBytesResumable, deleteObject
 } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-storage.js";
 
 /* ---------------- tiny DOM helpers ---------------- */
@@ -24,10 +24,15 @@ export function setAIStatus(text){ const el=$("aiMsg"); if(el) el.textContent = 
 export function showError(msg){ const b=errbar(); if(!b) return; b.textContent=String(msg); b.style.display='block'; console.error(msg); }
 export function hideError(){ const b=errbar(); if(!b) return; b.style.display='none'; }
 export function showLoad(on){ const l=$("loader"); if(l) l.style.display = on ? "grid" : "none"; }
+function setAIEnabled(on){
+  const btns = ["aiPreview","aiSend","aiOpen","aiAdd"].map($).filter(Boolean);
+  btns.forEach(b => b.disabled = !on);
+}
 
 /* ---------------- canvas ---------------- */
 export const f = new fabric.Canvas("c", { backgroundColor:"#061621", preserveObjectStacking:true });
 let baseImage = null;
+let baseTainted = false; // true if we had to load via direct URL without CORS
 
 function blobToObjectURL(b){ return URL.createObjectURL(b); }
 function revokeURL(u){ try{ URL.revokeObjectURL(u); }catch{} }
@@ -45,8 +50,28 @@ async function setBaseFromBlob(blob){
       img.scale(s); img.set({ left:(cw-img.width*s)/2, top:(ch-img.height*s)/2 });
       f.add(img); img.moveTo(0); f.requestRenderAll();
       $("canvasInfo").textContent=`Image ${Math.round(img.width)}×${Math.round(img.height)} | shown ${Math.round(img.width*s)}×${Math.round(img.height*s)}`;
+      baseTainted = false; setAIEnabled(true);
       resolve({ naturalW: img.width, naturalH: img.height });
-    }, { crossOrigin:"anonymous" });
+    }, { crossOrigin:"anonymous" }); // safe when blob URL
+  });
+}
+
+// Last-chance fallback: load a URL directly (no CORS); canvas becomes tainted.
+async function setBaseFromDirectURL(url){
+  return new Promise((resolve, reject)=>{
+    fabric.Image.fromURL(url, img=>{
+      if(!img){ reject(new Error("Image decode failed")); return; }
+      if (baseImage) f.remove(baseImage);
+      baseImage = img; baseImage.selectable=false; baseImage.evented=false; baseImage.set('erasable', false);
+      const cw=f.getWidth(), ch=f.getHeight();
+      const s=Math.min(cw/img.width, ch/img.height);
+      img.scale(s); img.set({ left:(cw-img.width*s)/2, top:(ch-img.height*s)/2 });
+      f.add(img); img.moveTo(0); f.requestRenderAll();
+      $("canvasInfo").textContent=`Image (cross-origin) ${Math.round(img.width)}×${Math.round(img.height)} — export disabled`;
+      baseTainted = true;  // we cannot toDataURL; disable AI/export
+      setAIEnabled(false);
+      resolve({ naturalW: img.width, naturalH: img.height });
+    } /* IMPORTANT: no crossOrigin here to guarantee it loads */, null);
   });
 }
 
@@ -65,6 +90,7 @@ function setBaseAsTextSlide(text, fontSize){
   tb.isBaseText = true;
   f.add(rect); f.add(tb); rect.moveTo(0); f.requestRenderAll();
   $("canvasInfo").textContent='Text slide';
+  baseTainted = false; setAIEnabled(true);
 }
 
 export function fitCanvas(){
@@ -81,7 +107,7 @@ export function fitCanvas(){
 }
 addEventListener("resize", fitCanvas);
 
-/* ---------------- image resolution (robust) ---------------- */
+/* ---------------- robust image resolution ---------------- */
 function withTimeout(promise, ms, label="timeout"){
   return Promise.race([
     promise,
@@ -94,47 +120,52 @@ async function toDownloadURL(refStr){
   const { storage } = getFirebase();
   const s = (refStr||"").trim();
   if (!s) throw new Error("empty-ref");
-  // If already an http(s) URL, use it directly
-  if (/^https?:\/\//i.test(s)) return s;
-  // Else: gs://bucket/path or bucket/path → getDownloadURL
-  const coerced = toStorageRefString(s); // may be gs://bucket/path OR bucket/path
+  if (/^https?:\/\//i.test(s)) return s; // already a URL
+  const coerced = toStorageRefString(s); // gs://bucket/path OR bucket/path
   const ref = stRef(storage, coerced);
   return await getDownloadURL(ref);
 }
 
-/** Try multiple candidates until one loads. Returns {blob, urlUsed}. */
-async function resolveBlobForStop(stop, timeoutMs=22000){
-  // Candidate seeds in smart order
+/** Try multiple candidates. If all fail, return {blob:null, url:httpURL} for a direct-URL fallback. */
+async function resolveForStop(stop, timeoutMs=22000){
   const seeds = [
     stop.imageURL, stop.gsUri, stop.storagePath, stop.thumbURL,
+    stop?.imageData?.data ? `data:image/${stop.imageData.format||'jpeg'};base64,${stop.imageData.data}` : null
   ].filter(Boolean);
 
-  // Add likely originals based on any seeds
-  const extra = [];
-  seeds.forEach(s => candidateOriginals(s).forEach(c => extra.push(c)));
-  const tried = new Set();
-  const candidates = [...seeds, ...extra].filter(c => {
-    const key = String(c).trim();
-    if (!key || tried.has(key)) return false;
-    tried.add(key); return true;
-  }).slice(0, 12); // cap attempts
+  const extras=[]; seeds.forEach(s => candidateOriginals(s).forEach(c => extras.push(c)));
 
-  let lastErr = null;
-  for (let i=0; i<candidates.length; i++){
-    const c = candidates[i];
+  const seen = new Set();
+  const cands = [...seeds, ...extras].filter(c=>{
+    const k=String(c).trim(); if(!k || seen.has(k)) return false; seen.add(k); return true;
+  }).slice(0, 16);
+
+  let lastURLError = null;
+  for (let i=0;i<cands.length;i++){
+    const c = cands[i];
     try{
-      const url = await withTimeout(toDownloadURL(c), Math.min(6000, timeoutMs-2000), "downloadurl/timeout");
+      // If it's a data: URL, decode directly (fast path)
+      if (/^data:/i.test(c)){
+        const resp = await fetch(c);
+        const bl = await resp.blob();
+        if (bl && bl.size>0) return { blob: bl, urlUsed: c, directFallbackUrl: null };
+        continue;
+      }
+      const url = await withTimeout(toDownloadURL(c), Math.min(7000, timeoutMs-3000), "downloadurl/timeout");
       const r = await withTimeout(fetch(url, { mode:"cors", credentials:"omit", cache:"no-store" }), timeoutMs, "fetch/timeout");
       if (!r.ok) throw new Error("HTTP "+r.status);
       const blob = await r.blob();
-      if (blob && blob.size>0) return { blob, urlUsed: url };
+      if (blob && blob.size>0) return { blob, urlUsed: url, directFallbackUrl: null };
     }catch(e){
-      lastErr = e;
-      console.warn(`[stop-image] candidate ${i+1}/${candidates.length} failed`, { c, err:e?.code||e?.message||e });
-      // keep trying
+      lastURLError = (typeof c==="string" && /^https?:\/\//i.test(c)) ? c : lastURLError;
+      console.warn(`[stop-image] ${i+1}/${cands.length} failed`, { candidate:c, err:e?.code||e?.message||e });
     }
   }
-  throw lastErr || new Error("no-image-candidate-succeeded");
+
+  // Nothing loaded as blob — if we saw at least one HTTP candidate, allow a direct URL fallback
+  if (lastURLError) return { blob: null, urlUsed: null, directFallbackUrl: lastURLError };
+
+  throw new Error("no-image-candidate-succeeded");
 }
 
 /* ---------------- scenario data ---------------- */
@@ -231,7 +262,7 @@ function renderThumbs(){
   });
 }
 
-/* ---------------- stop loader (spinner-proof) ---------------- */
+/* ---------------- stop loader (spinner-proof + fallback) ---------------- */
 export async function loadStop(i){
   hideError();
   if (!current) return;
@@ -253,17 +284,24 @@ export async function loadStop(i){
     showLoad(true);
     await ensureAuthed();
 
-    // 1) resolve a real blob via resilient multi-candidate logic
-    const { blob, urlUsed } = await resolveBlobForStop(s, 22000);
+    // 1) resolve blob or direct-URL fallback (never throws unless *no* candidates exist)
+    const result = await resolveForStop(s, 22000);
 
-    // 2) draw it
-    const dims = await setBaseFromBlob(blob);
+    if (result.blob){
+      await setBaseFromBlob(result.blob);
+    } else if (result.directFallbackUrl){
+      // load directly (canvas tainted, AI disabled)
+      await setBaseFromDirectURL(result.directFallbackUrl);
+      showError('Base image loaded via cross-origin fallback. Export/AI disabled for this stop.');
+    } else {
+      throw new Error('no-image-candidate-succeeded');
+    }
 
-    // 3) if we only got a tiny image, try upgrading using candidate originals
+    // 2) try to upgrade tiny images (best-effort; never throws)
     const minGood = 480;
-    if (dims.naturalW < minGood && dims.naturalH < minGood){
-      console.warn("[stop-image] tiny image loaded; attempting upgrade…");
-      const extras = candidateOriginals(urlUsed).slice(0, 6);
+    const dims = baseImage ? { naturalW: baseImage.width, naturalH: baseImage.height } : { naturalW:0, naturalH:0 };
+    if (!baseTainted && (dims.naturalW < minGood && dims.naturalH < minGood)){
+      const extras = candidateOriginals(result.urlUsed || s.imageURL || s.thumbURL || s.storagePath || s.gsUri).slice(0, 6);
       for (const c of extras){
         try{
           const url = await withTimeout(toDownloadURL(c), 6000, "downloadurl/timeout");
@@ -276,19 +314,23 @@ export async function loadStop(i){
       }
     }
   }catch(e){
-    showError('Image load failed: '+(e?.code || e?.message || e));
-    // fall back to any embedded data if present
+    // Final fallback: embedded data if present
     if (s.imageData?.data){
       try{
         const bl = await (await fetch(`data:image/${s.imageData.format||'jpeg'};base64,${s.imageData.data}`)).blob();
         await setBaseFromBlob(bl);
-      }catch{}
+        showError('Loaded embedded image; original not available.');
+      }catch{
+        showError('Image load failed completely for this stop.');
+      }
+    }else{
+      showError('Image load failed for this stop.');
     }
   }finally{
     showLoad(false);
   }
 
-  // Render overlays (if any)
+  // Render overlays (best-effort)
   if (Array.isArray(s.overlays)){
     for (const ov of s.overlays){
       if (ov?.kind==='text'){
@@ -319,13 +361,23 @@ export async function loadStop(i){
 export async function getGuideImageURLForCurrentStop(){
   if (!current || stopIndex<0) throw new Error('No stop selected');
   const s = current._stops[stopIndex];
-  // Prefer existing direct URL if present
+
+  // If we loaded via tainted direct URL, provide a usable guide URL anyway
   if (s?.imageURL && /^https?:\/\//i.test(s.imageURL)) return s.imageURL;
-  // Else resolve to a download URL
-  return await toDownloadURL(s.gsUri || s.storagePath || s.thumbURL || s.imageURL);
+
+  // Else resolve a download URL from any stored ref
+  const ref = s.gsUri || s.storagePath || s.thumbURL || s.imageURL;
+  if (ref) return await toDownloadURL(ref);
+
+  // As a last resort, if embedded exists, return the data URL
+  if (s?.imageData?.data){
+    return `data:image/${s.imageData.format||'jpeg'};base64,${s.imageData.data}`;
+  }
+  throw new Error('This stop has no accessible base image.');
 }
 
 export async function getCompositeDataURL(maxEdge = 1600, quality = 0.95){
+  if (baseTainted) throw new Error('Canvas is cross-origin tainted; export disabled.');
   const raw = f.toDataURL({ format:'jpeg', quality:1 });
   const img = new Image(); img.decoding='async'; img.src=raw; await img.decode();
   const w = img.naturalWidth, h = img.naturalHeight;
@@ -425,7 +477,6 @@ export function wireScenarioUI(){
       const lng = $("stopLng").value.trim()==='' ? null : parseFloat($("stopLng").value);
       s.lat = lat; s.lng = lng;
       s.radiusMeters = Math.max(5, Math.min(1000, Math.round(parseInt($("stopRadius").value || "50", 10))));
-      // preserve overlays on save
       s.overlays = f.getObjects().filter(o=>o!==baseImage && !o.isBaseText).map(o=>{
         if (o.type==='textbox'){
           return {
@@ -486,7 +537,6 @@ export function wireScenarioUI(){
     setRootPill(`root: ${ROOT} | bucket: ${bucketHost}`);
     await loadScenarios();
     subscribeScenarios();
-    // Auto-select first if none chosen
     const sel=$("scenarioSel");
     if (sel && !sel.value && scenarios.length){ sel.value=scenarios[0].id; sel.dispatchEvent(new Event('change')); }
   };
@@ -502,7 +552,6 @@ export async function bootScenarios(){
   await loadScenarios();
   subscribeScenarios();
 
-  // Auto-select first so thumbnails + canvas always populate
   const sel=$("scenarioSel");
   if (sel && !sel.value && scenarios.length){ sel.value=scenarios[0].id; sel.dispatchEvent(new Event('change')); }
 
