@@ -1,10 +1,12 @@
-# keep your existing content ABOVE/BELOW — do not delete it
+[build]
+  # Serve the site from /public (you have public/index.html, public/geophoto/*, etc.)
+  publish = "public"
 
 [functions]
-  # point to the ONE folder you actually use
-  directory = "functions"      # or "netlify/functions" if that's where ai-image.js lives
+  # Your ai-image.js is in /functions
+  directory = "functions"
 
-# Map only this exact path to the function (nothing else).
+# Nice API path that maps to the function
 [[redirects]]
   from = "/api/ai-image"
   to = "/.netlify/functions/ai-image"
