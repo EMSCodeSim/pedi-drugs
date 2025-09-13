@@ -1,85 +1,123 @@
-// scenarios.js — robust scenario loader + full editor wiring
-// Exports: wireScenarioUI, bootScenarios, and helpers used by ai-upload.js
+// scenarios.js — robust scenario loader + editor wiring (no syntax gotchas)
 
 import {
-  getFirebase, ensureAuthed, getStorageInfo,
-  toStorageRefString, candidateOriginals, detectScenariosRoot
+  getFirebase,
+  ensureAuthed,
+  getStorageInfo,
+  toStorageRefString,
+  candidateOriginals,
+  detectScenariosRoot
 } from "./firebase-core.js";
 
 import {
-  ref as dbRef, get, set, remove, onValue
+  ref as dbRef,
+  get,
+  set,
+  remove,
+  onValue
 } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-database.js";
 
 import {
-  ref as stRef, getDownloadURL, getBlob as sdkGetBlob,
-  uploadBytesResumable, deleteObject
+  ref as stRef,
+  getDownloadURL,
+  getBlob as storageGetBlob,
+  uploadBytesResumable,
+  deleteObject
 } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-storage.js";
 
-/* ---------------- tiny DOM helpers ---------------- */
-const $ = (id) => document.getElementById(id);
-const errbar = () => $("errbar");
-export function setAuthPill(text){ const el=$("authPill"); if(el) el.textContent = `Auth: ${text}`; }
-export function setStatus(text){ const el=$("statusPill"); if(el) el.textContent = text; }
-export function setRootPill(text){ const el=$("rootPill"); if(el) el.textContent = text; }
-export function setAIStatus(text){ const el=$("aiMsg"); if(el) el.textContent = text; }
-export function showError(msg){ const b=errbar(); if(!b) return; b.textContent=String(msg); b.style.display='block'; console.error(msg); }
-export function hideError(){ const b=errbar(); if(!b) return; b.style.display='none'; }
-export function showLoad(on){ const l=$("loader"); if(l) l.style.display = on ? "grid" : "none"; }
+/* ---------------- DOM helpers & status ---------------- */
+function $(id){ return document.getElementById(id); }
+const errbarEl = () => $("errbar");
 
-// Only gate export/save on taint; AI buttons can remain enabled
+export function setAuthPill(text){ const el=$("authPill"); if (el) el.textContent = "Auth: " + text; }
+export function setStatus(text){ const el=$("statusPill"); if (el) el.textContent = text; }
+export function setRootPill(text){ const el=$("rootPill"); if (el) el.textContent = text; }
+export function setAIStatus(text){ const el=$("aiMsg"); if (el) el.textContent = text; }
+
+export function showError(msg){
+  const b = errbarEl(); if (!b) return;
+  b.style.display = "block";
+  b.textContent = String(msg);
+  console.error("[scenarios] ", msg);
+}
+export function hideError(){ const b = errbarEl(); if (b) b.style.display = "none"; }
+export function showLoad(on){ const l=$("loader"); if (l) l.style.display = on ? "grid" : "none"; }
+
 function setExportEnabled(on){
-  ["exportPNG","saveImage"].forEach(id=>{ const b=$(id); if(b) b.disabled = !on; });
+  const ids = ["exportPNG","saveImage"];
+  for (let i=0;i<ids.length;i++){
+    const btn = $(ids[i]);
+    if (btn) btn.disabled = !on;
+  }
 }
 
-/* ---------------- canvas ---------------- */
+/* ---------------- Fabric canvas ---------------- */
 export const f = new fabric.Canvas("c", { backgroundColor:"#061621", preserveObjectStacking:true });
 let baseImage = null;
-let baseTainted = false; // if true, export/save disabled
-let lastBaseURL = null;  // last successfully used base image URL (http/data/blob)
+let baseTainted = false;       // disables export/save only (AI can still run)
+let lastBaseURL = null;        // the exact URL/blob/data used to load the base
 
-/** expose taint + last URL for AI */
 export function isCanvasTainted(){ return !!baseTainted; }
 export function getLastLoadedBaseURL(){ return lastBaseURL || null; }
 
-function blobToObjectURL(b){ return URL.createObjectURL(b); }
+function blobToObjectURL(bl){ return URL.createObjectURL(bl); }
 function revokeURL(u){ try{ URL.revokeObjectURL(u); }catch{} }
 
 async function setBaseFromBlob(blob){
   return new Promise((resolve, reject)=>{
-    const u = blobToObjectURL(blob);
-    fabric.Image.fromURL(u, img=>{
-      revokeURL(u);
-      if(!img){ reject(new Error("Image decode failed")); return; }
+    const url = blobToObjectURL(blob);
+    fabric.Image.fromURL(url, function(img){
+      revokeURL(url);
+      if (!img) { reject(new Error("Image decode failed")); return; }
       if (baseImage) f.remove(baseImage);
-      baseImage = img; baseImage.selectable=false; baseImage.evented=false; baseImage.set('erasable', false);
-      const cw=f.getWidth(), ch=f.getHeight();
-      const s=Math.min(cw/img.width, ch/img.height);
-      img.scale(s); img.set({ left:(cw-img.width*s)/2, top:(ch-img.height*s)/2 });
+      baseImage = img;
+      baseImage.selectable = false;
+      baseImage.evented = false;
+      baseImage.set("erasable", false);
+
+      const cw = f.getWidth(), ch = f.getHeight();
+      const s = Math.min(cw/img.width, ch/img.height);
+      img.scale(s);
+      img.set({ left:(cw-img.width*s)/2, top:(ch-img.height*s)/2 });
       f.add(img); img.moveTo(0); f.requestRenderAll();
-      $("canvasInfo")?.textContent=`Image ${Math.round(img.width)}×${Math.round(img.height)} | shown ${Math.round(img.width*s)}×${Math.round(img.height*s)}`;
-      baseTainted = false; setExportEnabled(true);
-      if (!lastBaseURL || lastBaseURL.startsWith("data:")) { lastBaseURL = lastBaseURL || "blob://local"; }
+
+      const info = $("canvasInfo");
+      if (info) info.textContent = `Image ${Math.round(img.width)}×${Math.round(img.height)} | shown ${Math.round(img.width*s)}×${Math.round(img.height*s)}`;
+
+      baseTainted = false;
+      setExportEnabled(true);
+
+      if (!lastBaseURL) lastBaseURL = "blob://loaded";
       resolve({ naturalW: img.width, naturalH: img.height });
-    }, { crossOrigin:"anonymous" }); // safe for blob URLs
+    }, { crossOrigin: "anonymous" });
   });
 }
 
-// Last-chance fallback: direct URL (taints canvas; keeps editor usable; AI send can still work)
 async function setBaseFromDirectURL(url){
   return new Promise((resolve, reject)=>{
-    fabric.Image.fromURL(url, img=>{
-      if(!img){ reject(new Error("Image decode failed")); return; }
+    fabric.Image.fromURL(url, function(img){
+      if (!img) { reject(new Error("Image decode failed")); return; }
       if (baseImage) f.remove(baseImage);
-      baseImage = img; baseImage.selectable=false; baseImage.evented=false; baseImage.set('erasable', false);
-      const cw=f.getWidth(), ch=f.getHeight();
-      const s=Math.min(cw/img.width, ch/img.height);
-      img.scale(s); img.set({ left:(cw-img.width*s)/2, top:(ch-img.height*s)/2 });
+      baseImage = img;
+      baseImage.selectable = false;
+      baseImage.evented = false;
+      baseImage.set("erasable", false);
+
+      const cw = f.getWidth(), ch = f.getHeight();
+      const s = Math.min(cw/img.width, ch/img.height);
+      img.scale(s);
+      img.set({ left:(cw-img.width*s)/2, top:(ch-img.height*s)/2 });
       f.add(img); img.moveTo(0); f.requestRenderAll();
-      $("canvasInfo")?.textContent=`Image (cross-origin) ${Math.round(img.width)}×${Math.round(img.height)} — export disabled`;
-      baseTainted = true; setExportEnabled(false);
+
+      const info = $("canvasInfo");
+      if (info) info.textContent = `Image (cross-origin) ${Math.round(img.width)}×${Math.round(img.height)} — export disabled`;
+
+      baseTainted = true;
+      setExportEnabled(false);
       lastBaseURL = url;
+
       resolve({ naturalW: img.width, naturalH: img.height });
-    } /* intentionally no crossOrigin */, null);
+    } /* no crossOrigin on purpose */, null);
   });
 }
 
@@ -87,40 +125,48 @@ function setBaseAsTextSlide(text, fontSize){
   f.clear();
   const rect = new fabric.Rect({ left:0, top:0, width:f.getWidth(), height:f.getHeight(), fill:"#000", selectable:false, evented:false, erasable:false });
   baseImage = rect;
-  const tb = new fabric.Textbox(text||"", {
-    width: Math.floor(f.getWidth()*0.8),
-    left: Math.floor(f.getWidth()*0.1),
-    top:  Math.floor(f.getHeight()*0.2),
-    fontSize: fontSize||34, fill:"#fff", textAlign:"center",
-    fontFamily:"system-ui,-apple-system,Segoe UI,Roboto,Inter,Arial,sans-serif",
+
+  const tb = new fabric.Textbox(text || "", {
+    width: Math.floor(f.getWidth() * 0.8),
+    left:  Math.floor(f.getWidth() * 0.1),
+    top:   Math.floor(f.getHeight() * 0.2),
+    fontSize: fontSize || 34, fill: "#fff", textAlign: "center",
+    fontFamily: "system-ui,-apple-system,Segoe UI,Roboto,Inter,Arial,sans-serif",
     selectable:false, evented:false, erasable:false
   });
   tb.isBaseText = true;
+
   f.add(rect); f.add(tb); rect.moveTo(0); f.requestRenderAll();
-  $("canvasInfo")?.textContent='Text slide';
-  baseTainted = false; setExportEnabled(true);
-  lastBaseURL = `data:text/plain;base64,${btoa(text||"")}`;
+
+  const info = $("canvasInfo");
+  if (info) info.textContent = "Text slide";
+
+  baseTainted = false;
+  lastBaseURL = "data:text/plain;base64," + btoa(text || "");
+  setExportEnabled(true);
 }
 
 export function fitCanvas(){
-  const targetH = Math.max(420, (window.innerHeight||900) - 280);
-  const cEl = $("c"); if (cEl) cEl.style.height = targetH + "px";
+  const cEl = $("c");
+  const targetH = Math.max(420, (window.innerHeight || 900) - 280);
+  if (cEl) cEl.style.height = targetH + "px";
   f.setHeight(targetH);
-  const viewer = cEl?.closest?.(".col");
-  const w = (viewer?.clientWidth || 900) - 24;
+  const viewer = cEl && cEl.closest ? cEl.closest(".col") : null;
+  const w = (viewer && viewer.clientWidth ? viewer.clientWidth : 900) - 24;
   f.setWidth(w);
-  if (baseImage && baseImage.type==='rect'){
+  if (baseImage && baseImage.type === "rect"){
     baseImage.set({ left:0, top:0, width:f.getWidth(), height:f.getHeight() });
   }
-  f.calcOffset(); f.requestRenderAll();
+  f.calcOffset();
+  f.requestRenderAll();
 }
 addEventListener("resize", fitCanvas);
 
-/* ---------------- robust image resolution ---------------- */
-function withTimeout(promise, ms, label="timeout"){
+/* ---------------- Image resolving ---------------- */
+function withTimeout(promise, ms, label){
   return Promise.race([
     promise,
-    new Promise((_, rej)=> setTimeout(()=> rej(Object.assign(new Error(label), { code: label })), ms))
+    new Promise((_, rej)=> setTimeout(()=> rej(Object.assign(new Error(label || "timeout"), { code: label || "timeout" })), ms))
   ]);
 }
 
@@ -135,167 +181,204 @@ function parseFirebaseURL(url){
   return null;
 }
 
-async function getBlobSDKFirst(refLike, timeoutMs=20000){
+async function getBlobSDKFirst(refLike, timeoutMs){
   const { storage } = getFirebase();
-  const s = (refLike||"").trim();
+  const s = (refLike || "").trim();
   if (!s) throw new Error("empty-ref");
-  if (/^data:/i.test(s)){ const r = await fetch(s); return await r.blob(); }
+
+  if (/^data:/i.test(s)){
+    const r = await fetch(s); return await r.blob();
+  }
+
   if (/^https?:\/\//i.test(s)){
     const parsed = parseFirebaseURL(s);
     if (parsed){
-      const ref = stRef(storage, `gs://${parsed.bucket}/${parsed.object}`);
-      return await withTimeout(sdkGetBlob(ref), timeoutMs, "storage/getblob-timeout");
+      const ref = stRef(storage, "gs://" + parsed.bucket + "/" + parsed.object);
+      return await withTimeout(storageGetBlob(ref), timeoutMs || 20000, "storage/getblob-timeout");
     }
-    const r = await withTimeout(fetch(s, { mode:"cors", credentials:"omit", cache:"no-store" }), timeoutMs, "fetch/timeout");
-    if (!r.ok) throw new Error("HTTP "+r.status);
+    const r = await withTimeout(fetch(s, { mode:"cors", credentials:"omit", cache:"no-store" }), timeoutMs || 20000, "fetch/timeout");
+    if (!r.ok) throw new Error("HTTP " + r.status);
     return await r.blob();
   }
-  const ref = stRef(storage, toStorageRefString(s)); // gs://bucket/path or bucket/path
-  return await withTimeout(sdkGetBlob(ref), timeoutMs, "storage/getblob-timeout");
+
+  // bucket/path or gs://
+  const ref = stRef(storage, toStorageRefString(s));
+  return await withTimeout(storageGetBlob(ref), timeoutMs || 20000, "storage/getblob-timeout");
 }
 
-async function resolveForStop(stop, timeoutMs=22000){
+async function resolveForStop(stop, timeoutMs){
   const seeds = [
-    stop.imageURL, stop.gsUri, stop.storagePath, stop.thumbURL,
-    stop?.imageData?.data ? `data:image/${stop.imageData.format||'jpeg'};base64,${stop.imageData.data}` : null
+    stop.imageURL,
+    stop.gsUri,
+    stop.storagePath,
+    stop.thumbURL,
+    stop && stop.imageData && stop.imageData.data
+      ? "data:image/" + (stop.imageData.format || "jpeg") + ";base64," + stop.imageData.data
+      : null
   ].filter(Boolean);
 
-  const extras=[]; seeds.forEach(s => candidateOriginals(s).forEach(c => extras.push(c)));
+  const extras = [];
+  for (let i=0;i<seeds.length;i++){
+    const s = seeds[i];
+    const cands = candidateOriginals(s);
+    for (let j=0;j<cands.length;j++) extras.push(cands[j]);
+  }
 
-  const seen = new Set();
-  const cands = [...seeds, ...extras].filter(c=>{
-    const k=String(c).trim(); if(!k || seen.has(k)) return false; seen.add(k); return true;
-  }).slice(0, 16);
+  const unique = new Set();
+  const candidates = [];
+  const pushUnique = (v) => { const k = String(v||"").trim(); if (!k || unique.has(k)) return; unique.add(k); candidates.push(k); };
+  for (let i=0;i<seeds.length;i++) pushUnique(seeds[i]);
+  for (let i=0;i<extras.length;i++) pushUnique(extras[i]);
 
   let lastPlainHTTP = null;
-  for (let i=0;i<cands.length;i++){
-    const c = cands[i];
-    try{
-      const bl = await getBlobSDKFirst(c, timeoutMs);
-      if (bl && bl.size>0) return { blob: bl, urlUsed: c, directFallbackUrl: null };
-    }catch(e){
-      if (typeof c==="string" && /^https?:\/\//i.test(c)) lastPlainHTTP = c;
-      console.warn(`[stop-image] try ${i+1}/${cands.length} failed`, { candidate:c, err:e?.code||e?.message||e });
+
+  for (let i=0;i<candidates.length;i++){
+    const c = candidates[i];
+    try {
+      const bl = await getBlobSDKFirst(c, timeoutMs || 22000);
+      if (bl && bl.size > 0) return { blob: bl, urlUsed: c, directFallbackUrl: null };
+    } catch (e) {
+      if (typeof c === "string" && /^https?:\/\//i.test(c)) lastPlainHTTP = c;
+      console.warn("[resolve] candidate failed", c, e && (e.code || e.message || e));
     }
   }
-  if (lastPlainHTTP) return { blob:null, urlUsed:null, directFallbackUrl:lastPlainHTTP };
+
+  if (lastPlainHTTP) return { blob: null, urlUsed: null, directFallbackUrl: lastPlainHTTP };
   throw new Error("no-image-candidate-succeeded");
 }
 
-/* ---------------- scenario data ---------------- */
+/* ---------------- Scenario state ---------------- */
 let ROOT = "scenarios";
-let scenarios = [], current = null, stopIndex = -1;
+let scenarios = [];
+let current = null;
+let stopIndex = -1;
 
 const { db } = getFirebase();
 
 function coerceStops(sc){
-  if (Array.isArray(sc?.stops)) return sc.stops;
-  if (Array.isArray(sc?.photos)) return sc.photos;
-  if (Array.isArray(sc?.images)) return sc.images;
+  if (sc && Array.isArray(sc.stops)) return sc.stops;
+  if (sc && Array.isArray(sc.photos)) return sc.photos;
+  if (sc && Array.isArray(sc.images)) return sc.images;
   return [];
 }
 function setStops(sc, stops){
-  if (Array.isArray(sc?.stops)) sc.stops = stops;
-  else if (Array.isArray(sc?.photos)) sc.photos = stops;
-  else if (Array.isArray(sc?.images)) sc.images = stops;
+  if (sc && Array.isArray(sc.stops)) sc.stops = stops;
+  else if (sc && Array.isArray(sc.photos)) sc.photos = stops;
+  else if (sc && Array.isArray(sc.images)) sc.images = stops;
   else sc.stops = stops;
 }
 
 function populateScenarios(){
-  const sel=$("scenarioSel"); if(!sel) return;
+  const sel = $("scenarioSel");
+  if (!sel) return;
   sel.innerHTML = '<option value="">Select scenario…</option>';
-  scenarios.forEach(sc=>{
-    const o=document.createElement('option');
-    o.value=sc.id;
-    o.textContent = (sc.title||'(untitled)') + (sc.active?'':' (inactive)');
+  for (let i=0;i<scenarios.length;i++){
+    const sc = scenarios[i];
+    const o = document.createElement("option");
+    o.value = sc.id;
+    o.textContent = (sc.title || "(untitled)") + (sc.active ? "" : " (inactive)");
     sel.appendChild(o);
-  });
+  }
 }
 
 async function fetchNode(path){
-  try{
+  try {
     const snap = await get(dbRef(db, path));
-    return snap.exists() ? (snap.val()||{}) : {};
-  }catch{ return {}; }
+    return snap.exists() ? (snap.val() || {}) : {};
+  } catch (_e) {
+    return {};
+  }
 }
 
 async function loadScenarios(){
   await ensureAuthed();
-  setStatus('Loading…');
+  setStatus("Loading…");
 
-  const a = await fetchNode('geophoto/scenarios');
-  const b = await fetchNode('scenarios');
+  const a = await fetchNode("geophoto/scenarios");
+  const b = await fetchNode("scenarios");
 
-  const list=[];
-  Object.entries(a).forEach(([id,s])=> list.push({id, ...(s||{})}));
-  Object.entries(b).forEach(([id,s])=> list.push({id, ...(s||{})}));
+  const list = [];
+  for (const k in a) list.push({ id:k, ...(a[k] || {}) });
+  for (const k in b) list.push({ id:k, ...(b[k] || {}) });
 
   const uniq = new Map();
-  list.forEach(x=>{ if(!uniq.has(x.id)) uniq.set(x.id, x); });
+  for (let i=0;i<list.length;i++){ const x=list[i]; if (!uniq.has(x.id)) uniq.set(x.id, x); }
 
-  const arr = Array.from(uniq.values()).sort((x,y)=>(y.createdAt||0)-(x.createdAt||0));
-
+  const arr = Array.from(uniq.values()).sort((x,y)=> (y.createdAt||0) - (x.createdAt||0));
   scenarios = arr.map(s => ({ id:s.id, _raw:s, _stops:coerceStops(s), ...s }));
+
   populateScenarios();
-  setStatus(`${scenarios.length} scenario(s)`);
+  setStatus(scenarios.length + " scenario(s)");
 }
 
-let unsubA=null, unsubB=null;
+let unsubA = null, unsubB = null;
 function subscribeScenarios(){
-  try{ if (typeof unsubA==='function') unsubA(); }catch{}
-  try{ if (typeof unsubB==='function') unsubB(); }catch{}
+  try{ if (typeof unsubA === "function") unsubA(); } catch (_){}
+  try{ if (typeof unsubB === "function") unsubB(); } catch (_){}
 
-  const refA = dbRef(db, 'geophoto/scenarios');
-  const refB = dbRef(db, 'scenarios');
-  const onAnyChange = ()=> loadScenarios();
+  const refA = dbRef(db, "geophoto/scenarios");
+  const refB = dbRef(db, "scenarios");
+  const onAnyChange = function(){ loadScenarios(); };
 
-  unsubA = onValue(refA, onAnyChange, ()=>{});
-  unsubB = onValue(refB, onAnyChange, ()=>{});
+  unsubA = onValue(refA, onAnyChange, function(){});
+  unsubB = onValue(refB, onAnyChange, function(){});
 }
 
-/* ---------------- thumbs & selection ---------------- */
+/* ---------------- Thumbs & stop loading ---------------- */
 function dataURLFromStored(stored){
-  return typeof stored==='string'
-    ? stored
-    : (stored && stored.data ? `data:image/${stored.format||'jpeg'};base64,${stored.data}` : '');
+  if (typeof stored === "string") return stored;
+  if (stored && stored.data) return "data:image/" + (stored.format || "jpeg") + ";base64," + stored.data;
+  return "";
 }
 
 function renderThumbs(){
-  const row=$("thumbRow"); if(!row){ return; }
-  row.innerHTML='';
-  if (!current || !current._stops?.length){
+  const row = $("thumbRow");
+  if (!row) return;
+  row.innerHTML = "";
+  if (!current || !current._stops || current._stops.length === 0){
     row.innerHTML = '<div class="pill small">No photos/slides</div>';
     return;
   }
-  current._stops.forEach((s,i)=>{
-    const thumbSrc = s.thumbURL || s.imageURL || dataURLFromStored(s.imageData) || '';
-    const img=document.createElement('img'); img.className='thumb'+(i===stopIndex?' active':'');
-    img.src=thumbSrc; img.alt=s.title||('Stop '+(i+1));
-    img.onerror=()=>{ img.src = 'data:image/svg+xml;utf8,' + encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" width="120" height="120"><rect width="100%" height="100%" fill="#000"/><text x="50%" y="52%" fill="#fff" font-size="14" text-anchor="middle">No image</text></svg>`); };
-    img.onclick=()=>loadStop(i);
+  for (let i=0;i<current._stops.length;i++){
+    const s = current._stops[i];
+    const thumbSrc = s.thumbURL || s.imageURL || dataURLFromStored(s.imageData) || "";
+    const img = document.createElement("img");
+    img.className = "thumb" + (i === stopIndex ? " active" : "");
+    img.src = thumbSrc;
+    img.alt = s.title || ("Stop " + (i+1));
+    img.onerror = function(){
+      img.src = "data:image/svg+xml;utf8," + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="120" height="120"><rect width="100%" height="100%" fill="#000"/><text x="50%" y="52%" fill="#fff" font-size="14" text-anchor="middle">No image</text></svg>');
+    };
+    img.onclick = function(){ loadStop(i); };
     row.appendChild(img);
-  });
+  }
 }
 
-/* ---------------- stop loader (spinner-proof + fallback) ---------------- */
 export async function loadStop(i){
   hideError();
   if (!current) return;
-  const s=current._stops[i]; if(!s) return;
-  stopIndex=i;
-  const row=$("thumbRow"); if (row){
-    Array.from(row.children).forEach((n,idx)=> n.classList.toggle('active', idx===i));
+  const s = current._stops[i];
+  if (!s) return;
+  stopIndex = i;
+
+  const row = $("thumbRow");
+  if (row){
+    const kids = Array.from(row.children);
+    for (let k=0;k<kids.length;k++) kids[k].classList.toggle("active", k===i);
   }
 
-  $("stopTitle") && ( $("stopTitle").value = s.title||'' );
-  $("stopCaption") && ( $("stopCaption").value = s.caption||'' );
-  $("stopLat") && ( $("stopLat").value = s.lat??'' );
-  $("stopLng") && ( $("stopLng").value = s.lng??'' );
-  $("stopRadius") && ( $("stopRadius").value = (s.radiusMeters ?? s.radius ?? 50) );
+  const ttl = $("stopTitle"); if (ttl) ttl.value = s.title || "";
+  const cap = $("stopCaption"); if (cap) cap.value = s.caption || "";
+  const lat = $("stopLat"); if (lat) lat.value = s.lat != null ? s.lat : "";
+  const lng = $("stopLng"); if (lng) lng.value = s.lng != null ? s.lng : "";
+  const rad = $("stopRadius"); if (rad) rad.value = (s.radiusMeters != null ? s.radiusMeters : (s.radius != null ? s.radius : 50));
 
-  f.clear(); baseImage=null;
+  f.clear(); baseImage = null;
 
-  if (s.type==='text'){ setBaseAsTextSlide(s.text||'', s.fontSize||34); return; }
+  if (s.type === "text"){
+    setBaseAsTextSlide(s.text || "", s.fontSize || 34);
+    return;
+  }
 
   try{
     showLoad(true);
@@ -308,63 +391,70 @@ export async function loadStop(i){
       await setBaseFromBlob(result.blob);
     } else if (result.directFallbackUrl){
       await setBaseFromDirectURL(result.directFallbackUrl);
-      showError('Base image loaded via cross-origin fallback. Export/Save disabled for this stop.');
+      showError("Base image loaded via cross-origin fallback. Export/Save disabled for this stop.");
     } else {
-      throw new Error('no-image-candidate-succeeded');
+      throw new Error("no-image-candidate-succeeded");
     }
 
-    // best-effort tiny upgrade (never throws)
+    // Gentle upgrade for very small images if we can (never throws)
     const minGood = 480;
-    const naturalW = baseImage?.width || 0, naturalH = baseImage?.height || 0;
+    const naturalW = baseImage ? baseImage.width : 0;
+    const naturalH = baseImage ? baseImage.height : 0;
     if (!baseTainted && (naturalW < minGood && naturalH < minGood)){
-      const extras = candidateOriginals(lastBaseURL || s.imageURL || s.thumbURL || s.storagePath || s.gsUri).slice(0, 6);
-      for (const c of extras){
+      const seeds = lastBaseURL || s.imageURL || s.thumbURL || s.storagePath || s.gsUri;
+      const extras = candidateOriginals(seeds).slice(0, 6);
+      for (let j=0;j<extras.length;j++){
         try{
-          const bl2 = await getBlobSDKFirst(c, 12000);
-          lastBaseURL = c;
+          const bl2 = await getBlobSDKFirst(extras[j], 12000);
+          lastBaseURL = extras[j];
           const d2 = await setBaseFromBlob(bl2);
           if (d2.naturalW >= minGood || d2.naturalH >= minGood) break;
-        }catch{}
+        } catch (_e){}
       }
     }
-  }catch(e){
-    if (s.imageData?.data){
+  } catch (e){
+    if (s.imageData && s.imageData.data){
       try{
-        const data = `data:image/${s.imageData.format||'jpeg'};base64,${s.imageData.data}`;
+        const data = "data:image/" + (s.imageData.format || "jpeg") + ";base64," + s.imageData.data;
         lastBaseURL = data;
         const bl = await (await fetch(data)).blob();
         await setBaseFromBlob(bl);
-        showError('Loaded embedded image; original not available.');
-      }catch{
-        showError('Image load failed for this stop.');
+        showError("Loaded embedded image; original not available.");
+      } catch (_ee){
+        showError("Image load failed for this stop.");
       }
-    }else{
-      showError('Image load failed for this stop.');
+    } else {
+      showError("Image load failed for this stop.");
     }
-  }finally{
+  } finally {
     showLoad(false);
   }
 
-  // overlays (best-effort)
+  // Best-effort overlays
   if (Array.isArray(s.overlays)){
-    for (const ov of s.overlays){
-      if (ov?.kind==='text'){
-        const tb = new fabric.Textbox(ov.text||'', {
-          left:ov.left||100, top:ov.top||100, scaleX:ov.scaleX||1, scaleY:ov.scaleY||1,
-          angle:ov.angle||0, opacity:ov.opacity??1, fontSize:ov.fontSize||24, fill:ov.fill||'#fff',
-          backgroundColor:ov.backgroundColor||'rgba(0,0,0,0.6)', padding:ov.padding??8,
-          cornerStyle:'circle', transparentCorners:false, editable:true
-        }); tb._kind='text'; f.add(tb);
-      } else if (ov?.src){
-        await new Promise(res=>{
-          fabric.Image.fromURL(ov.src, img=>{
+    for (let k=0;k<s.overlays.length;k++){
+      const ov = s.overlays[k];
+      if (ov && ov.kind === "text"){
+        const tb = new fabric.Textbox(ov.text || "", {
+          left: ov.left || 100, top: ov.top || 100, scaleX: ov.scaleX || 1, scaleY: ov.scaleY || 1,
+          angle: ov.angle || 0, opacity: (ov.opacity != null ? ov.opacity : 1),
+          fontSize: ov.fontSize || 24, fill: ov.fill || "#fff",
+          backgroundColor: ov.backgroundColor || "rgba(0,0,0,0.6)", padding: (ov.padding != null ? ov.padding : 8),
+          cornerStyle:"circle", transparentCorners:false, editable:true
+        });
+        tb._kind = "text";
+        f.add(tb);
+      } else if (ov && ov.src){
+        await new Promise((res)=>{
+          fabric.Image.fromURL(ov.src, function(img){
             img.set({
-              left:ov.left||0, top:ov.top||0, scaleX:ov.scaleX||1, scaleY:ov.scaleY||1,
-              angle:ov.angle||0, opacity:ov.opacity??1, flipX:!!ov.flipX, flipY:!!ov.flipY,
-              erasable:true, cornerStyle:'circle', transparentCorners:false
+              left: ov.left || 0, top: ov.top || 0, scaleX: ov.scaleX || 1, scaleY: ov.scaleY || 1,
+              angle: ov.angle || 0, opacity: (ov.opacity != null ? ov.opacity : 1),
+              flipX: !!ov.flipX, flipY: !!ov.flipY,
+              erasable: true, cornerStyle:"circle", transparentCorners:false
             });
             f.add(img); res();
-          }, { crossOrigin:'anonymous' });
+          }, { crossOrigin: "anonymous" });
         });
       }
     }
@@ -372,195 +462,248 @@ export async function loadStop(i){
   }
 }
 
-/* ---------------- public API (used by ai-upload.js) ---------------- */
+/* ---------------- Public API (used by ai-upload.js) ---------------- */
 export async function getGuideImageURLForCurrentStop(){
-  if (!current || stopIndex<0) throw new Error('No stop selected');
+  if (!current || stopIndex < 0) throw new Error("No stop selected");
   const s = current._stops[stopIndex];
 
-  // Fast path: the URL we actually used to load
-  if (lastBaseURL && (/^https?:\/\//i.test(lastBaseURL) || lastBaseURL.startsWith('data:') || lastBaseURL.startsWith('blob:'))) {
+  if (lastBaseURL && (/^https?:\/\//i.test(lastBaseURL) || lastBaseURL.indexOf("data:") === 0 || lastBaseURL.indexOf("blob:") === 0)) {
     return lastBaseURL;
   }
+  if (s && s.imageURL && /^https?:\/\//i.test(s.imageURL)) return s.imageURL;
 
-  // Direct URL on stop (if present)
-  if (s?.imageURL && /^https?:\/\//i.test(s.imageURL)) return s.imageURL;
-
-  // Storage refs
-  const ref = s.gsUri || s.storagePath || s.thumbURL || s.imageURL;
-  if (ref){
+  const refLike = s.gsUri || s.storagePath || s.thumbURL || s.imageURL;
+  if (refLike){
     const { storage } = getFirebase();
-    const r = stRef(storage, toStorageRefString(ref));
+    const r = stRef(storage, toStorageRefString(refLike));
     return await getDownloadURL(r);
   }
-
-  // Embedded
-  if (s?.imageData?.data){
-    return `data:image/${s.imageData.format||'jpeg'};base64,${s.imageData.data}`;
+  if (s && s.imageData && s.imageData.data){
+    return "data:image/" + (s.imageData.format || "jpeg") + ";base64," + s.imageData.data;
   }
-  throw new Error('This stop has no accessible base image.');
+  throw new Error("This stop has no accessible base image.");
 }
 
 export function hasOverlays(){
-  return f.getObjects().some(o => o!==baseImage && !o.isBaseText);
+  const objs = f.getObjects();
+  for (let i=0;i<objs.length;i++){
+    const o = objs[i];
+    if (o !== baseImage && !o.isBaseText) return true;
+  }
+  return false;
 }
 
-export async function getCompositeDataURL(maxEdge = 1600, quality = 0.95){
-  if (baseTainted) throw new Error('Canvas is cross-origin tainted; export disabled.');
-  const raw = f.toDataURL({ format:'jpeg', quality:1 });
-  const img = new Image(); img.decoding='async'; img.src=raw; await img.decode();
+export async function getCompositeDataURL(maxEdge, quality){
+  if (baseTainted) throw new Error("Canvas is cross-origin tainted; export disabled.");
+  const me = (typeof maxEdge === "number" && maxEdge > 0) ? maxEdge : 1600;
+  const q = (typeof quality === "number" && quality > 0 && quality <= 1) ? quality : 0.95;
+
+  const raw = f.toDataURL({ format: "jpeg", quality: 1 });
+  const img = new Image(); img.decoding = "async"; img.src = raw; await img.decode();
   const w = img.naturalWidth, h = img.naturalHeight;
-  const s = Math.min(1, maxEdge / Math.max(w, h));
+  const s = Math.min(1, me / Math.max(w, h));
   const outW = Math.round(w*s), outH = Math.round(h*s);
-  const c = document.createElement('canvas'); c.width=outW; c.height=outH;
-  const ctx = c.getContext('2d'); ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = 'high';
+  const c = document.createElement("canvas"); c.width = outW; c.height = outH;
+  const ctx = c.getContext("2d");
+  ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = "high";
   ctx.drawImage(img, 0, 0, outW, outH);
-  return c.toDataURL('image/jpeg', quality);
+  return c.toDataURL("image/jpeg", q);
 }
 
 export async function saveResultBlobToStorage(blob){
-  if (!current || stopIndex<0) throw new Error('No stop selected');
+  if (!current || stopIndex < 0) throw new Error("No stop selected");
   const { storage } = getFirebase();
   const ts = Date.now();
-  const path = `scenarios/${current.id}/ai/results/${ts}_stop${stopIndex}.jpg`;
+  const path = "scenarios/" + current.id + "/ai/results/" + ts + "_stop" + stopIndex + ".jpg";
   const ref = stRef(storage, path);
 
-  await new Promise((resolve,reject)=>{
-    const task = uploadBytesResumable(ref, blob, { contentType:'image/jpeg', cacheControl:'public,max-age=31536000,immutable' });
-    const killer = setTimeout(()=>{ try{ task.cancel(); }catch{} reject(Object.assign(new Error('upload/timeout'),{code:'upload/timeout'})); }, 90_000);
-    task.on('state_changed', ()=>{}, (err)=>{ clearTimeout(killer); reject(err); }, ()=>{ clearTimeout(killer); resolve(); });
+  await new Promise((resolve, reject)=>{
+    const task = uploadBytesResumable(ref, blob, { contentType:"image/jpeg", cacheControl:"public,max-age=31536000,immutable" });
+    const t = setTimeout(function(){ try{ task.cancel(); }catch(_e){} reject(Object.assign(new Error("upload/timeout"),{code:"upload/timeout"})); }, 90000);
+    task.on("state_changed", function(){}, function(err){ clearTimeout(t); reject(err); }, function(){ clearTimeout(t); resolve(); });
   });
 
   return await getDownloadURL(ref);
 }
 
 export async function addResultAsNewStop(url){
-  if (!current || stopIndex<0) return;
+  if (!current || stopIndex < 0) return;
   const base = current._stops[stopIndex];
   const ts = Date.now();
   const newStop = {
-    type:'photo',
-    title: (base.title||'') + ' (AI)',
-    caption: 'AI composite',
+    type: "photo",
+    title: (base.title || "") + " (AI)",
+    caption: "AI composite",
     imageURL: url,
     thumbURL: url,
     storagePath: null,
     gsUri: null,
-    lat: base.lat ?? null,
-    lng: base.lng ?? null,
-    accuracy: base.accuracy ?? null,
-    radiusMeters: base.radiusMeters ?? 50,
+    lat: (base.lat != null ? base.lat : null),
+    lng: (base.lng != null ? base.lng : null),
+    accuracy: (base.accuracy != null ? base.accuracy : null),
+    radiusMeters: (base.radiusMeters != null ? base.radiusMeters : 50),
     overlays: [],
     at: ts,
-    origin: 'ai',
+    origin: "ai",
     basedOn: stopIndex
   };
   const next = current._stops.slice(); next.push(newStop);
   const updated = Object.assign({}, current._raw);
   setStops(updated, next);
-  await set(dbRef(getFirebase().db, `${ROOT}/${current.id}`), updated);
+  await set(dbRef(getFirebase().db, ROOT + "/" + current.id), updated);
   current._raw = updated; current._stops = next;
   renderThumbs();
-  setAIStatus('AI image added as a new stop.');
+  setAIStatus("AI image added as a new stop.");
 }
 
 export function getCurrent(){ return current; }
 export function getStopIndex(){ return stopIndex; }
 
-/* ---------------- Editor wiring: overlays, brushes, text, selection, export/save ---------------- */
+/* ---------------- Editor tools (overlays / brushes / text / selection / export) ---------------- */
 function addOverlay(src){
-  fabric.Image.fromURL(src, img=>{
-    const cw=f.getWidth(), ch=f.getHeight(), targetW=cw*0.28, scale=targetW/img.width;
+  fabric.Image.fromURL(src, function(img){
+    const cw = f.getWidth(), ch = f.getHeight(), targetW = cw * 0.28, scale = targetW / img.width;
     img.scale(scale);
     img.set({
-      left:cw/2-(img.width*img.scaleX)/2, top:ch/2-(img.height*img.scaleY)/2,
-      cornerStyle:'circle', transparentCorners:false, shadow:'rgba(0,0,0,0.35) 0 6px 16px', erasable:true
+      left: cw/2 - (img.width*img.scaleX)/2,
+      top:  ch/2 - (img.height*img.scaleY)/2,
+      cornerStyle:"circle", transparentCorners:false,
+      shadow:"rgba(0,0,0,0.35) 0 6px 16px", erasable:true
     });
     f.add(img); f.setActiveObject(img); f.requestRenderAll();
-  }, { crossOrigin:'anonymous' });
+  }, { crossOrigin: "anonymous" });
 }
 
 async function listOverlays(cat){
+  let folder = "fire";
+  if (cat === "smoke") folder = "smoke";
+  else if (cat === "people") folder = "people";
+  else if (cat === "cars") folder = "cars";
+  else if (cat === "hazard") folder = "hazard";
+
   try{
-    const r = await fetch('https://fireopssim.com/geophoto/overlays/manifest.json', { cache:'no-store' });
+    const r = await fetch("https://fireopssim.com/geophoto/overlays/manifest.json", { cache:"no-store" });
     if (r.ok){
       const j = await r.json();
-      const folder = {fire:'fire', smoke:'smoke', people:'people', cars:'cars', hazard:'hazard'}[cat]||'fire';
-      if (Array.isArray(j[folder])) return j[folder].map(name=>`https://fireopssim.com/geophoto/overlays/${folder}/${name}`);
+      if (j && Array.isArray(j[folder])) {
+        const base = "https://fireopssim.com/geophoto/overlays/" + folder + "/";
+        return j[folder].map(function(name){ return base + name; });
+      }
     }
-  }catch{}
-  const folder = {fire:'fire', smoke:'smoke', people:'people', cars:'cars', hazard:'hazard'}[cat]||'fire';
-  const base = `https://fireopssim.com/geophoto/overlays/${folder}/`;
-  const names = ['1.png','2.png','3.png','4.png','5.png'];
-  return names.map(n=>base+n);
+  }catch(_e){}
+
+  const base = "https://fireopssim.com/geophoto/overlays/" + folder + "/";
+  return [1,2,3,4,5].map(function(n){ return base + n + ".png"; });
 }
 
 function wireOverlayShelf(){
-  const shelf = $("overlayShelf"); if(!shelf) return;
-  const buttons = Array.from(document.querySelectorAll('#tools [data-cat]'));
+  const shelf = $("overlayShelf");
+  if (!shelf) return;
+  const buttons = Array.from(document.querySelectorAll("#tools [data-cat]"));
+
   async function render(cat){
-    shelf.innerHTML = '';
+    shelf.innerHTML = "";
     const urls = await listOverlays(cat);
-    if (!urls.length){ shelf.innerHTML='<div class="pill small">No overlays found</div>'; return; }
-    urls.forEach(u=>{
-      const cell=document.createElement('div'); cell.style.border='1px solid rgba(255,255,255,.14)'; cell.style.borderRadius='10px'; cell.style.padding='4px'; cell.style.background='#0b2130';
-      const img=new Image(); img.src=u; img.alt='overlay'; img.style.width='100%'; img.style.display='block';
-      img.onclick=()=> addOverlay(u);
-      cell.appendChild(img); shelf.appendChild(cell);
-    });
+    if (!urls || urls.length === 0){
+      shelf.innerHTML = '<div class="pill small">No overlays found</div>';
+      return;
+    }
+    for (let i=0;i<urls.length;i++){
+      const u = urls[i];
+      const cell = document.createElement("div");
+      cell.style.border = "1px solid rgba(255,255,255,.14)";
+      cell.style.borderRadius = "10px";
+      cell.style.padding = "4px";
+      cell.style.background = "#0b2130";
+
+      const img = new Image();
+      img.src = u; img.alt = "overlay"; img.style.width = "100%"; img.style.display = "block";
+      img.onclick = function(){ addOverlay(u); };
+
+      cell.appendChild(img);
+      shelf.appendChild(cell);
+    }
   }
-  buttons.forEach(b=> b.addEventListener('click', ()=> render(b.dataset.cat)));
-  render('fire');
+
+  for (let i=0;i<buttons.length;i++){
+    const b = buttons[i];
+    b.addEventListener("click", function(){ render(b.getAttribute("data-cat")); });
+  }
+  render("fire");
 }
 
 function wireBrushes(){
-  if (!$("brushFire")) return; // skip if tools not present
-  let brushMode='off', pointerDown=false, lastStamp=null;
-  const brushSize=$("brushSize"), brushSizeReadout=$("brushSizeReadout");
-  const dist=(a,b)=>Math.hypot(a.x-b.x, a.y-b.y);
+  const btnF = $("brushFire"), btnS = $("brushSmoke"), btnE = $("brushErase"), btnOff = $("brushOff");
+  const size = $("brushSize"), readout = $("brushSizeReadout");
+  if (!btnF || !btnS || !btnE || !btnOff || !size) return;
+
+  let brushMode = "off";
+  let pointerDown = false;
+  let lastStamp = null;
+
+  function dist(a,b){ return Math.hypot(a.x - b.x, a.y - b.y); }
+
   async function randomOverlay(cat){
     const urls = await listOverlays(cat);
-    if (!urls.length) return null;
+    if (!urls || urls.length === 0) return null;
     return urls[Math.floor(Math.random()*urls.length)];
   }
+
   async function stampAt(p, cat){
-    const file = await randomOverlay(cat); if(!file) return;
-    const R=(parseInt(brushSize?.value||"120",10))/2;
-    if (lastStamp && dist(p,lastStamp) < R*0.6) return; lastStamp=p;
-    fabric.Image.fromURL(file, img=>{
-      const baseW=img.width||200, scale=(R*2)/baseW, j=0.75+Math.random()*0.5;
-      img.scale(scale*j);
+    const file = await randomOverlay(cat);
+    if (!file) return;
+    const R = (parseInt(size.value, 10) || 120) / 2;
+    if (lastStamp && dist(p, lastStamp) < R*0.6) return;
+    lastStamp = p;
+
+    fabric.Image.fromURL(file, function(img){
+      const baseW = img.width || 200;
+      const scale  = (R*2) / baseW;
+      const jitter = 0.75 + Math.random()*0.5;
+      img.scale(scale * jitter);
       img.set({
-        left:p.x-(img.width*img.scaleX)/2, top:p.y-(img.height*img.scaleY)/2, angle:(Math.random()*30-15),
-        opacity:0.9, cornerStyle:'circle', transparentCorners:false, erasable:true, selectable:false, evented:false
+        left: p.x - (img.width*img.scaleX)/2,
+        top:  p.y - (img.height*img.scaleY)/2,
+        angle: (Math.random()*30 - 15),
+        opacity: 0.9,
+        cornerStyle:"circle", transparentCorners:false,
+        erasable:true, selectable:false, evented:false
       });
       f.add(img); f.requestRenderAll();
-    }, { crossOrigin:'anonymous' });
+    }, { crossOrigin:"anonymous" });
   }
+
   function eraseStampsAt(p){
-    const R=(parseInt(brushSize?.value||"120",10))/2;
-    const targets = f.getObjects('image').filter(o => o!==baseImage);
-    for (const obj of targets){
-      const cx=obj.left + (obj.width*obj.scaleX)/2, cy=obj.top + (obj.height*obj.scaleY)/2;
-      if (Math.hypot(cx-p.x, cy-p.y) <= R) f.remove(obj);
+    const R = (parseInt(size.value, 10) || 120) / 2;
+    const targets = f.getObjects("image").filter(function(o){ return o !== baseImage; });
+    for (let i=0;i<targets.length;i++){
+      const obj = targets[i];
+      const cx = obj.left + (obj.width*obj.scaleX)/2;
+      const cy = obj.top  + (obj.height*obj.scaleY)/2;
+      if (Math.hypot(cx - p.x, cy - p.y) <= R) f.remove(obj);
     }
     f.requestRenderAll();
   }
 
-  $("brushFire").onclick = ()=> brushMode='fire';
-  $("brushSmoke").onclick= ()=> brushMode='smoke';
-  $("brushErase").onclick= ()=> brushMode='erase';
-  $("brushOff").onclick  = ()=> brushMode='off';
-  if (brushSizeReadout) brushSizeReadout.textContent=(parseInt(brushSize?.value||"120",10))+' px';
-  if (brushSize) brushSize.oninput=()=> brushSizeReadout && (brushSizeReadout.textContent=(parseInt(brushSize.value,10)||120)+' px');
+  btnF.onclick = function(){ brushMode = "fire"; };
+  btnS.onclick = function(){ brushMode = "smoke"; };
+  btnE.onclick = function(){ brushMode = "erase"; };
+  btnOff.onclick = function(){ brushMode = "off"; };
 
-  f.on('mouse:down', (e)=>{ pointerDown=true; const p=f.getPointer(e.e); if(brushMode==='fire') stampAt(p,'fire'); else if(brushMode==='smoke') stampAt(p,'smoke'); else if(brushMode==='erase') eraseStampsAt(p); });
-  f.on('mouse:move', (e)=>{ if(!pointerDown) return; const p=f.getPointer(e.e); if(brushMode==='fire') stampAt(p,'fire'); else if(brushMode==='smoke') stampAt(p,'smoke'); else if(brushMode==='erase') eraseStampsAt(p); });
-  f.on('mouse:up', ()=>{ pointerDown=false; });
+  if (readout) readout.textContent = (parseInt(size.value,10) || 120) + " px";
+  size.oninput = function(){ if (readout) readout.textContent = (parseInt(size.value,10) || 120) + " px"; };
+
+  f.on("mouse:down", function(e){ pointerDown = true; const p = f.getPointer(e.e); if (brushMode==="fire") stampAt(p,"fire"); else if (brushMode==="smoke") stampAt(p,"smoke"); else if (brushMode==="erase") eraseStampsAt(p); });
+  f.on("mouse:move", function(e){ if (!pointerDown) return; const p = f.getPointer(e.e); if (brushMode==="fire") stampAt(p,"fire"); else if (brushMode==="smoke") stampAt(p,"smoke"); else if (brushMode==="erase") eraseStampsAt(p); });
+  f.on("mouse:up",   function(){ pointerDown = false; });
 }
 
 function wireTextTools(){
-  if (!$("addTextbox")) return;
-  $("addTextbox").onclick = ()=>{
+  const addBtn = $("addTextbox"), applyBtn = $("tbApply"), delBtn = $("tbDelete");
+  const tContent = $("tbContent"), tFont = $("tbFont"), tBg = $("tbBgOpacity");
+  if (!addBtn || !applyBtn || !delBtn) return;
+
+  addBtn.onclick = function(){
     const tb = new fabric.Textbox("New note", {
       left: Math.max(20, f.getWidth()*0.1),
       top:  Math.max(20, f.getHeight()*0.1),
@@ -569,202 +712,232 @@ function wireTextTools(){
       fill: "#fff",
       backgroundColor: "rgba(0,0,0,0.6)",
       padding: 8,
-      cornerStyle:'circle', transparentCorners:false
+      cornerStyle:"circle", transparentCorners:false
     });
     f.add(tb); f.setActiveObject(tb); f.requestRenderAll();
-    $("tbContent") && ( $("tbContent").value = tb.text );
-    $("tbFont") && ( $("tbFont").value = String(tb.fontSize||24) );
-    $("tbBgOpacity") && ( $("tbBgOpacity").value = "0.6" );
+    if (tContent) tContent.value = tb.text;
+    if (tFont) tFont.value = String(tb.fontSize || 24);
+    if (tBg) tBg.value = "0.6";
   };
 
-  $("tbApply") && ($("tbApply").onclick = ()=>{
+  applyBtn.onclick = function(){
     const o = f.getActiveObject();
-    if (!o || o.type!=='textbox') return;
-    o.text = $("tbContent")?.value || '';
-    o.fontSize = parseInt($("tbFont")?.value||"24",10);
-    const op = Math.max(0, Math.min(1, parseFloat($("tbBgOpacity")?.value||"0.6")));
-    o.backgroundColor = `rgba(0,0,0,${op})`;
+    if (!o || o.type !== "textbox") return;
+    if (tContent) o.text = tContent.value || "";
+    if (tFont) o.fontSize = parseInt(tFont.value || "24", 10);
+    const op = tBg ? Math.max(0, Math.min(1, parseFloat(tBg.value || "0.6"))) : 0.6;
+    o.backgroundColor = "rgba(0,0,0," + op + ")";
     f.requestRenderAll();
-  });
-  $("tbDelete") && ($("tbDelete").onclick = ()=>{
+  };
+
+  delBtn.onclick = function(){
     const o = f.getActiveObject();
-    if (o && o.type==='textbox'){ f.remove(o); f.discardActiveObject(); f.requestRenderAll(); }
-  });
+    if (o && o.type === "textbox"){ f.remove(o); f.discardActiveObject(); f.requestRenderAll(); }
+  };
 }
 
 function wireSelectionTools(){
-  $("bringFront") && ($("bringFront").onclick = ()=>{ const o=f.getActiveObject(); if(o){ o.bringToFront(); f.requestRenderAll(); } });
-  $("sendBack")  && ($("sendBack").onclick  = ()=>{ const o=f.getActiveObject(); if(o){ o.sendToBack(); f.requestRenderAll(); } });
-  $("deleteObj") && ($("deleteObj").onclick = ()=>{ const o=f.getActiveObject(); if(o){ f.remove(o); f.discardActiveObject(); f.requestRenderAll(); } });
-  $("flipSelH")  && ($("flipSelH").onclick  = ()=>{ const o=f.getActiveObject(); if(o){ o.set('flipX', !o.flipX); f.requestRenderAll(); } });
-  $("flipSelV")  && ($("flipSelV").onclick  = ()=>{ const o=f.getActiveObject(); if(o){ o.set('flipY', !o.flipY); f.requestRenderAll(); } });
+  const fr = $("bringFront"), bk = $("sendBack"), del = $("deleteObj"), fh = $("flipSelH"), fv = $("flipSelV");
+  if (fr) fr.onclick = function(){ const o=f.getActiveObject(); if (o){ o.bringToFront(); f.requestRenderAll(); } };
+  if (bk) bk.onclick = function(){ const o=f.getActiveObject(); if (o){ o.sendToBack(); f.requestRenderAll(); } };
+  if (del) del.onclick = function(){ const o=f.getActiveObject(); if (o){ f.remove(o); f.discardActiveObject(); f.requestRenderAll(); } };
+  if (fh) fh.onclick = function(){ const o=f.getActiveObject(); if (o){ o.set("flipX", !o.flipX); f.requestRenderAll(); } };
+  if (fv) fv.onclick = function(){ const o=f.getActiveObject(); if (o){ o.set("flipY", !o.flipY); f.requestRenderAll(); } };
 }
 
 function wireViewerControls(){
-  $("fit")     && ($("fit").onclick = ()=>{
-    if (baseImage && baseImage.type==='image'){
+  const fitBtn = $("fit"), zi = $("zoomIn"), zo = $("zoomOut"), rl = $("rotateL"), rr = $("rotateR");
+  if (fitBtn) fitBtn.onclick = function(){
+    if (baseImage && baseImage.type === "image"){
       const cw=f.getWidth(), ch=f.getHeight(), s=Math.min(cw/baseImage.width, ch/baseImage.height);
-      baseImage.scale(s); baseImage.set({ left:(cw-baseImage.width*s)/2, top:(ch-baseImage.height*s)/2 });
+      baseImage.scale(s);
+      baseImage.set({ left:(cw-baseImage.width*s)/2, top:(ch-baseImage.height*s)/2 });
       f.requestRenderAll();
-    } else if (baseImage && baseImage.type==='rect'){
-      const t=f.getObjects('textbox').find(o=>o.isBaseText);
-      setBaseAsTextSlide(t?t.text:'', t?t.fontSize:34);
+    } else if (baseImage && baseImage.type === "rect"){
+      const tb = f.getObjects("textbox").find(function(o){ return o.isBaseText; });
+      setBaseAsTextSlide(tb ? tb.text : "", tb ? tb.fontSize : 34);
     }
-  });
-  $("zoomIn")  && ($("zoomIn").onclick = ()=> f.setZoom(f.getZoom()*1.1));
-  $("zoomOut") && ($("zoomOut").onclick= ()=> f.setZoom(f.getZoom()/1.1));
-  $("rotateL") && ($("rotateL").onclick = ()=>{ if(baseImage && baseImage.rotate){ baseImage.rotate((baseImage.angle||0)+90); f.requestRenderAll(); } });
-  $("rotateR") && ($("rotateR").onclick = ()=>{ if(baseImage && baseImage.rotate){ baseImage.rotate((baseImage.angle||0)-90); f.requestRenderAll(); } });
+  };
+  if (zi) zi.onclick = function(){ f.setZoom(f.getZoom()*1.1); };
+  if (zo) zo.onclick = function(){ f.setZoom(f.getZoom()/1.1); };
+  if (rl) rl.onclick = function(){ if (baseImage && baseImage.rotate){ baseImage.rotate((baseImage.angle || 0) + 90); f.requestRenderAll(); } };
+  if (rr) rr.onclick = function(){ if (baseImage && baseImage.rotate){ baseImage.rotate((baseImage.angle || 0) - 90); f.requestRenderAll(); } };
 }
 
-// Export + Save wiring
-function dataURLtoBlob(dataURL){ return fetch(dataURL).then(r=>r.blob()); }
+function dataURLtoBlob(dataURL){ return fetch(dataURL).then(function(r){ return r.blob(); }); }
 function wireExportAndSave(){
   const exportBtn = $("exportPNG");
   const saveBtn   = $("saveImage");
 
-  if (exportBtn) exportBtn.onclick = async ()=>{
-    try{
-      const dataURL = await getCompositeDataURL(2000, 0.95);
-      const a = document.createElement('a');
-      a.href = dataURL;
-      a.download = `scenario_${current?.id||'image'}_${Date.now()}.jpg`;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-    }catch(e){
-      showError('Export failed: ' + (e?.message || e));
-    }
-  };
-
-  if (saveBtn) saveBtn.onclick = async ()=>{
-    try{
-      setAIStatus('Preparing image…');
-      const dataURL = await getCompositeDataURL(1600, 0.95);
-      const blob = await dataURLtoBlob(dataURL);
-      setAIStatus('Uploading to cloud…');
-      const url = await saveResultBlobToStorage(blob);
-      setAIStatus('Saved to cloud ✓');
-      console.log('[saveImage] uploaded:', url);
-    }catch(e){
-      showError('Save to cloud failed: ' + (e?.message || e));
-      // Common cause: canvas tainted (cross-origin). Fix by giving the stop a gsUri/storagePath or a Firebase URL.
-    }
-  };
-}
-
-/* ---------------- UI wiring (ENTRY POINT) ---------------- */
-export function wireScenarioUI(){
-  // Toggle tools
-  $("toggleTools") && ($("toggleTools").onclick = ()=>{
-    const app = $("app");
-    if (!app) return;
-    const collapse = !app.classList.contains('toolsCollapsed');
-    app.classList.toggle('toolsCollapsed', collapse);
-    $("toggleTools").textContent = collapse ? 'Show Tools' : 'Hide Tools';
-    fitCanvas();
-  });
-
-  // Scenario select
-  const sel = $("scenarioSel");
-  if (sel){
-    sel.onchange = async ()=>{
-      const id = sel.value;
-      current = scenarios.find(s=>s.id===id) || null;
-      stopIndex = -1;
-      renderThumbs();
-      f.clear(); baseImage=null; fitCanvas();
-      if (current && current._stops.length){ await loadStop(0); }
+  if (exportBtn){
+    exportBtn.onclick = async function(){
+      try{
+        const dataURL = await getCompositeDataURL(2000, 0.95);
+        const a = document.createElement("a");
+        a.href = dataURL;
+        a.download = "scenario_" + (current ? current.id : "image") + "_" + Date.now() + ".jpg";
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+      }catch(e){
+        showError("Export failed: " + (e && (e.message || e)));
+      }
     };
   }
 
-  // GPS button
-  $("useGPS") && ($("useGPS").onclick = ()=>{
-    navigator.geolocation.getCurrentPosition(p=>{
-      $("stopLat") && ( $("stopLat").value = p.coords.latitude.toFixed(6) );
-      $("stopLng") && ( $("stopLng").value = p.coords.longitude.toFixed(6) );
-      $("metaMsg") && ( $("metaMsg").textContent = "GPS captured." );
-    }, e=>{ $("metaMsg") && ( $("metaMsg").textContent = "GPS error: " + e.message ); }, { enableHighAccuracy:true, timeout:10_000 });
-  });
-
-  // Save meta
-  $("saveMeta") && ($("saveMeta").onclick = async ()=>{
-    try{
-      await ensureAuthed();
-      if (!current || stopIndex<0) throw new Error('Select a stop first.');
-      const s = Object.assign({}, current._stops[stopIndex]);
-      s.title = $("stopTitle")?.value?.trim() || '';
-      s.caption = $("stopCaption")?.value?.trim() || '';
-      const lat = ($("stopLat")?.value?.trim()||'')==='' ? null : parseFloat($("stopLat").value);
-      const lng = ($("stopLng")?.value?.trim()||'')==='' ? null : parseFloat($("stopLng").value);
-      s.lat = lat; s.lng = lng;
-      s.radiusMeters = Math.max(5, Math.min(1000, Math.round(parseInt($("stopRadius")?.value || "50", 10))));
-      // serialize overlays
-      s.overlays = f.getObjects().filter(o=>o!==baseImage && !o.isBaseText).map(o=>{
-        if (o.type==='textbox'){
-          return {
-            kind:'text', text:o.text||'', left:o.left||0, top:o.top||0, scaleX:o.scaleX||1, scaleY:o.scaleY||1,
-            angle:o.angle||0, opacity:o.opacity??1, fontSize:o.fontSize||24, fill:o.fill||'#fff',
-            backgroundColor:o.backgroundColor||'rgba(0,0,0,0.6)', padding:o.padding??8
-          };
-        }
-        return {
-          kind:'image', src:o.getSrc ? o.getSrc() : (o._originalElement?.src || o.src || ''),
-          left:o.left||0, top:o.top||0, scaleX:o.scaleX||1, scaleY:o.scaleY||1,
-          angle:o.angle||0, opacity:o.opacity??1, flipX:!!o.flipX, flipY:!!o.flipY
-        };
-      });
-
-      const next = current._stops.slice(); next[stopIndex] = s;
-      const updated = Object.assign({}, current._raw); setStops(updated, next);
-      await set(dbRef(getFirebase().db, `${ROOT}/${current.id}`), updated);
-      current._raw = updated; current._stops = next;
-      $("metaMsg") && ( $("metaMsg").textContent = "Saved ✓" );
-    }catch(e){
-      $("metaMsg") && ( $("metaMsg").textContent = e?.message || String(e) );
-    }
-  });
-
-  // Delete scenario
-  $("deleteScenario") && ($("deleteScenario").onclick = async ()=>{
-    if (!current) return;
-    if (!confirm('Delete this scenario and its cloud images?')) return;
-    try{
-      showLoad(true);
-      await ensureAuthed();
-      const paths = [];
-      (current._stops||[]).forEach(s=>{
-        if (s.storagePath) paths.push(s.storagePath);
-        if (s.gsUri) paths.push(s.gsUri);
-        if (s.imageURL && !/^https?:\/\//.test(s.imageURL)) paths.push(s.imageURL);
-      });
-      for (const p of paths){
-        try{ await deleteObject(stRef(getFirebase().storage, toStorageRefString(p))); }catch{}
+  if (saveBtn){
+    saveBtn.onclick = async function(){
+      try{
+        setAIStatus("Preparing image…");
+        const dataURL = await getCompositeDataURL(1600, 0.95);
+        const blob = await dataURLtoBlob(dataURL);
+        setAIStatus("Uploading to cloud…");
+        const url = await saveResultBlobToStorage(blob);
+        setAIStatus("Saved to cloud ✓");
+        console.log("[saveImage] uploaded:", url);
+      }catch(e){
+        showError("Save to cloud failed: " + (e && (e.message || e)));
       }
-      await remove(dbRef(getFirebase().db, `${ROOT}/${current.id}`));
-      current=null; stopIndex=-1; populateScenarios(); if (sel) sel.value='';
-      $("thumbRow") && ( $("thumbRow").innerHTML='' );
-      f.clear(); baseImage=null; fitCanvas();
-      setStatus('Scenario deleted.');
-    }catch(e){
-      showError('Delete failed: '+(e?.message||e));
-    }finally{
-      showLoad(false);
-    }
-  });
+    };
+  }
+}
 
-  // Refresh/init
-  $("refreshBtn") && ($("refreshBtn").onclick = async ()=>{
-    await ensureAuthed();
-    ROOT = await detectScenariosRoot();
-    const { bucketHost } = getStorageInfo();
-    setRootPill(`root: ${ROOT} | bucket: ${bucketHost}`);
-    await loadScenarios();
-    subscribeScenarios();
-    if (sel && !sel.value && scenarios.length){ sel.value=scenarios[0].id; sel.dispatchEvent(new Event('change')); }
-  });
+/* ---------------- UI wiring (entry) ---------------- */
+export function wireScenarioUI(){
+  const toggleBtn = $("toggleTools");
+  if (toggleBtn){
+    toggleBtn.onclick = function(){
+      const app = $("app");
+      if (!app) return;
+      const collapse = !app.classList.contains("toolsCollapsed");
+      app.classList.toggle("toolsCollapsed", collapse);
+      toggleBtn.textContent = collapse ? "Show Tools" : "Hide Tools";
+      fitCanvas();
+    };
+  }
 
-  // viewer & editor tools + export/save
+  const sel = $("scenarioSel");
+  if (sel){
+    sel.onchange = async function(){
+      const id = sel.value;
+      current = scenarios.find(function(s){ return s.id === id; }) || null;
+      stopIndex = -1;
+      renderThumbs();
+      f.clear(); baseImage = null; fitCanvas();
+      if (current && current._stops && current._stops.length > 0){ await loadStop(0); }
+    };
+  }
+
+  const gps = $("useGPS");
+  if (gps){
+    gps.onclick = function(){
+      navigator.geolocation.getCurrentPosition(function(p){
+        const lat = $("stopLat"); if (lat) lat.value = p.coords.latitude.toFixed(6);
+        const lng = $("stopLng"); if (lng) lng.value = p.coords.longitude.toFixed(6);
+        const msg = $("metaMsg"); if (msg) msg.textContent = "GPS captured.";
+      }, function(e){
+        const msg = $("metaMsg"); if (msg) msg.textContent = "GPS error: " + e.message;
+      }, { enableHighAccuracy:true, timeout:10000 });
+    };
+  }
+
+  const saveMeta = $("saveMeta");
+  if (saveMeta){
+    saveMeta.onclick = async function(){
+      try{
+        await ensureAuthed();
+        if (!current || stopIndex < 0) throw new Error("Select a stop first.");
+        const s = Object.assign({}, current._stops[stopIndex]);
+        const ttl = $("stopTitle"), cap = $("stopCaption"), la = $("stopLat"), ln = $("stopLng"), r = $("stopRadius");
+        s.title = ttl ? (ttl.value || "").trim() : "";
+        s.caption = cap ? (cap.value || "").trim() : "";
+        s.lat = la && la.value.trim() !== "" ? parseFloat(la.value) : null;
+        s.lng = ln && ln.value.trim() !== "" ? parseFloat(ln.value) : null;
+        s.radiusMeters = r ? Math.max(5, Math.min(1000, Math.round(parseInt(r.value || "50", 10)))) : 50;
+
+        // serialize overlays
+        const objs = f.getObjects();
+        const overs = [];
+        for (let i=0;i<objs.length;i++){
+          const o = objs[i];
+          if (o === baseImage || o.isBaseText) continue;
+          if (o.type === "textbox"){
+            overs.push({
+              kind:"text", text:o.text || "", left:o.left || 0, top:o.top || 0,
+              scaleX:o.scaleX || 1, scaleY:o.scaleY || 1, angle:o.angle || 0,
+              opacity: (o.opacity != null ? o.opacity : 1), fontSize:o.fontSize || 24, fill:o.fill || "#fff",
+              backgroundColor:o.backgroundColor || "rgba(0,0,0,0.6)", padding:(o.padding != null ? o.padding : 8)
+            });
+          } else {
+            const src = o.getSrc ? o.getSrc() : (o._originalElement && o._originalElement.src ? o._originalElement.src : (o.src || ""));
+            overs.push({
+              kind:"image", src:src,
+              left:o.left || 0, top:o.top || 0, scaleX:o.scaleX || 1, scaleY:o.scaleY || 1,
+              angle:o.angle || 0, opacity:(o.opacity != null ? o.opacity : 1), flipX:!!o.flipX, flipY:!!o.flipY
+            });
+          }
+        }
+        s.overlays = overs;
+
+        const next = current._stops.slice(); next[stopIndex] = s;
+        const updated = Object.assign({}, current._raw); setStops(updated, next);
+        await set(dbRef(getFirebase().db, ROOT + "/" + current.id), updated);
+        current._raw = updated; current._stops = next;
+        const msg = $("metaMsg"); if (msg) msg.textContent = "Saved ✓";
+      }catch(e){
+        const msg = $("metaMsg"); if (msg) msg.textContent = (e && (e.message || e));
+      }
+    };
+  }
+
+  const del = $("deleteScenario");
+  if (del){
+    del.onclick = async function(){
+      if (!current) return;
+      if (!confirm("Delete this scenario and its cloud images?")) return;
+      try{
+        showLoad(true);
+        await ensureAuthed();
+        const paths = [];
+        const st = current._stops || [];
+        for (let i=0;i<st.length;i++){
+          const s = st[i];
+          if (s.storagePath) paths.push(s.storagePath);
+          if (s.gsUri) paths.push(s.gsUri);
+          if (s.imageURL && !/^https?:\/\//.test(s.imageURL)) paths.push(s.imageURL);
+        }
+        for (let i=0;i<paths.length;i++){
+          try { await deleteObject(stRef(getFirebase().storage, toStorageRefString(paths[i]))); } catch (_e){}
+        }
+        await remove(dbRef(getFirebase().db, ROOT + "/" + current.id));
+        current = null; stopIndex = -1; populateScenarios(); if (sel) sel.value = "";
+        const tr = $("thumbRow"); if (tr) tr.innerHTML = "";
+        f.clear(); baseImage = null; fitCanvas();
+        setStatus("Scenario deleted.");
+      }catch(e){
+        showError("Delete failed: " + (e && (e.message || e)));
+      }finally{
+        showLoad(false);
+      }
+    };
+  }
+
+  const refresh = $("refreshBtn");
+  if (refresh){
+    refresh.onclick = async function(){
+      await ensureAuthed();
+      ROOT = await detectScenariosRoot();
+      const info = getStorageInfo();
+      setRootPill("root: " + ROOT + " | bucket: " + info.bucketHost);
+      await loadScenarios();
+      subscribeScenarios();
+      if (sel && !sel.value && scenarios.length > 0){
+        sel.value = scenarios[0].id;
+        const ev = new Event("change"); sel.dispatchEvent(ev);
+      }
+    };
+  }
+
   wireViewerControls();
   wireOverlayShelf();
   wireBrushes();
@@ -773,19 +946,22 @@ export function wireScenarioUI(){
   wireExportAndSave();
 }
 
-/* ---------------- boot ---------------- */
+/* ---------------- Boot ---------------- */
 export async function bootScenarios(){
   fitCanvas();
   await ensureAuthed();
   ROOT = await detectScenariosRoot();
-  const { bucketHost } = getStorageInfo();
-  setRootPill(`root: ${ROOT} | bucket: ${bucketHost}`);
+  const info = getStorageInfo();
+  setRootPill("root: " + ROOT + " | bucket: " + info.bucketHost);
   await loadScenarios();
   subscribeScenarios();
 
-  const sel=$("scenarioSel");
-  if (sel && !sel.value && scenarios.length){ sel.value=scenarios[0].id; sel.dispatchEvent(new Event('change')); }
+  const sel = $("scenarioSel");
+  if (sel && !sel.value && scenarios.length > 0){
+    sel.value = scenarios[0].id;
+    const ev = new Event("change"); sel.dispatchEvent(ev);
+  }
 
-  const uid = (await ensureAuthed()).uid.slice(0,8);
-  setAuthPill(`anon ✔ (${uid})`);
+  const uid = (await ensureAuthed()).uid || "anon";
+  setAuthPill("anon ✔ (" + String(uid).slice(0,8) + ")");
 }
