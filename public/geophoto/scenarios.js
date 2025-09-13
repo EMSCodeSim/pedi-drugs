@@ -1,4 +1,4 @@
-// scenarios.js — robust loader + full editor wiring (keep files split)
+// scenarios.js — robust loader + full editor wiring + fixed AI/save behavior
 
 import {
   getFirebase, ensureAuthed, getStorageInfo,
@@ -23,14 +23,16 @@ export function setAIStatus(text){ const el=$("aiMsg"); if(el) el.textContent = 
 export function showError(msg){ const b=errbar(); if(!b) return; b.textContent=String(msg); b.style.display='block'; console.error(msg); }
 export function hideError(){ const b=errbar(); if(!b) return; b.style.display='none'; }
 export function showLoad(on){ const l=$("loader"); if(l) l.style.display = on ? "grid" : "none"; }
-function setAIEnabled(on){
-  ["aiPreview","aiSend","aiOpen","aiAdd"].forEach(id=>{ const b=$(id); if(b) b.disabled = !on; });
+
+// Only gate export/save on taint; keep AI send/preview usable even if tainted
+function setExportEnabled(on){
+  ["exportPNG","saveImage"].forEach(id=>{ const b=$(id); if(b) b.disabled = !on; });
 }
 
 /* ---------------- canvas ---------------- */
 export const f = new fabric.Canvas("c", { backgroundColor:"#061621", preserveObjectStacking:true });
 let baseImage = null;
-let baseTainted = false; // if true, export/AI disabled
+let baseTainted = false; // if true, export/save disabled (AI send stays ON)
 
 function blobToObjectURL(b){ return URL.createObjectURL(b); }
 function revokeURL(u){ try{ URL.revokeObjectURL(u); }catch{} }
@@ -48,13 +50,13 @@ async function setBaseFromBlob(blob){
       img.scale(s); img.set({ left:(cw-img.width*s)/2, top:(ch-img.height*s)/2 });
       f.add(img); img.moveTo(0); f.requestRenderAll();
       $("canvasInfo").textContent=`Image ${Math.round(img.width)}×${Math.round(img.height)} | shown ${Math.round(img.width*s)}×${Math.round(img.height*s)}`;
-      baseTainted = false; setAIEnabled(true);
+      baseTainted = false; setExportEnabled(true);
       resolve({ naturalW: img.width, naturalH: img.height });
     }, { crossOrigin:"anonymous" }); // safe for blob URLs
   });
 }
 
-// Last-chance fallback: direct URL (taints canvas; keeps editor usable)
+// Last-chance fallback: direct URL (taints canvas; keeps editor usable; AI send stays on)
 async function setBaseFromDirectURL(url){
   return new Promise((resolve, reject)=>{
     fabric.Image.fromURL(url, img=>{
@@ -66,7 +68,7 @@ async function setBaseFromDirectURL(url){
       img.scale(s); img.set({ left:(cw-img.width*s)/2, top:(ch-img.height*s)/2 });
       f.add(img); img.moveTo(0); f.requestRenderAll();
       $("canvasInfo").textContent=`Image (cross-origin) ${Math.round(img.width)}×${Math.round(img.height)} — export disabled`;
-      baseTainted = true; setAIEnabled(false);
+      baseTainted = true; setExportEnabled(false);
       resolve({ naturalW: img.width, naturalH: img.height });
     } /* intentionally no crossOrigin */, null);
   });
@@ -87,7 +89,7 @@ function setBaseAsTextSlide(text, fontSize){
   tb.isBaseText = true;
   f.add(rect); f.add(tb); rect.moveTo(0); f.requestRenderAll();
   $("canvasInfo").textContent='Text slide';
-  baseTainted = false; setAIEnabled(true);
+  baseTainted = false; setExportEnabled(true);
 }
 
 export function fitCanvas(){
@@ -104,7 +106,7 @@ export function fitCanvas(){
 }
 addEventListener("resize", fitCanvas);
 
-/* ---------------- robust image resolution (avoid taint) ---------------- */
+/* ---------------- robust image resolution ---------------- */
 function withTimeout(promise, ms, label="timeout"){
   return Promise.race([
     promise,
@@ -127,24 +129,18 @@ async function getBlobSDKFirst(refLike, timeoutMs=20000){
   const { storage } = getFirebase();
   const s = (refLike||"").trim();
   if (!s) throw new Error("empty-ref");
-  // data URL fast path
-  if (/^data:/i.test(s)){
-    const r = await fetch(s); const b = await r.blob(); return b;
-  }
-  // If http(s) and from Firebase domains, convert to SDK ref
+  if (/^data:/i.test(s)){ const r = await fetch(s); return await r.blob(); }
   if (/^https?:\/\//i.test(s)){
     const parsed = parseFirebaseURL(s);
     if (parsed){
       const ref = stRef(storage, `gs://${parsed.bucket}/${parsed.object}`);
       return await withTimeout(sdkGetBlob(ref), timeoutMs, "storage/getblob-timeout");
     }
-    // non-Firebase host → try fetch (may fail CORS)
     const r = await withTimeout(fetch(s, { mode:"cors", credentials:"omit", cache:"no-store" }), timeoutMs, "fetch/timeout");
     if (!r.ok) throw new Error("HTTP "+r.status);
     return await r.blob();
   }
-  // Otherwise assume gs:// or bucket/path
-  const ref = stRef(storage, toStorageRefString(s));
+  const ref = stRef(storage, toStorageRefString(s)); // gs://bucket/path or bucket/path
   return await withTimeout(sdkGetBlob(ref), timeoutMs, "storage/getblob-timeout");
 }
 
@@ -172,7 +168,6 @@ async function resolveForStop(stop, timeoutMs=22000){
       console.warn(`[stop-image] try ${i+1}/${cands.length} failed`, { candidate:c, err:e?.code||e?.message||e });
     }
   }
-  // Allow last-chance direct URL if we saw any http candidate
   if (lastPlainHTTP) return { blob:null, urlUsed:null, directFallbackUrl:lastPlainHTTP };
   throw new Error("no-image-candidate-succeeded");
 }
@@ -299,7 +294,7 @@ export async function loadStop(i){
       await setBaseFromBlob(result.blob);
     } else if (result.directFallbackUrl){
       await setBaseFromDirectURL(result.directFallbackUrl);
-      showError('Base image loaded via cross-origin fallback. Export/AI disabled for this stop.');
+      showError('Base image loaded via cross-origin fallback. Export/Save disabled for this stop.');
     } else {
       throw new Error('no-image-candidate-succeeded');
     }
@@ -379,6 +374,10 @@ export async function getGuideImageURLForCurrentStop(){
   throw new Error('This stop has no accessible base image.');
 }
 
+export function hasOverlays(){
+  return f.getObjects().some(o => o!==baseImage && !o.isBaseText);
+}
+
 export async function getCompositeDataURL(maxEdge = 1600, quality = 0.95){
   if (baseTainted) throw new Error('Canvas is cross-origin tainted; export disabled.');
   const raw = f.toDataURL({ format:'jpeg', quality:1 });
@@ -441,7 +440,7 @@ export async function addResultAsNewStop(url){
 export function getCurrent(){ return current; }
 export function getStopIndex(){ return stopIndex; }
 
-/* ---------------- Editor wiring: overlays, brushes, text, selection ---------------- */
+/* ---------------- Editor wiring: overlays, brushes, text, selection, export/save ---------------- */
 function addOverlay(src){
   fabric.Image.fromURL(src, img=>{
     const cw=f.getWidth(), ch=f.getHeight(), targetW=cw*0.28, scale=targetW/img.width;
@@ -463,7 +462,6 @@ async function listOverlays(cat){
       if (Array.isArray(j[folder])) return j[folder].map(name=>`https://fireopssim.com/geophoto/overlays/${folder}/${name}`);
     }
   }catch{}
-  // fallback: probe common names (short list)
   const folder = {fire:'fire', smoke:'smoke', people:'people', cars:'cars', hazard:'hazard'}[cat]||'fire';
   const base = `https://fireopssim.com/geophoto/overlays/${folder}/`;
   const names = ['1.png','2.png','3.png','4.png','5.png'];
@@ -590,6 +588,43 @@ function wireViewerControls(){
   $("rotateR").onclick = ()=>{ if(baseImage && baseImage.rotate){ baseImage.rotate((baseImage.angle||0)-90); f.requestRenderAll(); } };
 }
 
+// NEW: Export + Save wiring
+function dataURLtoBlob(dataURL){ return fetch(dataURL).then(r=>r.blob()); }
+
+function wireExportAndSave(){
+  const exportBtn = $("exportPNG");
+  const saveBtn   = $("saveImage");
+
+  if (exportBtn) exportBtn.onclick = async ()=>{
+    try{
+      const dataURL = await getCompositeDataURL(2000, 0.95);
+      const a = document.createElement('a');
+      a.href = dataURL;
+      a.download = `scenario_${current?.id||'image'}_${Date.now()}.jpg`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+    }catch(e){
+      showError('Export failed: ' + (e?.message || e));
+    }
+  };
+
+  if (saveBtn) saveBtn.onclick = async ()=>{
+    try{
+      setAIStatus('Preparing image…');
+      const dataURL = await getCompositeDataURL(1600, 0.95);
+      const blob = await dataURLtoBlob(dataURL);
+      setAIStatus('Uploading to cloud…');
+      const url = await saveResultBlobToStorage(blob);
+      setAIStatus('Saved to cloud ✓');
+      console.log('[saveImage] uploaded:', url);
+    }catch(e){
+      showError('Save to cloud failed: ' + (e?.message || e));
+      // Common cause: canvas tainted (cross-origin). Fix by giving the stop a gsUri/storagePath or a Firebase URL.
+    }
+  };
+}
+
 /* ---------------- UI wiring (entry) ---------------- */
 export function wireScenarioUI(){
   $("toggleTools").onclick = ()=>{
@@ -693,12 +728,13 @@ export function wireScenarioUI(){
     if (sel && !sel.value && scenarios.length){ sel.value=scenarios[0].id; sel.dispatchEvent(new Event('change')); }
   };
 
-  // viewer & editor tools
+  // viewer & editor tools + export/save
   wireViewerControls();
   wireOverlayShelf();
   wireBrushes();
   wireTextTools();
   wireSelectionTools();
+  wireExportAndSave(); // <— NEW
 }
 
 /* ---------------- boot ---------------- */
