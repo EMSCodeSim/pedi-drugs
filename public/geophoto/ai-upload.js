@@ -1,9 +1,9 @@
-// ai-upload.js — streaming-aware + sends `image` key
-// - Reuses window.__SCENARIOS (no duplicate state)
-// - Exports wireAI() and also auto-inits
-// - Adds `image: guideURL` to payload (common server expectation)
-// - Detects empty/quiet streams (≤6s no bytes) and surfaces a clear error
-// - Prints response headers + first bytes for debugging
+// ai-upload.js — img2img-style client: send { dataUrl, prompt, strength } to Netlify
+// - Reuses window.__SCENARIOS so selection state stays consistent
+// - Exports wireAI() and auto-inits
+// - Composites canvas to dataUrl (like img2img-demo) and POSTS it
+// - Falls back to guideURL if canvas is tainted (CORS)
+// - Streaming-aware with idle + hard timeouts
 // - Normalizes result: absolute/relative URL, dataURL, raw base64
 
 import { ensureAuthed, uploadSmallText, getFirebase } from "./firebase-core.js";
@@ -29,7 +29,7 @@ async function loadScenariosModule(){
     return __scn;
   }
   const bases = [ new URL(".", import.meta.url), new URL("./", location.href) ];
-  const names = ["scenarios.js","scenarios (1).js","scenarios%20(1).js"];
+  const names = ["scenarios.js","scenarios (1).js","scenarios%20(1).js"]; // no cache-busting => single instance
   let lastErr=null;
   for (const b of bases){
     for (const n of names){
@@ -42,9 +42,7 @@ async function loadScenariosModule(){
           return __scn;
         }
         if (typeof mod.getGuideImageURLForCurrentStop === "function"){
-          __scn = mod;
-          console.log("[ai] imported scenarios module from", u);
-          return __scn;
+          __scn = mod; console.log("[ai] imported scenarios module from", u); return __scn;
         }
       }catch(e){ lastErr = e; console.warn("[ai] scenarios import fail", u, e?.message||e); }
     }
@@ -118,23 +116,30 @@ async function ensureStopSelectedOrAutoOpen(){
   updateStatus("This scenario has no photos/slides."); return false;
 }
 
-/* ---------- guide building ---------- */
+/* ---------- guide & composite (img2img-style) ---------- */
 async function guessGuideURLFast(){
   const live = __scn?.getLastLoadedBaseURL?.();
   if (live && (/^https?:\/\//i.test(live) || live.startsWith("data:") || live.startsWith("blob:"))) return live;
   return await withTimeout(__scn.getGuideImageURLForCurrentStop(), 5000, "guideurl/timeout");
 }
-async function buildGuideFast({ wantComposite }){
+async function buildGuideAndDataUrl(){
   const guideURL = await withTimeout(guessGuideURLFast(), 6000, "guideurl/timeout");
-  let compositeURL = null;
-  if (wantComposite && __scn?.isCanvasTainted && !__scn.isCanvasTainted()){
+
+  // Try to composite the full canvas to a data URL (best UX for server, same as demo)
+  let dataUrl = null;
+  if (__scn?.isCanvasTainted && !__scn.isCanvasTainted()){
     try{
-      const dataURL = await withTimeout(__scn.getCompositeDataURL(1280, 0.92), 3000, "composite/timeout");
-      const blob = await toBlobFromDataURL(dataURL);
-      compositeURL = await withTimeout(uploadToInbox(blob, "jpg"), 5000, "upload/timeout");
-    }catch(e){ console.warn("[ai] composite skipped:", e?.code||e?.message||e); }
+      // Prefer PNG like the demo; if your getCompositeDataURL returns JPEG, it's fine too
+      dataUrl = await withTimeout(__scn.getCompositeDataURL(1600, 0.95), 5000, "composite/timeout");
+    }catch(e){
+      console.warn("[ai] composite dataUrl failed:", e?.code||e?.message||e);
+      dataUrl = null;
+    }
+  } else {
+    console.warn("[ai] Canvas is tainted; cannot composite to dataUrl. Will send guideURL instead.");
   }
-  return { guideURL, compositeURL };
+
+  return { guideURL, dataUrl };
 }
 
 /* ---------- result normalization ---------- */
@@ -181,16 +186,13 @@ async function postAI(payload, preferredUrl){
     try{
       console.log("[ai] POST →", url, { keys:Object.keys(payload) });
 
-      // overall hard timeout
       const ctl = new AbortController();
       const HARD_MS = 120000;
       const hardTimer = setTimeout(()=>ctl.abort(), HARD_MS);
 
       const r = await fetch(url, { method:"POST", headers, body, signal:ctl.signal, cache:"no-store", mode:"cors", credentials:"omit" });
 
-      // debug headers
-      const hdrs = {};
-      r.headers.forEach((v,k)=> hdrs[k]=v);
+      const hdrs = {}; r.headers.forEach((v,k)=> hdrs[k]=v);
       console.log("[ai] resp headers", hdrs);
 
       if (!r.ok){
@@ -201,11 +203,9 @@ async function postAI(payload, preferredUrl){
       }
 
       const ct = (r.headers.get("content-type") || "").toLowerCase();
-      const te = (r.headers.get("transfer-encoding") || "").toLowerCase();
-      const cl = r.headers.get("content-length") || "";
 
-      // Quick JSON path
-      if (ct.includes("application/json") && cl && !te && r.body == null){
+      // Non-streaming JSON path
+      if (ct.includes("application/json") && r.body == null){
         clearTimeout(hardTimer);
         const text = await withTimeout(r.text(), 15000, "json/timeout");
         console.log("[ai] resp body (json, length)", text.slice(0,300));
@@ -217,7 +217,6 @@ async function postAI(payload, preferredUrl){
       updateStatus("AI: streaming…");
       const reader = r.body?.getReader?.();
       if (!reader){
-        // No stream reader available: read all (with timeout)
         const text = await withTimeout(r.text(), 15000, "stream/timeout");
         clearTimeout(hardTimer);
         console.log("[ai] resp body (text)", text.slice(0,300));
@@ -228,9 +227,6 @@ async function postAI(payload, preferredUrl){
       const decoder = new TextDecoder();
       let buf = "";
       let firstBytesShown = false;
-      let lastProgressAt = Date.now();
-
-      // idle timer: if no bytes for 6s, bail
       const IDLE_MS = 6000;
       let idleTimer = setTimeout(()=>ctl.abort(), IDLE_MS);
       function resetIdle(){ clearTimeout(idleTimer); idleTimer = setTimeout(()=>ctl.abort(), IDLE_MS); }
@@ -247,17 +243,14 @@ async function postAI(payload, preferredUrl){
           firstBytesShown = true;
         }
 
-        // Process lines (SSE/NDJSON/plain)
+        // Parse SSE/NDJSON/plain line-by-line; finish as soon as an image/url appears
         const lines = buf.split(/\r?\n/); buf = lines.pop();
         for (const raw of lines){
           const line = raw.replace(/^data:\s*/,'').trim();
           if (!line) continue;
 
-          if (/^\{/.test(line) === false){
-            if (Date.now() - lastProgressAt > 750){
-              updateStatus("AI: " + line.slice(0,120));
-              lastProgressAt = Date.now();
-            }
+          if (!line.startsWith("{")){
+            updateStatus("AI: " + line.slice(0,120));
             continue;
           }
 
@@ -312,8 +305,9 @@ function bindButtons(){
         try{ await uploadSmallText(`healthchecks/ai_preview_${Date.now()}.txt`, "ok"); }catch{}
         const kind  = $("aiReturn")?.value || "photo";
         const style = $("aiStyle")?.value  || "realistic";
-        const notes = $("aiNotes")?.value  || "";
-        updateStatus(`Preview • return=${kind} • style=${style}${notes ? " • notes ✓" : ""}`);
+        const notes = $("aiNotes")?.value  || $("aiPrompt")?.value || "";
+        const strength = parseFloat($("aiStrength")?.value || "0.35") || 0.35;
+        updateStatus(`Preview • return=${kind} • style=${style} • strength=${strength}${notes ? " • notes ✓" : ""}`);
       }catch(e){ updateStatus("Preview failed: " + (e?.message||e)); }
     });
     labelBtnWired(btnPreview);
@@ -326,10 +320,10 @@ function bindButtons(){
     try{
       await ensureAuthed();
 
-      const kind  = $("aiReturn")?.value || "photo";
-      const style = $("aiStyle")?.value  || "realistic";
-      const notes = $("aiNotes")?.value  || "";
-      const wantComposite = (kind === "photo");
+      const kind      = $("aiReturn")?.value || "photo";
+      const style     = $("aiStyle")?.value  || "realistic";
+      const prompt    = $("aiNotes")?.value  || $("aiPrompt")?.value || ""; // align with demo
+      const strength  = parseFloat($("aiStrength")?.value || "0.35") || 0.35;
 
       updateStatus("Checking AI endpoint…");
       const ping = await pingEndpoints(3500);
@@ -339,33 +333,34 @@ function bindButtons(){
       if (!__scn) await loadScenariosModule();
       if (!(await ensureStopSelectedOrAutoOpen())) throw new Error("Select a scenario + photo/slide first.");
 
-      const { guideURL, compositeURL } = await withTimeout(
-        buildGuideFast({ wantComposite }),
-        10000,
+      const { guideURL, dataUrl } = await withTimeout(
+        buildGuideAndDataUrl(),
+        12000,
         "buildguide/timeout"
       );
-      if (!guideURL) throw new Error("No guideURL resolved.");
+      if (!guideURL && !dataUrl) throw new Error("Could not prepare guide image.");
 
-      updateStatus("Guide ready ✓ — contacting AI…");
+      updateStatus(dataUrl ? "Guide ready ✓ (dataUrl) — contacting AI…" : "Guide ready ✓ (URL) — contacting AI…");
 
       const hasOv = (()=>{ try { return !!__scn?.hasOverlays?.(); } catch { return false; } })();
 
-      // IMPORTANT: include `image` for servers that expect it
+      // Build payload like img2img-demo: send dataUrl if we have it; otherwise image/guideURL
       const payload = {
-        // canonical
-        returnType: kind, style, notes: notes||"", hasOverlays: hasOv,
-        guideURL, compositeURL,
-        // common synonyms (inputs)
-        image: guideURL,                  // ← added
-        return: kind, mode:(kind==="overlays"?"overlays":"photo"),
+        // img2img-style keys
+        dataUrl: dataUrl || null,
+        prompt,
+        strength,
+
+        // compatibility keys (your server can pick what it needs)
+        image: guideURL,
+        returnType: kind, style, notes: prompt, hasOverlays: hasOv,
+        guideURL,
+        return: kind, mode: (kind==="overlays"?"overlays":"photo"),
         overlaysOnly: kind==="overlays", transparent: kind==="overlays",
-        style_preset: style, prompt: notes||"",
-        guideUrl: guideURL, imageURL: guideURL, image_url: guideURL, input: guideURL, reference: guideURL, src: guideURL,
-        composite_url: compositeURL
+        style_preset: style, input: guideURL, guideUrl: guideURL, imageURL: guideURL, image_url: guideURL, reference: guideURL, src: guideURL
       };
 
-      // expose last payload for debugging
-      window.__AI_LAST_PAYLOAD__ = payload;
+      window.__AI_LAST_PAYLOAD__ = payload; // debug
 
       const res = await postAI(payload, ping?.url);
       const norm = await normalizeAIResponse(res.json || {}, res.endpoint);
