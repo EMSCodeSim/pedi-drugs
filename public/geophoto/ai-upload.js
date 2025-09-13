@@ -1,4 +1,4 @@
-// ai-upload.js — robust AI wiring (URL-first payload + detailed errors)
+// ai-upload.js — no-stall "Send to AI" (guide-only fallback + timeouts + clear errors)
 
 import { ensureAuthed, uploadSmallText, getFirebase } from "./firebase-core.js";
 import {
@@ -18,9 +18,16 @@ function $(id){ return document.getElementById(id); }
 function hasOverlaysSafe(){ try { return !!_hasOverlays(); } catch { return false; } }
 function pick(v, d){ return (v===undefined || v===null || v==="") ? d : v; }
 
+// ---------- small utils ----------
+function withTimeout(promise, ms, label="timeout"){
+  return Promise.race([
+    promise,
+    new Promise((_, rej)=> setTimeout(()=> rej(Object.assign(new Error(label), { code: label })), ms))
+  ]);
+}
 async function toBlobFromDataURL(dataURL){ const r = await fetch(dataURL); return await r.blob(); }
 
-// Upload a blob to a temp “inbox” path so we can pass a URL to the AI function
+// Upload a blob to a temp inbox path and return a download URL
 async function uploadToInbox(blob, ext = "jpg"){
   const { storage } = getFirebase();
   const cur = getCurrent();
@@ -31,58 +38,50 @@ async function uploadToInbox(blob, ext = "jpg"){
   return await getDownloadURL(stRef(storage, path));
 }
 
-// Prefer URL payloads (smaller, avoids function body size limits)
-async function buildGuide({ wantComposite }){
-  // Always provide a guideURL
-  const guideURL = await getGuideImageURLForCurrentStop();
+// Build guide quickly. Never stalls: composite attempt ≤ 3s, upload ≤ 7s, overall ≤ 10s
+async function buildGuideFast({ wantComposite }){
+  // Always grab a guide URL first; this should be fast and reliable
+  const guideURL = await withTimeout(getGuideImageURLForCurrentStop(), 7000, "guideurl/timeout");
 
-  // Optionally also provide a compositeURL (uploaded preview of canvas) if possible
   let compositeURL = null;
-  if (wantComposite) {
+  if (wantComposite){
     try {
-      const dataURL = await getCompositeDataURL(1280, 0.92);
+      // 1) render composite (≤ 3s)
+      const dataURL = await withTimeout(getCompositeDataURL(1280, 0.92), 3000, "composite/timeout");
+      // 2) upload composite (≤ 7s)
       const blob = await toBlobFromDataURL(dataURL);
-      compositeURL = await uploadToInbox(blob, "jpg");
-    } catch {
-      // Canvas might be tainted (or user didn’t edit) — that’s fine, we’ll just send guideURL
+      compositeURL = await withTimeout(uploadToInbox(blob, "jpg"), 7000, "upload/timeout");
+    } catch (e) {
+      // fine — continue with guide-only
+      console.warn("[ai] composite skipped:", e?.code || e?.message || e);
     }
   }
   return { guideURL, compositeURL };
 }
 
-// POST helper that shows detailed error text instead of just “400”
+// POST helper that shows server error text, not just a status code
 async function postAI(payload){
   const headers = { "content-type": "application/json", "accept": "application/json" };
   const body = JSON.stringify(payload);
 
-  const tryEndpoint = async (url) => {
+  const call = async (url) => {
     const r = await fetch(url, { method: "POST", headers, body });
+    const text = await r.text();
     const ct = r.headers.get("content-type") || "";
-    const text = await r.text(); // read once
-
-    if (!r.ok) {
-      // try to surface JSON error messages if any
-      let errMsg = text;
-      try { errMsg = JSON.stringify(JSON.parse(text)); } catch {}
-      throw new Error(`${url} ${r.status} ${errMsg.slice(0, 800)}`);
+    if (!r.ok){
+      let msg = text;
+      try { msg = JSON.stringify(JSON.parse(text)); } catch {}
+      throw new Error(`${url} ${r.status} ${msg.slice(0, 800)}`);
     }
-
     if (ct.startsWith("image/")) {
-      // Convert previously-read text back into a Blob is tricky; instead, re-fetch the URL via a signed redirect if provided.
-      // Most functions won’t inline binary with text path. If yours does, adapt here to stream the response instead of reading text.
-      throw new Error("Function returned image with text body; please return JSON {url} or stream the image.");
+      // Your function should return JSON {url: "..."}; if it returns raw image, adjust server or stream here instead.
+      throw new Error("Function returned raw image; please return JSON {url}.");
     }
-
-    try { return { type: "json", json: JSON.parse(text) }; }
-    catch { return { type: "json", json: {} }; }
+    try { return JSON.parse(text); } catch { return {}; }
   };
 
-  try {
-    return await tryEndpoint(AI_PRIMARY);
-  } catch (e1) {
-    // fall back
-    return await tryEndpoint(AI_FALLBACK);
-  }
+  try { return await call(AI_PRIMARY); }
+  catch { return await call(AI_FALLBACK); }
 }
 
 export function wireAI(){
@@ -92,7 +91,7 @@ export function wireAI(){
   const btnAdd     = $("aiAdd");
 
   if (!btnPreview || !btnSend || !btnOpen || !btnAdd) {
-    console.warn("[ai-upload] Missing buttons");
+    console.warn("[ai-upload] Missing AI buttons");
     return;
   }
 
@@ -106,7 +105,7 @@ export function wireAI(){
       const kind  = $("aiReturn")?.value || "photo";
       const style = $("aiStyle")?.value  || "realistic";
       const notes = $("aiNotes")?.value  || "";
-      setAIStatus(`Preview ready • return=${kind} • style=${style}${notes ? " • notes ✓" : ""}`);
+      setAIStatus(`Preview • return=${kind} • style=${style}${notes ? " • notes ✓" : ""}`);
     } catch (e) {
       setAIStatus("Preview failed: " + (e?.message || e));
     }
@@ -123,53 +122,42 @@ export function wireAI(){
       const kind  = $("aiReturn")?.value || "photo";      // "photo" | "overlays"
       const style = $("aiStyle")?.value  || "realistic";
       const notes = $("aiNotes")?.value  || "";
-      const wantComposite = (kind === "photo");
+      const wantComposite = (kind === "photo"); // fast attempt; falls back automatically
 
       setAIStatus("Preparing guide…");
-      const { guideURL, compositeURL } = await buildGuide({ wantComposite });
 
-      // Build a very tolerant payload (lots of synonyms)
+      // Build guide with strict timeouts so we never stall
+      const { guideURL, compositeURL } = await withTimeout(
+        buildGuideFast({ wantComposite }),
+        10000,
+        "buildguide/timeout"
+      );
+
+      setAIStatus("Guide ready ✓ — contacting AI…");
+
+      // Tolerant payload (include common synonyms)
       const payload = {
-        // canonical
-        returnType: kind,                // "photo" | "overlays"
-        style,
-        notes: pick(notes, ""),
-        hasOverlays: hasOverlaysSafe(),
-
-        // synonyms many server funcs accept
-        return: kind,
-        mode: kind === "overlays" ? "overlays" : "photo",
-        overlaysOnly: kind === "overlays",
-        transparent: kind === "overlays",
-        style_preset: style,
-        prompt: pick(notes, ""),
-
-        // guide URL (many aliases)
-        guideURL, guideUrl: guideURL, imageURL: guideURL, image_url: guideURL,
-        input: guideURL, reference: guideURL, src: guideURL,
-
-        // optional composite URL (preview of canvas)
-        compositeURL,
-        composite_url: compositeURL
+        returnType: kind, style, notes: pick(notes,""), hasOverlays: hasOverlaysSafe(),
+        return: kind, mode: (kind==="overlays"?"overlays":"photo"), overlaysOnly: kind==="overlays", transparent: kind==="overlays",
+        style_preset: style, prompt: pick(notes,""),
+        guideURL, guideUrl: guideURL, imageURL: guideURL, image_url: guideURL, input: guideURL, reference: guideURL, src: guideURL,
+        compositeURL, composite_url: compositeURL
       };
 
-      setAIStatus("Contacting AI…");
       const res = await postAI(payload);
 
-      // Expect JSON with a result URL or dataURL
-      const j = res.json || {};
-      const url = j.url || j.result || j.image || j.output || j.image_url || j.composited_url || j.compositeURL || null;
-      const dataURL = j.dataURL || j.data_url || null;
+      // Accept a bunch of common result keys
+      const url = res.url || res.result || res.image || res.output || res.image_url || res.compositeURL || res.composited_url || null;
+      const dataURL = res.dataURL || res.data_url || null;
 
       let finalURL = null;
       if (url && /^https?:\/\//i.test(url)) {
         finalURL = url;
       } else if (dataURL && dataURL.startsWith("data:image/")) {
-        // Upload dataURL to storage to get a durable URL
         const blob = await toBlobFromDataURL(dataURL);
         finalURL = await uploadToInbox(blob, dataURL.includes("png") ? "png" : "jpg");
       } else {
-        throw new Error("AI did not return a URL. Received: " + JSON.stringify(j).slice(0, 500));
+        throw new Error("AI did not return a URL. Received: " + JSON.stringify(res).slice(0, 500));
       }
 
       btnOpen.disabled = false;
@@ -183,7 +171,7 @@ export function wireAI(){
       setAIStatus("AI result ready ✓");
     } catch (e) {
       console.error("[ai-upload] send failed", e);
-      setAIStatus(String(e?.message || e));
+      setAIStatus("Send failed: " + (e?.message || e));
     } finally {
       btnSend.disabled = false;
     }
