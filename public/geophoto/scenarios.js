@@ -1,4 +1,5 @@
-// scenarios.js — robust loader + full editor wiring + fixed AI/save behavior + lastBaseURL export
+// scenarios.js — robust scenario loader + full editor wiring
+// Exports: wireScenarioUI, bootScenarios, and helpers used by ai-upload.js
 
 import {
   getFirebase, ensureAuthed, getStorageInfo,
@@ -10,7 +11,8 @@ import {
 } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-database.js";
 
 import {
-  ref as stRef, getDownloadURL, getBlob as sdkGetBlob, uploadBytesResumable, deleteObject
+  ref as stRef, getDownloadURL, getBlob as sdkGetBlob,
+  uploadBytesResumable, deleteObject
 } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-storage.js";
 
 /* ---------------- tiny DOM helpers ---------------- */
@@ -24,7 +26,7 @@ export function showError(msg){ const b=errbar(); if(!b) return; b.textContent=S
 export function hideError(){ const b=errbar(); if(!b) return; b.style.display='none'; }
 export function showLoad(on){ const l=$("loader"); if(l) l.style.display = on ? "grid" : "none"; }
 
-// Only gate export/save on taint; keep AI send/preview usable even if tainted
+// Only gate export/save on taint; AI buttons can remain enabled
 function setExportEnabled(on){
   ["exportPNG","saveImage"].forEach(id=>{ const b=$(id); if(b) b.disabled = !on; });
 }
@@ -32,8 +34,8 @@ function setExportEnabled(on){
 /* ---------------- canvas ---------------- */
 export const f = new fabric.Canvas("c", { backgroundColor:"#061621", preserveObjectStacking:true });
 let baseImage = null;
-let baseTainted = false; // if true, export/save disabled (AI send stays ON)
-let lastBaseURL = null;  // <- NEW: remember the last loaded base image URL (http(s)/blob/data)
+let baseTainted = false; // if true, export/save disabled
+let lastBaseURL = null;  // last successfully used base image URL (http/data/blob)
 
 /** expose taint + last URL for AI */
 export function isCanvasTainted(){ return !!baseTainted; }
@@ -54,16 +56,15 @@ async function setBaseFromBlob(blob){
       const s=Math.min(cw/img.width, ch/img.height);
       img.scale(s); img.set({ left:(cw-img.width*s)/2, top:(ch-img.height*s)/2 });
       f.add(img); img.moveTo(0); f.requestRenderAll();
-      $("canvasInfo").textContent=`Image ${Math.round(img.width)}×${Math.round(img.height)} | shown ${Math.round(img.width*s)}×${Math.round(img.height*s)}`;
+      $("canvasInfo")?.textContent=`Image ${Math.round(img.width)}×${Math.round(img.height)} | shown ${Math.round(img.width*s)}×${Math.round(img.height*s)}`;
       baseTainted = false; setExportEnabled(true);
-      // If we loaded from a blob, keep any previous URL (set by caller) or mark as blob:
       if (!lastBaseURL || lastBaseURL.startsWith("data:")) { lastBaseURL = lastBaseURL || "blob://local"; }
       resolve({ naturalW: img.width, naturalH: img.height });
     }, { crossOrigin:"anonymous" }); // safe for blob URLs
   });
 }
 
-// Last-chance fallback: direct URL (taints canvas; keeps editor usable; AI send stays on)
+// Last-chance fallback: direct URL (taints canvas; keeps editor usable; AI send can still work)
 async function setBaseFromDirectURL(url){
   return new Promise((resolve, reject)=>{
     fabric.Image.fromURL(url, img=>{
@@ -74,9 +75,9 @@ async function setBaseFromDirectURL(url){
       const s=Math.min(cw/img.width, ch/img.height);
       img.scale(s); img.set({ left:(cw-img.width*s)/2, top:(ch-img.height*s)/2 });
       f.add(img); img.moveTo(0); f.requestRenderAll();
-      $("canvasInfo").textContent=`Image (cross-origin) ${Math.round(img.width)}×${Math.round(img.height)} — export disabled`;
+      $("canvasInfo")?.textContent=`Image (cross-origin) ${Math.round(img.width)}×${Math.round(img.height)} — export disabled`;
       baseTainted = true; setExportEnabled(false);
-      lastBaseURL = url; // <- remember exact URL used
+      lastBaseURL = url;
       resolve({ naturalW: img.width, naturalH: img.height });
     } /* intentionally no crossOrigin */, null);
   });
@@ -96,16 +97,16 @@ function setBaseAsTextSlide(text, fontSize){
   });
   tb.isBaseText = true;
   f.add(rect); f.add(tb); rect.moveTo(0); f.requestRenderAll();
-  $("canvasInfo").textContent='Text slide';
+  $("canvasInfo")?.textContent='Text slide';
   baseTainted = false; setExportEnabled(true);
-  lastBaseURL = `data:text/plain;base64,${btoa(text||"")}`; // mark a sentinel for “text slide”
+  lastBaseURL = `data:text/plain;base64,${btoa(text||"")}`;
 }
 
 export function fitCanvas(){
-  const targetH = Math.max(420, window.innerHeight - 280);
-  $("c").style.height = targetH + "px";
+  const targetH = Math.max(420, (window.innerHeight||900) - 280);
+  const cEl = $("c"); if (cEl) cEl.style.height = targetH + "px";
   f.setHeight(targetH);
-  const viewer = $("c").closest(".col");
+  const viewer = cEl?.closest?.(".col");
   const w = (viewer?.clientWidth || 900) - 24;
   f.setWidth(w);
   if (baseImage && baseImage.type==='rect'){
@@ -201,7 +202,7 @@ function setStops(sc, stops){
 }
 
 function populateScenarios(){
-  const sel=$("scenarioSel");
+  const sel=$("scenarioSel"); if(!sel) return;
   sel.innerHTML = '<option value="">Select scenario…</option>';
   scenarios.forEach(sc=>{
     const o=document.createElement('option');
@@ -260,7 +261,8 @@ function dataURLFromStored(stored){
 }
 
 function renderThumbs(){
-  const row=$("thumbRow"); row.innerHTML='';
+  const row=$("thumbRow"); if(!row){ return; }
+  row.innerHTML='';
   if (!current || !current._stops?.length){
     row.innerHTML = '<div class="pill small">No photos/slides</div>';
     return;
@@ -281,13 +283,15 @@ export async function loadStop(i){
   if (!current) return;
   const s=current._stops[i]; if(!s) return;
   stopIndex=i;
-  Array.from($("thumbRow").children).forEach((n,idx)=> n.classList.toggle('active', idx===i));
+  const row=$("thumbRow"); if (row){
+    Array.from(row.children).forEach((n,idx)=> n.classList.toggle('active', idx===i));
+  }
 
-  $("stopTitle").value = s.title||'';
-  $("stopCaption").value = s.caption||'';
-  $("stopLat").value = s.lat??'';
-  $("stopLng").value = s.lng??'';
-  $("stopRadius").value = (s.radiusMeters ?? s.radius ?? 50);
+  $("stopTitle") && ( $("stopTitle").value = s.title||'' );
+  $("stopCaption") && ( $("stopCaption").value = s.caption||'' );
+  $("stopLat") && ( $("stopLat").value = s.lat??'' );
+  $("stopLng") && ( $("stopLng").value = s.lng??'' );
+  $("stopRadius") && ( $("stopRadius").value = (s.radiusMeters ?? s.radius ?? 50) );
 
   f.clear(); baseImage=null;
 
@@ -300,10 +304,10 @@ export async function loadStop(i){
     const result = await resolveForStop(s, 22000);
 
     if (result.blob){
-      lastBaseURL = result.urlUsed || lastBaseURL || null; // remember source if known
+      lastBaseURL = result.urlUsed || lastBaseURL || null;
       await setBaseFromBlob(result.blob);
     } else if (result.directFallbackUrl){
-      await setBaseFromDirectURL(result.directFallbackUrl); // sets lastBaseURL inside
+      await setBaseFromDirectURL(result.directFallbackUrl);
       showError('Base image loaded via cross-origin fallback. Export/Save disabled for this stop.');
     } else {
       throw new Error('no-image-candidate-succeeded');
@@ -317,7 +321,7 @@ export async function loadStop(i){
       for (const c of extras){
         try{
           const bl2 = await getBlobSDKFirst(c, 12000);
-          lastBaseURL = c; // track upgraded source
+          lastBaseURL = c;
           const d2 = await setBaseFromBlob(bl2);
           if (d2.naturalW >= minGood || d2.naturalH >= minGood) break;
         }catch{}
@@ -327,7 +331,7 @@ export async function loadStop(i){
     if (s.imageData?.data){
       try{
         const data = `data:image/${s.imageData.format||'jpeg'};base64,${s.imageData.data}`;
-        lastBaseURL = data; // embedded fallback
+        lastBaseURL = data;
         const bl = await (await fetch(data)).blob();
         await setBaseFromBlob(bl);
         showError('Loaded embedded image; original not available.');
@@ -373,15 +377,15 @@ export async function getGuideImageURLForCurrentStop(){
   if (!current || stopIndex<0) throw new Error('No stop selected');
   const s = current._stops[stopIndex];
 
-  // 0) If we already have a real URL in memory from the loader, use it immediately
+  // Fast path: the URL we actually used to load
   if (lastBaseURL && (/^https?:\/\//i.test(lastBaseURL) || lastBaseURL.startsWith('data:') || lastBaseURL.startsWith('blob:'))) {
     return lastBaseURL;
   }
 
-  // 1) Prefer existing direct URL if present
+  // Direct URL on stop (if present)
   if (s?.imageURL && /^https?:\/\//i.test(s.imageURL)) return s.imageURL;
 
-  // 2) Resolve via Storage if we have a gs/path ref
+  // Storage refs
   const ref = s.gsUri || s.storagePath || s.thumbURL || s.imageURL;
   if (ref){
     const { storage } = getFirebase();
@@ -389,7 +393,7 @@ export async function getGuideImageURLForCurrentStop(){
     return await getDownloadURL(r);
   }
 
-  // 3) Embedded data last
+  // Embedded
   if (s?.imageData?.data){
     return `data:image/${s.imageData.format||'jpeg'};base64,${s.imageData.data}`;
   }
@@ -462,11 +466,7 @@ export async function addResultAsNewStop(url){
 export function getCurrent(){ return current; }
 export function getStopIndex(){ return stopIndex; }
 
-/* ---------------- Editor wiring & export/save (unchanged from last version) ---------------- */
-// ... (unchanged wiring code from your previous version) ...
-// For brevity in this message, keep your existing overlay/brush/text/selection/export wiring here.
-// If you replaced your file earlier with my full version, you can keep that block intact.
-
+/* ---------------- Editor wiring: overlays, brushes, text, selection, export/save ---------------- */
 function addOverlay(src){
   fabric.Image.fromURL(src, img=>{
     const cw=f.getWidth(), ch=f.getHeight(), targetW=cw*0.28, scale=targetW/img.width;
@@ -479,7 +479,299 @@ function addOverlay(src){
   }, { crossOrigin:'anonymous' });
 }
 
-/* … keep the rest of the editor wiring exactly as in your last working file … */
+async function listOverlays(cat){
+  try{
+    const r = await fetch('https://fireopssim.com/geophoto/overlays/manifest.json', { cache:'no-store' });
+    if (r.ok){
+      const j = await r.json();
+      const folder = {fire:'fire', smoke:'smoke', people:'people', cars:'cars', hazard:'hazard'}[cat]||'fire';
+      if (Array.isArray(j[folder])) return j[folder].map(name=>`https://fireopssim.com/geophoto/overlays/${folder}/${name}`);
+    }
+  }catch{}
+  const folder = {fire:'fire', smoke:'smoke', people:'people', cars:'cars', hazard:'hazard'}[cat]||'fire';
+  const base = `https://fireopssim.com/geophoto/overlays/${folder}/`;
+  const names = ['1.png','2.png','3.png','4.png','5.png'];
+  return names.map(n=>base+n);
+}
+
+function wireOverlayShelf(){
+  const shelf = $("overlayShelf"); if(!shelf) return;
+  const buttons = Array.from(document.querySelectorAll('#tools [data-cat]'));
+  async function render(cat){
+    shelf.innerHTML = '';
+    const urls = await listOverlays(cat);
+    if (!urls.length){ shelf.innerHTML='<div class="pill small">No overlays found</div>'; return; }
+    urls.forEach(u=>{
+      const cell=document.createElement('div'); cell.style.border='1px solid rgba(255,255,255,.14)'; cell.style.borderRadius='10px'; cell.style.padding='4px'; cell.style.background='#0b2130';
+      const img=new Image(); img.src=u; img.alt='overlay'; img.style.width='100%'; img.style.display='block';
+      img.onclick=()=> addOverlay(u);
+      cell.appendChild(img); shelf.appendChild(cell);
+    });
+  }
+  buttons.forEach(b=> b.addEventListener('click', ()=> render(b.dataset.cat)));
+  render('fire');
+}
+
+function wireBrushes(){
+  if (!$("brushFire")) return; // skip if tools not present
+  let brushMode='off', pointerDown=false, lastStamp=null;
+  const brushSize=$("brushSize"), brushSizeReadout=$("brushSizeReadout");
+  const dist=(a,b)=>Math.hypot(a.x-b.x, a.y-b.y);
+  async function randomOverlay(cat){
+    const urls = await listOverlays(cat);
+    if (!urls.length) return null;
+    return urls[Math.floor(Math.random()*urls.length)];
+  }
+  async function stampAt(p, cat){
+    const file = await randomOverlay(cat); if(!file) return;
+    const R=(parseInt(brushSize?.value||"120",10))/2;
+    if (lastStamp && dist(p,lastStamp) < R*0.6) return; lastStamp=p;
+    fabric.Image.fromURL(file, img=>{
+      const baseW=img.width||200, scale=(R*2)/baseW, j=0.75+Math.random()*0.5;
+      img.scale(scale*j);
+      img.set({
+        left:p.x-(img.width*img.scaleX)/2, top:p.y-(img.height*img.scaleY)/2, angle:(Math.random()*30-15),
+        opacity:0.9, cornerStyle:'circle', transparentCorners:false, erasable:true, selectable:false, evented:false
+      });
+      f.add(img); f.requestRenderAll();
+    }, { crossOrigin:'anonymous' });
+  }
+  function eraseStampsAt(p){
+    const R=(parseInt(brushSize?.value||"120",10))/2;
+    const targets = f.getObjects('image').filter(o => o!==baseImage);
+    for (const obj of targets){
+      const cx=obj.left + (obj.width*obj.scaleX)/2, cy=obj.top + (obj.height*obj.scaleY)/2;
+      if (Math.hypot(cx-p.x, cy-p.y) <= R) f.remove(obj);
+    }
+    f.requestRenderAll();
+  }
+
+  $("brushFire").onclick = ()=> brushMode='fire';
+  $("brushSmoke").onclick= ()=> brushMode='smoke';
+  $("brushErase").onclick= ()=> brushMode='erase';
+  $("brushOff").onclick  = ()=> brushMode='off';
+  if (brushSizeReadout) brushSizeReadout.textContent=(parseInt(brushSize?.value||"120",10))+' px';
+  if (brushSize) brushSize.oninput=()=> brushSizeReadout && (brushSizeReadout.textContent=(parseInt(brushSize.value,10)||120)+' px');
+
+  f.on('mouse:down', (e)=>{ pointerDown=true; const p=f.getPointer(e.e); if(brushMode==='fire') stampAt(p,'fire'); else if(brushMode==='smoke') stampAt(p,'smoke'); else if(brushMode==='erase') eraseStampsAt(p); });
+  f.on('mouse:move', (e)=>{ if(!pointerDown) return; const p=f.getPointer(e.e); if(brushMode==='fire') stampAt(p,'fire'); else if(brushMode==='smoke') stampAt(p,'smoke'); else if(brushMode==='erase') eraseStampsAt(p); });
+  f.on('mouse:up', ()=>{ pointerDown=false; });
+}
+
+function wireTextTools(){
+  if (!$("addTextbox")) return;
+  $("addTextbox").onclick = ()=>{
+    const tb = new fabric.Textbox("New note", {
+      left: Math.max(20, f.getWidth()*0.1),
+      top:  Math.max(20, f.getHeight()*0.1),
+      width: Math.min(480, Math.floor(f.getWidth()*0.6)),
+      fontSize: 24,
+      fill: "#fff",
+      backgroundColor: "rgba(0,0,0,0.6)",
+      padding: 8,
+      cornerStyle:'circle', transparentCorners:false
+    });
+    f.add(tb); f.setActiveObject(tb); f.requestRenderAll();
+    $("tbContent") && ( $("tbContent").value = tb.text );
+    $("tbFont") && ( $("tbFont").value = String(tb.fontSize||24) );
+    $("tbBgOpacity") && ( $("tbBgOpacity").value = "0.6" );
+  };
+
+  $("tbApply") && ($("tbApply").onclick = ()=>{
+    const o = f.getActiveObject();
+    if (!o || o.type!=='textbox') return;
+    o.text = $("tbContent")?.value || '';
+    o.fontSize = parseInt($("tbFont")?.value||"24",10);
+    const op = Math.max(0, Math.min(1, parseFloat($("tbBgOpacity")?.value||"0.6")));
+    o.backgroundColor = `rgba(0,0,0,${op})`;
+    f.requestRenderAll();
+  });
+  $("tbDelete") && ($("tbDelete").onclick = ()=>{
+    const o = f.getActiveObject();
+    if (o && o.type==='textbox'){ f.remove(o); f.discardActiveObject(); f.requestRenderAll(); }
+  });
+}
+
+function wireSelectionTools(){
+  $("bringFront") && ($("bringFront").onclick = ()=>{ const o=f.getActiveObject(); if(o){ o.bringToFront(); f.requestRenderAll(); } });
+  $("sendBack")  && ($("sendBack").onclick  = ()=>{ const o=f.getActiveObject(); if(o){ o.sendToBack(); f.requestRenderAll(); } });
+  $("deleteObj") && ($("deleteObj").onclick = ()=>{ const o=f.getActiveObject(); if(o){ f.remove(o); f.discardActiveObject(); f.requestRenderAll(); } });
+  $("flipSelH")  && ($("flipSelH").onclick  = ()=>{ const o=f.getActiveObject(); if(o){ o.set('flipX', !o.flipX); f.requestRenderAll(); } });
+  $("flipSelV")  && ($("flipSelV").onclick  = ()=>{ const o=f.getActiveObject(); if(o){ o.set('flipY', !o.flipY); f.requestRenderAll(); } });
+}
+
+function wireViewerControls(){
+  $("fit")     && ($("fit").onclick = ()=>{
+    if (baseImage && baseImage.type==='image'){
+      const cw=f.getWidth(), ch=f.getHeight(), s=Math.min(cw/baseImage.width, ch/baseImage.height);
+      baseImage.scale(s); baseImage.set({ left:(cw-baseImage.width*s)/2, top:(ch-baseImage.height*s)/2 });
+      f.requestRenderAll();
+    } else if (baseImage && baseImage.type==='rect'){
+      const t=f.getObjects('textbox').find(o=>o.isBaseText);
+      setBaseAsTextSlide(t?t.text:'', t?t.fontSize:34);
+    }
+  });
+  $("zoomIn")  && ($("zoomIn").onclick = ()=> f.setZoom(f.getZoom()*1.1));
+  $("zoomOut") && ($("zoomOut").onclick= ()=> f.setZoom(f.getZoom()/1.1));
+  $("rotateL") && ($("rotateL").onclick = ()=>{ if(baseImage && baseImage.rotate){ baseImage.rotate((baseImage.angle||0)+90); f.requestRenderAll(); } });
+  $("rotateR") && ($("rotateR").onclick = ()=>{ if(baseImage && baseImage.rotate){ baseImage.rotate((baseImage.angle||0)-90); f.requestRenderAll(); } });
+}
+
+// Export + Save wiring
+function dataURLtoBlob(dataURL){ return fetch(dataURL).then(r=>r.blob()); }
+function wireExportAndSave(){
+  const exportBtn = $("exportPNG");
+  const saveBtn   = $("saveImage");
+
+  if (exportBtn) exportBtn.onclick = async ()=>{
+    try{
+      const dataURL = await getCompositeDataURL(2000, 0.95);
+      const a = document.createElement('a');
+      a.href = dataURL;
+      a.download = `scenario_${current?.id||'image'}_${Date.now()}.jpg`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+    }catch(e){
+      showError('Export failed: ' + (e?.message || e));
+    }
+  };
+
+  if (saveBtn) saveBtn.onclick = async ()=>{
+    try{
+      setAIStatus('Preparing image…');
+      const dataURL = await getCompositeDataURL(1600, 0.95);
+      const blob = await dataURLtoBlob(dataURL);
+      setAIStatus('Uploading to cloud…');
+      const url = await saveResultBlobToStorage(blob);
+      setAIStatus('Saved to cloud ✓');
+      console.log('[saveImage] uploaded:', url);
+    }catch(e){
+      showError('Save to cloud failed: ' + (e?.message || e));
+      // Common cause: canvas tainted (cross-origin). Fix by giving the stop a gsUri/storagePath or a Firebase URL.
+    }
+  };
+}
+
+/* ---------------- UI wiring (ENTRY POINT) ---------------- */
+export function wireScenarioUI(){
+  // Toggle tools
+  $("toggleTools") && ($("toggleTools").onclick = ()=>{
+    const app = $("app");
+    if (!app) return;
+    const collapse = !app.classList.contains('toolsCollapsed');
+    app.classList.toggle('toolsCollapsed', collapse);
+    $("toggleTools").textContent = collapse ? 'Show Tools' : 'Hide Tools';
+    fitCanvas();
+  });
+
+  // Scenario select
+  const sel = $("scenarioSel");
+  if (sel){
+    sel.onchange = async ()=>{
+      const id = sel.value;
+      current = scenarios.find(s=>s.id===id) || null;
+      stopIndex = -1;
+      renderThumbs();
+      f.clear(); baseImage=null; fitCanvas();
+      if (current && current._stops.length){ await loadStop(0); }
+    };
+  }
+
+  // GPS button
+  $("useGPS") && ($("useGPS").onclick = ()=>{
+    navigator.geolocation.getCurrentPosition(p=>{
+      $("stopLat") && ( $("stopLat").value = p.coords.latitude.toFixed(6) );
+      $("stopLng") && ( $("stopLng").value = p.coords.longitude.toFixed(6) );
+      $("metaMsg") && ( $("metaMsg").textContent = "GPS captured." );
+    }, e=>{ $("metaMsg") && ( $("metaMsg").textContent = "GPS error: " + e.message ); }, { enableHighAccuracy:true, timeout:10_000 });
+  });
+
+  // Save meta
+  $("saveMeta") && ($("saveMeta").onclick = async ()=>{
+    try{
+      await ensureAuthed();
+      if (!current || stopIndex<0) throw new Error('Select a stop first.');
+      const s = Object.assign({}, current._stops[stopIndex]);
+      s.title = $("stopTitle")?.value?.trim() || '';
+      s.caption = $("stopCaption")?.value?.trim() || '';
+      const lat = ($("stopLat")?.value?.trim()||'')==='' ? null : parseFloat($("stopLat").value);
+      const lng = ($("stopLng")?.value?.trim()||'')==='' ? null : parseFloat($("stopLng").value);
+      s.lat = lat; s.lng = lng;
+      s.radiusMeters = Math.max(5, Math.min(1000, Math.round(parseInt($("stopRadius")?.value || "50", 10))));
+      // serialize overlays
+      s.overlays = f.getObjects().filter(o=>o!==baseImage && !o.isBaseText).map(o=>{
+        if (o.type==='textbox'){
+          return {
+            kind:'text', text:o.text||'', left:o.left||0, top:o.top||0, scaleX:o.scaleX||1, scaleY:o.scaleY||1,
+            angle:o.angle||0, opacity:o.opacity??1, fontSize:o.fontSize||24, fill:o.fill||'#fff',
+            backgroundColor:o.backgroundColor||'rgba(0,0,0,0.6)', padding:o.padding??8
+          };
+        }
+        return {
+          kind:'image', src:o.getSrc ? o.getSrc() : (o._originalElement?.src || o.src || ''),
+          left:o.left||0, top:o.top||0, scaleX:o.scaleX||1, scaleY:o.scaleY||1,
+          angle:o.angle||0, opacity:o.opacity??1, flipX:!!o.flipX, flipY:!!o.flipY
+        };
+      });
+
+      const next = current._stops.slice(); next[stopIndex] = s;
+      const updated = Object.assign({}, current._raw); setStops(updated, next);
+      await set(dbRef(getFirebase().db, `${ROOT}/${current.id}`), updated);
+      current._raw = updated; current._stops = next;
+      $("metaMsg") && ( $("metaMsg").textContent = "Saved ✓" );
+    }catch(e){
+      $("metaMsg") && ( $("metaMsg").textContent = e?.message || String(e) );
+    }
+  });
+
+  // Delete scenario
+  $("deleteScenario") && ($("deleteScenario").onclick = async ()=>{
+    if (!current) return;
+    if (!confirm('Delete this scenario and its cloud images?')) return;
+    try{
+      showLoad(true);
+      await ensureAuthed();
+      const paths = [];
+      (current._stops||[]).forEach(s=>{
+        if (s.storagePath) paths.push(s.storagePath);
+        if (s.gsUri) paths.push(s.gsUri);
+        if (s.imageURL && !/^https?:\/\//.test(s.imageURL)) paths.push(s.imageURL);
+      });
+      for (const p of paths){
+        try{ await deleteObject(stRef(getFirebase().storage, toStorageRefString(p))); }catch{}
+      }
+      await remove(dbRef(getFirebase().db, `${ROOT}/${current.id}`));
+      current=null; stopIndex=-1; populateScenarios(); if (sel) sel.value='';
+      $("thumbRow") && ( $("thumbRow").innerHTML='' );
+      f.clear(); baseImage=null; fitCanvas();
+      setStatus('Scenario deleted.');
+    }catch(e){
+      showError('Delete failed: '+(e?.message||e));
+    }finally{
+      showLoad(false);
+    }
+  });
+
+  // Refresh/init
+  $("refreshBtn") && ($("refreshBtn").onclick = async ()=>{
+    await ensureAuthed();
+    ROOT = await detectScenariosRoot();
+    const { bucketHost } = getStorageInfo();
+    setRootPill(`root: ${ROOT} | bucket: ${bucketHost}`);
+    await loadScenarios();
+    subscribeScenarios();
+    if (sel && !sel.value && scenarios.length){ sel.value=scenarios[0].id; sel.dispatchEvent(new Event('change')); }
+  });
+
+  // viewer & editor tools + export/save
+  wireViewerControls();
+  wireOverlayShelf();
+  wireBrushes();
+  wireTextTools();
+  wireSelectionTools();
+  wireExportAndSave();
+}
 
 /* ---------------- boot ---------------- */
 export async function bootScenarios(){
