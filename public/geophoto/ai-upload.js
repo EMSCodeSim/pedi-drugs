@@ -1,44 +1,62 @@
-// ai-upload.js — exports wireAI(), auto-selects first stop if none is selected
-// - Dynamically loads scenarios module (scenarios.js or "scenarios (1).js")
-// - Pings your Netlify function so you see a request immediately
-// - Auto-opens stop 0 if user hasn’t clicked a thumbnail yet
-// - Very verbose status via #aiMsg (or scenarios.setAIStatus)
+// ai-upload.js — exports wireAI(), attaches to existing scenarios instance (no duplicate module)
+// - First tries window.__SCENARIOS (same live instance your page is using)
+// - Falls back to importing scenarios.js WITHOUT cache-busting (to avoid separate instances)
+// - Auto-selects first stop if none is selected
+// - Pings Netlify function so you see a network request immediately
+// - Very verbose status updates
 
 import { ensureAuthed, uploadSmallText, getFirebase } from "./firebase-core.js";
 import { ref as stRef, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-storage.js";
 
 /* ---------------- DOM + status helpers ---------------- */
 function $(id){ return document.getElementById(id); }
-
-let __scn = null; // scenarios module once loaded
+let __scn = (typeof window !== "undefined" && window.__SCENARIOS) || null;
 
 function updateStatus(text){
   try{ if (__scn && typeof __scn.setAIStatus === "function"){ __scn.setAIStatus(text); return; } }catch{}
   const el = $("aiMsg"); if (el) el.textContent = text;
   console.log("[ai]", text);
 }
-
 function labelBtnWired(btn){ try{ if (btn){ btn.dataset.wired="1"; btn.title="wired"; } }catch{} }
 
-/* ---------------- dynamic scenarios loader ---------------- */
+/* ---------------- obtain scenarios instance (reuse first, then import) ---------------- */
 async function loadScenariosModule(){
   if (__scn) return __scn;
+
+  // Re-check global in case scenarios.js registered after this file loaded
+  if (typeof window !== "undefined" && window.__SCENARIOS){
+    __scn = window.__SCENARIOS;
+    console.log("[ai] attached to window.__SCENARIOS");
+    return __scn;
+  }
+
   const bases = [ new URL(".", import.meta.url), new URL("./", location.href) ];
-  const names = ["scenarios.js","scenarios%20(1).js","scenarios (1).js"];
+  const names = ["scenarios.js","scenarios (1).js","scenarios%20(1).js"]; // no cache-bust!
   let lastErr=null;
+
   for (const b of bases){
     for (const n of names){
-      const u = new URL(n, b).href + "?v=" + Date.now();
+      const u = new URL(n, b).href; // IMPORTANT: no '?v=...' so we don't fork the module
       try{
         const mod = await import(u);
-        if (typeof mod.getGuideImageURLForCurrentStop === "function"){
-          __scn = mod;
-          console.log("[ai] scenarios module loaded from", u);
+        // Prefer a global if the module published one (same instance everywhere)
+        if (typeof window !== "undefined" && window.__SCENARIOS){
+          __scn = window.__SCENARIOS;
+          console.log("[ai] imported & attached via window.__SCENARIOS from", u);
           return __scn;
         }
-      }catch(e){ lastErr=e; console.warn("[ai] import fail", u, e?.message||e); }
+        // Otherwise, accept the module's own exports (should still be a single instance if everyone imports the same URL)
+        if (typeof mod.getGuideImageURLForCurrentStop === "function"){
+          __scn = mod;
+          console.log("[ai] imported scenarios module from", u);
+          return __scn;
+        }
+      }catch(e){
+        lastErr = e; console.warn("[ai] scenarios import fail", u, e?.message||e);
+      }
     }
   }
+
   console.warn("[ai] Could not load scenarios module.", lastErr?.message||lastErr||"");
   __scn = null;
   return null;
@@ -62,7 +80,7 @@ async function uploadToInbox(blob, ext="jpg"){
   return await getDownloadURL(stRef(storage, path));
 }
 
-/* ---------------- Netlify endpoint discovery & ping ---------------- */
+/* ---------------- endpoint discovery & ping ---------------- */
 const DEFAULT_ENDPOINTS = [
   "/.netlify/functions/ai-image",
   "/api/ai-image",
@@ -94,7 +112,7 @@ async function pingEndpoints(timeoutMs=4000){
   return null;
 }
 
-/* ---------------- ensure a stop is selected ---------------- */
+/* ---------------- ensure a stop is selected (auto-open #0) ---------------- */
 async function ensureStopSelectedOrAutoOpen(){
   if (!__scn) await loadScenariosModule();
   if (!__scn) { updateStatus("No scenarios module — cannot resolve guide image."); return false; }
@@ -111,7 +129,6 @@ async function ensureStopSelectedOrAutoOpen(){
     try{ await __scn.loadStop?.(0); return true; }
     catch(e){ updateStatus("Could not open first stop: " + (e?.message||e)); return false; }
   }
-
   updateStatus("This scenario has no photos/slides.");
   return false;
 }
@@ -122,7 +139,6 @@ async function guessGuideURLFast(){
   if (live && (/^https?:\/\//i.test(live) || live.startsWith("data:") || live.startsWith("blob:"))) return live;
   return await withTimeout(__scn.getGuideImageURLForCurrentStop(), 5000, "guideurl/timeout");
 }
-
 async function buildGuideFast({ wantComposite }){
   const guideURL = await withTimeout(guessGuideURLFast(), 6000, "guideurl/timeout");
   let compositeURL = null;
@@ -178,7 +194,6 @@ function bindButtons(){
   if (btnOpen) btnOpen.disabled = true;
   if (btnAdd)  btnAdd.disabled  = true;
 
-  // Preview (non-blocking)
   if (btnPreview){
     btnPreview.addEventListener("click", async ()=>{
       try{
@@ -193,11 +208,8 @@ function bindButtons(){
     labelBtnWired(btnPreview);
   }
 
-  // Send
   btnSend.addEventListener("click", async ()=>{
-    btnSend.disabled = true;
-    if (btnOpen) btnOpen.disabled = true;
-    if (btnAdd)  btnAdd.disabled  = true;
+    btnSend.disabled = true; if (btnOpen) btnOpen.disabled = true; if (btnAdd) btnAdd.disabled = true;
 
     try{
       await ensureAuthed();
@@ -212,7 +224,6 @@ function bindButtons(){
       if (!ping) updateStatus("Could not reach AI endpoint (ping failed). Trying anyway…");
       else       updateStatus(`Endpoint OK (${ping.status}) — preparing guide…`);
 
-      // Ensure scenarios + stop
       if (!__scn) await loadScenariosModule();
       if (!(await ensureStopSelectedOrAutoOpen())) throw new Error("Select a scenario + photo/slide first.");
 
@@ -271,12 +282,11 @@ function bindButtons(){
 
 /* ---------------- export + auto-init ---------------- */
 export function wireAI(){ bindButtons(); }
-
 function start(){ try{ bindButtons(); }catch(e){ console.error("[ai] bind error", e); } }
 if (document.readyState === "loading"){ document.addEventListener("DOMContentLoaded", start, { once:true }); }
 else { setTimeout(start, 0); }
 
-/* ---------------- debug hooks ---------------- */
+// Debug hooks
 window.__AI_DEBUG = {
   reloadScenarios: async () => { __scn = null; return await loadScenariosModule(); },
   ping: pingEndpoints,
