@@ -6,50 +6,40 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <style>
     :root {
-      --bg: #07131c;
-      --panel: #0b2130;
-      --muted: #a9bac6;
-      --accent: #2da3ff;
-      --text: #e8f2f9;
-      --border: rgba(255,255,255,0.12);
-      --pill: rgba(255,255,255,0.12);
-      --danger: #ff5d5d;
-      --ok: #25d366;
+      --bg: #07131c; --panel: #0b2130; --muted: #a9bac6; --accent: #2da3ff;
+      --text: #e8f2f9; --border: rgba(255,255,255,0.12); --pill: rgba(255,255,255,0.12);
     }
-    * { box-sizing: border-box; }
-    html, body { height: 100%; margin: 0; background: var(--bg); color: var(--text); font: 14px/1.4 system-ui, -apple-system, Segoe UI, Roboto, Inter, Arial, sans-serif; }
-    a { color: var(--accent); text-decoration: none; }
-    .app { padding: 12px; }
-    .topbar { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; flex-wrap: wrap; }
-    .pill { display: inline-block; background: var(--pill); padding: 6px 10px; border-radius: 999px; }
-    .pill.small { font-size: 12px; padding: 4px 8px; }
-    .btn, button { background: #123044; border: 1px solid var(--border); color: var(--text); padding: 8px 10px; border-radius: 8px; cursor: pointer; }
-    button[disabled] { opacity: 0.5; cursor: not-allowed; }
-    .muted { color: var(--muted); }
-    .grid { display: grid; grid-template-columns: 340px 1fr; gap: 12px; }
-    .toolsCollapsed .grid { grid-template-columns: 1fr; }
-    .col { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 12px; min-height: 200px; }
-    .block { border: 1px solid var(--border); border-radius: 10px; padding: 10px; margin-bottom: 12px; }
-    .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
-    label { display: block; margin: 2px 0 6px; font-weight: 600; }
-    input[type="text"], input[type="number"], select, textarea {
-      width: 100%; background: #0f2738; color: var(--text); border: 1px solid var(--border);
-      border-radius: 8px; padding: 8px;
-    }
-    textarea { min-height: 70px; }
-    .thumb-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
-    .thumb { width: 100%; aspect-ratio: 1/1; object-fit: cover; border-radius: 8px; border: 2px solid transparent; background: #092033; }
-    .thumb.active { border-color: var(--accent); }
-    .shelf { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-top: 8px; }
-    .btn-row { display: flex; gap: 6px; flex-wrap: wrap; }
-    #errbar { display: none; background: #2b0a0a; border: 1px solid #4a1515; color: #ffdede; padding: 8px 10px; border-radius: 8px; margin-bottom: 10px; }
-    #loader { display: none; position: absolute; inset: 0; background: rgba(3,8,12,0.55); place-items: center; border-radius: 12px; }
-    .viewer-wrap { position: relative; }
-    .spinner { width: 36px; height: 36px; border: 4px solid rgba(255,255,255,0.2); border-top-color: var(--accent); border-radius: 50%; animation: spin 1s linear infinite; }
-    @keyframes spin { to { transform: rotate(360deg); } }
-    /* canvas should stretch nicely */
-    #c { width: 100%; height: 640px; display: block; background: #061621; border-radius: 8px; border: 1px solid var(--border); }
-    .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+    *{box-sizing:border-box} html,body{height:100%;margin:0;background:var(--bg);color:var(--text);
+      font:14px/1.4 system-ui,-apple-system,Segoe UI,Roboto,Inter,Arial,sans-serif}
+    a{color:var(--accent);text-decoration:none}
+    .app{padding:12px}
+    .topbar{display:flex;align-items:center;gap:8px;margin-bottom:10px;flex-wrap:wrap}
+    .pill{display:inline-block;background:var(--pill);padding:6px 10px;border-radius:999px}
+    .pill.small{font-size:12px;padding:4px 8px}
+    .btn,button{background:#123044;border:1px solid var(--border);color:var(--text);padding:8px 10px;border-radius:8px;cursor:pointer}
+    button[disabled]{opacity:.5;cursor:not-allowed}
+    .muted{color:var(--muted)}
+    .grid{display:grid;grid-template-columns:340px 1fr;gap:12px}
+    .toolsCollapsed .grid{grid-template-columns:1fr}
+    .col{background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:12px;min-height:200px;position:relative}
+    .block{border:1px solid var(--border);border-radius:10px;padding:10px;margin-bottom:12px}
+    .row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+    label{display:block;margin:2px 0 6px;font-weight:600}
+    input[type="text"],input[type="number"],select,textarea{
+      width:100%;background:#0f2738;color:var(--text);border:1px solid var(--border);border-radius:8px;padding:8px}
+    textarea{min-height:70px}
+    .thumb-row{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+    .thumb{width:100%;aspect-ratio:1/1;object-fit:cover;border-radius:8px;border:2px solid transparent;background:#092033}
+    .thumb.active{border-color:var(--accent)}
+    .shelf{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-top:8px}
+    .btn-row{display:flex;gap:6px;flex-wrap:wrap}
+    #errbar{display:none;background:#2b0a0a;border:1px solid #4a1515;color:#ffdede;padding:8px 10px;border-radius:8px;margin-bottom:10px}
+    #loader{display:none;position:absolute;inset:0;background:rgba(3,8,12,0.55);place-items:center;border-radius:12px}
+    .viewer-wrap{position:relative}
+    .spinner{width:36px;height:36px;border:4px solid rgba(255,255,255,.2);border-top-color:var(--accent);border-radius:50%;animation:spin 1s linear infinite}
+    @keyframes spin{to{transform:rotate(360deg)}}
+    #c{width:100%;height:640px;display:block;background:#061621;border-radius:8px;border:1px solid var(--border)}
+    .two-col{display:grid;grid-template-columns:1fr 1fr;gap:8px}
   </style>
 </head>
 <body>
@@ -63,7 +53,7 @@
     </div>
 
     <div class="grid">
-      <!-- LEFT: Tools + Scenario + Thumbs + Meta -->
+      <!-- LEFT -->
       <div class="col">
         <div class="block">
           <label for="scenarioSel">Scenario</label>
@@ -76,7 +66,7 @@
         <div id="thumbRow" class="thumb-row"></div>
 
         <div id="tools" class="block">
-          <div class="row" style="justify-content: space-between;">
+          <div class="row" style="justify-content:space-between;">
             <h3 style="margin:0;">Overlays</h3>
             <div class="btn-row">
               <button class="btn" data-cat="fire">Fire</button>
@@ -88,7 +78,7 @@
           </div>
           <div id="overlayShelf" class="shelf"></div>
 
-          <hr style="border:none;border-top:1px solid var(--border); margin:10px 0;"/>
+          <hr style="border:none;border-top:1px solid var(--border);margin:10px 0;"/>
 
           <h3 style="margin:0 0 6px;">Brush</h3>
           <div class="btn-row">
@@ -103,7 +93,7 @@
             <span id="brushSizeReadout" class="pill small">120 px</span>
           </div>
 
-          <hr style="border:none;border-top:1px solid var(--border); margin:10px 0;"/>
+          <hr style="border:none;border-top:1px solid var(--border);margin:10px 0;"/>
 
           <h3 style="margin:0 0 6px;">Text</h3>
           <div class="btn-row">
@@ -121,7 +111,7 @@
             </div>
           </div>
 
-          <hr style="border:none;border-top:1px solid var(--border); margin:10px 0;"/>
+          <hr style="border:none;border-top:1px solid var(--border);margin:10px 0;"/>
 
           <h3 style="margin:0 0 6px;">Selection</h3>
           <div class="btn-row">
@@ -132,7 +122,7 @@
             <button id="deleteObj" class="btn" style="background:#331616;border-color:#5b2424;">Delete</button>
           </div>
 
-          <hr style="border:none;border-top:1px solid var(--border); margin:10px 0;"/>
+          <hr style="border:none;border-top:1px solid var(--border);margin:10px 0;"/>
 
           <h3 style="margin:0 0 6px;">Export & Save</h3>
           <div class="btn-row">
@@ -167,7 +157,7 @@
         </div>
       </div>
 
-      <!-- RIGHT: Viewer + AI -->
+      <!-- RIGHT -->
       <div class="col viewer">
         <div id="errbar"></div>
         <div class="viewer-wrap">
@@ -220,10 +210,10 @@
     </div>
   </div>
 
-  <!-- Fabric.js (global) -->
+  <!-- Fabric.js -->
   <script src="https://cdn.jsdelivr.net/npm/fabric@5.3.0/dist/fabric.min.js"></script>
 
-  <!-- Robust module boot: tries both scenarios.js and "scenarios (1).js" -->
+  <!-- Robust module boot -->
   <script type="module">
     (async () => {
       const showErr = (msg) => {
@@ -232,60 +222,105 @@
         console.error(msg);
       };
 
-      // Try a few likely paths for scenarios module
-      const candidates = [
-        './scenarios.js',
-        './scenarios%20(1).js',  // URL-encoded space
-        './scenarios (1).js'     // raw space (if server allows)
+      // Generate path candidates from current location
+      const here = new URL('.', location.href);          // same dir
+      const parent = new URL('..', location.href);       // parent dir
+      const root = new URL('/', location.href);          // site root
+      // Common subfolder on your domain based on your error path:
+      const geo = new URL('/geophoto/', location.href);  // /geophoto/
+
+      const bases = [here, parent, root, geo];
+      const names = [
+        'scenarios.js',
+        'scenarios%20(1).js',
+        'scenarios (1).js'
       ];
-      let scenariosMod = null, used = null, lastErr = null;
-      for (const p of candidates) {
-        try {
-          scenariosMod = await import(p + '?v=' + Date.now()); // cache-bust
-          used = p;
-          console.log('[boot] scenarios module loaded from', p);
-          break;
-        } catch (e) {
-          lastErr = e;
-          console.warn('[boot] failed to import', p, e);
+
+      async function tryImport(paths) {
+        let lastErr = null;
+        for (const p of paths) {
+          try {
+            // quick preflight to catch 404/HTML
+            const res = await fetch(p + (p.includes('?') ? '' : `?v=${Date.now()}`), { cache: 'no-store' });
+            if (!res.ok) { console.warn('[boot] 404', p); continue; }
+            const ct = res.headers.get('content-type') || '';
+            if (!/javascript|ecmascript|text\/plain/i.test(ct)) {
+              console.warn('[boot] wrong MIME', ct, 'for', p);
+              // still attempt to import; some hosts mislabel as text/plain
+            }
+            const mod = await import(p + (p.includes('?') ? '' : `?v=${Date.now()}`));
+            console.log('[boot] imported', p);
+            return { mod, path: p };
+          } catch (e) {
+            lastErr = e;
+            console.warn('[boot] import failed', p, e);
+          }
+        }
+        throw lastErr || new Error('No module found');
+      }
+
+      // Build all candidate paths
+      const scenarioPaths = [];
+      for (const b of bases) {
+        for (const n of names) {
+          scenarioPaths.push(new URL(n, b).href);
+        }
+        // Also try a js/ subfolder under each base
+        for (const n of names) {
+          scenarioPaths.push(new URL('js/' + n, b).href);
         }
       }
-      if (!scenariosMod) {
-        showErr('Could not import scenarios module. Last error: ' + (lastErr?.message || String(lastErr)));
-        return;
-      }
-      const { wireScenarioUI, bootScenarios } = scenariosMod;
-      if (typeof wireScenarioUI !== 'function' || typeof bootScenarios !== 'function') {
-        showErr(`Module "${used}" loaded but missing exports wireScenarioUI/bootScenarios.`);
+
+      let scenariosMod, usedScenarioPath;
+      try {
+        const res = await tryImport(scenarioPaths);
+        scenariosMod = res.mod;
+        usedScenarioPath = res.path;
+      } catch (e) {
+        showErr('Could not import scenarios module. Last error: ' + (e?.message || String(e)));
         return;
       }
 
-      // Import AI wiring
-      let ai;
+      const { wireScenarioUI, bootScenarios } = scenariosMod;
+      if (typeof wireScenarioUI !== 'function' || typeof bootScenarios !== 'function') {
+        showErr(`Module loaded from "${usedScenarioPath}" but missing exports wireScenarioUI/bootScenarios.`);
+        return;
+      }
+
+      // ai-upload
+      const aiNames = ['ai-upload.js', 'js/ai-upload.js'];
+      const aiPaths = [].concat(
+        ...[here, parent, root, geo].map(base => aiNames.map(n => new URL(n, base).href))
+      );
+      let aiMod;
       try {
-        ai = await import('./ai-upload.js?v=' + Date.now());
+        aiMod = (await tryImport(aiPaths)).mod;
       } catch (e) {
         showErr('Failed to import ai-upload.js: ' + (e?.message || String(e)));
         return;
       }
-      if (typeof ai.wireAI !== 'function') {
+      if (typeof aiMod.wireAI !== 'function') {
         showErr('ai-upload.js loaded but missing wireAI() export.');
         return;
       }
 
-      // Import firebase-core.js (not strictly required to import here if scenarios.js imports it, but this will surface path errors early)
+      // firebase-core (optional preflight to surface path errors early)
+      const fbNames = ['firebase-core.js', 'js/firebase-core.js'];
+      const fbPaths = [].concat(
+        ...[here, parent, root, geo].map(base => fbNames.map(n => new URL(n, base).href))
+      );
       try {
-        await import('./firebase-core.js?v=' + Date.now());
+        await tryImport(fbPaths);
       } catch (e) {
         showErr('Failed to import firebase-core.js: ' + (e?.message || String(e)));
         return;
       }
 
-      // Boot sequence
+      // Boot
       try {
         await bootScenarios();
         wireScenarioUI();
-        ai.wireAI();
+        aiMod.wireAI();
       } catch (e) {
         showErr('Boot failed: ' + (e?.message || String(e)));
       }
