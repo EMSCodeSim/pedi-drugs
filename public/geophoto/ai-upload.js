@@ -1,9 +1,7 @@
-// ai-upload.js — exports wireAI(), attaches to existing scenarios instance (no duplicate module)
-// - First tries window.__SCENARIOS (same live instance your page is using)
-// - Falls back to importing scenarios.js WITHOUT cache-busting (to avoid separate instances)
-// - Auto-selects first stop if none is selected
-// - Pings Netlify function so you see a network request immediately
-// - Very verbose status updates
+// ai-upload.js — exports wireAI(), attaches to existing scenarios, robust result parsing
+// - Accepts { ok, image, mode } where `image` may be absolute URL, relative URL, dataURL, or raw base64
+// - Pings Netlify endpoint first so a network call is always visible
+// - Auto-selects first stop if none selected, verbose status
 
 import { ensureAuthed, uploadSmallText, getFirebase } from "./firebase-core.js";
 import { ref as stRef, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-storage.js";
@@ -23,7 +21,6 @@ function labelBtnWired(btn){ try{ if (btn){ btn.dataset.wired="1"; btn.title="wi
 async function loadScenariosModule(){
   if (__scn) return __scn;
 
-  // Re-check global in case scenarios.js registered after this file loaded
   if (typeof window !== "undefined" && window.__SCENARIOS){
     __scn = window.__SCENARIOS;
     console.log("[ai] attached to window.__SCENARIOS");
@@ -31,38 +28,33 @@ async function loadScenariosModule(){
   }
 
   const bases = [ new URL(".", import.meta.url), new URL("./", location.href) ];
-  const names = ["scenarios.js","scenarios (1).js","scenarios%20(1).js"]; // no cache-bust!
+  const names = ["scenarios.js","scenarios (1).js","scenarios%20(1).js"]; // no cache-busting to avoid forking module
   let lastErr=null;
 
   for (const b of bases){
     for (const n of names){
-      const u = new URL(n, b).href; // IMPORTANT: no '?v=...' so we don't fork the module
+      const u = new URL(n, b).href;
       try{
         const mod = await import(u);
-        // Prefer a global if the module published one (same instance everywhere)
         if (typeof window !== "undefined" && window.__SCENARIOS){
           __scn = window.__SCENARIOS;
           console.log("[ai] imported & attached via window.__SCENARIOS from", u);
           return __scn;
         }
-        // Otherwise, accept the module's own exports (should still be a single instance if everyone imports the same URL)
         if (typeof mod.getGuideImageURLForCurrentStop === "function"){
           __scn = mod;
           console.log("[ai] imported scenarios module from", u);
           return __scn;
         }
-      }catch(e){
-        lastErr = e; console.warn("[ai] scenarios import fail", u, e?.message||e);
-      }
+      }catch(e){ lastErr = e; console.warn("[ai] scenarios import fail", u, e?.message||e); }
     }
   }
-
   console.warn("[ai] Could not load scenarios module.", lastErr?.message||lastErr||"");
   __scn = null;
   return null;
 }
 
-/* ---------------- small utils ---------------- */
+/* ---------------- utils ---------------- */
 function withTimeout(promise, ms, label="timeout"){
   return Promise.race([
     promise,
@@ -152,6 +144,64 @@ async function buildGuideFast({ wantComposite }){
   return { guideURL, compositeURL };
 }
 
+/* ---------------- Result normalization ---------------- */
+function looksLikeBase64Image(s){
+  if (typeof s !== "string" || s.length < 32) return false;
+  // Common starts: JPEG "/9j/", PNG "iVBORw0KGgo", GIF "R0lGOD", WebP "UklGR"
+  return s.startsWith("/9j/") || s.startsWith("iVBORw0") || s.startsWith("R0lGOD") || s.startsWith("UklGR");
+}
+
+// Accepts many shapes and resolves to either a final absolute URL or a dataURL
+async function normalizeAIResponse(json, endpoint){
+  const ep = endpoint || location.origin;
+
+  // 1) Direct candidates (strings or nested objects)
+  const pool = [];
+  const push = (v)=>{ if (v==null) return; if (typeof v === "string" || (typeof v === "object" && v.url)) pool.push(v); };
+
+  push(json.url);
+  push(json.result);
+  push(json.output);
+  push(json.image_url);
+  push(json.image);
+  push(json.href);
+  push(json.link);
+  push(json.compositeURL);
+  push(json.composited_url);
+
+  // If `image` was an object like {url:"...", mime:"image/png"}
+  for (let i=0;i<pool.length;i++){
+    const item = pool[i];
+    const val = (typeof item === "object" && item.url) ? item.url : item;
+    if (typeof val !== "string") continue;
+
+    if (/^https?:\/\//i.test(val)) return { finalURL: val };
+    if (val.startsWith("data:image/")) return { dataURL: val };
+
+    // relative path?
+    if (val.startsWith("/") || val.startsWith("./") || val.startsWith("../")){
+      try{ return { finalURL: new URL(val, ep).href }; }catch{}
+    }
+
+    // raw base64?
+    if (looksLikeBase64Image(val)) {
+      const mime = (typeof item === "object" && item.mime) ? item.mime : "image/jpeg";
+      return { dataURL: `data:${mime};base64,${val}` };
+    }
+  }
+
+  // 2) Explicit base64/data keys
+  const b64 = json.dataURL || json.data_url || json.base64 || json.b64 || json.imageBase64 || json.image_b64 || json.output_b64;
+  if (typeof b64 === "string" && b64.length){
+    if (b64.startsWith("data:image/")) return { dataURL: b64 };
+    const mime = json.mime || json.contentType || "image/jpeg";
+    return { dataURL: `data:${mime};base64,${b64}` };
+  }
+
+  // 3) Some functions reply {ok:true} only (no asset) — treat as error
+  return null;
+}
+
 /* ---------------- AI POST ---------------- */
 async function postAI(payload, preferredUrl){
   const endpoints = preferredUrl ? [preferredUrl, ...getCandidateEndpoints().filter(u=>u!==preferredUrl)] : getCandidateEndpoints();
@@ -174,9 +224,13 @@ async function postAI(payload, preferredUrl){
       }
       if (ct.startsWith("image/")) throw new Error("Function returned binary image. Return JSON { url: 'https://...' }");
 
-      try{ return { endpoint:url, json: JSON.parse(text) }; }
-      catch{ return { endpoint:url, json:{} }; }
-    }catch(e){ console.warn("[ai] POST failed", url, e?.message||e); }
+      let json = {};
+      try{ json = JSON.parse(text); }catch{}
+      return { endpoint:url, json };
+    }catch(e){
+      console.warn("[ai] POST failed", url, e?.message||e);
+      // try next
+    }
   }
   throw new Error("All AI endpoints failed.");
 }
@@ -194,6 +248,7 @@ function bindButtons(){
   if (btnOpen) btnOpen.disabled = true;
   if (btnAdd)  btnAdd.disabled  = true;
 
+  // Preview
   if (btnPreview){
     btnPreview.addEventListener("click", async ()=>{
       try{
@@ -208,6 +263,7 @@ function bindButtons(){
     labelBtnWired(btnPreview);
   }
 
+  // Send
   btnSend.addEventListener("click", async ()=>{
     btnSend.disabled = true; if (btnOpen) btnOpen.disabled = true; if (btnAdd) btnAdd.disabled = true;
 
@@ -250,18 +306,23 @@ function bindButtons(){
       };
 
       const res = await postAI(payload, ping?.url);
-      const j = res.json || {};
-      const url = j.url || j.result || j.image || j.output || j.image_url || j.compositeURL || j.composited_url || null;
-      const dataURL = j.dataURL || j.data_url || null;
+      const norm = await normalizeAIResponse(res.json || {}, res.endpoint);
 
-      let finalURL=null;
-      if (url && /^https?:\/\//i.test(url)) finalURL=url;
-      else if (dataURL && dataURL.startsWith("data:image/")){
-        const blob=await toBlobFromDataURL(dataURL);
-        finalURL = await uploadToInbox(blob, dataURL.includes("png")?"png":"jpg");
-      } else {
-        throw new Error("AI did not return a URL. Received keys: " + Object.keys(j).join(", "));
+      if (!norm){
+        const keys = Object.keys(res.json || {}).join(", ") || "(no keys)";
+        throw new Error("AI did not return a usable image. Received keys: " + keys);
       }
+
+      let finalURL = null;
+      if (norm.finalURL){
+        finalURL = norm.finalURL;
+      } else if (norm.dataURL){
+        const blob = await toBlobFromDataURL(norm.dataURL);
+        const ext  = norm.dataURL.includes("png") ? "png" : "jpg";
+        finalURL = await uploadToInbox(blob, ext);
+      }
+
+      if (!finalURL) throw new Error("Could not resolve final image URL.");
 
       if (btnOpen){ btnOpen.disabled=false; btnOpen.onclick=()=> window.open(finalURL,"_blank"); }
       if (btnAdd){  btnAdd.disabled=false;  btnAdd.onclick=async ()=>{ try{ await __scn.addResultAsNewStop(finalURL); updateStatus("Result added as a new stop ✓"); }catch(e){ updateStatus("Add failed: " + (e?.message||e)); } }; }
