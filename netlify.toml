@@ -1,12 +1,12 @@
 [build]
-  # Serve the site from /public (you have public/index.html, public/geophoto/*, etc.)
+  # Serve your static site from /public (matches your zip)
   publish = "public"
 
 [functions]
-  # Your ai-image.js is in /functions
+  # Your Netlify Functions are in /functions
   directory = "functions"
 
-# Nice API path that maps to the function
+# Pretty alias so both URLs work
 [[redirects]]
   from = "/api/ai-image"
   to = "/.netlify/functions/ai-image"
