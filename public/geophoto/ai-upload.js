@@ -1,12 +1,13 @@
 // ai-upload.js — self-wiring, scenarios-agnostic, super-verbose "Send to AI"
 //
+// ✅ Exports wireAI()  ← so your HTML/bootloader can call it
+// ✅ Also auto-inits (idempotent), so page works even if you forget to call wireAI()
 // ✅ Dynamically imports scenarios module from several filenames (no hardcoded path)
-// ✅ Wires buttons even if scenarios fail to load (click always responds)
-// ✅ Pings Netlify function first so you can see a network request immediately
+// ✅ Pings Netlify function first so you see a network request immediately
 // ✅ Sends URL-based payload (guideURL + optional compositeURL)
 // ✅ Clear step-by-step status in UI (#aiMsg) and console
 //
-// Requires: firebase-core.js in the same folder
+// Requires: firebase-core.js in the same folder.
 
 import { ensureAuthed, uploadSmallText, getFirebase } from "./firebase-core.js";
 import { ref as stRef, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-storage.js";
@@ -16,11 +17,7 @@ function $(id){ return document.getElementById(id); }
 
 function updateStatus(text){
   try {
-    // Prefer scenarios.js' setAIStatus when available
-    if (__scn && typeof __scn.setAIStatus === "function") {
-      __scn.setAIStatus(text);
-      return;
-    }
+    if (__scn && typeof __scn.setAIStatus === "function") { __scn.setAIStatus(text); return; }
   } catch {}
   const el = $("aiMsg");
   if (el) el.textContent = text;
@@ -28,44 +25,35 @@ function updateStatus(text){
 }
 
 function labelBtnWired(btn){
-  try {
-    if (!btn) return;
-    btn.dataset.wired = "1";
-    btn.title = "wired";
-  } catch {}
+  try{ if (btn){ btn.dataset.wired = "1"; btn.title = "wired"; } }catch{}
 }
 
 /* ---------------- dynamic scenarios loader ---------------- */
-let __scn = null; // will hold the loaded scenarios module
+let __scn = null; // scenarios module (once loaded)
 
 async function loadScenariosModule(){
   if (__scn) return __scn;
 
   const bases = [
-    new URL(".", import.meta.url),                   // same folder as ai-upload.js
-    new URL("./", location.href),                    // page folder (safety)
+    new URL(".", import.meta.url),   // same folder as ai-upload.js
+    new URL("./", location.href)     // page folder (safety)
   ];
-  const names = [
-    "scenarios.js",
-    "scenarios%20(1).js",
-    "scenarios (1).js"
-  ];
+  const names = ["scenarios.js", "scenarios%20(1).js", "scenarios (1).js"];
 
   let lastErr = null;
   for (const b of bases){
     for (const n of names){
       const u = new URL(n, b).href + "?v=" + Date.now();
-      try {
+      try{
         const mod = await import(u);
-        // minimal export check
-        if (typeof mod.getGuideImageURLForCurrentStop === "function") {
+        if (typeof mod.getGuideImageURLForCurrentStop === "function"){
           __scn = mod;
           console.log("[ai] scenarios module loaded from", u);
           return __scn;
         } else {
           console.warn("[ai] scenarios module at", u, "missing expected exports");
         }
-      } catch (e) {
+      }catch(e){
         lastErr = e;
         console.warn("[ai] import fail", u, e?.message || e);
       }
@@ -76,7 +64,7 @@ async function loadScenariosModule(){
   return null;
 }
 
-/* ---------------- generic utils ---------------- */
+/* ---------------- utils ---------------- */
 function withTimeout(promise, ms, label="timeout"){
   return Promise.race([
     promise,
@@ -92,10 +80,7 @@ async function toBlobFromDataURL(dataURL){
 async function uploadToInbox(blob, ext = "jpg"){
   const { storage } = getFirebase();
   let curId = "scratch";
-  try {
-    const cur = __scn?.getCurrent?.();
-    if (cur?.id) curId = cur.id;
-  } catch {}
+  try { const cur = __scn?.getCurrent?.(); if (cur?.id) curId = cur.id; } catch {}
   const ts = Date.now();
   const path = `scenarios/${curId}/ai/inbox/${ts}.${ext}`;
   await uploadBytes(stRef(storage, path), blob, {
@@ -116,8 +101,7 @@ const DEFAULT_ENDPOINTS = [
 function getCandidateEndpoints(){
   const ext = Array.isArray(window.__AI_ENDPOINTS__) ? window.__AI_ENDPOINTS__ : [];
   const arr = [...ext, ...DEFAULT_ENDPOINTS];
-  const uniq = [];
-  const seen = new Set();
+  const uniq = []; const seen = new Set();
   for (let i=0;i<arr.length;i++){
     const href = new URL(arr[i], location.origin).href;
     if (!seen.has(href)) { seen.add(href); uniq.push(href); }
@@ -125,7 +109,6 @@ function getCandidateEndpoints(){
   return uniq;
 }
 
-// POST a tiny ping {ping:true}. Any HTTP status indicates reachability.
 async function pingEndpoints(timeoutMs = 4000){
   const endpoints = getCandidateEndpoints();
   const headers = { "content-type": "application/json", "x-ai-ping": "1" };
@@ -136,7 +119,7 @@ async function pingEndpoints(timeoutMs = 4000){
     try{
       const ctl = new AbortController();
       const tid = setTimeout(()=> ctl.abort(), timeoutMs);
-      const r = await fetch(url, { method:"POST", headers, body, signal: ctl.signal, cache: "no-store", mode:"cors", credentials:"omit" });
+      const r = await fetch(url, { method:"POST", headers, body, signal: ctl.signal, cache:"no-store", mode:"cors", credentials:"omit" });
       clearTimeout(tid);
       console.log("[ai] ping", url, "→", r.status);
       return { url, status: r.status };
@@ -149,13 +132,11 @@ async function pingEndpoints(timeoutMs = 4000){
 
 /* ---------------- guide building (URL-first) ---------------- */
 async function guessGuideURLFast(){
-  // If scenarios loaded, ask it for the fastest guide
   if (__scn){
     const live = __scn.getLastLoadedBaseURL?.();
     if (live && (/^https?:\/\//i.test(live) || live.startsWith("data:") || live.startsWith("blob:"))) {
       return live;
     }
-    // guarded call into helper
     return await withTimeout(__scn.getGuideImageURLForCurrentStop(), 5000, "guideurl/timeout");
   }
   throw new Error("scenarios module not loaded");
@@ -205,11 +186,8 @@ async function postAI(payload, preferredUrl){
         throw new Error("Function returned binary image. Please return JSON { url: 'https://...' }");
       }
 
-      try {
-        return { endpoint:url, json: JSON.parse(text) };
-      } catch {
-        return { endpoint:url, json: {} };
-      }
+      try { return { endpoint:url, json: JSON.parse(text) }; }
+      catch { return { endpoint:url, json: {} }; }
     }catch(e){
       console.warn("[ai] POST failed", url, e?.message || e);
       // try next endpoint
@@ -225,16 +203,10 @@ function bindButtons(){
   const btnOpen    = $("aiOpen");
   const btnAdd     = $("aiAdd");
 
-  if (!btnSend) {
-    console.warn("[ai] #aiSend not found in DOM");
-    return;
-  }
+  if (!btnSend) { console.warn("[ai] #aiSend not found in DOM"); return; }
 
   // Avoid duplicate listeners
-  if (btnSend.dataset.wired === "1") {
-    console.log("[ai] already wired");
-    return;
-  }
+  if (btnSend.dataset.wired === "1") { console.log("[ai] already wired"); return; }
 
   // baseline UI state
   if (btnOpen) btnOpen.disabled = true;
@@ -259,7 +231,6 @@ function bindButtons(){
 
   // Send
   btnSend.addEventListener("click", async ()=>{
-    // immediate visible response
     btnSend.disabled = true;
     if (btnOpen) btnOpen.disabled = true;
     if (btnAdd)  btnAdd.disabled  = true;
@@ -267,7 +238,7 @@ function bindButtons(){
     try{
       await ensureAuthed();
 
-      const kind  = $("aiReturn")?.value || "photo";      // "photo" | "overlays"
+      const kind  = $("aiReturn")?.value || "photo";
       const style = $("aiStyle")?.value  || "realistic";
       const notes = $("aiNotes")?.value  || "";
       const wantComposite = (kind === "photo");
@@ -280,20 +251,15 @@ function bindButtons(){
         updateStatus(`Endpoint OK (${ping.status}) — preparing guide…`);
       }
 
-      // Ensure scenarios loaded (so we can resolve guide URL)
-      if (!__scn) {
-        await loadScenariosModule();
-      }
-      if (!__scn) {
-        throw new Error("Scenarios module not loaded; cannot resolve guide image.");
-      }
+      // Ensure scenarios loaded
+      if (!__scn) await loadScenariosModule();
+      if (!__scn) throw new Error("Scenarios module not loaded; cannot resolve guide image.");
 
       const { guideURL, compositeURL } = await withTimeout(
         buildGuideFast({ wantComposite }),
         10000,
         "buildguide/timeout"
       );
-
       if (!guideURL) throw new Error("No guideURL resolved.");
 
       updateStatus("Guide ready ✓ — contacting AI…");
@@ -302,27 +268,18 @@ function bindButtons(){
 
       const payload = {
         // canonical
-        returnType: kind,
-        style,
-        notes: notes || "",
-        hasOverlays: hasOv,
-        guideURL,
-        compositeURL,
-
-        // common synonyms
-        return: kind,
-        mode: (kind==="overlays" ? "overlays" : "photo"),
-        overlaysOnly: kind==="overlays",
-        transparent: kind==="overlays",
-        style_preset: style,
-        prompt: notes || "",
+        returnType: kind, style, notes: notes || "", hasOverlays: hasOv,
+        guideURL, compositeURL,
+        // synonyms for different backends
+        return: kind, mode:(kind==="overlays"?"overlays":"photo"),
+        overlaysOnly: kind==="overlays", transparent: kind==="overlays",
+        style_preset: style, prompt: notes || "",
         guideUrl: guideURL, imageURL: guideURL, image_url: guideURL, input: guideURL, reference: guideURL, src: guideURL,
         composite_url: compositeURL
       };
 
       const res = await postAI(payload, ping?.url);
 
-      // Parse result
       const j = res.json || {};
       const url = j.url || j.result || j.image || j.output || j.image_url || j.compositeURL || j.composited_url || null;
       const dataURL = j.dataURL || j.data_url || null;
@@ -350,10 +307,10 @@ function bindButtons(){
       }
 
       updateStatus("AI result ready ✓");
-    } catch (e){
+    }catch(e){
       console.error("[ai] send failed", e);
       updateStatus("Send failed: " + (e?.message || e));
-    } finally {
+    }finally{
       btnSend.disabled = false;
     }
   });
@@ -366,22 +323,20 @@ function bindButtons(){
   updateStatus("AI ready");
 }
 
-/* ---------------- auto-init (idempotent) ---------------- */
+/* ---------------- export + auto-init (idempotent) ---------------- */
+export function wireAI(){ bindButtons(); }  // ← named export expected by your loader
+
 function start(){
-  try {
-    bindButtons();
-  } catch (e) {
-    console.error("[ai] bind error", e);
-  }
+  try { bindButtons(); } catch (e) { console.error("[ai] bind error", e); }
 }
+
 if (document.readyState === "loading") {
   document.addEventListener("DOMContentLoaded", start, { once:true });
 } else {
-  // already loaded
   setTimeout(start, 0);
 }
 
-/* ---------------- optional: expose debug hooks ---------------- */
+/* ---------------- optional debug hooks ---------------- */
 window.__AI_DEBUG = {
   reloadScenarios: async () => { __scn = null; return await loadScenariosModule(); },
   ping: pingEndpoints,
