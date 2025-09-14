@@ -2,101 +2,91 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<title>AI Endpoint Test – Fire Effect</title>
+<title>AI Diagnostic Test</title>
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <style>
-  :root { --bg:#0f1115; --panel:#1a1f2b; --text:#e5e9f0; --muted:#a7b0c0; --accent:#6aa3ff; }
-  body { margin:0; background:var(--bg); color:var(--text); font:14px/1.35 system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif; }
-  .wrap { max-width:1000px; margin:24px auto; padding:0 16px; }
-  h1 { font-size:18px; margin:0 0 12px; }
-  .card { background:var(--panel); border:1px solid #293248; border-radius:12px; padding:16px; margin:12px 0; }
-  label { display:block; font-size:12px; color:var(--muted); margin:0 0 6px; }
-  input[type="text"], textarea, select {
-    width:100%; box-sizing:border-box; background:#111827; color:#eef3ff;
-    border:1px solid #2c344a; padding:8px 10px; border-radius:8px; outline:none;
-  }
-  textarea { min-height:72px; resize:vertical; }
-  .row { display:flex; gap:10px; }
-  .row > * { flex:1 1 0; }
-  .btn { display:inline-flex; align-items:center; justify-content:center; gap:6px;
-    background:#22314e; color:#eaf1ff; border:1px solid #314266; padding:10px 14px; border-radius:10px;
-    cursor:pointer; margin-right:8px;
-  }
-  .btn:hover { background:#263a5f; }
-  .status { font-size:12px; color:#c9d3ea; margin-top:8px; min-height:1.4em; white-space:pre-wrap; }
-  .gallery { display:grid; grid-template-columns: 1fr 1fr; gap:12px; }
-  .imgbox { background:#0b0f18; border:1px solid #25304a; border-radius:10px; padding:10px; }
-  .imgbox img { width:100%; height:auto; display:block; border-radius:8px; }
-  code.small { font-size:12px; color:#d5e1ff; background:#0d1320; border:1px solid #263355; padding:2px 6px; border-radius:6px; }
+  body{margin:0;background:#0f1115;color:#e5e9f0;font:14px/1.35 system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif}
+  .wrap{max-width:1100px;margin:24px auto;padding:0 16px}
+  .card{background:#1a1f2b;border:1px solid #293248;border-radius:12px;padding:16px;margin:12px 0}
+  label{display:block;font-size:12px;color:#a7b0c0;margin:0 0 6px}
+  input,textarea{width:100%;background:#111827;color:#eef3ff;border:1px solid #2c344a;padding:8px 10px;border-radius:8px}
+  textarea{min-height:70px}
+  .row{display:flex;gap:10px}
+  .row>*{flex:1 1 0}
+  .btn{display:inline-flex;background:#22314e;border:1px solid #314266;color:#eaf1ff;padding:10px 14px;border-radius:10px;cursor:pointer;margin-right:8px}
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  .imgbox{background:#0b0f18;border:1px solid #25304a;border-radius:10px;padding:10px}
+  img{width:100%;height:auto;border-radius:8px}
+  pre{white-space:pre-wrap;word-break:break-word;background:#0d1320;border:1px solid #263355;border-radius:8px;padding:10px;max-height:360px;overflow:auto}
 </style>
 </head>
 <body>
-  <div class="wrap">
-    <h1>AI Endpoint Test — make it look like it’s <span style="color:#ff784a">on fire</span> 🔥</h1>
-
-    <div class="card">
-      <div class="row">
-        <div>
-          <label for="endpoint">AI endpoint (Netlify Function)</label>
-          <input id="endpoint" type="text" value="/.netlify/functions/ai-image" />
-          <div style="margin-top:6px; font-size:12px; color:var(--muted);">
-            If your pages are on a different host than the function, set the full URL (e.g. <code class="small">https://YOUR-SITE.netlify.app/.netlify/functions/ai-image</code>)
-          </div>
-        </div>
-      </div>
-      <div class="row" style="margin-top:10px;">
-        <div>
-          <label for="imageUrl">Image URL</label>
-          <input id="imageUrl" type="text" value="https://ff0c942b9653634369ec8ba5be3d0d8d0fd89992bef1d7b27e4acfc-apidata.googleusercontent.com/download/storage/v1/b/dailyquiz-d5279.firebasestorage.app/o/scenarios%2F-OZH6KD_krWW-FODi4A_%2F1756945542530.jpg?jk=AXbWWmk2QRyT2___ioAUJm7lFLOg2k3d8RF9kKlujhGpYAyXGw8sZ5PpfaPDfyENGh40vIRXWsRLOyM1pTugfBmgDDew3fvCbPpQgqVRD_I6R4yDjGQdGwJuJiOp_XRXuXcnNZuYiaVRzmiOicIk-wv1OZjydVSJgqxMm2lYhf2MsWEIJm2xy7mKfiY1WQMNeDQPr-WyPAA2sdckBxjRK10_8VN5rKAzLNJYfiyB8Qxab23nhQiXDSsdgtJ3LcrgvsSPr2bEzzNJ0RVBXPJvzPWwbTMIAKy06hjOex0rqfCOIVk7-pJiDwToJM3MlrTpDOFRC21Be0G47kFJ2wSkcX28pdjg4bJFcOhW8b6czLk2q84aNjpT1MKrlK6vKR35FaQx1tWwxBSFcF5XEwxys9OmMD4-2UnxdzS_Wtf4NQmmILZ5w30WoN0PQmgkqb_P3yANQNMeJP6Y6eSyV9aOsLK4gtrsfxKM5lUI4a23HvKxw7kIGpbAlvZfGO00qQCESi9UBohN41AK9B2qh1eddEFaDQ4EiwMNc7qG2P2gbcFzfF_iCsPUa29VA5ExV9Mnb5OLR-Pop9aC6TGCRUowvcHX5brGSbcLEucjm9x4QAoYnGE02y-jP-7icjzP1CaDe0Xp4sw9PRBlwu_UtdB-BYG1MHnCh_i9MKvaNKNTKsYFnLJGzy0m_uwi3QEBUwHrrygma_GArZ58hWuMqj4BLb-1IveK6ppVVJ2qQQ2HCupojUXSaNICF_2PFgiMTDF_i0twMcn7CbhCOtgJpmKHTDx1EiM5smexxKed9jEeje9TXpkQHgDc3vy-XsQrMOLvXXy_QEjQv2yCEW5pxSEQowrFr4k_zwBC1yFrxlgabPcVjzayzIxGtTU9oP6qw3ghGvb_6XmE2_DigShOYFRLQ0vvtC4Gq0h-YEwSJfHHEMVmDhz3NHhu4CrF1GZU78_SdscOq69J1VInLhxV6pYa3vtRM4E8FLVd010QAkp5wq01ivAHvQyEVBvENGgZ6hBxEh_lhSacOg8A2nIt2WKGwaQbu6WQhVsEMkB-GVR05839dlldSpaiL34LEYIjE4USdcjKJo8YagdT6t8KEqWc5tCp1cBgMC1bqqy6AR6PAQd0vNu4Wqb83tgTRI4NGSaI3pY9-gYCctaF09a1NILpgzVI-wmacJiaWIB6EmIYK6gnuF8T2ahbcRzBPy9-Sz7iHMsdfSSV5qCe9cl2ZQiseQnOVoWkIQ&isca=1">
-        </div>
-      </div>
-
-      <div class="row" style="margin-top:10px;">
-        <div>
-          <label for="prompt">Prompt</label>
-          <textarea id="prompt">Make the scene look like it is on fire: realistic flames, heat haze, smoke, glowing embers, dramatic lighting. Keep main structure recognizable, add cinematic fire effects.</textarea>
-        </div>
-        <div>
-          <label for="strength">Strength (0–1)</label>
-          <input id="strength" type="text" value="0.45">
-          <div style="margin-top:6px; font-size:12px; color:var(--muted);">Higher = stronger transformation</div>
-        </div>
-      </div>
-
-      <div style="margin-top:12px;">
-        <button class="btn" id="btnPing">Ping</button>
-        <button class="btn" id="btnSend">Send to AI</button>
-      </div>
-      <div id="status" class="status">Ready.</div>
-    </div>
-
-    <div class="card">
-      <div class="gallery">
-        <div class="imgbox">
-          <div style="color:var(--muted); font-size:12px; margin-bottom:6px;">Source</div>
-          <img id="srcImg" alt="source">
-        </div>
-        <div class="imgbox">
-          <div style="color:var(--muted); font-size:12px; margin-bottom:6px;">Result</div>
-          <img id="outImg" alt="result">
-        </div>
+<div class="wrap">
+  <h1>AI Diagnostic Test</h1>
+  <div class="card">
+    <div class="row">
+      <div>
+        <label for="endpoint">Endpoint</label>
+        <input id="endpoint" value="/.netlify/functions/ai-image">
       </div>
     </div>
-
+    <div class="row" style="margin-top:10px">
+      <div>
+        <label for="imageUrl">Image URL</label>
+        <input id="imageUrl" value="https://ff0c942b9653... (paste your full URL here)">
+      </div>
+      <div>
+        <label for="modelVersion">Model Version (optional override)</label>
+        <input id="modelVersion" placeholder="leave blank to use env">
+      </div>
+    </div>
+    <div class="row" style="margin-top:10px">
+      <div>
+        <label for="prompt">Prompt</label>
+        <textarea id="prompt">Make the scene look like it is on fire: realistic flames, smoke, embers, heat haze; keep main structure recognizable.</textarea>
+      </div>
+      <div>
+        <label for="strength">Strength (0–1)</label>
+        <input id="strength" value="0.45">
+      </div>
+    </div>
+    <div style="margin-top:12px">
+      <button class="btn" id="btnPing">Ping</button>
+      <button class="btn" id="btnSend">Send</button>
+    </div>
   </div>
+
+  <div class="card grid">
+    <div class="imgbox">
+      <div style="font-size:12px;color:#a7b0c0;margin-bottom:6px">Source</div>
+      <img id="src">
+    </div>
+    <div class="imgbox">
+      <div style="font-size:12px;color:#a7b0c0;margin-bottom:6px">Result</div>
+      <img id="out">
+    </div>
+  </div>
+
+  <div class="card">
+    <div style="font-size:12px;color:#a7b0c0;margin-bottom:6px">Raw JSON</div>
+    <pre id="jsonBox"></pre>
+  </div>
+</div>
 
 <script>
 (function(){
-  const $ = (id)=> document.getElementById(id);
-  const status = $("status");
+  const $ = (id)=>document.getElementById(id);
+  $("src").src = $("imageUrl").value;
 
-  function setStatus(t){ status.textContent = t; console.log("[test]", t); }
+  function showJSON(obj){
+    $("jsonBox").textContent = JSON.stringify(obj, null, 2);
+    // also try to show provider if present
+  }
 
-  function normalizeResult(json) {
-    // Accept { image: "http..." } OR { image:{ url:"http..." } } OR { url:"http..." }
-    if (!json || typeof json !== "object") return null;
-    if (typeof json.image === "string") return json.image;
+  function normalizeOut(json){
+    if (!json) return null;
     if (json.image && typeof json.image.url === "string") return json.image.url;
+    if (typeof json.image === "string") return json.image;
     if (typeof json.url === "string") return json.url;
     if (Array.isArray(json.output)) {
       const s = json.output.find(x => typeof x === "string" && /^https?:\/\//i.test(x));
@@ -105,89 +95,35 @@
     return null;
   }
 
-  async function ping() {
-    const ep = $("endpoint").value.trim() || "/.netlify/functions/ai-image";
-    setStatus("Pinging " + ep + "…");
-    try {
-      const url = ep + (ep.includes("?") ? "&" : "?") + "ping=1";
-      const r = await fetch(url, { method:"GET" });
-      const j = await r.json().catch(()=>({ raw: r.status+" "+r.statusText }));
-      setStatus("Ping response ("+r.status+"): " + JSON.stringify(j));
-    } catch (e) {
-      setStatus("Ping error: " + (e && e.message || e));
-    }
-  }
+  $("btnPing").onclick = async () => {
+    const ep = $("endpoint").value.trim();
+    const r = await fetch(ep + (ep.includes("?")?"&":"?") + "ping=1");
+    const j = await r.json().catch(()=>({status:r.status}));
+    showJSON(j);
+  };
 
-  async function send() {
-    const ep = $("endpoint").value.trim() || "/.netlify/functions/ai-image";
-    const image = $("imageUrl").value.trim();
-    const prompt = $("prompt").value;
-    const strength = parseFloat($("strength").value || "0.45") || 0.45;
-
-    $("srcImg").src = image;
-
+  $("btnSend").onclick = async () => {
+    const ep = $("endpoint").value.trim();
     const payload = {
-      image,                // preferred
-      guideURL: image,      // aliases for maximum compatibility
-      input: image,
-      src: image,
-      prompt,
-      strength,
-      returnType: "photo",
-      mode: "photo"
+      image: $("imageUrl").value.trim(),
+      prompt: $("prompt").value,
+      strength: parseFloat($("strength").value || "0.45") || 0.45
     };
+    const mv = $("modelVersion").value.trim();
+    if (mv) payload.modelVersion = mv;
 
-    setStatus("POST → " + ep + " …");
-    try {
-      const r = await fetch(ep, {
-        method: "POST",
-        headers: { "content-type": "application/json", "accept": "application/json,text/event-stream" },
-        body: JSON.stringify(payload)
-      });
+    $("src").src = payload.image;
 
-      // Try to read JSON; if not JSON, try to parse the last JSON-looking line
-      const ct = (r.headers.get("content-type")||"").toLowerCase();
-      let json = null;
+    const r = await fetch(ep, { method:"POST", headers:{ "content-type":"application/json" }, body: JSON.stringify(payload) });
+    let j = null;
+    const ct = (r.headers.get("content-type")||"").toLowerCase();
+    if (ct.includes("application/json")) j = await r.json().catch(()=>null);
+    else j = { status:r.status, text: await r.text().catch(()=>"(no text)") };
 
-      if (ct.includes("application/json")) {
-        json = await r.json().catch(()=>null);
-      } else {
-        const text = await r.text();
-        // look for last {...} in stream
-        const matches = text.match(/\{[\s\S]*\}/g);
-        if (matches && matches.length) {
-          try { json = JSON.parse(matches[matches.length-1]); } catch {}
-        }
-      }
-
-      setStatus("HTTP " + r.status + (json ? " • parsed JSON" : " • no JSON body"));
-
-      if (!json) {
-        setStatus(status.textContent + "\nServer text:\n" + (await r.clone().text().catch(()=>"(no text)")));
-        return;
-      }
-
-      console.log("[test] raw JSON:", json);
-
-      const outUrl = normalizeResult(json);
-      if (!outUrl) {
-        setStatus("Got JSON but no usable image URL.\nKeys: " + Object.keys(json).join(", "));
-        return;
-      }
-
-      $("outImg").src = outUrl;
-      setStatus("Done ✓");
-    } catch (e) {
-      setStatus("Send error: " + (e && e.message || e));
-    }
-  }
-
-  $("btnPing").addEventListener("click", ping);
-  $("btnSend").addEventListener("click", send);
-
-  // set initial source preview
-  $("srcImg").src = $("imageUrl").value.trim();
-
+    showJSON(j);
+    const out = normalizeOut(j);
+    if (out) $("out").src = out;
+  };
 })();
 </script>
 </body>
