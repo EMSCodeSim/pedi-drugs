@@ -2,13 +2,14 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <title>Advanced Photo Editor — FireOps SIM (AI-enabled)</title>
+  <title>Advanced Photo Editor — Storage Only</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <style>
     :root { --bg:#0f1115; --panel:#171923; --text:#e6e6e6; --muted:#a4a8b3; --accent:#6aa3ff; --edge:#232634; }
     * { box-sizing: border-box; }
-    html,body { height:100%; margin:0; background:var(--bg); color:var(--text); font:14px/1.35 system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif; }
-    .app { display:grid; grid-template-columns: 320px 1fr 420px; height:100%; }
+    html,body { height:100%; margin:0; background:var(--bg); color:var(--text);
+      font:14px/1.35 system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif; }
+    .app { display:grid; grid-template-columns: 340px 1fr 360px; height:100%; }
 
     /* Left: Scenario panel */
     .left { background:var(--panel); border-right:1px solid var(--edge); padding:14px; overflow:auto; }
@@ -19,7 +20,6 @@
       width:100%; background:#131621; color:#e8e8e8; border:1px solid #272b3a;
       padding:8px 10px; border-radius:8px; outline:none;
     }
-    textarea { min-height:72px; resize:vertical; }
     .btn { display:inline-flex; align-items:center; justify-content:center; gap:6px;
       background:#1f2534; color:#e8f0ff; border:1px solid #2b3246; padding:8px 10px;
       border-radius:10px; cursor:pointer; margin:3px 2px; }
@@ -29,36 +29,37 @@
     .row > * { flex:1 1 0; }
 
     .thumbs { display:grid; grid-template-columns: repeat(2, 1fr); gap:8px; margin-top:10px; }
-    .thumb { border:1px solid #2b3246; background:#0c0f16; border-radius:8px; overflow:hidden; cursor:pointer; position:relative; }
+    .thumb { border:1px solid #2b3246; background:#0c0f16; border-radius:8px; overflow:hidden;
+      cursor:pointer; position:relative; }
     .thumb img { width:100%; height:100%; display:block; object-fit:cover; aspect-ratio: 4/3; }
-    .thumb .cap { position:absolute; bottom:0; left:0; right:0; background:linear-gradient(transparent, rgba(0,0,0,.7)); color:#dfe7ff; font-size:11px; padding:24px 6px 6px; }
+    .thumb .cap { position:absolute; bottom:0; left:0; right:0; background:linear-gradient(transparent, rgba(0,0,0,.7));
+      color:#dfe7ff; font-size:11px; padding:24px 6px 6px; }
     .thumb.active { outline:2px solid var(--accent); }
 
     /* Center: Canvas/viewer */
     .center { display:flex; align-items:center; justify-content:center; background:#0b0e14; position:relative; }
     #mainCanvas { width: min(98%, 1400px); height: auto; max-height: 96%; background:#0a0d13; border-radius:12px; border:1px solid var(--edge); }
 
-    /* Right: AI panel */
+    /* Right: Status / helpers */
     .right { background:var(--panel); border-left:1px solid var(--edge); padding:14px; overflow:auto; }
+    .pill { font-size:11px; color:#9fb0ff; opacity:.95; border:1px solid #2b3246; padding:4px 8px; border-radius:999px; display:inline-block; margin-left:6px; }
     .status { margin-top:8px; font-size:12px; color:#b9c3d9; min-height:1.4em; }
     .sep { height:1px; background:#262a38; margin:14px 0; }
-    .pill { font-size:11px; color:#9fb0ff; opacity:.95; border:1px solid #2b3246; padding:4px 8px; border-radius:999px; display:inline-block; margin-left:6px; }
-
-    .imgbox { background:#0b0f18; border:1px solid #25304a; border-radius:10px; padding:10px; }
-    .imgbox img { width:100%; height:auto; border-radius:8px; }
-    pre { white-space:pre-wrap; word-break:break-word; background:#0d1320; border:1px solid #263355; border-radius:8px; padding:10px; max-height:280px; overflow:auto; }
+    small { color:#96a0b3; }
   </style>
 </head>
 <body>
   <div class="app">
-    <!-- LEFT: Scenarios -->
+
+    <!-- SCENARIOS (Storage-only) -->
     <aside class="left">
       <h1>
-        Scenarios
+        Storage Scenarios
         <span id="authPill" class="pill">auth: …</span>
         <span id="fbPill" class="pill">bucket: …</span>
       </h1>
 
+      <h2>Pick a scenario folder</h2>
       <div class="row">
         <select id="scenarioSelect" title="Pick a scenario"></select>
         <button class="btn" id="scenarioRefresh" title="Refresh list">⟳</button>
@@ -70,12 +71,9 @@
         <button class="btn" id="scenarioNext">Next ▶</button>
       </div>
 
-      <label for="scenarioName">Scenario name</label>
-      <input id="scenarioName" type="text" placeholder="Untitled scenario" />
-
-      <h2>Storage Fallback</h2>
-      <label for="basePath">If RTDB is empty, list folders under this Storage path</label>
-      <input id="basePath" type="text" value="geophoto/" />
+      <h2>Base path (in Storage)</h2>
+      <label for="basePath">All folders under this path become scenarios</label>
+      <input id="basePath" type="text" value="scenarios/" />
       <div class="row">
         <button class="btn" id="btnSetBase">Use Path</button>
         <button class="btn" id="btnSetupFirebase">Override Config</button>
@@ -85,164 +83,126 @@
       <div id="thumbs" class="thumbs"></div>
     </aside>
 
-    <!-- CENTER: Canvas -->
+    <!-- VIEWER -->
     <main class="center">
       <canvas id="mainCanvas" width="1600" height="900"></canvas>
     </main>
 
-    <!-- RIGHT: AI -->
+    <!-- RIGHT: Helpers / Direct URL tester -->
     <aside class="right">
-      <h1>AI (Replicate)</h1>
-
-      <label for="aiEndpoint">Endpoint</label>
-      <input id="aiEndpoint" value="/.netlify/functions/ai-replicate" />
-
-      <div class="row">
-        <div>
-          <label for="aiStrength">Image strength (0–1)</label>
-          <input id="aiStrength" value="0.55" />
-        </div>
-        <div>
-          <label>&nbsp;</label>
-          <button class="btn" id="aiSend">Send to AI</button>
-        </div>
-      </div>
-
-      <label for="aiPrompt">Prompt</label>
-      <textarea id="aiPrompt" placeholder="make this look like a realistic emergency fire scene; blend overlays naturally; photorealistic"></textarea>
-
-      <label for="aiNeg">Negative prompt</label>
-      <input id="aiNeg" placeholder="blurry, low quality, artifacts, text, watermark" />
-
-      <div class="row">
-        <button class="btn" id="aiOpen" disabled>Open Result</button>
-        <button class="btn" id="aiAdd" disabled>Add as New Stop</button>
-      </div>
-
+      <h1>Status</h1>
       <div class="status" id="aiMsg">Ready</div>
-      <div class="sep"></div>
 
-      <div class="imgbox">
-        <div style="font-size:12px;color:#a7b0c0;margin-bottom:6px">AI Output</div>
-        <img id="aiOut">
+      <div class="sep"></div>
+      <h2>Test a direct Storage URL</h2>
+      <input id="directUrl" placeholder="Paste https://firebasestorage.googleapis.com/... here" />
+      <div class="row">
+        <button class="btn" id="btnAddDirect">Add Image</button>
+        <button class="btn" id="btnOpenDirect">Open in new tab</button>
       </div>
+      <small>We convert download URLs to a gs:// path and fetch via the SDK (works even if the URL token changes).</small>
 
       <div class="sep"></div>
-      <div style="font-size:12px;color:#a7b0c0;margin-bottom:6px">Raw JSON</div>
-      <pre id="aiJson"></pre>
+      <h2>Notes</h2>
+      <ul style="margin-top:6px; padding-left:18px; line-height:1.35">
+        <li>Only reads **Storage**. RTDB is not used at all.</li>
+        <li>Default base path is <code>scenarios/</code> (matches your example).</li>
+        <li>Scenarios are subfolders; images are loaded recursively.</li>
+      </ul>
     </aside>
+
   </div>
 
   <!-- Firebase (module SDK) -->
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-app.js";
     import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-auth.js";
-    import { getDatabase, ref as dbRef, get as dbGet, push, set } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-database.js";
-    import { getStorage, ref as stRef, listAll, getDownloadURL, getBlob, uploadBytes } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-storage.js";
+    import { getStorage, ref as stRef, listAll, getDownloadURL, getBlob } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-storage.js";
 
-    // --- DOM helpers ---
+    // ---------- DOM ----------
     const $ = (id)=>document.getElementById(id);
     const sel=$("scenarioSelect"), thumbsEl=$("thumbs"), canvas=$("mainCanvas");
     const ctx=canvas.getContext("2d");
-    const aiMsg=$("aiMsg"), aiJson=$("aiJson"), aiOut=$("aiOut");
-    const authPill=$("authPill"), fbPill=$("fbPill"), basePathInput=$("basePath");
+    const msg=$("aiMsg"), authPill=$("authPill"), fbPill=$("fbPill");
 
-    // --- Firebase config (match viewer) ---
+    const basePathInput = $("basePath");
+    const directUrl = $("directUrl");
+
+    // ---------- Firebase config ----------
     const config = {
       apiKey:"AIzaSyDM6DpRSeZueVKRpbyJyDmhf8WY66KyCDk",
       authDomain:"dailyquiz-d5279.firebaseapp.com",
-      databaseURL:"https://dailyquiz-d5279-default-rtdb.firebaseio.com",
       projectId:"dailyquiz-d5279",
       storageBucket:"dailyquiz-d5279.appspot.com",
       appId:"1:94577748034:web:c032d3a1d72db1313de5db"
     };
+    // Explicitly bind to the appspot bucket
     const FORCE_BUCKET_GS = "gs://dailyquiz-d5279.appspot.com";
 
     const app = initializeApp(config);
     const auth = getAuth(app);
-    const db   = getDatabase(app);
     const storage = getStorage(app, FORCE_BUCKET_GS);
 
-    function setMsg(t){ aiMsg.textContent = t; }
-    const ensureSlash = p => p ? (p.endsWith("/") ? p : p + "/") : "";
+    const ensureSlash = (p)=> p ? (p.endsWith('/') ? p : p + '/') : '';
+    function setMsg(t){ msg.textContent = t; }
 
     async function ensureAuthed(){
       return new Promise((resolve,reject)=>{
         const unsub = onAuthStateChanged(auth, u=>{
           if(u){ authPill.textContent = "auth: anon ✓ " + u.uid.slice(0,8); unsub(); resolve(u); }
-          else  signInAnonymously(auth).catch(e=>{ authPill.textContent = "auth: failed"; unsub(); reject(e); });
+          else  signInAnonymously(auth).catch(e=>{ authPill.textContent="auth: failed"; unsub(); reject(e); });
         });
       });
     }
 
-    // ----- DB (viewer-style) -----
-    async function dbFetch(path){
-      const snap = await dbGet(dbRef(db, path));
-      return snap.exists() ? snap.val() : null;
-    }
-    async function loadScenarioListFromRTDB(){
-      const list = [];
-      try { const a = await dbFetch("geophoto/scenarios"); if (a) for (const [id,s] of Object.entries(a)) list.push({ id, ...(s||{}) }); } catch(e){}
-      try { const b = await dbFetch("scenarios");          if (b) for (const [id,s] of Object.entries(b)) list.push({ id, ...(s||{}) }); } catch(e){}
-      const uniq = new Map(); list.forEach(x=>{ if(!uniq.has(x.id)) uniq.set(x.id,x); });
-      return Array.from(uniq.values()).sort((a,b)=>(b.createdAt||0)-(a.createdAt||0));
+    // ---------- URL → gs:// path helpers ----------
+    function toGsPathFromDownloadURL(url){
+      // Accept both googleapis.com and firebasestorage.app styles
+      try {
+        const u = decodeURIComponent(url.trim());
+        let m = u.match(/firebasestorage\.googleapis\.com\/v0\/b\/([^/]+)\/o\/([^?]+)/i);
+        if (m) return m[2]; // path only (we always use our bucket binding)
+        m = u.match(/([^/]+)\.firebasestorage\.app\/o\/([^?]+)/i);
+        if (m) return m[2];
+      } catch {}
+      return "";
     }
 
-    // ----- Storage listing (fallback) -----
-    async function loadStorageFolders(basePath){
+    // ---------- Scenario listing (Storage only) ----------
+    async function listScenarioFolders(basePath){
       const baseRef = stRef(storage, ensureSlash(basePath));
       const res = await listAll(baseRef);
       return res.prefixes || [];
     }
 
-    function option(text, value){ const o=document.createElement("option"); o.textContent=text; o.value=value; return o; }
+    function option(text, value){ const o=document.createElement('option'); o.textContent=text; o.value=value; return o; }
 
     async function refreshScenarioList(){
       sel.innerHTML = '<option disabled>Loading…</option>';
-      const base = ensureSlash((basePathInput?.value || localStorage.getItem("geophoto_basePath") || "geophoto/").trim());
+      const base = ensureSlash((basePathInput?.value || localStorage.getItem("geophoto_basePath") || "scenarios/").trim());
       basePathInput.value = base;
       localStorage.setItem("geophoto_basePath", base);
 
       try{
-        const fromDB = await loadScenarioListFromRTDB();
-        sel.innerHTML = "";
-        if (fromDB.length){
-          fromDB.forEach(sc=> sel.appendChild(option(sc.title || sc.name || "(untitled)", `db:${sc.id}`)));
-          $("scenarioName").value = sel.options[0]?.textContent || "";
-          setMsg("Connected ✓ scenarios from RTDB.");
-          return;
-        }
-        // Fallback to Storage
-        const prefixes = await loadStorageFolders(base);
+        const prefixes = await listScenarioFolders(base);
         sel.innerHTML = "";
         if (!prefixes.length){
-          sel.appendChild(option("(no scenarios found in RTDB or Storage)", ""));
-          setMsg("No scenarios in RTDB; no folders under " + base);
+          sel.appendChild(option("(no scenario folders under "+base+")", ""));
+          setMsg("No scenario folders under "+base);
           return;
         }
-        prefixes.forEach(p => sel.appendChild(option(p.name || p.fullPath.replace(/\/$/,"").split("/").pop(), `st:${p.fullPath}`)));
-        $("scenarioName").value = sel.options[0]?.textContent || "";
-        setMsg("Connected ✓ (Storage fallback).");
+        prefixes.forEach(p => sel.appendChild(option(p.name || p.fullPath.replace(/\/$/,"").split("/").pop(), p.fullPath)));
+        setMsg("Connected ✓ Storage folders listed.");
       }catch(e){
         sel.innerHTML = "";
-        sel.appendChild(option("(error loading scenario list)", ""));
+        sel.appendChild(option("(error listing folders)", ""));
         setMsg("Listing error: " + (e.code || e.message));
       }
     }
 
-    // ----- Image loading -----
-    function toStorageRefString(v){
-      if(!v) return "";
-      let s = (v+"").trim(); try{s = decodeURIComponent(s);}catch{}
-      if(s.startsWith("gs://")) return s;
-      let m=s.match(/^https?:\/\/firebasestorage\.googleapis\.com\/v0\/b\/([^/]+)\/o\/([^?]+)/i); if(m) return `gs://${m[1]}/${m[2].replace(/\+/g,' ')}`;
-      m=s.match(/^https?:\/\/([^/]+)\.firebasestorage\.app\/o\/([^?]+)/i); if(m) return `gs://${m[1]}/${m[2].replace(/\+/g,' ')}`;
-      if(!/^https?:\/\//i.test(s)) return `gs://dailyquiz-d5279.appspot.com/${s}`;
-      return "";
-    }
-
-    async function listAllRecursiveImages(ref, acc=[]){
-      const res = await listAll(ref);
+    // ---------- Image loading (Storage only) ----------
+    async function listAllRecursiveImages(dirRef, acc=[]){
+      const res = await listAll(dirRef);
       for (const item of res.items){
         if (/\.(png|jpe?g|webp|gif)$/i.test(item.name)) acc.push(item);
       }
@@ -281,208 +241,64 @@
     }
 
     async function loadScenarioImages(){
-      const val = sel.value;
-      if (!val){ setMsg("No scenario selected."); return; }
+      const fullPath = sel.value;
+      if (!fullPath){ setMsg("No scenario selected."); return; }
+
       clearThumbs(); images=[]; currentIndex=-1; setMsg("Loading images…");
-
       try{
-        if (val.startsWith("db:")){
-          const id = val.slice(3);
-          let sc = await dbFetch(`geophoto/scenarios/${id}`); if(!sc) sc = await dbFetch(`scenarios/${id}`);
-          if(!sc){ setMsg("Scenario not found in RTDB."); return; }
-          const stops = normalizeStops(sc.stops);
-          for (const s of stops){
-            let url = "";
-            if (s.imageData && s.imageData.data){
-              const fmt = (s.imageData.format==='jpeg'||s.imageData.format==='jpg')?'jpeg':'png';
-              url = `data:image/${fmt};base64,${s.imageData.data}`;
-            } else if (s.gsUri || s.storagePath){
-              const gs = toStorageRefString(s.gsUri || s.storagePath);
-              if (gs) url = await dataURLFromStorage(gs);
-            } else if (s.imageURL && /^https?:/.test(s.imageURL)){
-              url = s.imageURL;
-            } else if (s.imageURL){
-              const gs = toStorageRefString(s.imageURL);
-              if (gs) url = await dataURLFromStorage(gs);
-            }
-            if (url){
-              addThumb({ name: s.title || s.caption || "slide", url, path: s.storagePath || s.gsUri || s.imageURL || "" });
-            }
-          }
-        } else if (val.startsWith("st:")){
-          const full = val.slice(3);
-          const dirRef = stRef(storage, ensureSlash(full));
-          const imgs = await listAllRecursiveImages(dirRef);
-          for (const it of imgs){
-            const url = await getDownloadURL(it);
-            addThumb({ name: it.name, url, path: it.fullPath });
-          }
+        const dirRef = stRef(storage, ensureSlash(fullPath));
+        const items = await listAllRecursiveImages(dirRef);
+        if (!items.length){ setMsg("No images found in "+fullPath); return; }
+        for (const it of items){
+          const url = await getDownloadURL(it);
+          addThumb({ name: it.name, url, path: it.fullPath });
         }
-
-        if (images.length){ selectImage(0); setMsg(`Loaded ${images.length} image(s).`); }
-        else setMsg("No images found.");
+        selectImage(0);
+        setMsg(`Loaded ${items.length} image(s).`);
       }catch(e){
         console.error(e);
-        setMsg("Failed to load images: " + (e.code || e.message));
+        setMsg("Failed to list images: " + (e.code || e.message));
       }
     }
 
-    async function dataURLFromStorage(refStr){
-      const ref = stRef(storage, refStr);
-      const blob = await getBlob(ref);
-      const fr = new FileReader();
-      const p = new Promise((res,rej)=>{ fr.onload=()=>res(fr.result); fr.onerror=rej; });
-      fr.readAsDataURL(blob);
-      return p;
-    }
-
-    function normalizeStops(stopsLike){
-      if(!stopsLike) return [];
-      const arr = Array.isArray(stopsLike) ? stopsLike : Object.values(stopsLike);
-      return arr.map(s=>({
-        title: s.title || s.name || "",
-        caption: s.caption || s.text || "",
-        imageData: s.imageData || null,
-        imageURL:  s.imageURL || s.imageUrl || s.url || s.photoURL || s.photo || "",
-        storagePath: s.storagePath || s.thumbPath || "",
-        gsUri: s.gsUri || ""
-      }));
-    }
-
-    // ----- AI integration -----
-    const getCurrent = () => images[currentIndex] || null;
-
-    function deriveStoragePathFromUrl(u){
-      // Try to pull "bucket/o/path" → path part
+    // ---------- Direct URL tester ----------
+    $("btnAddDirect").addEventListener("click", async ()=>{
+      const u = (directUrl.value||"").trim();
+      if (!u) return;
       try{
-        const m1 = u.match(/firebasestorage\.googleapis\.com\/v0\/b\/[^/]+\/o\/([^?]+)/i);
-        if (m1) return decodeURIComponent(m1[1]);
-        const m2 = u.match(/([^/]+)\.firebasestorage\.app\/o\/([^?]+)/i);
-        if (m2) return decodeURIComponent(m2[2]);
-      }catch{}
-      return "";
-    }
-
-    async function buildAIInput(){
-      const cur = getCurrent();
-      if (!cur) throw new Error("No image selected.");
-      // Prefer Storage path if we have it
-      if (cur.path && !/^https?:/i.test(cur.path)) return { storagePath: cur.path };
-      // Try to derive storagePath from URL
-      const sp = deriveStoragePathFromUrl(cur.url);
-      if (sp) return { storagePath: sp };
-      // Fallback: use a dataURL from canvas
-      const dataUrl = canvas.toDataURL("image/png", 0.95);
-      return { dataUrl };
-    }
-
-    function showJSON(j){ aiJson.textContent = JSON.stringify(j, null, 2); }
-
-    async function sendToAI(){
-      try{
-        setMsg("Uploading to AI…");
-        $("aiSend").disabled = true; $("aiOpen").disabled = true; $("aiAdd").disabled = true; aiOut.removeAttribute("src");
-
-        const ep = $("aiEndpoint").value.trim() || "/.netlify/functions/ai-replicate";
-        const strength = Math.max(0, Math.min(1, parseFloat($("aiStrength").value)||0.55));
-        const payload = await buildAIInput();
-        payload.prompt = $("aiPrompt").value.trim() || undefined;
-        payload.negativePrompt = $("aiNeg").value.trim() || undefined;
-        payload.imageStrength = strength;
-
-        const r = await fetch(ep, { method:"POST", headers:{ "Content-Type":"application/json" }, body: JSON.stringify(payload) });
-        const j = await r.json().catch(()=>({ ok:false, error:"Non-JSON response", status:r.status }));
-        showJSON(j);
-
-        if (!j || !j.ok || !j.image_url){
-          setMsg("AI error: " + (j?.error || "no output"));
-          $("aiSend").disabled = false;
-          return;
-        }
-
-        aiOut.src = j.image_url;
-        setMsg("AI image ready.");
-        $("aiOpen").disabled = false;
-        $("aiAdd").disabled = false;
-        $("aiAdd").dataset.resultUrl = j.image_url;
+        // Convert download URL → storage path, then fetch via SDK
+        const path = toGsPathFromDownloadURL(u);
+        const ref = path ? stRef(storage, path) : null;
+        const url = ref ? await getDownloadURL(ref) : u; // if parsing fails, try as-is
+        addThumb({ name: path.split("/").pop() || "image", url, path });
+        if (images.length===1) selectImage(0);
+        setMsg("Added image from URL.");
       }catch(e){
-        console.error(e);
-        setMsg("AI request failed: " + e.message);
-      }finally{
-        $("aiSend").disabled = false;
+        console.warn(e);
+        setMsg("Could not add URL: " + (e.code || e.message));
       }
-    }
+    });
+    $("btnOpenDirect").addEventListener("click", ()=>{
+      const u = (directUrl.value||"").trim();
+      if (u) window.open(u, "_blank");
+    });
 
-    $("aiSend").addEventListener("click", sendToAI);
-    $("aiOpen").addEventListener("click", ()=>{ const u=aiOut.getAttribute("src"); if(u) window.open(u, "_blank"); });
+    // ---------- UI wiring ----------
+    $("scenarioRefresh").addEventListener("click", refreshScenarioList);
+    $("scenarioLoadImgs").addEventListener("click", loadScenarioImages);
+    $("scenarioPrev").addEventListener("click", ()=>{ if (images.length) selectImage((currentIndex-1+images.length)%images.length); });
+    $("scenarioNext").addEventListener("click", ()=>{ if (images.length) selectImage((currentIndex+1)%images.length); });
+    $("btnSetBase").addEventListener("click", refreshScenarioList);
 
-    async function addResultAsNewStop(){
-      try{
-        const resultUrl = $("aiAdd").dataset.resultUrl;
-        if (!resultUrl) return;
-        setMsg("Saving AI image to scenario…");
-        $("aiAdd").disabled = true;
-
-        // Decide target dir: use parent folder of the currently selected image (or the storage scenario folder).
-        const cur = getCurrent(); if (!cur) throw new Error("No image selected.");
-        let baseDir = "";
-
-        const val = sel.value;
-        if (val.startsWith("st:")) {
-          // Storage scenario => val.slice(3) is the scenario folder (ends with /)
-          baseDir = ensureSlash(val.slice(3));
-        } else {
-          // DB scenario => infer from current image path or image URL
-          if (cur.path && !/^https?:/i.test(cur.path)) {
-            baseDir = cur.path.replace(/[^/]+$/, ""); // drop filename
-          } else {
-            const sp = deriveStoragePathFromUrl(cur.url);
-            baseDir = sp ? sp.replace(/[^/]+$/, "") : "geophoto/";
-          }
-        }
-        const targetDir = ensureSlash(baseDir) + "ai/";
-        const ext = (resultUrl.match(/\.(png|jpe?g|webp)(\?|$)/i)?.[1] || "jpg").toLowerCase();
-        const name = `ai_${Date.now()}.${ext}`;
-        const uploadPath = targetDir + name;
-
-        // Fetch result image and upload to Storage
-        const res = await fetch(resultUrl);
-        if (!res.ok) throw new Error("Failed to fetch AI image.");
-        const blob = await res.blob();
-        await uploadBytes(stRef(storage, uploadPath), blob);
-
-        // If DB-backed scenario, push a new stop
-        if (val.startsWith("db:")){
-          const id = val.slice(3);
-          const stop = {
-            title: $("aiPrompt").value.trim() || "AI result",
-            caption: $("aiNeg").value.trim() ? `neg: ${$("aiNeg").value.trim()}` : "",
-            storagePath: uploadPath,
-            createdAt: Date.now()
-          };
-          const newRef = push(dbRef(db, `geophoto/scenarios/${id}/stops`));
-          await set(newRef, stop);
-        }
-
-        setMsg("Saved to Storage: " + uploadPath);
-        // Optionally, append to the local thumbs so it appears immediately:
-        const url = await getDownloadURL(stRef(storage, uploadPath));
-        addThumb({ name: name, url, path: uploadPath });
-      }catch(e){
-        console.error(e);
-        setMsg("Save failed: " + e.message);
-      }finally{
-        $("aiAdd").disabled = false;
-      }
-    }
-    $("aiAdd").addEventListener("click", addResultAsNewStop);
-
-    // ----- Boot -----
+    // ---------- Boot ----------
     (async ()=>{
       try{
         await ensureAuthed();
         fbPill.textContent = "bucket: dailyquiz-d5279.appspot.com";
-        const savedBase = localStorage.getItem("geophoto_basePath"); if (savedBase) $("basePath").value = savedBase;
+        // Load saved base path (use scenarios/ by default)
+        const savedBase = localStorage.getItem("geophoto_basePath");
+        if (savedBase) basePathInput.value = savedBase;
+        else basePathInput.value = "scenarios/";
         await refreshScenarioList();
       }catch(e){
         authPill.textContent = "auth: failed";
@@ -490,14 +306,7 @@
       }
     })();
 
-    // ----- UI wiring for non-AI bits -----
-    $("scenarioRefresh").addEventListener("click", refreshScenarioList);
-    $("scenarioLoadImgs").addEventListener("click", loadScenarioImages);
-    $("scenarioPrev").addEventListener("click", ()=>{ if (images.length) selectImage((currentIndex-1+images.length)%images.length); });
-    $("scenarioNext").addEventListener("click", ()=>{ if (images.length) selectImage((currentIndex+1)%images.length); });
-    $("btnSetBase").addEventListener("click", refreshScenarioList);
-    sel.addEventListener("change", (e)=>{ $("scenarioName").value = e.target.selectedOptions[0]?.textContent || ""; });
-
+    // Optional per-origin config override
     $("btnSetupFirebase").addEventListener("click", ()=>{
       const example = JSON.stringify(config, null, 2);
       const txt = prompt("Paste Firebase Web Config JSON to override (saved for this domain):", example);
