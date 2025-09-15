@@ -1,11 +1,13 @@
-# Redirect old /pump/pump links to the pump entry
+[build]
+  publish = "public"        # <- THIS is the key fix
+
+# Clean, scoped redirects (no global /* rewrite)
 [[redirects]]
   from = "/pump/pump"
   to = "/pump/"
   status = 301
   force = true
 
-# Pump entry + optional client routes
 [[redirects]]
   from = "/pump"
   to = "/pump/index.html"
@@ -21,7 +23,6 @@
   to = "/pump/index.html"
   status = 200
 
-# Geophoto viewer (scoped SPA fallback)
 [[redirects]]
   from = "/geophoto/viewer"
   to = "/geophoto/viewer/index.html"
@@ -31,5 +32,3 @@
   from = "/geophoto/viewer/*"
   to = "/geophoto/viewer/index.html"
   status = 200
-
-# IMPORTANT: no global /* → /index.html rule here.
