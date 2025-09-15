@@ -1,206 +1,239 @@
-// functions/ai-hardcoded-replicate.js
-// Works with REPLICATE_MODEL (owner/model or owner/model:versionId) OR REPLICATE_MODEL_VERSION.
-// Auto-detects image key (image/init_image) and strength knob
-// (prompt_strength | strength | image_strength). Always returns 200 JSON.
-
-const CORS = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
-  "Access-Control-Allow-Headers": "Content-Type, X-Requested-With, X-AI-Ping",
-  "Access-Control-Max-Age": "86400",
-};
-const reply200 = (obj) => ({ statusCode: 200, headers: { ...CORS, "Content-Type": "application/json" }, body: JSON.stringify(obj) });
-const sleep = (ms) => new Promise(r => setTimeout(r, 1000));
-
-const API_BASE = "https://api.replicate.com/v1";
-const PREDICTIONS = `${API_BASE}/predictions`;
-
-const TOKEN       = process.env.REPLICATE_API_TOKEN || "";
-const MODEL_SPEC  = (process.env.REPLICATE_MODEL || "").trim();          // e.g. "stability-ai/stable-diffusion-img2img"
-const VERSION_ENV = (process.env.REPLICATE_MODEL_VERSION || "").trim();  // raw version id (optional)
-
-// 🔒 Hardcoded test image (your Firebase/Google URL)
-const HARD_IMAGE_URL =
-  "https://ff0c942b9653634369ec8ba5be3d0d8d0fd89992bef1d7b27e4acfc-apidata.googleusercontent.com/download/storage/v1/b/dailyquiz-d5279.firebasestorage.app/o/scenarios%2F-OZH6KD_krWW-FODi4A_%2F1756945542530.jpg?jk=AXbWWmk2QRyT2___ioAUJm7lFLOg2k3d8RF9kKlujhGpYAyXGw8sZ5PpfaPDfyENGh40vIRXWsRLOyM1pTugfBmgDDew3fvCbPpQgqVRD_I6R4yDjGQdGwJuJiOp_XRXuXcnNZuYiaVRzmiOicIk-wv1OZjydVSJgqxMm2lYhf2MsWEIJm2xy7mKfiY1WQMNeDQPr-WyPAA2sdckBxjRK10_8VN5rKAzLNJYfiyB8Qxab23nhQiXDSsdgtJ3LcrgvsSPr2bEzzNJ0RVBXPJvzPWwbTMIAKy06hjOex0rqfCOIVk7-pJiDwToJM3MlrTpDOFRC21Be0G47kFJ2wSkcX28pdjg4bJFcOhW8b6czLk2q84aNjpT1MKrlK6vKR35FaQx1tWwxBSFcF5XEwxys9OmMD4-2UnxdzS_Wtf4NQmmILZ5w30WoN0PQmgkqb_P3yANQNMeJP6Y6eSyV9aOsLK4gtrsfxKM5lUI4a23HvKxw7kIGpbAlvZfGO00qQCESi9UBohN41AK9B2qh1eddEFaDQ4EiwMNc7qG2P2gbcFzfF_iCsPUa29VA5ExV9Mnb5OLR-Pop9aC6TGCRUowvcHX5brGSbcLEucjm9x4QAoYnGE02y-jP-7icjzP1CaDe0Xp4sw9PRBlwu_UtdB-BYG1MHnCh_i9MKvaNKNTKsYFnLJGzy0m_uwi3QEBUwHrrygma_GArZ58hWuMqj4BLb-1IveK6ppVVJ2qQQ2HCupojUXSaNICF_2PFgiMTDF_i0twMcn7CbhCOtgJpmKHTDx1EiM5smexxKed9jEeje9TXpkQHgDc3vy-XsQrMOLvXXy_QEjQv2yCEW5pxSEQowrFr4k_zwBC1yFrxlgabPcVjzayzIxGtTU9oP6qw3ghGvb_6XmE2_DigShOYFRLQ0vvtC4Gq0h-YEwSJfHHEMVmDhz3NHhu4CrF1GZU78_SdscOq69J1VInLhxV6pYa3vtRM4E8FLVd010QAkp5wq01ivAHvQyEVBvENGgZ6hBxEh_lhSacOg8A2nIt2WKGwaQbu6WQhVsEMkB-GVR05839dlldSpaiL34LEYIjE4USdcjKJo8YagdT6t8KEqWc5tCp1cBgMC1bqqy6AR6PAQd0vNu4Wqb83tgTRI4NGSaI3pY9-gYCctaF09a1NILpgzVI-wmacJiaWIB6EmIYK6gnuF8T2ahbcRzBPy9-Sz7iHMsdfSSV5qCe9cl2ZQiseQnOVoWkIQ&isca=1";
-
-const DEFAULT_PROMPT =
-  "Make the scene look like it is on fire: realistic flames, smoke, embers, heat haze; keep main structure recognizable.";
-
-const clamp01 = (v, dflt) => {
-  let n = parseFloat(v); if (!Number.isFinite(n)) n = dflt;
-  return Math.max(0, Math.min(1, n));
-};
-
-const parseModelSpec = (spec) => {
-  if (!spec) return { slug: null, versionFromSpec: null };
-  const i = spec.lastIndexOf(":");
-  if (i > -1) return { slug: spec.slice(0, i), versionFromSpec: spec.slice(i + 1) };
-  return { slug: spec, versionFromSpec: null };
-};
-
-async function fetchJSON(url) {
-  const r = await fetch(url, { headers: { Authorization: `Token ${TOKEN}` } });
-  const t = await r.text(); let j={}; try { j = JSON.parse(t); } catch {}
-  return { ok: r.ok, status: r.status, json: j, text: t };
-}
-
-async function resolveVersion({ versionOverride, diagnostics }) {
-  if (versionOverride) return { versionId: versionOverride, slug: parseModelSpec(MODEL_SPEC).slug };
-  if (VERSION_ENV) return { versionId: VERSION_ENV, slug: parseModelSpec(MODEL_SPEC).slug };
-
-  const { slug, versionFromSpec } = parseModelSpec(MODEL_SPEC);
-  diagnostics.modelSlug = slug || null;
-  if (versionFromSpec) return { versionId: versionFromSpec, slug };
-
-  if (slug) {
-    diagnostics.trace.push(`Fetching latest version for ${slug}…`);
-    const { ok, json } = await fetchJSON(`${API_BASE}/models/${slug}`);
-    if (ok && json.latest_version && json.latest_version.id) {
-      return { versionId: json.latest_version.id, slug };
-    }
-    diagnostics.trace.push("Failed to fetch model info; cannot resolve version.");
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Replicate SDXL img2img — Reliable Test</title>
+<style>
+  :root { --bg:#0b1020; --panel:#111830; --soft:#1a2342; --text:#e9eefb; --muted:#a8b3d0; }
+  html,body { margin:0; height:100%; background:var(--bg); color:var(--text); font:14px/1.35 system-ui, -apple-system, Segoe UI, Roboto, sans-serif; }
+  header { padding:14px 18px; background:var(--panel); border-bottom:1px solid #223059; font-weight:600; }
+  main { padding:16px; display:grid; gap:16px; grid-template-columns: 380px 1fr; }
+  .card { background:var(--panel); border:1px solid #223059; border-radius:12px; padding:14px; }
+  h2 { margin:0 0 10px; font-size:16px; }
+  label { display:block; margin:10px 0 6px; color:var(--muted); }
+  input[type="text"], textarea, input[type="number"] {
+    width:100%; box-sizing:border-box; border:1px solid #2a3868; background:var(--soft); color:var(--text);
+    border-radius:8px; padding:8px 10px; outline:none;
   }
-  return { versionId: null, slug: null };
-}
-
-async function discoverInputs({ slug, versionId }) {
-  if (!slug || !versionId) return { keys: null, imgKey: null, strengthKey: null };
-  const { ok, json } = await fetchJSON(`${API_BASE}/models/${slug}/versions/${versionId}`);
-  const keys = [];
-  if (ok && json && json.openapi_schema) {
-    const props =
-      json.openapi_schema.components?.schemas?.Input?.properties ||
-      json.openapi_schema.components?.schemas?.input?.properties || {};
-    for (const k of Object.keys(props)) keys.push(k);
+  textarea { min-height:92px; resize:vertical; }
+  .row { display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
+  button {
+    appearance:none; border:1px solid #2a3868; background:#2a3868; color:#fff; padding:9px 12px; border-radius:10px;
+    cursor:pointer; font-weight:600;
   }
-  const imgKey = keys.includes("image") ? "image" : (keys.includes("init_image") ? "init_image" : null);
+  button.secondary { background:transparent; }
+  button:disabled { opacity:.6; cursor:default; }
+  .grid { display:grid; gap:12px; grid-template-columns: 1fr 1fr; }
+  .preview { background:#0a0f21; border:1px dashed #2a3868; border-radius:12px; min-height:220px; display:grid; place-items:center; overflow:auto; }
+  .preview img { max-width:100%; height:auto; display:block; }
+  .mono { white-space:pre-wrap; background:#0a0f21; border:1px solid #223059; border-radius:10px; padding:10px; font-family:ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; color:#cfe3ff; }
+  .pill { display:inline-block; padding:4px 8px; border-radius:999px; background:#19254a; border:1px solid #2a3868; color:#cfe3ff; font-size:12px; }
+  .muted { color:var(--muted); }
+  footer { padding:12px 16px; color:#94a3c5; }
+  .small { font-size:12px; }
+</style>
+</head>
+<body>
+  <header>Replicate SDXL img2img — Reliable Test Harness</header>
+  <main>
+    <section class="card">
+      <h2>1) Input</h2>
 
-  // Prefer model-specific strength knobs in this order:
-  const strengthKey =
-    (keys.includes("prompt_strength") && "prompt_strength") ||
-    (keys.includes("strength") && "strength") ||
-    (keys.includes("image_strength") && "image_strength") ||
-    null;
+      <label>Upload image (best for testing — uses base64 data URL)</label>
+      <input id="file" type="file" accept="image/*" />
 
-  return { keys, imgKey, strengthKey };
-}
+      <div class="row" style="margin-top:8px;">
+        <button id="btn-sample">Use built-in sample</button>
+        <button id="btn-public" class="secondary">Use known public URL</button>
+        <span id="hint" class="muted small">Pick one of the options above, or paste your own URL below.</span>
+      </div>
 
-exports.handler = async (event) => {
-  if (event.httpMethod === "OPTIONS") return { statusCode: 204, headers: CORS };
+      <label style="margin-top:10px;">Public image URL (optional)</label>
+      <input id="url" type="text" placeholder="https://..." />
 
-  if (event.httpMethod === "GET" && (event.queryStringParameters || {}).ping === "1") {
-    return reply200({ ok: true, pong: true, method: "GET", t: Date.now() });
-  }
+      <label style="margin-top:10px;">Firebase Storage path (optional, requires Admin env on function)</label>
+      <input id="storagePath" type="text" placeholder="scenarios/-OZH6KD_krWW-FODi4A_/1756945542530.jpg" />
 
-  const qs = event.queryStringParameters || {};
-  let body = {}; try { if (event.httpMethod === "POST" && event.body) body = JSON.parse(event.body); } catch {}
-  const get = (k, d) => (qs[k] != null ? qs[k] : (body[k] != null ? body[k] : d));
+      <label style="margin-top:14px;">Prompt</label>
+      <textarea id="prompt">make this look like a realistic emergency fire scene; blend overlays naturally; photorealistic</textarea>
 
-  const run = String(get("run", "1")) === "1";
-  const prompt = String(get("prompt", DEFAULT_PROMPT));
-  // You can pass ?prompt_strength=0.35 explicitly. If not provided, we map from &strength or default.
-  const promptStrengthParam = get("prompt_strength", null);
-  const strengthParam = get("strength", null);
+      <label>Image strength (0–1, lower = stay close to original)</label>
+      <input id="strength" type="number" step="0.01" min="0" max="1" value="0.55" />
 
-  const diagnostics = {
-    provider: null,
-    mode: null,
-    trace: [],
-    hasToken: !!TOKEN,
-    env: { REPLICATE_MODEL: !!MODEL_SPEC, REPLICATE_MODEL_VERSION: !!VERSION_ENV },
-    usedVersion: null,
-    modelSlug: null,
-    schemaInputs: null,
-    chosenKeys: { imgKey: null, strengthKey: null }
+      <div class="row" style="margin-top:12px;">
+        <button id="run">Run Replicate</button>
+        <span id="status" class="pill">idle</span>
+      </div>
+
+      <div class="small muted" style="margin-top:10px;">
+        This calls <code>/.netlify/functions/ai-replicate</code>. It sends <span class="pill">dataUrl</span> if you uploaded/used the sample,
+        otherwise <span class="pill">imageUrl</span> or <span class="pill">storagePath</span>.
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>2) Result</h2>
+      <div class="grid">
+        <div>
+          <div class="muted small" style="margin-bottom:6px;">Input preview</div>
+          <div id="inPrev" class="preview"><span class="muted small">No image selected yet</span></div>
+        </div>
+        <div>
+          <div class="muted small" style="margin-bottom:6px;">Output from Replicate</div>
+          <div id="outPrev" class="preview"><span class="muted small">No output yet</span></div>
+        </div>
+      </div>
+
+      <div style="margin-top:12px;">
+        <div class="muted small" style="margin-bottom:6px;">Raw JSON</div>
+        <div id="json" class="mono small">—</div>
+      </div>
+    </section>
+  </main>
+  <footer class="small">
+    Tip: if output doesn’t show, expand the Raw JSON. The function returns a <code>trace</code> array that shows each poll step.
+  </footer>
+
+<script>
+  const fnUrl = "/.netlify/functions/ai-replicate";
+  const el = {
+    file: document.getElementById("file"),
+    url: document.getElementById("url"),
+    storagePath: document.getElementById("storagePath"),
+    prompt: document.getElementById("prompt"),
+    strength: document.getElementById("strength"),
+    run: document.getElementById("run"),
+    sample: document.getElementById("btn-sample"),
+    public: document.getElementById("btn-public"),
+    status: document.getElementById("status"),
+    inPrev: document.getElementById("inPrev"),
+    outPrev: document.getElementById("outPrev"),
+    json: document.getElementById("json"),
   };
 
-  if (!run && event.httpMethod === "GET") {
-    return reply200({ ok: true, info: "Append ?run=1 to execute.", hardcodedImage: HARD_IMAGE_URL, env: diagnostics.env });
-  }
+  let chosenDataUrl = null;
 
-  if (!TOKEN) {
-    diagnostics.provider = "echo";
-    diagnostics.trace.push("Missing REPLICATE_API_TOKEN — echoing input image.");
-    return reply200({ ok: true, provider: "echo", image: { url: HARD_IMAGE_URL }, diagnostics });
-  }
-
-  const { versionId, slug } = await resolveVersion({ versionOverride: String(get("version", "")).trim(), diagnostics });
-  diagnostics.usedVersion = versionId; diagnostics.modelSlug = slug;
-  if (!versionId) {
-    diagnostics.provider = "echo";
-    diagnostics.trace.push("No version id (set REPLICATE_MODEL or REPLICATE_MODEL_VERSION). Echoing input.");
-    return reply200({ ok: true, provider: "echo", image: { url: HARD_IMAGE_URL }, diagnostics });
-  }
-
-  const { keys, imgKey, strengthKey } = await discoverInputs({ slug, versionId });
-  diagnostics.schemaInputs = keys;
-  diagnostics.chosenKeys = { imgKey, strengthKey };
-  diagnostics.mode = imgKey ? "img2img" : "text2img";
-
-  // Build inputs respecting schema
-  const input = {};
-  // prompt is almost always allowed
-  if (!keys || keys.includes("prompt")) input.prompt = prompt; else input["prompt"] = prompt;
-
-  if (imgKey) {
-    input[imgKey] = HARD_IMAGE_URL;
-
-    // Figure the strength value to send
-    let strengthVal = 0.35; // conservative default
-    if (promptStrengthParam != null) strengthVal = clamp01(promptStrengthParam, 0.35);
-    else if (strengthParam != null) strengthVal = clamp01(strengthParam, 0.35);
-
-    if (strengthKey) input[strengthKey] = strengthVal;
-  }
-
-  const payload = { version: versionId, input };
-
-  try {
-    diagnostics.provider = "replicate";
-    diagnostics.trace.push(`Creating prediction (mode=${diagnostics.mode}, imgKey=${imgKey || "none"}, strengthKey=${strengthKey || "none"})…`);
-
-    const createRes = await fetch(PREDICTIONS, {
-      method: "POST",
-      headers: { Authorization: `Token ${TOKEN}`, "Content-Type": "application/json" },
-      body: JSON.stringify(payload)
-    });
-    const createTxt = await createRes.text();
-    let created = {}; try { created = JSON.parse(createTxt); } catch {}
-    diagnostics.trace.push(`Create status: ${createRes.status} id: ${created && created.id}`);
-
-    if (!createRes.ok || !created.id) {
-      diagnostics.trace.push(`Create failed: ${createTxt.slice(0,300)}`);
-      return reply200({ ok: false, error: "Replicate create failed", status: createRes.status, details: created || createTxt, diagnostics });
+  // Utilities
+  const setStatus = (t) => el.status.textContent = t;
+  const showJSON = (obj) => el.json.textContent = JSON.stringify(obj, null, 2);
+  const setPreview = (node, src, link) => {
+    node.innerHTML = "";
+    if (src) {
+      const img = new Image();
+      img.decoding = "async";
+      img.loading = "eager";
+      img.alt = "preview";
+      img.style.maxWidth = "100%";
+      img.style.height = "auto";
+      img.src = src;
+      img.onerror = () => { node.innerHTML = `<div class="muted small">Image tag could not display. <a href="${link||src}" target="_blank">Open in new tab</a></div>`; };
+      node.appendChild(img);
+    } else {
+      node.innerHTML = `<span class="muted small">No image</span>`;
     }
+  };
 
-    const id = created.id; let final = created;
-    for (let i = 0; i < 120; i++) {
-      const r = await fetch(`${PREDICTIONS}/${id}`, { headers: { Authorization: `Token ${TOKEN}` } });
-      const t = await r.text(); try { final = JSON.parse(t); } catch { final = { status: "unknown" }; }
-      if (i % 5 === 0) diagnostics.trace.push(`Poll ${i}s → ${final.status}`);
-      if (final.status === "succeeded" || final.status === "failed" || final.status === "canceled") break;
-      await sleep(1000);
+  // 1) Upload file → dataUrl (most reliable)
+  el.file.addEventListener("change", async (e) => {
+    const f = e.target.files?.[0];
+    if (!f) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      chosenDataUrl = reader.result;
+      setPreview(el.inPrev, chosenDataUrl);
+      // Clear other fields to ensure we send dataUrl path
+      el.url.value = "";
+      el.storagePath.value = "";
+    };
+    reader.readAsDataURL(f);
+  });
+
+  // 2) Built-in sample → generate canvas → dataUrl
+  el.sample.addEventListener("click", () => {
+    const w=640, h=400;
+    const c=document.createElement("canvas"); c.width=w; c.height=h;
+    const ctx=c.getContext("2d");
+    const g=ctx.createLinearGradient(0,0,w,h);
+    g.addColorStop(0,"#666"); g.addColorStop(1,"#ddd");
+    ctx.fillStyle=g; ctx.fillRect(0,0,w,h);
+    ctx.fillStyle="#000"; ctx.fillRect(0,h-80,w,80);
+    ctx.fillStyle="#fff"; ctx.font="bold 28px system-ui, sans-serif";
+    ctx.fillText("Built-in sample image", 16, h-40);
+    ctx.fillStyle="#c00"; ctx.fillRect(20,40,120,70);
+    ctx.fillStyle="#222"; ctx.fillRect(30,100,580,10);
+    const d = c.toDataURL("image/png");
+    chosenDataUrl = d;
+    setPreview(el.inPrev, chosenDataUrl);
+    el.url.value = "";
+    el.storagePath.value = "";
+  });
+
+  // 3) Known-public URL (Wikipedia)
+  el.public.addEventListener("click", () => {
+    el.url.value = "https://upload.wikimedia.org/wikipedia/commons/thumb/a/a9/Example.jpg/640px-Example.jpg";
+    chosenDataUrl = null;
+    setPreview(el.inPrev, el.url.value);
+    el.storagePath.value = "";
+  });
+
+  // Typing a URL shows a live input preview (so you know it’s loadable by the browser)
+  el.url.addEventListener("input", () => {
+    chosenDataUrl = null;
+    const u = el.url.value.trim();
+    if (u) setPreview(el.inPrev, u);
+  });
+
+  // Main run
+  el.run.addEventListener("click", async () => {
+    try {
+      el.run.disabled = true;
+      setStatus("sending…");
+      el.outPrev.innerHTML = `<span class="muted small">Waiting…</span>`;
+      showJSON("—");
+
+      const body = {
+        prompt: el.prompt.value.trim(),
+        imageStrength: Number(el.strength.value || 0.55)
+      };
+
+      if (chosenDataUrl) {
+        body.dataUrl = chosenDataUrl;                // Most reliable path
+      } else if (el.storagePath.value.trim()) {
+        body.storagePath = el.storagePath.value.trim(); // Requires Firebase Admin on function
+      } else if (el.url.value.trim()) {
+        body.imageUrl = el.url.value.trim();         // Must be truly public
+      } else {
+        alert("Please upload a file, use the built-in sample, paste a public URL, or provide a storage path.");
+        el.run.disabled = false;
+        setStatus("idle");
+        return;
+      }
+
+      const res = await fetch(fnUrl, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "Cache-Control":"no-cache" },
+        body: JSON.stringify(body)
+      });
+
+      const json = await res.json().catch(() => ({}));
+      showJSON(json);
+
+      if (json && json.ok && json.image_url) {
+        setStatus("done");
+        setPreview(el.outPrev, json.image_url, json.image_url);
+      } else {
+        setStatus("error");
+        el.outPrev.innerHTML = `<div class="muted small">No output image. Check the Raw JSON below for details.</div>`;
+      }
+    } catch (err) {
+      console.error(err);
+      setStatus("error");
+      el.outPrev.innerHTML = `<div class="muted small">Request failed. Open DevTools console for details.</div>`;
+    } finally {
+      el.run.disabled = false;
     }
-
-    // Extract URL
-    let outUrl = null;
-    const out = final && final.output;
-    if (typeof out === "string" && /^https?:\/\//i.test(out)) outUrl = out;
-    else if (Array.isArray(out)) {
-      const first = out.find(u => typeof u === "string" && /^https?:\/\//i.test(u));
-      if (first) outUrl = first;
-    }
-
-    if (final.status !== "succeeded" || !outUrl) {
-      diagnostics.trace.push(`Final status: ${final.status}; no output URL.`);
-      return reply200({ ok: false, error: "Replicate did not return an image URL", status: final.status, id, output: final && final.output, diagnostics });
-    }
-
-    diagnostics.trace.push("Succeeded ✓");
-    return reply200({ ok: true, provider: "replicate", mode: diagnostics.mode, image: { url: outUrl }, id, diagnostics });
-
-  } catch (e) {
-    diagnostics.trace.push(`Exception: ${e && (e.message || String(e))}`);
-    return reply200({ ok: false, error: e && (e.message || String(e)), diagnostics });
-  }
-};
+  });
+</script>
+</body>
+</html>
