@@ -41,11 +41,10 @@
     .center { display:flex; align-items:center; justify-content:center; background:#0b0e14; position:relative; }
     #mainCanvas { width: min(98%, 1400px); height: auto; max-height: 96%; background:#0a0d13; border-radius:12px; border:1px solid var(--edge); }
 
-    /* Right: AI panel */
+    /* Right: placeholder panel (AI controls area if you want later) */
     .right { background:var(--panel); border-left:1px solid var(--edge); padding:14px; overflow:auto; }
     .status { margin-top:8px; font-size:12px; color:#b9c3d9; min-height:1.4em; }
     .sep { height:1px; background:#262a38; margin:14px 0; }
-
     .pill { font-size:11px; color:#9fb0ff; opacity:.95; border:1px solid #2b3246; padding:4px 8px; border-radius:999px; display:inline-block; margin-left:6px; }
   </style>
 </head>
@@ -85,7 +84,7 @@
       <h2>Slides / Photos</h2>
       <div id="thumbs" class="thumbs"></div>
 
-      <!-- hidden file inputs -->
+      <!-- hidden file inputs (kept for future use) -->
       <input type="file" id="fileImages" accept="image/*" multiple style="display:none" />
       <input type="file" id="fileJson" accept="application/json" style="display:none" />
     </aside>
@@ -95,179 +94,147 @@
       <canvas id="mainCanvas" width="1600" height="900"></canvas>
     </main>
 
-    <!-- AI PANEL (unchanged placeholder) -->
+    <!-- RIGHT PANEL (placeholder for AI controls) -->
     <aside class="right">
-      <h1>AI Controls</h1>
+      <h1>Panel</h1>
       <div class="status" id="aiMsg">Ready</div>
       <div class="sep"></div>
-      <label>Endpoint (optional override)</label>
-      <input id="aiEndpoint" type="text" placeholder="/.netlify/functions/ai-image" />
-      <div class="row">
-        <button class="btn" type="button" id="btnUseEndpoint">Use Endpoint</button>
-        <button class="btn" type="button" id="btnResetEndpoint">Reset</button>
-      </div>
+      <p>If you need the AI endpoints back in here later, we can add them. For now this is focused on loading photos from Firebase.</p>
     </aside>
 
   </div>
 
-  <!-- Firebase compat SDKs (match Viewer) -->
-  <script src="https://www.gstatic.com/firebasejs/10.12.4/firebase-app-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.12.4/firebase-auth-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.12.4/firebase-database-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.12.4/firebase-storage-compat.js"></script>
-  <!-- App Check (enable if Enforcement is ON) -->
-  <script src="https://www.gstatic.com/firebasejs/10.12.4/firebase-app-check-compat.js"></script>
+  <!-- Firebase (module SDK) -->
+  <script type="module">
+    // --- Firebase SDK (v10 modular) ---
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-app.js";
+    import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-auth.js";
+    import { getStorage, ref as stRef, listAll, getDownloadURL } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-storage.js";
 
-  <script>
-  (function(){
-    // ---------- Elements ----------
-    const $ = id => document.getElementById(id);
-    const sel = $('scenarioSelect'), thumbsEl = $('thumbs'), canvas = $('mainCanvas');
-    const ctx = canvas.getContext('2d');
-    const aiMsg = $('aiMsg'), authPill = $('authPill'), fbPill = $('fbPill');
+    // ---------- DOM ----------
+    const $ = (id) => document.getElementById(id);
+    const sel = $("scenarioSelect"), thumbsEl = $("thumbs"), canvas = $("mainCanvas");
+    const ctx = canvas.getContext("2d");
+    const aiMsg = $("aiMsg"), authPill = $("authPill"), fbPill = $("fbPill");
+    const basePathInput = $("basePath");
 
-    // ---------- Firebase Config (mirrors Viewer) ----------
-    // You can override by defining window.FIREBASE_CONFIG before this script or via the "Override Config" button.
+    // ---------- Config ----------
+    // If window.FIREBASE_CONFIG is defined earlier on the page, it will override.
     const DEFAULT_CONFIG = {
       apiKey:"AIzaSyDM6DpRSeZueVKRpbyJyDmhf8WY66KyCDk",
       authDomain:"dailyquiz-d5279.firebaseapp.com",
-      databaseURL:"https://dailyquiz-d5279-default-rtdb.firebaseio.com",
       projectId:"dailyquiz-d5279",
-      storageBucket:"dailyquiz-d5279.firebasestorage.app",
-      appId:"1:94577748034:web:c032d3a1d72db1313de5db",
-      measurementId:"G-19DVN7NNH7"
+      // IMPORTANT: Storage must target the .appspot.com bucket (not .firebasestorage.app)
+      storageBucket:"dailyquiz-d5279.appspot.com",
+      appId:"1:94577748034:web:c032d3a1d72db1313de5db"
     };
-    // Always talk to the real bucket when building gs:// refs:
-    const FORCE_BUCKET = "dailyquiz-d5279.appspot.com";
+    // Allow local override (saved per-domain if you click "Override Config")
+    const savedCfg = (() => { try { return JSON.parse(localStorage.getItem("fbConfig") || "null"); } catch { return null; } })();
+    const cfg = window.FIREBASE_CONFIG || savedCfg || DEFAULT_CONFIG;
 
-    // In-page override saved per-origin:
-    const saved = localStorage.getItem('fbConfig');
-    const cfg = window.FIREBASE_CONFIG || (saved ? JSON.parse(saved) : DEFAULT_CONFIG);
-    firebase.initializeApp(cfg);
-    // self.FIREBASE_APPCHECK_DEBUG_TOKEN = true; // DEV only if needed
-    // firebase.appCheck().activate('YOUR_RECAPTCHA_V3_SITE_KEY', true);
+    // Force using the correct bucket (some consoles show .firebasestorage.app)
+    const FORCE_BUCKET_GS = "gs://dailyquiz-d5279.appspot.com";
 
-    const auth = firebase.auth();
-    const db = firebase.database();
-    const storage = firebase.storage();
+    // ---------- Firebase init + auth ----------
+    const app = initializeApp(cfg);
+    const auth = getAuth(app);
+    const storage = getStorage(app, FORCE_BUCKET_GS); // explicitly bind to the appspot bucket
 
-    // ---------- Auth (same flow as Viewer) ----------
+    function setMsg(t){ aiMsg && (aiMsg.textContent = t); }
+
     async function ensureAuthed(){
       return new Promise((resolve,reject)=>{
-        const unsub = auth.onAuthStateChanged(u=>{
-          if(u){
-            authPill.textContent = `auth: anon ✓ ${u.uid.slice(0,8)}`;
-            unsub(); resolve(u);
-          }else{
-            auth.signInAnonymously().catch(e=>{
-              authPill.textContent = `auth: failed (${e.code||e.message})`;
-              unsub(); reject(e);
-            });
-          }
+        const unsub = onAuthStateChanged(auth, (u)=>{
+          if(u){ authPill.textContent = "auth: anon ✓ " + u.uid.slice(0,8); unsub(); resolve(u); }
+          else { signInAnonymously(auth).catch(err=>{ authPill.textContent="auth: failed"; unsub(); reject(err); }); }
         });
       });
     }
 
-    // ---------- Helpers copied/adapted from Viewer ----------
-    // Normalize any storage URL/path into a gs:// ref string
-    function toStorageRefString(v){
-      if(!v) return ''; let s=(v+'').trim(); try{s=decodeURIComponent(s);}catch{}
-      if(s.startsWith('gs://')) return s;
-      let m=s.match(/^https?:\/\/firebasestorage\.googleapis\.com\/v0\/b\/([^/]+)\/o\/([^?]+)/i); if(m) return `gs://${m[1]}/${m[2].replace(/\+/g,' ')}`;
-      m=s.match(/^https?:\/\/([^/]+)\.firebasestorage\.app\/o\/([^?]+)/i); if(m) return `gs://${m[1]}/${m[2].replace(/\+/g,' ')}`;
-      if(!/^https?:\/\//i.test(s)) return `gs://${FORCE_BUCKET}/${s}`;
-      return '';
-    }
-    function storageRefAt(path){
-      const p = (path||'').replace(/^\/+/,'');
-      return storage.refFromURL(`gs://${FORCE_BUCKET}/${p}`);
-    }
-    async function getDownloadURLSafe(itemRef) {
-      try { return await itemRef.getDownloadURL(); }
-      catch(e){ console.warn('getDownloadURL failed for', itemRef.fullPath, e); return null; }
-    }
-    async function listAllImagesRecursive(ref, acc = []) {
-      const res = await ref.listAll();
-      for (const item of res.items) {
-        const nameLc = item.name.toLowerCase();
-        if (/\.(png|jpg|jpeg|webp|gif)$/i.test(nameLc)) acc.push(item);
-      }
-      for (const p of res.prefixes) await listAllImagesRecursive(p, acc);
-      return acc;
-    }
-
-    // ---------- Scenario listing ----------
-    const basePathInput = $('basePath');
-    function ensureSlash(p){ return p ? (p.endsWith('/') ? p : p + '/') : ''; }
+    // ---------- Helpers ----------
+    const ensureSlash = (p) => p ? (p.endsWith("/") ? p : p + "/") : "";
 
     async function listStorageScenarioFolders(basePath){
-      const baseRef = storageRefAt(ensureSlash(basePath));
-      const res = await baseRef.listAll();
+      const baseRef = stRef(storage, ensureSlash(basePath));
+      const res = await listAll(baseRef);   // { prefixes, items }
       return res.prefixes || [];
     }
 
     async function refreshScenarioList(){
-      $('scenarioSelect').innerHTML = '<option disabled>Loading…</option>';
-      const base = ensureSlash(basePathInput.value.trim() || 'geophoto/');
-      localStorage.setItem('geophoto_basePath', base);
+      sel.innerHTML = '<option disabled>Loading…</option>';
+      const base = ensureSlash((basePathInput?.value || localStorage.getItem("geophoto_basePath") || "geophoto/").trim());
+      basePathInput.value = base;
+      localStorage.setItem("geophoto_basePath", base);
 
       try{
-        // Prefer Storage folders (the editor works on images)
         const prefixes = await listStorageScenarioFolders(base);
-        sel.innerHTML = '';
+        sel.innerHTML = "";
         if (!prefixes.length){
           const o=document.createElement('option'); o.value=''; o.textContent='(no scenario folders found)'; sel.appendChild(o);
-        }else{
-          for (const pref of prefixes){
-            const full = pref.fullPath;
-            const name = full.replace(/\/$/,'').split('/').pop();
-            const o=document.createElement('option'); o.value=full; o.textContent=name; sel.appendChild(o);
-          }
-          sel.selectedIndex = 0;
-          $('scenarioName').value = sel.options[0].textContent || '';
+          setMsg("No scenario folders under "+base);
+          return;
         }
+        for (const pref of prefixes){
+          const o=document.createElement('option');
+          o.value = pref.fullPath;                 // e.g. "geophoto/house_01/"
+          o.textContent = pref.name || pref.fullPath.replace(/\/$/,'').split('/').pop();
+          sel.appendChild(o);
+        }
+        sel.selectedIndex = 0;
+        $("scenarioName").value = sel.options[0]?.textContent || "";
+        setMsg("Connected ✓ scenarios listed.");
       }catch(e){
-        console.error('Scenario list error:', e);
-        sel.innerHTML = '';
+        console.warn("Scenario list error:", e);
+        sel.innerHTML = "";
         const o=document.createElement('option'); o.value=''; o.textContent='(error listing folders)'; sel.appendChild(o);
+        setMsg("Listing error: " + (e.code || e.message));
       }
     }
 
-    // ---------- Load images for the selected scenario ----------
     let images=[], currentIndex=-1;
     function clearThumbs(){ thumbsEl.innerHTML = ''; }
     function setActiveThumb(idx){ [...thumbsEl.children].forEach((c,i)=>c.classList.toggle('active', i===idx)); }
 
+    async function listAllImagesRecursive(dirRef, acc = []) {
+      const { prefixes, items } = await listAll(dirRef);
+      for (const it of items) {
+        const name = it.name.toLowerCase();
+        if (/\.(png|jpe?g|webp|gif)$/i.test(name)) acc.push(it);
+      }
+      for (const sub of prefixes) await listAllImagesRecursive(sub, acc);
+      return acc;
+    }
+
     async function loadScenarioImages(){
       const path = sel.value;
-      if(!path){ aiMsg.textContent='No scenario selected.'; return; }
+      if(!path){ setMsg('No scenario selected.'); return; }
 
-      aiMsg.textContent = 'Loading images…';
+      setMsg('Loading images…');
       clearThumbs(); images=[]; currentIndex=-1;
 
       try{
-        const scenRef = storageRefAt(ensureSlash(path));
+        const scenRef = stRef(storage, ensureSlash(path));
         const items = await listAllImagesRecursive(scenRef);
-        if (!items.length){ aiMsg.textContent='No images found in scenario.'; return; }
+        if (!items.length){ setMsg('No images found in scenario.'); return; }
 
         let i=0;
-        for (const item of items){
-          const url = await getDownloadURLSafe(item); if(!url) continue;
-          const obj = { name:item.name, path:item.fullPath, url };
+        for (const it of items){
+          const url = await getDownloadURL(it);
+          const obj = { name: it.name, path: it.fullPath, url };
           images.push(obj);
 
-          const div = document.createElement('div'); div.className='thumb'; div.title=item.fullPath;
+          const div = document.createElement('div'); div.className = 'thumb'; div.title = it.fullPath;
           div.addEventListener('click', ()=>selectImage(i));
           const img = document.createElement('img'); img.loading='lazy'; img.decoding='async'; img.src=url;
-          const cap = document.createElement('div'); cap.className='cap'; cap.textContent=item.name;
+          const cap = document.createElement('div'); cap.className='cap'; cap.textContent=it.name;
           div.appendChild(img); div.appendChild(cap); thumbsEl.appendChild(div);
           i++;
         }
         if (images.length) selectImage(0);
-        aiMsg.textContent = `Loaded ${images.length} image(s).`;
+        setMsg(`Loaded ${images.length} image(s).`);
       }catch(e){
-        console.error('Load images error:', e);
-        aiMsg.textContent = `Failed to list images: ${e.code||e.message}`;
+        console.warn('Load images error:', e);
+        setMsg(`Failed to list images: ${e.code||e.message}`);
       }
     }
 
@@ -291,26 +258,15 @@
     }
 
     // ---------- UI wiring ----------
-    $('scenarioRefresh').addEventListener('click', refreshScenarioList);
-    $('scenarioLoadImgs').addEventListener('click', loadScenarioImages);
-    $('scenarioPrev').addEventListener('click', ()=>{ if (images.length) selectImage((currentIndex-1+images.length)%images.length); });
-    $('scenarioNext').addEventListener('click', ()=>{ if (images.length) selectImage((currentIndex+1)%images.length); });
-    $('btnSetBase').addEventListener('click', refreshScenarioList);
-    sel.addEventListener('change', (e)=>{ $('scenarioName').value = e.target.selectedOptions[0]?.textContent || ''; });
-
-    // Endpoint toggles (kept)
-    $('btnUseEndpoint').addEventListener('click', ()=>{
-      const v = $('aiEndpoint').value.trim();
-      if(!v){ delete window.__AI_ENDPOINTS__; aiMsg.textContent='Cleared custom endpoint'; return; }
-      window.__AI_ENDPOINTS__=[v]; aiMsg.textContent='Using custom endpoint: '+v;
-    });
-    $('btnResetEndpoint').addEventListener('click', ()=>{
-      delete window.__AI_ENDPOINTS__;
-      aiMsg.textContent='Using default endpoints';
-    });
+    $("scenarioRefresh").addEventListener('click', refreshScenarioList);
+    $("scenarioLoadImgs").addEventListener('click', loadScenarioImages);
+    $("scenarioPrev").addEventListener('click', ()=>{ if (images.length) selectImage((currentIndex-1+images.length)%images.length); });
+    $("scenarioNext").addEventListener('click', ()=>{ if (images.length) selectImage((currentIndex+1)%images.length); });
+    $("btnSetBase").addEventListener('click', refreshScenarioList);
+    sel.addEventListener('change', (e)=>{ $("scenarioName").value = e.target.selectedOptions[0]?.textContent || ''; });
 
     // Allow overriding Firebase config at runtime (saved per-origin)
-    $('btnSetupFirebase').addEventListener('click', ()=>{
+    $("btnSetupFirebase").addEventListener('click', ()=>{
       const example = JSON.stringify(DEFAULT_CONFIG, null, 2);
       const txt = prompt('Paste Firebase Web Config JSON to override (saved for this domain):', example);
       if (!txt) return;
@@ -326,19 +282,16 @@
     (async ()=>{
       try{
         await ensureAuthed();
-        authPill.title = `db: ${cfg.databaseURL||'(none)'}`;
-        fbPill.textContent = `bucket: ${FORCE_BUCKET}`;
+        if (fbPill) fbPill.textContent = 'bucket: dailyquiz-d5279.appspot.com';
         // Load saved base path
         const savedBase = localStorage.getItem('geophoto_basePath');
-        if (savedBase) $('basePath').value = savedBase;
+        if (savedBase) $("basePath").value = savedBase;
         await refreshScenarioList();
       }catch(e){
         authPill.textContent = 'auth: failed';
-        aiMsg.textContent = `Auth failed: ${e.code||e.message}`;
+        setMsg(`Auth failed: ${e.code||e.message}`);
       }
     })();
-
-  })();
   </script>
 </body>
 </html>
