@@ -2,17 +2,17 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <title>Advanced Photo Editor</title>
+  <title>Advanced Photo Editor — FireOps SIM</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <style>
-    :root { --bg:#0f1115; --panel:#171923; --text:#e6e6e6; --muted:#a4a8b3; --accent:#6aa3ff; }
+    :root { --bg:#0f1115; --panel:#171923; --text:#e6e6e6; --muted:#a4a8b3; --accent:#6aa3ff; --edge:#232634; }
     * { box-sizing: border-box; }
     html,body { height:100%; margin:0; background:var(--bg); color:var(--text);
       font:14px/1.35 system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif; }
     .app { display:grid; grid-template-columns: 320px 1fr 380px; height:100%; }
 
     /* Left: Scenario panel */
-    .left { background:var(--panel); border-right:1px solid #232634; padding:14px; overflow:auto; }
+    .left { background:var(--panel); border-right:1px solid var(--edge); padding:14px; overflow:auto; }
     h1,h2 { margin:0 0 10px; font-size:16px; color:#fff; }
     h2 { font-size:14px; color:#dfe7ff; margin-top:14px; }
     label { display:block; font-size:12px; color:var(--muted); margin:0 0 6px; }
@@ -39,15 +39,14 @@
 
     /* Center: Canvas/viewer */
     .center { display:flex; align-items:center; justify-content:center; background:#0b0e14; position:relative; }
-    #mainCanvas { width: min(98%, 1400px); height: auto; max-height: 96%; background:#0a0d13; border-radius:12px; border:1px solid #232634; }
+    #mainCanvas { width: min(98%, 1400px); height: auto; max-height: 96%; background:#0a0d13; border-radius:12px; border:1px solid var(--edge); }
 
     /* Right: AI panel */
-    .right { background:var(--panel); border-left:1px solid #232634; padding:14px; overflow:auto; }
+    .right { background:var(--panel); border-left:1px solid var(--edge); padding:14px; overflow:auto; }
     .status { margin-top:8px; font-size:12px; color:#b9c3d9; min-height:1.4em; }
     .sep { height:1px; background:#262a38; margin:14px 0; }
 
-    /* Small badge */
-    .badge { font-size:11px; color:#9fb0ff; opacity:.9; }
+    .pill { font-size:11px; color:#9fb0ff; opacity:.95; border:1px solid #2b3246; padding:4px 8px; border-radius:999px; display:inline-block; margin-left:6px; }
   </style>
 </head>
 <body>
@@ -55,7 +54,11 @@
 
     <!-- SCENARIOS PANEL -->
     <aside class="left">
-      <h1>Scenarios <span class="badge" id="fbStatus">Firebase: not connected</span></h1>
+      <h1>
+        Scenarios
+        <span id="authPill" class="pill">auth: …</span>
+        <span id="fbPill" class="pill">bucket: …</span>
+      </h1>
 
       <div class="row">
         <select id="scenarioSelect" title="Pick a scenario"></select>
@@ -64,22 +67,8 @@
 
       <div class="row">
         <button class="btn" id="scenarioLoadImgs">Load Images</button>
-        <button class="btn" id="scenarioLoadJson">Load JSON</button>
-      </div>
-
-      <div class="row">
-        <button class="btn" id="scenarioAddUrl">Add Image URL</button>
-        <button class="btn" id="scenarioSave">Save JSON</button>
-      </div>
-
-      <div class="row">
         <button class="btn" id="scenarioPrev">◀ Prev</button>
         <button class="btn" id="scenarioNext">Next ▶</button>
-      </div>
-
-      <div class="row">
-        <button class="btn" id="stopDelete">Delete Stop</button>
-        <button class="btn" id="stopRename">Rename</button>
       </div>
 
       <label for="scenarioName">Scenario name</label>
@@ -90,7 +79,7 @@
       <input id="basePath" type="text" value="geophoto/" />
       <div class="row">
         <button class="btn" id="btnSetBase">Use Path</button>
-        <button class="btn" id="btnSetupFirebase">Setup Firebase</button>
+        <button class="btn" id="btnSetupFirebase">Override Config</button>
       </div>
 
       <h2>Slides / Photos</h2>
@@ -106,52 +95,11 @@
       <canvas id="mainCanvas" width="1600" height="900"></canvas>
     </main>
 
-    <!-- AI PANEL -->
+    <!-- AI PANEL (unchanged placeholder) -->
     <aside class="right">
       <h1>AI Controls</h1>
-
-      <div class="row">
-        <div style="flex:1">
-          <label for="aiReturn">Return</label>
-          <select id="aiReturn">
-            <option value="photo" selected>Photo</option>
-            <option value="overlays">Overlays (transparent)</option>
-          </select>
-        </div>
-        <div style="flex:1">
-          <label for="aiStyle">Style</label>
-          <select id="aiStyle">
-            <option value="realistic" selected>Realistic</option>
-            <option value="cinematic">Cinematic</option>
-            <option value="vivid">Vivid</option>
-            <option value="illustrative">Illustrative</option>
-          </select>
-        </div>
-      </div>
-
-      <div class="row">
-        <div style="flex:1">
-          <label for="aiStrength">Strength</label>
-          <input id="aiStrength" type="text" value="0.35" />
-        </div>
-      </div>
-
-      <label for="aiNotes">Prompt / Notes</label>
-      <textarea id="aiNotes" placeholder="Describe changes you'd like…"></textarea>
-
-      <div class="row">
-        <button class="btn" id="aiPreview" type="button">Preview</button>
-        <button class="btn" id="aiSend" type="button">Send to AI</button>
-      </div>
-      <div class="row">
-        <button class="btn" id="aiOpen" type="button" disabled>Open Result</button>
-        <button class="btn" id="aiAdd" type="button" disabled>Add as New Stop</button>
-      </div>
-
-      <div id="aiMsg" class="status">AI ready</div>
-
+      <div class="status" id="aiMsg">Ready</div>
       <div class="sep"></div>
-
       <label>Endpoint (optional override)</label>
       <input id="aiEndpoint" type="text" placeholder="/.netlify/functions/ai-image" />
       <div class="row">
@@ -162,262 +110,179 @@
 
   </div>
 
-  <!-- Firebase SDK (compat for simplicity) -->
-  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-storage-compat.js"></script>
+  <!-- Firebase compat SDKs (match Viewer) -->
+  <script src="https://www.gstatic.com/firebasejs/10.12.4/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.4/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.4/firebase-database-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.4/firebase-storage-compat.js"></script>
+  <!-- App Check (enable if Enforcement is ON) -->
+  <script src="https://www.gstatic.com/firebasejs/10.12.4/firebase-app-check-compat.js"></script>
 
   <script>
   (function(){
-    // --------------- State ---------------
-    const el = (id) => document.getElementById(id);
-    const fbBadge = el('fbStatus');
-    const selectScenario = el('scenarioSelect');
-    const thumbsEl = el('thumbs');
-    const canvas = el('mainCanvas');
+    // ---------- Elements ----------
+    const $ = id => document.getElementById(id);
+    const sel = $('scenarioSelect'), thumbsEl = $('thumbs'), canvas = $('mainCanvas');
     const ctx = canvas.getContext('2d');
-    const aiMsg = el('aiMsg');
+    const aiMsg = $('aiMsg'), authPill = $('authPill'), fbPill = $('fbPill');
 
-    let storage = null;
-    let basePath = localStorage.getItem('geophoto_basePath') || el('basePath').value;
-    let currentScenario = null;
-    let images = [];   // {name, path, url}
-    let currentIndex = -1;
+    // ---------- Firebase Config (mirrors Viewer) ----------
+    // You can override by defining window.FIREBASE_CONFIG before this script or via the "Override Config" button.
+    const DEFAULT_CONFIG = {
+      apiKey:"AIzaSyDM6DpRSeZueVKRpbyJyDmhf8WY66KyCDk",
+      authDomain:"dailyquiz-d5279.firebaseapp.com",
+      databaseURL:"https://dailyquiz-d5279-default-rtdb.firebaseio.com",
+      projectId:"dailyquiz-d5279",
+      storageBucket:"dailyquiz-d5279.firebasestorage.app",
+      appId:"1:94577748034:web:c032d3a1d72db1313de5db",
+      measurementId:"G-19DVN7NNH7"
+    };
+    // Always talk to the real bucket when building gs:// refs:
+    const FORCE_BUCKET = "dailyquiz-d5279.appspot.com";
 
-    // --------------- Firebase Boot ---------------
-    function setFbStatus(txt){ fbBadge.textContent = 'Firebase: ' + txt; }
+    // In-page override saved per-origin:
+    const saved = localStorage.getItem('fbConfig');
+    const cfg = window.FIREBASE_CONFIG || (saved ? JSON.parse(saved) : DEFAULT_CONFIG);
+    firebase.initializeApp(cfg);
+    // self.FIREBASE_APPCHECK_DEBUG_TOKEN = true; // DEV only if needed
+    // firebase.appCheck().activate('YOUR_RECAPTCHA_V3_SITE_KEY', true);
 
-    async function initFirebaseIfNeeded() {
-      if (window.firebase?.apps?.length) {
-        storage = firebase.storage();
-        setFbStatus('connected');
-        return true;
-      }
-      // 1) Try window.FIREBASE_CONFIG if developer inlined it
-      if (window.FIREBASE_CONFIG) {
-        firebase.initializeApp(window.FIREBASE_CONFIG);
-        storage = firebase.storage();
-        setFbStatus('connected');
-        return true;
-      }
-      // 2) Try previously saved config
-      const saved = localStorage.getItem('fbConfig');
-      if (saved) {
-        try {
-          firebase.initializeApp(JSON.parse(saved));
-          storage = firebase.storage();
-          setFbStatus('connected');
-          return true;
-        } catch (e) {
-          console.warn('Saved Firebase config invalid:', e);
-        }
-      }
-      setFbStatus('not connected');
-      return false;
+    const auth = firebase.auth();
+    const db = firebase.database();
+    const storage = firebase.storage();
+
+    // ---------- Auth (same flow as Viewer) ----------
+    async function ensureAuthed(){
+      return new Promise((resolve,reject)=>{
+        const unsub = auth.onAuthStateChanged(u=>{
+          if(u){
+            authPill.textContent = `auth: anon ✓ ${u.uid.slice(0,8)}`;
+            unsub(); resolve(u);
+          }else{
+            auth.signInAnonymously().catch(e=>{
+              authPill.textContent = `auth: failed (${e.code||e.message})`;
+              unsub(); reject(e);
+            });
+          }
+        });
+      });
     }
 
-    // Prompt-based setup to paste Firebase web config JSON
-    async function setupFirebaseInteractive(){
-      const example = `{
-  "apiKey": "...",
-  "authDomain": "YOUR-PROJECT.firebaseapp.com",
-  "projectId": "YOUR-PROJECT",
-  "storageBucket": "dailyquiz-d5279.firebasestorage.app",
-  "messagingSenderId": "...",
-  "appId": "1:...:web:..."
-}`;
-      const txt = prompt('Paste your Firebase Web Config JSON (from Project Settings > General > Your Apps):', example);
-      if (!txt) return;
-      try {
-        const cfg = JSON.parse(txt);
-        localStorage.setItem('fbConfig', JSON.stringify(cfg));
-        if (window.firebase?.apps?.length) {
-          // Re-init not supported; simple reload is easiest
-          alert('Saved. Reloading page to initialize Firebase…');
-          location.reload();
-          return;
-        } else {
-          firebase.initializeApp(cfg);
-          storage = firebase.storage();
-          setFbStatus('connected');
-          alert('Firebase connected.');
-        }
-      } catch(e){
-        alert('Invalid JSON. Please try again.');
-      }
+    // ---------- Helpers copied/adapted from Viewer ----------
+    // Normalize any storage URL/path into a gs:// ref string
+    function toStorageRefString(v){
+      if(!v) return ''; let s=(v+'').trim(); try{s=decodeURIComponent(s);}catch{}
+      if(s.startsWith('gs://')) return s;
+      let m=s.match(/^https?:\/\/firebasestorage\.googleapis\.com\/v0\/b\/([^/]+)\/o\/([^?]+)/i); if(m) return `gs://${m[1]}/${m[2].replace(/\+/g,' ')}`;
+      m=s.match(/^https?:\/\/([^/]+)\.firebasestorage\.app\/o\/([^?]+)/i); if(m) return `gs://${m[1]}/${m[2].replace(/\+/g,' ')}`;
+      if(!/^https?:\/\//i.test(s)) return `gs://${FORCE_BUCKET}/${s}`;
+      return '';
     }
-
-    // --------------- Storage Helpers ---------------
-    function ensureTrailingSlash(p){
-      return p ? (p.endsWith('/') ? p : p + '/') : '';
+    function storageRefAt(path){
+      const p = (path||'').replace(/^\/+/,'');
+      return storage.refFromURL(`gs://${FORCE_BUCKET}/${p}`);
     }
-
-    async function listPrefixes(ref) {
-      // listAll returns { prefixes, items }
-      const res = await ref.listAll();
-      return res.prefixes || [];
-    }
-
-    async function listAllImagesRecursive(ref, acc = []) {
-      const res = await ref.listAll();
-      // Add items (we'll filter by extension)
-      for (const item of res.items) {
-        const nameLc = item.name.toLowerCase();
-        if (/\.(png|jpg|jpeg|webp|gif)$/i.test(nameLc)) {
-          acc.push(item);
-        }
-      }
-      // Recurse into subfolders
-      for (const p of res.prefixes) {
-        await listAllImagesRecursive(p, acc);
-      }
-      return acc;
-    }
-
     async function getDownloadURLSafe(itemRef) {
       try { return await itemRef.getDownloadURL(); }
       catch(e){ console.warn('getDownloadURL failed for', itemRef.fullPath, e); return null; }
     }
-
-    // --------------- UI: Scenarios ---------------
-    async function refreshScenarioList() {
-      if (!storage) {
-        const ok = await initFirebaseIfNeeded();
-        if (!ok) return;
+    async function listAllImagesRecursive(ref, acc = []) {
+      const res = await ref.listAll();
+      for (const item of res.items) {
+        const nameLc = item.name.toLowerCase();
+        if (/\.(png|jpg|jpeg|webp|gif)$/i.test(nameLc)) acc.push(item);
       }
-      basePath = ensureTrailingSlash(el('basePath').value.trim() || 'geophoto/');
-      localStorage.setItem('geophoto_basePath', basePath);
+      for (const p of res.prefixes) await listAllImagesRecursive(p, acc);
+      return acc;
+    }
 
-      selectScenario.innerHTML = '';
-      const baseRef = storage.ref(basePath);
-      let prefixes = [];
-      try {
-        prefixes = await listPrefixes(baseRef);
-      } catch (e) {
-        console.warn('Failed listing base path, trying root fallback', e);
-      }
+    // ---------- Scenario listing ----------
+    const basePathInput = $('basePath');
+    function ensureSlash(p){ return p ? (p.endsWith('/') ? p : p + '/') : ''; }
 
-      if (prefixes.length === 0 && basePath !== '') {
-        // Fallback: try root folders in case basePath was wrong
-        try {
-          prefixes = await listPrefixes(storage.ref('/'));
-        } catch(e) {}
-      }
+    async function listStorageScenarioFolders(basePath){
+      const baseRef = storageRefAt(ensureSlash(basePath));
+      const res = await baseRef.listAll();
+      return res.prefixes || [];
+    }
 
-      if (prefixes.length === 0) {
-        const opt = document.createElement('option');
-        opt.value = '';
-        opt.textContent = '(no scenario folders found)';
-        selectScenario.appendChild(opt);
-        return;
-      }
+    async function refreshScenarioList(){
+      $('scenarioSelect').innerHTML = '<option disabled>Loading…</option>';
+      const base = ensureSlash(basePathInput.value.trim() || 'geophoto/');
+      localStorage.setItem('geophoto_basePath', base);
 
-      // Populate select with folder names
-      for (const pref of prefixes) {
-        // Only include folders directly under basePath (not all root)
-        const full = pref.fullPath;
-        if (basePath && !full.startsWith(basePath)) continue;
-        // Scenario name = last path segment without trailing slash
-        const name = full.replace(/\/$/, '').split('/').pop();
-        const opt = document.createElement('option');
-        opt.value = full;        // store the folder full path
-        opt.textContent = name;
-        selectScenario.appendChild(opt);
-      }
-
-      // select first by default
-      if (selectScenario.options.length) {
-        selectScenario.selectedIndex = 0;
-        currentScenario = selectScenario.value;
-        el('scenarioName').value = selectScenario.options[0].textContent || '';
+      try{
+        // Prefer Storage folders (the editor works on images)
+        const prefixes = await listStorageScenarioFolders(base);
+        sel.innerHTML = '';
+        if (!prefixes.length){
+          const o=document.createElement('option'); o.value=''; o.textContent='(no scenario folders found)'; sel.appendChild(o);
+        }else{
+          for (const pref of prefixes){
+            const full = pref.fullPath;
+            const name = full.replace(/\/$/,'').split('/').pop();
+            const o=document.createElement('option'); o.value=full; o.textContent=name; sel.appendChild(o);
+          }
+          sel.selectedIndex = 0;
+          $('scenarioName').value = sel.options[0].textContent || '';
+        }
+      }catch(e){
+        console.error('Scenario list error:', e);
+        sel.innerHTML = '';
+        const o=document.createElement('option'); o.value=''; o.textContent='(error listing folders)'; sel.appendChild(o);
       }
     }
 
-    // --------------- UI: Thumbs + Canvas ---------------
+    // ---------- Load images for the selected scenario ----------
+    let images=[], currentIndex=-1;
     function clearThumbs(){ thumbsEl.innerHTML = ''; }
-    function setActiveThumb(idx){
-      [...thumbsEl.children].forEach((c,i)=>c.classList.toggle('active', i===idx));
-    }
+    function setActiveThumb(idx){ [...thumbsEl.children].forEach((c,i)=>c.classList.toggle('active', i===idx)); }
 
-    async function loadScenarioImages() {
-      if (!storage) {
-        const ok = await initFirebaseIfNeeded();
-        if (!ok) { alert('Connect Firebase first.'); return; }
-      }
-      currentScenario = selectScenario.value;
-      if (!currentScenario) { alert('No scenario selected.'); return; }
+    async function loadScenarioImages(){
+      const path = sel.value;
+      if(!path){ aiMsg.textContent='No scenario selected.'; return; }
 
       aiMsg.textContent = 'Loading images…';
-      clearThumbs();
-      images = [];
-      currentIndex = -1;
+      clearThumbs(); images=[]; currentIndex=-1;
 
-      const scenRef = storage.ref(ensureTrailingSlash(currentScenario));
-      let items = [];
-      try {
-        items = await listAllImagesRecursive(scenRef);
-      } catch(e) {
-        console.error('Failed listing images:', e);
-        aiMsg.textContent = 'Failed to list images.';
-        return;
+      try{
+        const scenRef = storageRefAt(ensureSlash(path));
+        const items = await listAllImagesRecursive(scenRef);
+        if (!items.length){ aiMsg.textContent='No images found in scenario.'; return; }
+
+        let i=0;
+        for (const item of items){
+          const url = await getDownloadURLSafe(item); if(!url) continue;
+          const obj = { name:item.name, path:item.fullPath, url };
+          images.push(obj);
+
+          const div = document.createElement('div'); div.className='thumb'; div.title=item.fullPath;
+          div.addEventListener('click', ()=>selectImage(i));
+          const img = document.createElement('img'); img.loading='lazy'; img.decoding='async'; img.src=url;
+          const cap = document.createElement('div'); cap.className='cap'; cap.textContent=item.name;
+          div.appendChild(img); div.appendChild(cap); thumbsEl.appendChild(div);
+          i++;
+        }
+        if (images.length) selectImage(0);
+        aiMsg.textContent = `Loaded ${images.length} image(s).`;
+      }catch(e){
+        console.error('Load images error:', e);
+        aiMsg.textContent = `Failed to list images: ${e.code||e.message}`;
       }
-
-      if (items.length === 0) {
-        aiMsg.textContent = 'No images found in scenario.';
-        return;
-      }
-
-      // Build thumbnail grid
-      let i = 0;
-      for (const item of items) {
-        const url = await getDownloadURLSafe(item);
-        if (!url) continue;
-        const obj = { name: item.name, path: item.fullPath, url };
-        images.push(obj);
-
-        const div = document.createElement('div');
-        div.className = 'thumb';
-        div.title = item.fullPath;
-        div.addEventListener('click', ()=>selectImage(i));
-        const img = document.createElement('img');
-        img.loading = 'lazy';
-        img.decoding = 'async';
-        img.src = url;
-        const cap = document.createElement('div');
-        cap.className = 'cap';
-        cap.textContent = item.name;
-        div.appendChild(img);
-        div.appendChild(cap);
-        thumbsEl.appendChild(div);
-        i++;
-      }
-
-      // Open first image
-      if (images.length) selectImage(0);
-      aiMsg.textContent = `Loaded ${images.length} image(s).`;
     }
 
     function selectImage(idx){
-      if (idx < 0 || idx >= images.length) return;
-      currentIndex = idx;
-      setActiveThumb(idx);
+      if (idx<0 || idx>=images.length) return;
+      currentIndex = idx; setActiveThumb(idx);
       drawToCanvas(images[idx].url);
     }
-
-    function drawToCanvas(url) {
+    function drawToCanvas(url){
       const img = new Image();
       img.onload = () => {
-        // Clear
-        ctx.fillStyle = '#0a0d13';
-        ctx.fillRect(0,0,canvas.width,canvas.height);
-
-        // Fit image into canvas preserving aspect ratio
-        const cw = canvas.width, ch = canvas.height;
-        const iw = img.naturalWidth, ih = img.naturalHeight;
-        const scale = Math.min(cw/iw, ch/ih);
-        const dw = Math.round(iw*scale);
-        const dh = Math.round(ih*scale);
-        const dx = Math.round((cw - dw)/2);
-        const dy = Math.round((ch - dh)/2);
+        ctx.fillStyle = '#0a0d13'; ctx.fillRect(0,0,canvas.width,canvas.height);
+        const cw=canvas.width, ch=canvas.height, iw=img.naturalWidth, ih=img.naturalHeight;
+        const s = Math.min(cw/iw, ch/ih), dw=Math.round(iw*s), dh=Math.round(ih*s);
+        const dx=Math.round((cw-dw)/2), dy=Math.round((ch-dh)/2);
         ctx.drawImage(img, dx, dy, dw, dh);
       };
       img.onerror = () => console.warn('Failed to load image', url);
@@ -425,35 +290,52 @@
       img.src = url;
     }
 
-    // --------------- Wire up controls ---------------
-    el('scenarioRefresh').addEventListener('click', refreshScenarioList);
-    el('scenarioLoadImgs').addEventListener('click', loadScenarioImages);
-    el('scenarioPrev').addEventListener('click', ()=>{ if (images.length) selectImage((currentIndex-1+images.length)%images.length); });
-    el('scenarioNext').addEventListener('click', ()=>{ if (images.length) selectImage((currentIndex+1)%images.length); });
-    el('btnSetBase').addEventListener('click', ()=>{ basePath = ensureTrailingSlash(el('basePath').value.trim()); localStorage.setItem('geophoto_basePath', basePath); refreshScenarioList(); });
-    el('btnSetupFirebase').addEventListener('click', setupFirebaseInteractive);
-    el('scenarioSelect').addEventListener('change', (e)=>{
-      currentScenario = e.target.value;
-      el('scenarioName').value = e.target.selectedOptions[0]?.textContent || '';
-    });
+    // ---------- UI wiring ----------
+    $('scenarioRefresh').addEventListener('click', refreshScenarioList);
+    $('scenarioLoadImgs').addEventListener('click', loadScenarioImages);
+    $('scenarioPrev').addEventListener('click', ()=>{ if (images.length) selectImage((currentIndex-1+images.length)%images.length); });
+    $('scenarioNext').addEventListener('click', ()=>{ if (images.length) selectImage((currentIndex+1)%images.length); });
+    $('btnSetBase').addEventListener('click', refreshScenarioList);
+    sel.addEventListener('change', (e)=>{ $('scenarioName').value = e.target.selectedOptions[0]?.textContent || ''; });
 
-    // AI endpoint toggles (kept from your UI)
-    el('btnUseEndpoint').addEventListener('click', ()=>{
-      const v = document.getElementById('aiEndpoint').value.trim();
+    // Endpoint toggles (kept)
+    $('btnUseEndpoint').addEventListener('click', ()=>{
+      const v = $('aiEndpoint').value.trim();
       if(!v){ delete window.__AI_ENDPOINTS__; aiMsg.textContent='Cleared custom endpoint'; return; }
-      window.__AI_ENDPOINTS__=[v];
-      aiMsg.textContent='Using custom endpoint: '+v;
+      window.__AI_ENDPOINTS__=[v]; aiMsg.textContent='Using custom endpoint: '+v;
     });
-    el('btnResetEndpoint').addEventListener('click', ()=>{
+    $('btnResetEndpoint').addEventListener('click', ()=>{
       delete window.__AI_ENDPOINTS__;
       aiMsg.textContent='Using default endpoints';
     });
 
-    // Boot
-    (async function init(){
-      el('basePath').value = basePath;
-      await initFirebaseIfNeeded();
-      refreshScenarioList();
+    // Allow overriding Firebase config at runtime (saved per-origin)
+    $('btnSetupFirebase').addEventListener('click', ()=>{
+      const example = JSON.stringify(DEFAULT_CONFIG, null, 2);
+      const txt = prompt('Paste Firebase Web Config JSON to override (saved for this domain):', example);
+      if (!txt) return;
+      try{
+        const newCfg = JSON.parse(txt);
+        localStorage.setItem('fbConfig', JSON.stringify(newCfg));
+        alert('Saved. Reloading to apply…');
+        location.reload();
+      }catch(e){ alert('Invalid JSON, not saved.'); }
+    });
+
+    // ---------- Boot ----------
+    (async ()=>{
+      try{
+        await ensureAuthed();
+        authPill.title = `db: ${cfg.databaseURL||'(none)'}`;
+        fbPill.textContent = `bucket: ${FORCE_BUCKET}`;
+        // Load saved base path
+        const savedBase = localStorage.getItem('geophoto_basePath');
+        if (savedBase) $('basePath').value = savedBase;
+        await refreshScenarioList();
+      }catch(e){
+        authPill.textContent = 'auth: failed';
+        aiMsg.textContent = `Auth failed: ${e.code||e.message}`;
+      }
     })();
 
   })();
