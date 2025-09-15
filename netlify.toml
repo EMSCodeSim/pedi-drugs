@@ -1,14 +1,18 @@
-[build]
-  # Serve your static site from /public (matches your zip)
-  publish = "public"
-
-[functions]
-  # Your Netlify Functions are in /functions
-  directory = "functions"
-
-# Pretty alias so both URLs work
+# Redirect old /pump/pump to /pump/
 [[redirects]]
-  from = "/api/ai-image"
-  to = "/.netlify/functions/ai-image"
+  from = "/pump/pump"
+  to = "/pump/"
+  status = 301
+  force = true
+
+# Optional: SPA fallback for the pump tool (remove if not needed)
+[[redirects]]
+  from = "/pump/*"
+  to = "/pump/index.html"
   status = 200
-  force = false
+
+# Optional: SPA fallback for the main site (remove if not needed)
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
