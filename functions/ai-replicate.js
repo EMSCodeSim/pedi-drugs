@@ -1,18 +1,51 @@
 // netlify/functions/ai-replicate.js
-// Runs img2img on Replicate (SDXL) using either a public image URL or a base64 data URL.
-// - Accepts JSON POST { imageUrl?, dataUrl?, prompt?, negativePrompt?, imageStrength? }
-// - Fetches/decodes the image server-side, uploads it to Replicate file storage,
-//   creates a prediction, polls until done, then returns the output URL.
+// Accepts POST JSON:
+// { storagePath?, imageUrl?, dataUrl?, prompt?, negativePrompt?, imageStrength? }
+// - storagePath: Firebase Storage object path (private OK), e.g. "scenarios/abc/123.jpg"
+// - imageUrl: public URL (NOT the googleusercontent download/storage/v1 form)
+// - dataUrl: base64 "data:image/png;base64,..."
+// Returns: { ok, image_url?, id?, error?, diagnostics? }
 
 const Replicate = require("replicate");
 const fs = require("fs/promises");
 
+// ---------- Replicate config ----------
 const REPLICATE_API_TOKEN = process.env.REPLICATE_API_TOKEN;
-
-// You can override this in Netlify env with REPLICATE_MODEL_VERSION
 const MODEL_VERSION =
   process.env.REPLICATE_MODEL_VERSION || "stability-ai/sdxl:7762fd07";
 
+// ---------- Firebase Admin (optional; only if storagePath is used) ----------
+let adminApp = null;
+function initFirebaseAdmin() {
+  if (adminApp) return adminApp;
+
+  const saJson = process.env.FIREBASE_SERVICE_ACCOUNT_JSON; // full JSON string
+  const bucketName = process.env.FIREBASE_STORAGE_BUCKET;   // e.g. "dailyquiz-d5279.appspot.com"
+
+  if (!saJson || !bucketName) return null;
+
+  const admin = require("firebase-admin");
+  if (admin.apps.length === 0) {
+    admin.initializeApp({
+      credential: admin.credential.cert(JSON.parse(saJson)),
+      storageBucket: bucketName,
+    });
+  }
+  adminApp = admin;
+  return adminApp;
+}
+
+async function downloadFromFirebase(storagePath) {
+  const admin = initFirebaseAdmin();
+  if (!admin) {
+    throw new Error("Firebase Admin not configured (set FIREBASE_SERVICE_ACCOUNT_JSON and FIREBASE_STORAGE_BUCKET).");
+  }
+  const [buf] = await admin.storage().bucket().file(storagePath).download();
+  const ext = (storagePath.split(".").pop() || "png").toLowerCase();
+  return { buf, ext };
+}
+
+// ---------- Utilities ----------
 const JSON_HEADERS = { "Content-Type": "application/json" };
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
@@ -29,7 +62,6 @@ function extFromMime(mime) {
 }
 
 function dataUrlToBufferAndExt(dataUrl) {
-  // Example: "data:image/png;base64,AAAA..."
   const [head, b64] = dataUrl.split(",");
   const mime = head.replace(/^data:/, "").replace(/;base64$/, "");
   const buf = Buffer.from(b64, "base64");
@@ -40,12 +72,8 @@ async function fetchToBuffer(url) {
   const res = await fetch(url);
   if (!res.ok) {
     let text = "";
-    try {
-      text = await res.text();
-    } catch {}
-    throw new Error(
-      `Failed to fetch input image (${res.status}). ${text.slice(0, 200)}`
-    );
+    try { text = await res.text(); } catch {}
+    throw new Error(`Failed to fetch input image (${res.status}). ${text.slice(0, 200)}`);
   }
   const ab = await res.arrayBuffer();
   return Buffer.from(ab);
@@ -61,43 +89,52 @@ exports.handler = async (event) => {
       return {
         statusCode: 500,
         headers: JSON_HEADERS,
-        body: JSON.stringify({
-          ok: false,
-          error: "Missing REPLICATE_API_TOKEN env var.",
-        }),
+        body: JSON.stringify({ ok: false, error: "Missing REPLICATE_API_TOKEN env var." }),
       };
     }
 
     const body = JSON.parse(event.body || "{}");
-    const { imageUrl, dataUrl, prompt, negativePrompt, imageStrength } = body;
+    const {
+      storagePath,   // Firebase Storage path
+      imageUrl,      // public URL
+      dataUrl,       // base64
+      prompt,
+      negativePrompt,
+      imageStrength
+    } = body;
 
-    if (!imageUrl && !dataUrl) {
+    if (!storagePath && !imageUrl && !dataUrl) {
       return {
         statusCode: 400,
         headers: JSON_HEADERS,
         body: JSON.stringify({
           ok: false,
-          error:
-            "Provide either imageUrl (public URL) or dataUrl (base64 data:image/*).",
+          error: "Provide one of: storagePath, imageUrl (public), or dataUrl (base64)."
         }),
       };
     }
 
-    // 1) Get image bytes (handles private storage by fetching server-side)
-    let buf, ext;
-    if (isDataUrl(dataUrl)) {
-      const res = dataUrlToBufferAndExt(dataUrl);
-      buf = res.buf;
-      ext = res.ext;
+    // 1) Obtain bytes
+    let buf, ext = "png";
+    if (storagePath) {
+      ({ buf, ext } = await downloadFromFirebase(storagePath));
+    } else if (isDataUrl(dataUrl)) {
+      ({ buf, ext } = dataUrlToBufferAndExt(dataUrl));
     } else if (imageUrl) {
+      // Warn on the unsupported googleusercontent download/storage/v1 form
+      const badHost =
+        /googleusercontent\.com$/.test(new URL(imageUrl).hostname) ||
+        /appspot\.com$/.test(new URL(imageUrl).hostname);
+      if (badHost && !/firebasestorage\.googleapis\.com\/v0\//.test(imageUrl)) {
+        throw new Error(
+          "imageUrl looks like a 'download/storage/v1' link that requires Google auth. " +
+          "Use getDownloadURL(...) (v0 form with ?alt=media&token=...) or pass storagePath instead."
+        );
+      }
       buf = await fetchToBuffer(imageUrl);
-      ext = "png"; // default if URL doesn't reveal mime; Replicate only needs the bytes
-    } else {
-      return {
-        statusCode: 400,
-        headers: JSON_HEADERS,
-        body: JSON.stringify({ ok: false, error: "No valid image provided." }),
-      };
+      // try to infer ext from URL
+      const m = imageUrl.match(/\.(png|jpg|jpeg|webp)(\?|$)/i);
+      if (m) ext = m[1].toLowerCase();
     }
 
     // 2) Save to /tmp and upload to Replicate file storage
@@ -105,28 +142,23 @@ exports.handler = async (event) => {
     await fs.writeFile(tmpPath, buf);
 
     const replicate = new Replicate({ auth: REPLICATE_API_TOKEN });
-    const uploaded = await replicate.files.upload(tmpPath); // pass this directly as the `image` input
+    const uploaded = await replicate.files.upload(tmpPath);
 
-    // 3) Create prediction using SDXL (img2img). Correct key: image_strength (0..1).
+    // 3) Prediction (SDXL img2img) — correct key: image_strength (0..1)
     const strength =
-      typeof imageStrength === "number"
-        ? Math.max(0, Math.min(1, imageStrength))
-        : 0.6;
+      typeof imageStrength === "number" ? Math.max(0, Math.min(1, imageStrength)) : 0.6;
 
     let prediction = await replicate.predictions.create({
       version: MODEL_VERSION,
       input: {
         image: uploaded,
-        prompt:
-          prompt ||
-          "make this look like a realistic emergency fire scene; blend overlays naturally; photorealistic",
-        negative_prompt:
-          negativePrompt || "blurry, low quality, artifacts, text, watermark",
+        prompt: prompt || "make this look like a realistic emergency fire scene; blend overlays naturally; photorealistic",
+        negative_prompt: negativePrompt || "blurry, low quality, artifacts, text, watermark",
         image_strength: strength,
       },
     });
 
-    // 4) Poll until finished
+    // 4) Poll
     const trace = [`Create status: ${prediction.status}`];
     let tries = 0;
     while (["starting", "processing", "queued"].includes(prediction.status)) {
@@ -150,7 +182,6 @@ exports.handler = async (event) => {
       };
     }
 
-    // SDXL returns an array of image URLs
     const output =
       Array.isArray(prediction.output) && prediction.output.length
         ? prediction.output[0]
@@ -170,10 +201,7 @@ exports.handler = async (event) => {
     return {
       statusCode: 200,
       headers: JSON_HEADERS,
-      body: JSON.stringify({
-        ok: false,
-        error: String(err?.message || err),
-      }),
+      body: JSON.stringify({ ok: false, error: String(err?.message || err) }),
     };
   }
 };
