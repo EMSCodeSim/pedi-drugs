@@ -1,18 +1,35 @@
-# Redirect old /pump/pump to /pump/
+# Redirect old /pump/pump links to the pump entry
 [[redirects]]
   from = "/pump/pump"
   to = "/pump/"
   status = 301
-  force = true
+  force = true  # ok to keep forced here
 
-# Optional: SPA fallback for the pump tool (remove if not needed)
+# Make /pump, /pump/, and any client routes under /pump load the tool
+[[redirects]]
+  from = "/pump"
+  to = "/pump/index.html"
+  status = 200
+
+[[redirects]]
+  from = "/pump/"
+  to = "/pump/index.html"
+  status = 200
+
 [[redirects]]
   from = "/pump/*"
   to = "/pump/index.html"
   status = 200
 
-# Optional: SPA fallback for the main site (remove if not needed)
+# Geophoto viewer SPA fallback — scoped only to that folder
 [[redirects]]
-  from = "/*"
-  to = "/index.html"
+  from = "/geophoto/viewer"
+  to = "/geophoto/viewer/index.html"
   status = 200
+
+[[redirects]]
+  from = "/geophoto/viewer/*"
+  to = "/geophoto/viewer/index.html"
+  status = 200
+
+# IMPORTANT: no global /* rewrite here.
