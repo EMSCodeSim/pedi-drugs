@@ -3,9 +3,9 @@
   from = "/pump/pump"
   to = "/pump/"
   status = 301
-  force = true  # ok to keep forced here
+  force = true
 
-# Make /pump, /pump/, and any client routes under /pump load the tool
+# Pump entry + optional client routes
 [[redirects]]
   from = "/pump"
   to = "/pump/index.html"
@@ -21,7 +21,7 @@
   to = "/pump/index.html"
   status = 200
 
-# Geophoto viewer SPA fallback — scoped only to that folder
+# Geophoto viewer (scoped SPA fallback)
 [[redirects]]
   from = "/geophoto/viewer"
   to = "/geophoto/viewer/index.html"
@@ -32,4 +32,4 @@
   to = "/geophoto/viewer/index.html"
   status = 200
 
-# IMPORTANT: no global /* rewrite here.
+# IMPORTANT: no global /* → /index.html rule here.
