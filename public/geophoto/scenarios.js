@@ -1,6 +1,7 @@
 // scenarios.js — Storage-only scenario loader + advanced editor wiring
 // - Auto-detects root between 'scenarios/' and 'geophoto/scenarios/'
 // - Uses SDK listAll() first; if empty or errors, falls back to REST on two hosts
+// - Scans one folder level deeper for images if top-level has none (e.g., thumbs/, images/, ai/results/)
 // - Shows clear status + console logs
 
 import {
@@ -275,40 +276,63 @@ async function listScenarioIdsFromStorage(root) {
   return [];
 }
 
-/* ---------------- stops from Storage ---------------- */
+/* ---------------- stops from Storage (with 1-level-deep scan) ---------------- */
 async function ensureStopsForCurrentFromStorage() {
   if (!current || (current._stops && current._stops.length)) return;
 
   setStatus("Loading photos from storage…");
   const { storage } = getFirebase();
 
-  let listing;
-  try {
-    listing = await listAll(stRef(storage, `${ROOT}/${current.id}`.replace(/\/+/g,"/")));
-  } catch (e) {
-    showError("Cannot list folder: " + (e && (e.message || e)));
-    return;
-  }
+  // Helper: list images in a folder and optionally 1 level deeper
+  async function listImagesUnder(prefixPath, recurseOneLevel) {
+    const out = [];
+    const baseRef = stRef(storage, prefixPath.replace(/\/+/g,"/"));
 
-  const imgRefs = (listing.items || []).filter(r => /\.(jpe?g|png|webp)$/i.test(r.name));
-  imgRefs.sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: "base" }));
+    let listing;
+    try {
+      listing = await listAll(baseRef);
+    } catch (e) {
+      showError("Cannot list folder: " + (e && (e.message || e)));
+      return out;
+    }
 
-  const stops = new Array(imgRefs.length);
-  const conc = Math.min(4, imgRefs.length);
-  let i = 0;
-
-  async function worker() {
-    while (i < imgRefs.length) {
-      const idx = i++;
-      const r = imgRefs[idx];
+    // Top-level items
+    const top = (listing.items || []).filter(r => /\.(jpe?g|png|webp)$/i.test(r.name));
+    for (const r of top) {
       try {
         const url = await getDownloadURL(r);
-        stops[idx] = { type:"photo", title:r.name, storagePath:r.fullPath, imageURL:url, radiusMeters:50 };
-      } catch (_e) { stops[idx] = null; }
+        out.push({ type:"photo", title:r.name, storagePath:r.fullPath, imageURL:url, radiusMeters:50 });
+      } catch (_) {}
     }
+
+    if (out.length || !recurseOneLevel) return out;
+
+    // One level deeper if nothing found at top-level
+    const folders = listing.prefixes || [];
+    for (const p of folders) {
+      try {
+        const inner = await listAll(p);
+        for (const r of (inner.items || [])) {
+          if (!/\.(jpe?g|png|webp)$/i.test(r.name)) continue;
+          try {
+            const url = await getDownloadURL(r);
+            out.push({ type:"photo", title:r.name, storagePath:r.fullPath, imageURL:url, radiusMeters:50 });
+          } catch (_) {}
+        }
+      } catch (_) {}
+    }
+    return out;
   }
-  await Promise.all(Array.from({ length: conc }, worker));
-  current._stops = stops.filter(Boolean);
+
+  // Try top-level; if empty, try one level deeper
+  const basePath = `${ROOT}/${current.id}`;
+  let stops = await listImagesUnder(basePath, /*recurseOneLevel=*/false);
+  if (!stops.length) stops = await listImagesUnder(basePath, /*recurseOneLevel=*/true);
+
+  // Sort by filename naturally
+  stops.sort((a, b) => a.title.localeCompare(b.title, undefined, { numeric: true, sensitivity: "base" }));
+
+  current._stops = stops;
   setStops(current._raw, current._stops);
   renderThumbs();
   setStatus(`${current._stops.length} photo(s)`);
