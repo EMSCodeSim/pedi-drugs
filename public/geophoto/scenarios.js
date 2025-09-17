@@ -1,13 +1,11 @@
-// scenarios.js — minimal, loud logging, no metadata filtering, immediate display
-// Place this file next to your HTML. Requires firebase-core.js in the same folder
-// and FabricJS already loaded before this module.
+// scenarios.js — storage-only loader with thumbnails + canvas display
+// Requires: firebase-core.js (same folder) and FabricJS loaded before this module.
 
 import {
   getFirebase,
   ensureAuthed,
   getStorageInfo,
   toStorageRefString,
-  candidateOriginals,
 } from "./firebase-core.js";
 
 import {
@@ -17,13 +15,13 @@ import {
   getBlob as storageGetBlob,
 } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-storage.js";
 
-/* ---------------- tiny helpers ---------------- */
+/* ---------- tiny helpers ---------- */
 const $ = (id) => document.getElementById(id);
+const setTxt = (id, t) => { const el=$(id); if (el) el.textContent=t; };
 const log  = (...a) => { try{ console.log("[scenarios]", ...a); }catch(_){} };
 const warn = (...a) => { try{ console.warn("[scenarios]", ...a); }catch(_){} };
-function set(txtId, t){ const el=$(txtId); if (el) el.textContent=t; }
 
-/* -------------- Canvas + <img> fallback -------------- */
+/* ---------- canvas + fallback <img> ---------- */
 let f=null, baseImage=null;
 
 function ensureCanvas(){
@@ -34,7 +32,6 @@ function ensureCanvas(){
   fitCanvas();
   return f;
 }
-
 function fitCanvas(){
   if (!f) return;
   const wrap = f.lowerCanvasEl.parentElement || document.body;
@@ -49,120 +46,93 @@ function fitCanvas(){
   }
 }
 
-/* ----------------- Scenario state ----------------- */
+/* ---------- state ---------- */
 const ROOT = "scenarios";
-let scenarios = [];     // [{id}]
-let current   = null;   // {id}
-let stops     = [];     // [{path, url, title}]
-let stopIdx   = -1;
+let scenarios = [];            // [{id}]
+let currentId = "";
+let stops = [];                // [{path,url,title}]
+let stopIdx = -1;
 
-/* -------------- List scenarios (folders) -------------- */
-async function listScenarioIds() {
+/* ---------- storage listing ---------- */
+async function listScenarioIds(){
   const { storage } = getFirebase();
   const res = await listAll(stRef(storage, ROOT));
-  const ids = (res.prefixes || []).map(p => p.name);
-  log("Scenario IDs:", ids);
-  return ids;
+  return (res.prefixes || []).map(p => p.name);
 }
-
-/* -------------- List ALL files under a scenario -------------- */
 async function listFilesUnderScenario(id){
   const { storage } = getFirebase();
   const base = `${ROOT}/${id}`;
   const paths = [];
-
   async function walk(prefix){
     const res = await listAll(stRef(storage, prefix));
     (res.items || []).forEach(it => paths.push(it.fullPath || `${prefix}/${it.name}`));
     for (const sub of (res.prefixes || [])) {
-      const leaf = sub.name.toLowerCase();
-      // keep simple: skip only heavy/generated folders
+      const leaf = (sub.name || "").toLowerCase();
       if (leaf === "masks" || leaf === "overlays") continue;
       if (leaf === "results" && prefix.toLowerCase().endsWith("/ai")) continue;
       await walk(sub.fullPath || `${prefix}/${sub.name}`);
     }
   }
-
   await walk(base);
-  log(`Found ${paths.length} item(s) under ${base}:`, paths.slice(0,12));
+  log(`Found ${paths.length} under ${base}`, paths.slice(0,12));
   return paths;
 }
-
-/* -------------- Build stops (resolve download URLs) -------------- */
 async function buildStopsFromPaths(paths){
   const { storage } = getFirebase();
   const out = [];
-  for (const p of paths) {
+  for (const p of paths){
     try{
       const url = await getDownloadURL(stRef(storage, p));
-      const title = p.split("/").pop() || "photo";
-      out.push({ path:p, url, title });
-    }catch(e){
-      warn("getDownloadURL failed:", p, e?.message || e);
-    }
+      out.push({ path:p, url, title: p.split("/").pop() || "photo" });
+    }catch(e){ warn("getDownloadURL:", p, e?.message||e); }
   }
-  log("stop candidates (first 6):", out.slice(0,6));
   return out;
 }
 
-/* -------------- Thumbs & image load -------------- */
+/* ---------- rendering ---------- */
 function renderThumbs(){
   const row = $("thumbRow"); if (!row) return;
   row.innerHTML = "";
-  if (!stops.length){
-    row.innerHTML = '<div class="pill small">No photos/slides</div>';
-    return;
-  }
-  for (let i=0;i<stops.length;i++){
-    const s = stops[i];
+  if (!stops.length){ row.innerHTML = '<div class="pill small">No photos/slides</div>'; return; }
+  stops.forEach((s,i)=>{
     const img = document.createElement("img");
-    img.className = "thumb" + (i===stopIdx ? " active":"");
-    img.src = s.url;
-    img.alt = s.title;
-    img.title = s.path;
-    img.onerror = () => { img.style.opacity = 0.5; img.title = "thumb load error"; };
+    img.className = "thumb" + (i===stopIdx?" active":"");
+    img.src = s.url; img.alt = s.title; img.title = s.path;
     img.onclick = () => loadStop(i);
     row.appendChild(img);
-  }
+  });
 }
 
 async function loadStop(i){
   stopIdx = i;
   const s = stops[i]; if (!s) return;
-  set("statusPill", `Loading: ${s.title}`);
-
+  setTxt("statusPill", `Loading: ${s.title}`);
   try{
     ensureCanvas();
     const blob = await tryBlobThenFetch(s);
     await setCanvasFromBlob(blob);
-    set("statusPill", `Loaded: ${s.title}`);
-    // Always show plain <img> fallback too:
     const fb = $("fullsizeFallback");
     if (fb){ fb.src = s.url; fb.style.display = "block"; }
+    setTxt("statusPill", `Loaded: ${s.title}`);
   }catch(e){
     warn("loadStop error:", e);
-    set("statusPill", "Load failed (showing fallback)");
     const fb = $("fullsizeFallback");
     if (fb){ fb.src = s.url; fb.style.display = "block"; }
+    setTxt("statusPill", "Load failed (fallback shown)");
   }
-
   renderThumbs();
 }
 
 async function tryBlobThenFetch(stop){
-  // 1) Try SDK getBlob when we can coerce a storage ref
   try{
     const { storage } = getFirebase();
-    const ref = stRef(storage, toStorageRefString(stop.path || stop.url));
-    return await storageGetBlob(ref);
-  }catch(_e){ /* fall through */ }
-
-  // 2) Direct fetch (CORS)
+    const r = stRef(storage, toStorageRefString(stop.path || stop.url));
+    return await storageGetBlob(r);
+  }catch(_){}
   const r = await fetch(stop.url, { mode:"cors", cache:"force-cache" });
   if (!r.ok) throw new Error("fetch blob " + r.status);
   return await r.blob();
 }
-
 async function setCanvasFromBlob(blob){
   ensureCanvas();
   return new Promise((res,rej)=>{
@@ -172,58 +142,68 @@ async function setCanvasFromBlob(blob){
       baseImage = img; img.set({ selectable:false, evented:false });
       f.clear(); f.add(img); img.moveTo(0); fitCanvas(); f.requestRenderAll();
       URL.revokeObjectURL(u); res();
-    }, { crossOrigin: "anonymous" });
+    }, { crossOrigin:"anonymous" });
   });
 }
 
-/* -------------- UI wiring -------------- */
-async function onScenarioChanged(){
+/* ---------- UI: exported wireScenarioUI() ---------- */
+export function wireScenarioUI(){
   const sel = $("scenarioSel");
-  const id = sel?.value || "";
-  if (!id){ stops=[]; renderThumbs(); return; }
-  current = { id };
-
-  set("statusPill", "Listing files…");
-  const paths = await listFilesUnderScenario(id);
-  set("debugBox", `Paths (${paths.length})\n${paths.slice(0,12).join("\n")}${paths.length>12? "\n…" : ""}`);
-
-  if (!paths.length){
-    stops=[]; renderThumbs();
-    set("statusPill","No images found in this storage folder.");
-    return;
+  if (sel){
+    sel.onchange = async () => {
+      currentId = sel.value || "";
+      if (!currentId){ stops=[]; renderThumbs(); return; }
+      setTxt("statusPill","Listing files…");
+      const paths = await listFilesUnderScenario(currentId);
+      setTxt("debugBox", `Paths (${paths.length})\n${paths.slice(0,12).join("\n")}${paths.length>12? "\n…" : ""}`);
+      if (!paths.length){ stops=[]; renderThumbs(); setTxt("statusPill","No images found."); return; }
+      setTxt("statusPill","Resolving URLs…");
+      stops = await buildStopsFromPaths(paths);
+      renderThumbs();
+      setTxt("statusPill", `${stops.length} file(s) resolved`);
+      if (stops.length) loadStop(0);
+    };
   }
 
-  set("statusPill","Resolving URLs…");
-  stops = await buildStopsFromPaths(paths);
-  renderThumbs();
-  set("statusPill", `${stops.length} file(s) resolved`);
-  if (stops.length) loadStop(0);
-}
-
-export async function bootScenarios(){
-  // show bucket & auth
-  const info = getStorageInfo();
-  set("rootPill", `bucket: ${info.bucketHost} | root: ${ROOT}`);
-  const user = await ensureAuthed();
-  set("authPill", `anon ✔ (${String(user?.uid||"anon").slice(0,8)})`);
-
-  // fill scenario select
-  const sel = $("scenarioSel");
-  sel.innerHTML = '<option value="">Select scenario…</option>';
-  const ids = await listScenarioIds();
-  ids.forEach(id => {
-    const o=document.createElement("option");
-    o.value=id; o.textContent=id; sel.appendChild(o);
-  });
-  set("statusPill", `${ids.length} scenario(s)`);
-
-  sel.onchange = onScenarioChanged;
-  if (ids.length){ sel.value = ids[0]; sel.dispatchEvent(new Event("change")); }
-
   const refresh = $("refreshBtn");
-  if (refresh) refresh.onclick = ()=> sel.dispatchEvent(new Event("change"));
+  if (refresh) refresh.onclick = () => { if (sel) sel.dispatchEvent(new Event("change")); };
+
+  const toggleTools = $("toggleTools");
+  if (toggleTools){
+    toggleTools.onclick = ()=>{
+      const app = $("app");
+      const collapse = !app?.classList.contains("toolsCollapsed");
+      if (app) app.classList.toggle("toolsCollapsed", collapse);
+      toggleTools.textContent = collapse ? "Show Tools" : "Hide Tools";
+      fitCanvas();
+    };
+  }
+
+  window.addEventListener("resize", fitCanvas);
 }
 
-/* expose for console debugging */
-if (typeof window !== "undefined") window.__SCENARIOS = { bootScenarios };
-export default { bootScenarios };
+/* ---------- exported bootScenarios() ---------- */
+export async function bootScenarios(){
+  const info = getStorageInfo();
+  setTxt("rootPill", `bucket: ${info.bucketHost} | root: ${ROOT}`);
+  const user = await ensureAuthed();
+  setTxt("authPill", `anon ✔ (${String(user?.uid||"anon").slice(0,8)})`);
+
+  const sel = $("scenarioSel");
+  if (sel){
+    sel.innerHTML = '<option value="">Select scenario…</option>';
+    scenarios = await listScenarioIds();
+    scenarios.forEach(id => {
+      const o=document.createElement("option");
+      o.value=id; o.textContent=id; sel.appendChild(o);
+    });
+    setTxt("statusPill", `${scenarios.length} scenario(s)`);
+    if (scenarios.length){ sel.value = scenarios[0]; sel.dispatchEvent(new Event("change")); }
+  }
+}
+
+/* ---------- expose for console ---------- */
+if (typeof window !== "undefined") {
+  window.__SCENARIOS = { bootScenarios, wireScenarioUI };
+}
+export default { bootScenarios, wireScenarioUI };
