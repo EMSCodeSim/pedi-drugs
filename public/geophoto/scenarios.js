@@ -1,8 +1,9 @@
-v// scenarios.js — Storage-only scenario loader (SDK + REST fallback) + editor wiring
-// - Lists 'scenarios/' via SDK listAll; if it times out, falls back to REST
-// - Deep-scans inside each scenario up to depth=3; per-folder, tries SDK then REST
-// - Skips ai/, results/, overlays/, masks/; picks *.jpg|jpeg|png|webp
-// - No use of setMaxOperationRetryTime (not exported by ESM CDN)
+// scenarios.js — Storage-only scenario loader (SDK + REST fallback)
+// - Lists scenario folders under 'scenarios/' (Storage only).
+// - Deep scans each scenario up to 3 levels for *.jpg|jpeg|png|webp,
+//   skipping ai/, results/, overlays/, masks/.
+// - No reliance on a global `v`.
+// - Canvas work is deferred until bootScenarios() is called from HTML.
 
 import {
   getFirebase,
@@ -27,14 +28,14 @@ import {
   deleteObject
 } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-storage.js";
 
-/* ---------------- tiny DOM helpers ---------------- */
+/* ---------------- small DOM helpers ---------------- */
 const $ = (id) => document.getElementById(id);
+const log  = (...a) => { try{ console.log("[scenarios]", ...a); }catch(_e){} };
+const warn = (...a) => { try{ console.warn("[scenarios]", ...a); }catch(_e){} };
 const errbarEl = () => $("errbar");
-const log  = (...a) => { try{ console.log("[scenarios]", ...a); }catch(_e){}; };
-const warn = (...a) => { try{ console.warn("[scenarios]", ...a); }catch(_e){}; };
 
 export function setAuthPill(t){ const el=$("authPill"); if (el) el.textContent="Auth: "+t; }
-export function setStatus(t){ const el=$("statusPill"); if (el){ el.textContent=t; } log(t); }
+export function setStatus(t){ const el=$("statusPill"); if (el) el.textContent=t; log(t); }
 export function setRootPill(t){ const el=$("rootPill"); if (el) el.textContent=t; }
 export function setAIStatus(t){ const el=$("aiMsg"); if (el) el.textContent=t; }
 
@@ -46,18 +47,22 @@ export function showError(msg){
 }
 export function hideError(){ const b = errbarEl(); if (b) b.style.display = "none"; }
 function showLoad(on){ const ld=$("loader"); if (ld) ld.style.display = on ? "grid" : "none"; }
+function setExportEnabled(on){ for (const id of ["exportPNG","saveImage"]){ const btn=$(id); if (btn) btn.disabled=!on; } }
 
-function setExportEnabled(on){
-  for (const id of ["exportPNG","saveImage"]){
-    const btn = $(id); if (btn) btn.disabled = !on;
-  }
-}
-
-/* ---------------- Fabric canvas ---------------- */
-export const f = new fabric.Canvas("c", { backgroundColor:"#061621", preserveObjectStacking:true });
+/* ---------------- Fabric canvas (constructed lazily) ---------------- */
+let f = null;            // fabric.Canvas
 let baseImage = null;
 let baseTainted = false;
 let lastBaseURL = null;
+
+function ensureCanvas(){
+  if (f) return f;
+  if (!window.fabric) throw new Error("fabric not loaded");
+  f = new fabric.Canvas("c", { backgroundColor:"#061621", preserveObjectStacking:true });
+  wireViewerControls();
+  fitCanvas();
+  return f;
+}
 
 export function isCanvasTainted(){ return !!baseTainted; }
 export function getLastLoadedBaseURL(){ return lastBaseURL; }
@@ -80,6 +85,7 @@ function withTimeout(p, ms, tag){
 }
 
 async function setBaseFromBlob(blob){
+  ensureCanvas();
   baseTainted = false;
   return await new Promise((resolve, reject)=>{
     const url = URL.createObjectURL(blob);
@@ -97,6 +103,7 @@ async function setBaseFromBlob(blob){
 }
 
 export function setBaseAsTextSlide(text, fontSize){
+  ensureCanvas();
   f.clear();
   const rect = new fabric.Rect({ left:0, top:0, width:f.getWidth(), height:f.getHeight(), fill:"#000", selectable:false, evented:false, erasable:false });
   baseImage = rect;
@@ -118,8 +125,8 @@ export function setBaseAsTextSlide(text, fontSize){
 }
 
 export function fitCanvas(){
-  const cEl = $("c"); if (!cEl) return;
-  const wrap = cEl.parentElement;
+  const cEl = $("c"); if (!cEl || !f) return;
+  const wrap = cEl.parentElement || document.body;
   const maxW = wrap.clientWidth - 8;
   const maxH = wrap.clientHeight - 8;
   const targetW = Math.max(320, Math.floor(maxW));
@@ -140,7 +147,6 @@ function deriveBucketNames(){
   const cfg = (app && app.options) || {};
   let sb = cfg.storageBucket || (storage && storage.bucket) || "";
   sb = String(sb).replace(/^gs:\/\//,"").replace(/\/.*/,"");
-  // normalize both host variants
   const appspot = sb.includes("appspot.com") ? sb : (sb ? `${sb.replace(/\.firebasestorage\.app$/,"")}.appspot.com` : "");
   const fsa     = sb.includes("firebasestorage.app") ? sb : (sb ? `${sb.replace(/\.appspot\.com$/,"")}.firebasestorage.app` : "");
   return { appspot, fsa };
@@ -160,7 +166,6 @@ function ensurePrefixSlash(p){
 }
 
 async function listFolderREST(bucketHost, prefixPath){
-  // Single-level list using REST (delimiter=/)
   const prefix = ensurePrefixSlash(prefixPath);
   const url = "https://firebasestorage.googleapis.com/v0/b/" +
               encodeURIComponent(bucketHost) +
@@ -180,7 +185,6 @@ async function listFolderREST(bucketHost, prefixPath){
 }
 
 async function listFolderCombined(prefixPath){
-  // Try SDK listAll first; on failure, try REST (both hosts)
   const { storage } = getFirebase();
   const norm = String(prefixPath || "").replace(/^\/+/,"").replace(/\/+$/,"");
   const ref = stRef(storage, norm);
@@ -194,33 +198,25 @@ async function listFolderCombined(prefixPath){
     warn("SDK listAll failed at", norm || "(root)", e?.message || e);
   }
 
-  // REST fallbacks
   const { appspot, fsa } = deriveBucketNames();
-  let err1 = null, err2 = null;
-
-  if (fsa) {
-    try { return await listFolderREST(fsa, norm); } catch(e){ err1 = e; warn("REST fsa failed:", e?.message || e); }
-  }
-  if (appspot) {
-    try { return await listFolderREST(appspot, norm); } catch(e){ err2 = e; warn("REST appspot failed:", e?.message || e); }
-  }
-  // Throw most recent error
+  let err1=null, err2=null;
+  if (fsa) { try { return await listFolderREST(fsa, norm); } catch(e){ err1=e; warn("REST fsa failed:", e?.message || e); } }
+  if (appspot) { try { return await listFolderREST(appspot, norm); } catch(e){ err2=e; warn("REST appspot failed:", e?.message || e); } }
   throw new Error((err2 || err1 || new Error("list failed")).message || "list failed");
 }
 
 /* ---------------- Scenario state ---------------- */
-const FORCE_ROOT = "scenarios"; // fixed Storage root (cloud storage only)
+const FORCE_ROOT = "scenarios";
 let ROOT = FORCE_ROOT;
 
 let scenarios = [];
 let current = null;
 let stopIndex = -1;
 
-/* ---------------- list scenarios from Storage (with fallback) ---------------- */
+/* ---------------- list scenarios (Storage only) ---------------- */
 async function listScenarioIdsFromStorage(root) {
   const clean = String(root || "").replace(/^\/+|\/+$/g, "");
   setStatus(`Listing '${clean}/'…`);
-
   try {
     const { prefixes } = await listFolderCombined(clean);
     const ids = (prefixes || []).map(full => full.replace(/^scenarios\/?/,"")).filter(Boolean);
@@ -232,10 +228,10 @@ async function listScenarioIdsFromStorage(root) {
   }
 }
 
-/* ---------------- stop discovery: deep scan (SDK+REST per folder) ---------------- */
+/* ---------------- stop discovery: deep scan ---------------- */
 const IMAGE_RX = /\.(jpe?g|png|webp)$/i;
 const SKIP_FOLDER_RX = /^(ai|results|overlays|masks)$/i;
-const MAX_COLLECT = 500; // safety cap
+const MAX_COLLECT = 500;
 
 async function listImagesDeep(prefixPath, maxDepth){
   const out = [];
@@ -255,7 +251,6 @@ async function listImagesDeep(prefixPath, maxDepth){
       continue;
     }
 
-    // Items at this level
     for (const it of (listing.items || [])) {
       const full = it.name || "";
       const name = full.split("/").pop() || "";
@@ -264,7 +259,6 @@ async function listImagesDeep(prefixPath, maxDepth){
     }
     if (out.length >= MAX_COLLECT) break;
 
-    // Descend to subfolders
     if (depth < maxDepth) {
       for (const p of (listing.prefixes || [])) {
         const leaf = p.split("/").pop() || "";
@@ -273,67 +267,10 @@ async function listImagesDeep(prefixPath, maxDepth){
       }
     }
   }
-
   log("Scanned folders:", scanned, "Collected files:", out.length);
   return out;
 }
 
-async function ensureStopsForCurrentFromStorage() {
-  if (!current || (current._stops && current._stops.length)) return;
-
-  const basePath = `${ROOT}/${current.id}`;
-  setStatus(`Looking for photos under '${basePath}/'…`);
-
-  // Deep scan up to 3 levels using combined (SDK+REST) listing
-  let filePaths = await listImagesDeep(basePath, 3);
-
-  if (!filePaths.length) {
-    setStatus("No images found in storage for this scenario.");
-    current._stops = [];
-    renderThumbs();
-    return;
-  }
-
-  setStatus(`Found ${filePaths.length} file(s). Fetching URLs…`);
-  // Sort for nice ordering
-  filePaths.sort((a, b) => a.localeCompare(b, undefined, { numeric: true, sensitivity: "base" }));
-
-  // Parallelize getDownloadURL with small concurrency
-  const { storage } = getFirebase();
-  const stops = new Array(filePaths.length);
-  let i = 0;
-  const conc = Math.min(6, filePaths.length);
-
-  async function worker(){
-    while (true) {
-      const idx = i++;
-      if (idx >= filePaths.length) break;
-      const fullPath = filePaths[idx];
-      try {
-        const url = await getDownloadURL(stRef(storage, fullPath));
-        const title = fullPath.split("/").pop() || "photo";
-        stops[idx] = { type:"photo", title, storagePath:fullPath, imageURL:url, radiusMeters:50 };
-      } catch (e) {
-        warn("getDownloadURL failed:", fullPath, e?.message || e);
-        stops[idx] = null;
-      }
-      if (idx % 10 === 0) setStatus(`Fetching URLs… ${idx+1}/${filePaths.length}`);
-    }
-  }
-  await Promise.all(Array.from({ length: conc }, worker));
-
-  current._stops = stops.filter(Boolean);
-  setStops(current._raw, current._stops);
-  renderThumbs();
-  setStatus(`${current._stops.length} photo(s)`);
-
-  // Auto-load first image
-  if (current._stops.length > 0) {
-    try { await loadStop(0); } catch(_) {}
-  }
-}
-
-/* ---------------- populate UI ---------------- */
 function setStops(sc, stops){
   const next = Object.assign({}, sc || {});
   next.stops = Array.isArray(stops) ? stops.slice() : [];
@@ -384,69 +321,6 @@ function renderThumbs(){
 }
 
 /* ---------------- stop load + overlays ---------------- */
-export async function loadStop(i){
-  hideError();
-  if (!current) return;
-  const s = current._stops[i];
-  if (!s) return;
-  stopIndex = i;
-
-  const row = $("thumbRow");
-  if (row){
-    const kids = Array.from(row.children);
-    for (let k=0;k<kids.length;k++) kids[k].classList.toggle("active", k===i);
-  }
-
-  const ttl = $("stopTitle"); if (ttl) ttl.value = s.title || "";
-  const cap = $("stopCaption"); if (cap) cap.value = s.caption || "";
-  const lat = $("stopLat"); if (lat) lat.value = s.lat != null ? s.lat : "";
-  const lng = $("stopLng"); if (lng) lng.value = s.lng != null ? s.lng : "";
-  const rad = $("stopRadius"); if (rad) rad.value = s.radiusMeters != null ? s.radiusMeters : 50;
-
-  try{
-    showLoad(true);
-    const blob = await resolveForStop(s, 25000);
-    await setBaseFromBlob(blob);
-  } catch (e){
-    if (s.imageData && s.imageData.data){
-      setBaseAsTextSlide("(embedded data render failed; showing text)");
-    } else {
-      showError("Load failed: " + (e && (e.message || e)));
-    }
-  } finally {
-    showLoad(false);
-  }
-
-  if (Array.isArray(s.overlays)) {
-    for (let k=0;k<s.overlays.length;k++){
-      const ov = s.overlays[k];
-      if (ov && ov.type === "text"){
-        const tb = new fabric.Textbox(ov.text || "", {
-          left: ov.left || 0, top: ov.top || 0, width: ov.width || Math.floor(f.getWidth() * 0.5),
-          fontSize: ov.fontSize || 24, fill: ov.fill || "#fff",
-          backgroundColor: ov.backgroundColor || "rgba(0,0,0,0.6)", padding: (ov.padding != null ? ov.padding : 8),
-          cornerStyle:"circle", transparentCorners:false, editable:true
-        });
-        tb._kind = "text"; f.add(tb);
-      } else if (ov && ov.src){
-        await new Promise((res)=>{
-          fabric.Image.fromURL(ov.src, function(img){
-            img.set({
-              left: ov.left || 0, top: ov.top || 0, scaleX: ov.scaleX || 1, scaleY: ov.scaleY || 1,
-              angle: ov.angle || 0, opacity: (ov.opacity != null ? ov.opacity : 1),
-              flipX: !!ov.flipX, flipY: !!ov.flipY,
-              erasable: true, cornerStyle:"circle", transparentCorners:false
-            });
-            img._kind = "overlay"; f.add(img); res();
-          }, { crossOrigin: "anonymous" });
-        });
-      }
-    }
-  }
-  f.requestRenderAll();
-}
-
-/* ---------------- Guide / Export helpers for AI uploader ---------------- */
 async function getBlobSDKFirst(refLike, timeoutMs){
   try{
     const { storage } = getFirebase();
@@ -496,6 +370,70 @@ async function resolveForStop(stop, timeoutMs){
   throw new Error("Could not resolve image for stop.");
 }
 
+export async function loadStop(i){
+  hideError();
+  if (!current) return;
+  const s = current._stops[i];
+  if (!s) return;
+  stopIndex = i;
+
+  const row = $("thumbRow");
+  if (row){
+    const kids = Array.from(row.children);
+    for (let k=0;k<kids.length;k++) kids[k].classList.toggle("active", k===i);
+  }
+
+  const ttl = $("stopTitle"); if (ttl) ttl.value = s.title || "";
+  const cap = $("stopCaption"); if (cap) cap.value = s.caption || "";
+  const lat = $("stopLat"); if (lat) lat.value = s.lat != null ? s.lat : "";
+  const lng = $("stopLng"); if (lng) lng.value = s.lng != null ? s.lng : "";
+  const rad = $("stopRadius"); if (rad) rad.value = s.radiusMeters != null ? s.radiusMeters : 50;
+
+  try{
+    showLoad(true);
+    const blob = await resolveForStop(s, 25000);
+    await setBaseFromBlob(blob);
+  } catch (e){
+    if (s.imageData && s.imageData.data){
+      setBaseAsTextSlide("(embedded data render failed; showing text)");
+    } else {
+      showError("Load failed: " + (e && (e.message || e)));
+    }
+  } finally {
+    showLoad(false);
+  }
+
+  if (!f) return;
+  if (Array.isArray(s.overlays)) {
+    for (let k=0;k<s.overlays.length;k++){
+      const ov = s.overlays[k];
+      if (ov && ov.type === "text"){
+        const tb = new fabric.Textbox(ov.text || "", {
+          left: ov.left || 0, top: ov.top || 0, width: ov.width || Math.floor(f.getWidth() * 0.5),
+          fontSize: ov.fontSize || 24, fill: ov.fill || "#fff",
+          backgroundColor: ov.backgroundColor || "rgba(0,0,0,0.6)", padding: (ov.padding != null ? ov.padding : 8),
+          cornerStyle:"circle", transparentCorners:false, editable:true
+        });
+        tb._kind = "text"; f.add(tb);
+      } else if (ov && ov.src){
+        await new Promise((res)=>{
+          fabric.Image.fromURL(ov.src, function(img){
+            img.set({
+              left: ov.left || 0, top: ov.top || 0, scaleX: ov.scaleX || 1, scaleY: ov.scaleY || 1,
+              angle: ov.angle || 0, opacity: (ov.opacity != null ? ov.opacity : 1),
+              flipX: !!ov.flipX, flipY: !!ov.flipY,
+              erasable: true, cornerStyle:"circle", transparentCorners:false
+            });
+            img._kind = "overlay"; f.add(img); res();
+          }, { crossOrigin: "anonymous" });
+        });
+      }
+    }
+  }
+  f.requestRenderAll();
+}
+
+/* ---------------- AI helpers ---------------- */
 export async function getGuideImageURLForCurrentStop(){
   if (!current || stopIndex < 0) throw new Error("No stop selected");
   const s = current._stops[stopIndex];
@@ -518,11 +456,12 @@ export async function getGuideImageURLForCurrentStop(){
 }
 
 export function hasOverlays(){
+  if (!f) return false;
   return f.getObjects().some(o => o && !o.isBaseText && o !== baseImage);
 }
 
 export function getCompositeDataURL(){
-  if (baseTainted) return null;
+  if (!f || baseTainted) return null;
   try{ return f.toDataURL({ format:"png", quality: 0.92, multiplier: 1 }); }
   catch(_e){ return null; }
 }
@@ -556,7 +495,6 @@ export async function addResultAsNewStop(url){
   };
   const next = current._stops.slice(); next.push(newStop);
   const updated = Object.assign({}, current._raw); setStops(updated, next);
-
   try{ await set(dbRef(getFirebase().db, ROOT + "/" + current.id), updated); }catch(_e){}
   renderThumbs();
 }
@@ -601,6 +539,7 @@ function wireOverlayShelf(){
           const img = document.createElement("img"); img.src=u; img.alt=grp.key + " " + (i+1);
           img.style.width="60px"; img.style.height="60px"; img.style.objectFit="contain"; img.style.background="#0c121a"; img.style.borderRadius="8px"; img.style.cursor="grab";
           img.onclick = function(){
+            ensureCanvas();
             fabric.Image.fromURL(u, function(o){
               o.set({ left:10, top:10, opacity:1, erasable:true, cornerStyle:"circle", transparentCorners:false });
               o._kind = "overlay";
@@ -616,15 +555,16 @@ function wireOverlayShelf(){
 
 function wireBrushes(){
   const b = $("brushSize"); const e = $("eraserSize");
-  if (b){ b.oninput = function(){ const v=+b.value||10; f.isDrawingMode = true; f.freeDrawingBrush = new fabric.PencilBrush(f); f.freeDrawingBrush.width = v; }; }
-  if (e){ e.oninput = function(){ const v=+e.value||24; f.isDrawingMode = true; f.freeDrawingBrush = new fabric.EraserBrush(f); f.freeDrawingBrush.width = v; }; }
-  const pan = $("panMode"); if (pan){ pan.onclick = function(){ f.isDrawingMode = false; }; }
+  if (b){ b.oninput = function(){ ensureCanvas(); const val=+b.value||10; f.isDrawingMode = true; f.freeDrawingBrush = new fabric.PencilBrush(f); f.freeDrawingBrush.width = val; }; }
+  if (e){ e.oninput = function(){ ensureCanvas(); const val=+e.value||24; f.isDrawingMode = true; f.freeDrawingBrush = new fabric.EraserBrush(f); f.freeDrawingBrush.width = val; }; }
+  const pan = $("panMode"); if (pan){ pan.onclick = function(){ ensureCanvas(); f.isDrawingMode = false; }; }
 }
 
 function wireTextTools(){
   const add = $("addText");
   if (add){
     add.onclick = function(){
+      ensureCanvas();
       const tb = new fabric.Textbox("Text", { left:20, top:20, width: Math.floor(f.getWidth()*0.4),
         fill:"#fff", backgroundColor:"rgba(0,0,0,0.6)", padding:8, cornerStyle:"circle", transparentCorners:false, editable:true });
       tb._kind = "text";
@@ -635,7 +575,7 @@ function wireTextTools(){
 
 function wireSelectionTools(){
   const del = $("deleteSel");
-  if (del){ del.onclick = function(){ const a = f.getActiveObject(); if (a) f.remove(a); }; }
+  if (del){ del.onclick = function(){ ensureCanvas(); const a = f.getActiveObject(); if (a) f.remove(a); }; }
 }
 
 function wireExportAndSave(){
@@ -643,6 +583,7 @@ function wireExportAndSave(){
   if (exportBtn){
     exportBtn.onclick = async function(){
       try{
+        ensureCanvas();
         if (baseTainted) { showError("Canvas is tainted; export disabled. (AI still works.)"); return; }
         const data = getCompositeDataURL();
         if (!data) { showError("Export failed."); return; }
@@ -656,6 +597,7 @@ function wireExportAndSave(){
   if (saveBtn){
     saveBtn.onclick = async function(){
       try{
+        ensureCanvas();
         if (baseTainted){ showError("Canvas is tainted; cannot save."); return; }
         if (!current || stopIndex < 0) { showError("No stop selected."); return; }
         const data = getCompositeDataURL();
@@ -688,7 +630,7 @@ export function wireScenarioUI(){
       current = scenarios.find(s => s.id === id) || null;
       stopIndex = -1;
       renderThumbs();
-      f.clear(); baseImage = null; fitCanvas();
+      if (f){ f.clear(); baseImage = null; fitCanvas(); }
       if (current) {
         await ensureStopsForCurrentFromStorage();
         if (current._stops && current._stops.length > 0){ await loadStop(0); }
@@ -752,7 +694,7 @@ export function wireScenarioUI(){
         await remove(dbRef(getFirebase().db, ROOT + "/" + current.id));
         current = null; stopIndex = -1; populateScenarios(); if (sel) sel.value = "";
         const tr = $("thumbRow"); if (tr) tr.innerHTML = "";
-        f.clear(); baseImage = null; fitCanvas();
+        if (f){ f.clear(); baseImage = null; fitCanvas(); }
         setStatus("Scenario deleted.");
       }catch(e){
         showError("Delete failed: " + (e && (e.message || e)));
@@ -777,7 +719,6 @@ export function wireScenarioUI(){
     };
   }
 
-  wireViewerControls();
   wireOverlayShelf();
   wireBrushes();
   wireTextTools();
@@ -785,7 +726,57 @@ export function wireScenarioUI(){
   wireExportAndSave();
 }
 
-/* ---------------- boot ---------------- */
+async function ensureStopsForCurrentFromStorage() {
+  if (!current || (current._stops && current._stops.length)) return;
+
+  const basePath = `${ROOT}/${current.id}`;
+  setStatus(`Looking for photos under '${basePath}/'…`);
+
+  const filePaths = await listImagesDeep(basePath, 3);
+  if (!filePaths.length) {
+    setStatus("No images found in storage for this scenario.");
+    current._stops = [];
+    renderThumbs();
+    return;
+  }
+
+  setStatus(`Found ${filePaths.length} file(s). Fetching URLs…`);
+  filePaths.sort((a, b) => a.localeCompare(b, undefined, { numeric: true, sensitivity: "base" }));
+
+  const { storage } = getFirebase();
+  const stops = new Array(filePaths.length);
+  let i = 0;
+  const conc = Math.min(6, filePaths.length);
+
+  async function worker(){
+    while (true) {
+      const idx = i++;
+      if (idx >= filePaths.length) break;
+      const fullPath = filePaths[idx];
+      try {
+        const url = await getDownloadURL(stRef(storage, fullPath));
+        const title = fullPath.split("/").pop() || "photo";
+        stops[idx] = { type:"photo", title, storagePath:fullPath, imageURL:url, radiusMeters:50 };
+      } catch (e) {
+        warn("getDownloadURL failed:", fullPath, e?.message || e);
+        stops[idx] = null;
+      }
+      if (idx % 10 === 0) setStatus(`Fetching URLs… ${idx+1}/${filePaths.length}`);
+    }
+  }
+  await Promise.all(Array.from({ length: conc }, worker));
+
+  current._stops = stops.filter(Boolean);
+  setStops(current._raw, current._stops);
+  renderThumbs();
+  setStatus(`${current._stops.length} photo(s)`);
+
+  if (current._stops.length > 0) {
+    try { await loadStop(0); } catch(_) {}
+  }
+}
+
+/* ---------------- load & boot ---------------- */
 async function loadScenarios(){
   await ensureAuthed();
   setStatus("Loading scenarios from storage…");
@@ -796,7 +787,6 @@ async function loadScenarios(){
   populateScenarios();
   setStatus(`${scenarios.length} scenario(s) in storage`);
 
-  // Auto-select first scenario to kick off discovery
   const sel = $("scenarioSel");
   if (sel && !sel.value && scenarios.length > 0){
     sel.value = scenarios[0].id;
@@ -805,7 +795,13 @@ async function loadScenarios(){
 }
 
 export async function bootScenarios(){
-  fitCanvas();
+  // Wait until fabric is present (script tag) before touching canvas.
+  if (!window.fabric) {
+    // Optional: delay a tick if fabric is deferred
+    await new Promise(r => setTimeout(r, 0));
+  }
+  try { ensureCanvas(); } catch(_e) { /* fabric may init later when first image loads */ }
+
   await ensureAuthed();
 
   ROOT = FORCE_ROOT;
@@ -817,18 +813,18 @@ export async function bootScenarios(){
   setAuthPill("anon ✔ (" + String(uid).slice(0,8) + ")");
 }
 
-/* ---------------- expose API ---------------- */
 function wireViewerControls(){
   const info = $("canvasInfo");
   window.addEventListener("resize", fitCanvas);
   if (info) info.textContent = "Canvas ready.";
 }
+
 export function getCurrent(){ return current; }
 export function getStopIndex(){ return stopIndex; }
 
 const __SCENARIOS_API__ = {
   setAIStatus, setAuthPill, setStatus, setRootPill,
-  f, isCanvasTainted, getLastLoadedBaseURL, getCompositeDataURL,
+  isCanvasTainted, getLastLoadedBaseURL, getCompositeDataURL,
   getCurrent, getStopIndex, loadStop, hasOverlays,
   getGuideImageURLForCurrentStop, saveResultBlobToStorage, addResultAsNewStop,
   wireScenarioUI, bootScenarios
