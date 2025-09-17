@@ -1,8 +1,6 @@
 // scenarios.js — Storage-only scenario loader + advanced editor wiring
-// - Auto-detects root between 'scenarios/' and 'geophoto/scenarios/'
-// - Uses SDK listAll() first; if empty or errors, falls back to REST on two hosts
-// - Scans one folder level deeper for images if top-level has none (e.g., thumbs/, images/, ai/results/)
-// - Shows clear status + console logs
+// NOTE: This version avoids importing setMaxOperationRetryTime / setMaxUploadRetryTime
+// so it works with the CDN ESM build you're using.
 
 import {
   getFirebase,
@@ -24,9 +22,7 @@ import {
   listAll,
   getBlob as storageGetBlob,
   uploadBytesResumable,
-  deleteObject,
-  setMaxOperationRetryTime,
-  setMaxUploadRetryTime
+  deleteObject
 } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-storage.js";
 
 /* ---------------- tiny DOM helpers ---------------- */
@@ -186,21 +182,21 @@ async function resolveForStop(stop, timeoutMs){
 }
 
 /* ---------------- Scenario state ---------------- */
-let ROOT = "scenarios"; // will be auto-detected to 'geophoto/scenarios' if present
+const FORCE_ROOT = "scenarios"; // fixed Storage root (cloud storage only)
+let ROOT = FORCE_ROOT;
+
 let scenarios = [];
 let current = null;
 let stopIndex = -1;
 
 /* ---------------- bucket helpers + REST fallbacks ---------------- */
 function deriveBucketNames(){
-  // Try to deduce both "appspot.com" and "firebasestorage.app" names
   const { app, storage } = getFirebase();
   const cfg = (app && app.options) || {};
   let sb = cfg.storageBucket || (storage && storage.bucket) || "";
-  sb = String(sb).replace(/^gs:\/\//,"").replace(/\/.*/,""); // bare bucket name
+  sb = String(sb).replace(/^gs:\/\//,"").replace(/\/.*/,"");
   let appspot = sb.includes("appspot.com") ? sb : sb.replace("firebasestorage.app","appspot.com");
   let fsa     = sb.includes("firebasestorage.app") ? sb : sb.replace("appspot.com","firebasestorage.app");
-  // If still weird, try to guess from projectId
   if (!appspot.includes(".")){
     const pid = (cfg.projectId || "").trim();
     if (pid) appspot = `${pid}.appspot.com`;
@@ -244,8 +240,6 @@ async function listScenarioIdsFromStorage(root) {
     const ids = (res.prefixes || []).map(p => p.name);
     log("SDK listAll prefixes:", ids);
     if (ids.length > 0) return ids;
-
-    // If SDK gave 0, try REST both hosts
     setStatus("No folders via SDK. Trying REST…");
   } catch (e) {
     warn("SDK listAll failed:", e?.message || e);
@@ -255,7 +249,6 @@ async function listScenarioIdsFromStorage(root) {
   const { appspot, fsa } = deriveBucketNames();
   log("REST buckets:", { appspot, fsa });
 
-  // Try firebasestorage.app first, then appspot.com
   try {
     setStatus(`REST listing on ${fsa}…`);
     const ids = await listFoldersREST(fsa, clean);
@@ -276,14 +269,13 @@ async function listScenarioIdsFromStorage(root) {
   return [];
 }
 
-/* ---------------- stops from Storage (with 1-level-deep scan) ---------------- */
+/* ---------------- stops from Storage (1-level deep if needed) ---------------- */
 async function ensureStopsForCurrentFromStorage() {
   if (!current || (current._stops && current._stops.length)) return;
 
   setStatus("Loading photos from storage…");
   const { storage } = getFirebase();
 
-  // Helper: list images in a folder and optionally 1 level deeper
   async function listImagesUnder(prefixPath, recurseOneLevel) {
     const out = [];
     const baseRef = stRef(storage, prefixPath.replace(/\/+/g,"/"));
@@ -296,7 +288,6 @@ async function ensureStopsForCurrentFromStorage() {
       return out;
     }
 
-    // Top-level items
     const top = (listing.items || []).filter(r => /\.(jpe?g|png|webp)$/i.test(r.name));
     for (const r of top) {
       try {
@@ -307,7 +298,6 @@ async function ensureStopsForCurrentFromStorage() {
 
     if (out.length || !recurseOneLevel) return out;
 
-    // One level deeper if nothing found at top-level
     const folders = listing.prefixes || [];
     for (const p of folders) {
       try {
@@ -324,12 +314,10 @@ async function ensureStopsForCurrentFromStorage() {
     return out;
   }
 
-  // Try top-level; if empty, try one level deeper
   const basePath = `${ROOT}/${current.id}`;
-  let stops = await listImagesUnder(basePath, /*recurseOneLevel=*/false);
-  if (!stops.length) stops = await listImagesUnder(basePath, /*recurseOneLevel=*/true);
+  let stops = await listImagesUnder(basePath, false);
+  if (!stops.length) stops = await listImagesUnder(basePath, true);
 
-  // Sort by filename naturally
   stops.sort((a, b) => a.title.localeCompare(b.title, undefined, { numeric: true, sensitivity: "base" }));
 
   current._stops = stops;
@@ -421,7 +409,6 @@ export async function loadStop(i){
     showLoad(false);
   }
 
-  // overlays (if any)
   if (Array.isArray(s.overlays)) {
     for (let k=0;k<s.overlays.length;k++){
       const ov = s.overlays[k];
@@ -722,7 +709,14 @@ export function wireScenarioUI(){
   if (refresh){
     refresh.onclick = async function(){
       await ensureAuthed();
-      await detectAndLoadRoot(); // re-run detection on refresh
+      ROOT = FORCE_ROOT;
+      const info = getStorageInfo();
+      setRootPill("storage: " + ROOT + " | bucket: " + info.bucketHost);
+      await loadScenarios();
+      if (sel && !sel.value && scenarios.length > 0){
+        sel.value = scenarios[0].id;
+        sel.dispatchEvent(new Event("change"));
+      }
     };
   }
 
@@ -735,46 +729,31 @@ export function wireScenarioUI(){
 }
 
 /* ---------------- detection + boot ---------------- */
-async function detectAndLoadRoot(){
-  const candidates = ["scenarios", "geophoto/scenarios"];
-  let ids = [];
-  for (const cand of candidates) {
-    setStatus(`Probing '${cand}/'…`);
-    try { ids = await listScenarioIdsFromStorage(cand); } catch(_e){ ids = []; }
-    if (ids.length) { ROOT = cand; break; }
-  }
-  if (!ids.length) {
-    ROOT = candidates[0]; // default to 'scenarios'
-    ids = await listScenarioIdsFromStorage(ROOT);
-  }
+async function loadScenarios(){
+  await ensureAuthed();
+  setStatus("Loading scenarios from storage…");
 
-  const info = getStorageInfo();
-  setRootPill(`storage: ${ROOT} | bucket: ${info.bucketHost || "?"}`);
-
+  const ids = await listScenarioIdsFromStorage(ROOT);
   scenarios = ids.map(id => ({ id, title: id, createdAt: 0, _raw: { id, title: id }, _stops: [] }));
+
   populateScenarios();
   setStatus(`${scenarios.length} scenario(s) in storage`);
-
-  const sel = $("scenarioSel");
-  if (sel && !sel.value && scenarios.length > 0){
-    sel.value = scenarios[0].id;
-    sel.dispatchEvent(new Event("change"));
-  }
 }
 
 export async function bootScenarios(){
   fitCanvas();
   await ensureAuthed();
 
-  // Make SDK a bit more tolerant
-  try {
-    const { storage } = getFirebase();
-    setMaxOperationRetryTime(storage, 60000);
-    setMaxUploadRetryTime(storage, 60000);
-  } catch(_e){}
+  ROOT = FORCE_ROOT;
+  const info = getStorageInfo();
+  setRootPill("storage: " + ROOT + " | bucket: " + info.bucketHost);
+  await loadScenarios();
 
-  await detectAndLoadRoot();
-
+  const sel = $("scenarioSel");
+  if (sel && !sel.value && scenarios.length > 0){
+    sel.value = scenarios[0].id;
+    sel.dispatchEvent(new Event("change"));
+  }
   const uid = (await ensureAuthed()).uid || "anon";
   setAuthPill("anon ✔ (" + String(uid).slice(0,8) + ")");
 }
