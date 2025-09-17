@@ -40,6 +40,10 @@
     #app.toolsCollapsed { grid-template-columns: 1fr; }
     .muted { color:var(--muted); }
     .toolRow { display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+    #debug { background:#0b1218; border:1px solid #1b2633; border-radius:8px; padding:8px; max-height:160px; overflow:auto; font-family:ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size:12px; }
+    #debug b { color:#a7d3ff; }
+    #debug .fail { color:#ffb3b3; }
+    #debug .ok { color:#a7ffb3; }
   </style>
 </head>
 <body>
@@ -161,6 +165,11 @@
       </div>
       <div class="muted">Export/save are disabled if the base image is cross-origin tainted; AI still works via guide URL.</div>
     </div>
+
+    <div class="stack">
+      <h3>Debug</h3>
+      <div id="debug">Booting…</div>
+    </div>
   </section>
 
   <footer>
@@ -169,14 +178,16 @@
   </footer>
 </div>
 
-<!-- Fabric (must load before scenarios.js) -->
+<!-- Fabric -->
 <script src="https://cdn.jsdelivr.net/npm/fabric@5.3.0/dist/fabric.min.js"></script>
 
-<!-- Modules (robust dynamic import with on-screen errors) -->
+<!-- Robust module boot -->
 <script type="module">
   const errbar = document.getElementById("errbar");
   const statusPill = document.getElementById("statusPill");
-  const setStatusEarly = (t) => { if (statusPill) statusPill.textContent = t; };
+  const debug = document.getElementById("debug");
+  const setStatus = (t) => { if (statusPill) statusPill.textContent = t; console.log("[boot]", t); };
+  const logDbg = (html) => { if (!debug) return; debug.insertAdjacentHTML("beforeend", "<div>"+html+"</div>"); };
 
   function showError(e) {
     if (!errbar) return;
@@ -185,67 +196,113 @@
     console.error(e);
   }
 
-  async function importFirst(candidates) {
-    for (const raw of candidates) {
-      const url = raw;
-      try {
-        const head = await fetch(url, { method: "HEAD", cache: "no-store" });
-        if (!head.ok) continue;
-        return await import(url);
-      } catch (e) {
-        // try next
-      }
+  // Try direct dynamic import (some hosts reject HEAD or lie about status)
+  async function tryImport(url) {
+    try {
+      const mod = await import(url);
+      logDbg(`<span class="ok">✓ import</span> <b>${url}</b>`);
+      return mod;
+    } catch (e) {
+      logDbg(`<span class="fail">✗ import</span> <b>${url}</b> — ${e?.message || e}`);
+      return null;
     }
-    throw new Error("Could not import any of: " + candidates.join(", "));
+  }
+
+  async function importFirst(candidateUrls) {
+    for (const u of candidateUrls) {
+      const mod = await tryImport(u);
+      if (mod) return mod;
+    }
+    throw new Error("Could not import any of:\n" + candidateUrls.join("\n"));
+  }
+
+  // Build a broad set of candidates for both modules
+  function buildCandidates(baseNames) {
+    const dirs = [
+      "./",                 // same folder
+      "../",                // parent
+      "./geophoto/",        // common folder name used
+      "../geophoto/",       // parent/geophoto
+      "/",                  // site root (if hosted at root)
+      "/geophoto/"          // site root/geophoto
+    ];
+    const names = [];
+    for (const b of baseNames) {
+      names.push(`${b}.js`);
+      names.push(`${b} (3).js`);
+      names.push(`${b} (2).js`);
+      names.push(`${b} (1).js`);
+      names.push(`${b}.legacy.js`);
+    }
+    // Add URL-encoded versions for space variants
+    const namesEncoded = names.map(n => n.replaceAll(" ", "%20"));
+    const allNames = [...new Set([...names, ...namesEncoded])];
+
+    const out = [];
+    for (const d of dirs) for (const n of allNames) out.push(d + n);
+    // Add cache-busters
+    const ts = Date.now();
+    return out.map(u => u + `?v=${ts}`);
   }
 
   window.addEventListener("DOMContentLoaded", async () => {
     try {
-      setStatusEarly("Resolving modules…");
+      debug.textContent = "Resolving modules…";
+      setStatus("Resolving modules…");
 
-      // Try multiple filenames for local dev convenience
-      const core = await importFirst([
-        "./firebase-core.js",
-        "./firebase-core%20(3).js",
-        "./firebase-core%20(2).js"
-      ]);
+      // 1) firebase-core.js must exist somewhere
+      const coreCandidates = buildCandidates(["firebase-core"]);
+      logDbg("<b>firebase-core candidates:</b>");
+      coreCandidates.forEach(u => logDbg(u));
 
-      core.initFirebase();
+      const core = await importFirst(coreCandidates);
+      if (!core || typeof core.initFirebase !== "function") {
+        throw new Error("firebase-core loaded but initFirebase() is missing.");
+      }
+      await core.initFirebase();
+      setStatus("Firebase ready");
 
-      const SCNmod = await importFirst([
-        "./scenarios.js",
-        "./scenarios%20(3).js",
-        "./scenarios%20(2).js"
-      ]);
+      // 2) scenarios.js — your loader
+      const scnCandidates = buildCandidates(["scenarios", "scenarios-ui"]);
+      logDbg("<b>scenarios candidates:</b>");
+      scnCandidates.forEach(u => logDbg(u));
+
+      const SCNmod = await importFirst(scnCandidates);
       const SCN = SCNmod.default || SCNmod;
 
+      if (!SCN || !SCN.bootScenarios || !SCN.wireScenarioUI) {
+        throw new Error("scenarios module loaded but expected exports are missing (bootScenarios/wireScenarioUI).");
+      }
+
       SCN.wireScenarioUI();
-      setStatusEarly("Booting scenarios…");
+      setStatus("Booting scenarios…");
       await SCN.bootScenarios();
-      setStatusEarly("Ready");
+      setStatus("Ready");
+      logDbg("<b class='ok'>✓ scenarios booted</b>");
     } catch (e) {
       showError(e);
-      setStatusEarly("Failed to boot");
+      setStatus("Failed to boot");
+      logDbg(`<span class="fail"><b>BOOT FAILED:</b> ${e?.message || e}</span>`);
+      logDbg("<div class='muted'>Fix: place <b>firebase-core.js</b> and <b>scenarios.js</b> next to this HTML or rename your existing files to those names.</div>");
     }
 
-    // Try to load AI uploader (any name)
-    const aiCandidates = [
-      "./ai-upload.js",
-      "./ai-upload%20(3).js",
-      "./ai-upload%20(2).js",
-      "./ai-upload.legacy.js"
-    ];
+    // 3) AI uploader (optional)
+    const aiCandidates = buildCandidates(["ai-upload"]);
+    logDbg("<b>ai-upload candidates:</b>");
+    aiCandidates.forEach(u => logDbg(u));
     for (const ai of aiCandidates) {
-      try {
-        const head = await fetch(ai, { method: "HEAD", cache: "no-store" });
-        if (head.ok) {
-          const s = document.createElement("script");
-          s.src = ai; document.body.appendChild(s);
-          break;
-        }
-      } catch {}
+      const ok = await tryImport(ai);
+      if (ok) break;
     }
   });
+
+  // UI chrome
+  document.getElementById("toggleTools").onclick = function(){
+    const app = document.getElementById("app");
+    const collapse = !app.classList.contains("toolsCollapsed");
+    app.classList.toggle("toolsCollapsed", collapse);
+    this.textContent = collapse ? "Show Tools" : "Hide Tools";
+  };
 </script>
 </body>
 </html>
