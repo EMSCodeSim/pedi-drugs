@@ -1,7 +1,8 @@
-// scenarios.js — Storage-only scenario loader (deep scan up to 3 levels) + editor wiring
-// - Recursively scans 'scenarios/<id>/**' up to depth=3 for jpg/jpeg/png/webp
-// - Skips typical non-source folders: ai/, results/, overlays/, masks/
-// - Clear status updates + loads first image automatically
+v// scenarios.js — Storage-only scenario loader (SDK + REST fallback) + editor wiring
+// - Lists 'scenarios/' via SDK listAll; if it times out, falls back to REST
+// - Deep-scans inside each scenario up to depth=3; per-folder, tries SDK then REST
+// - Skips ai/, results/, overlays/, masks/; picks *.jpg|jpeg|png|webp
+// - No use of setMaxOperationRetryTime (not exported by ESM CDN)
 
 import {
   getFirebase,
@@ -133,72 +134,97 @@ export function fitCanvas(){
   }
 }
 
-async function getBlobSDKFirst(refLike, timeoutMs){
-  try{
-    const { storage } = getFirebase();
-    const ref = stRef(storage, toStorageRefString(refLike));
-    const blob = await withTimeout(storageGetBlob(ref), timeoutMs || 20000, "storage/getblob-timeout");
-    return blob;
-  }catch(_e){
-    try{
-      const url = /^https?:\/\//i.test(refLike) ? refLike : await getDownloadURL(stRef(getFirebase().storage, toStorageRefString(refLike)));
-      const blob = await withTimeout(blobFromURL(url, 15000), timeoutMs || 20000, "fetch-timeout");
-      baseTainted = true;
-      return blob;
-    }catch(e2){
-      throw e2;
-    }
-  }
+/* ---------------- Storage REST helpers (fallback) ---------------- */
+function deriveBucketNames(){
+  const { app, storage } = getFirebase();
+  const cfg = (app && app.options) || {};
+  let sb = cfg.storageBucket || (storage && storage.bucket) || "";
+  sb = String(sb).replace(/^gs:\/\//,"").replace(/\/.*/,"");
+  // normalize both host variants
+  const appspot = sb.includes("appspot.com") ? sb : (sb ? `${sb.replace(/\.firebasestorage\.app$/,"")}.appspot.com` : "");
+  const fsa     = sb.includes("firebasestorage.app") ? sb : (sb ? `${sb.replace(/\.appspot\.com$/,"")}.firebasestorage.app` : "");
+  return { appspot, fsa };
 }
 
-async function resolveForStop(stop, timeoutMs){
-  const seeds = [
-    stop.imageURL,
-    stop.gsUri,
-    stop.storagePath,
-    stop.thumbURL,
-    stop && stop.imageData && stop.imageData.data
-      ? "data:image/" + (stop.imageData.format || "jpeg") + ";base64," + stop.imageData.data
-      : null
-  ].filter(Boolean);
+async function getAuthBearer(){
+  try{
+    const u = await ensureAuthed();
+    if (u && u.getIdToken) return "Bearer " + await u.getIdToken();
+  }catch(_e){}
+  return null;
+}
 
-  const extras = [];
-  if (seeds.length){
-    for (let i=0;i<seeds.length;i++){
-      const cands = candidateOriginals(seeds[i]).slice(0, 6);
-      for (let j=0;j<cands.length;j++) extras.push(cands[j]);
-    }
+function ensurePrefixSlash(p){
+  const s = String(p || "").replace(/^\/+/,"");
+  return s.endsWith("/") ? s : (s + "/");
+}
+
+async function listFolderREST(bucketHost, prefixPath){
+  // Single-level list using REST (delimiter=/)
+  const prefix = ensurePrefixSlash(prefixPath);
+  const url = "https://firebasestorage.googleapis.com/v0/b/" +
+              encodeURIComponent(bucketHost) +
+              "/o?delimiter=%2F&prefix=" + encodeURIComponent(prefix);
+  const hdrs = { "Accept": "application/json" };
+  const bearer = await getAuthBearer();
+  if (bearer) hdrs["Authorization"] = bearer;
+  const r = await fetch(url, { headers: hdrs, cache: "no-store" });
+  if (!r.ok){
+    const txt = await r.text().catch(()=> "");
+    throw new Error(`REST ${bucketHost} → ${r.status} ${txt.slice(0,200)}`);
+  }
+  const j = await r.json();
+  const prefixes = Array.isArray(j.prefixes) ? j.prefixes.map(x => x.replace(/\/$/,"")) : [];
+  const items    = Array.isArray(j.items)    ? j.items.map(x => ({ name: x.name }))    : [];
+  return { prefixes, items };
+}
+
+async function listFolderCombined(prefixPath){
+  // Try SDK listAll first; on failure, try REST (both hosts)
+  const { storage } = getFirebase();
+  const norm = String(prefixPath || "").replace(/^\/+/,"").replace(/\/+$/,"");
+  const ref = stRef(storage, norm);
+
+  try {
+    const res = await listAll(ref);
+    const prefixes = (res.prefixes || []).map(p => (norm ? `${norm}/${p.name}` : p.name));
+    const items    = (res.items || []).map(it => ({ name: it.fullPath || (norm ? `${norm}/${it.name}` : it.name) }));
+    return { prefixes, items };
+  } catch (e) {
+    warn("SDK listAll failed at", norm || "(root)", e?.message || e);
   }
 
-  const tried = new Set();
-  for (let i=0;i<seeds.length;i++){
-    const s = seeds[i]; if (tried.has(s)) continue; tried.add(s);
-    try{ const bl = await getBlobSDKFirst(s, timeoutMs); lastBaseURL = s; return bl; }catch(_e){}
+  // REST fallbacks
+  const { appspot, fsa } = deriveBucketNames();
+  let err1 = null, err2 = null;
+
+  if (fsa) {
+    try { return await listFolderREST(fsa, norm); } catch(e){ err1 = e; warn("REST fsa failed:", e?.message || e); }
   }
-  for (let i=0;i<extras.length;i++){
-    const s = extras[i]; if (tried.has(s)) continue; tried.add(s);
-    try{ const bl = await getBlobSDKFirst(s, timeoutMs); lastBaseURL = s; return bl; }catch(_e){}
+  if (appspot) {
+    try { return await listFolderREST(appspot, norm); } catch(e){ err2 = e; warn("REST appspot failed:", e?.message || e); }
   }
-  throw new Error("Could not resolve image for stop.");
+  // Throw most recent error
+  throw new Error((err2 || err1 || new Error("list failed")).message || "list failed");
 }
 
 /* ---------------- Scenario state ---------------- */
-const FORCE_ROOT = "scenarios"; // fixed Storage root
+const FORCE_ROOT = "scenarios"; // fixed Storage root (cloud storage only)
 let ROOT = FORCE_ROOT;
 
 let scenarios = [];
 let current = null;
 let stopIndex = -1;
 
-/* ---------------- list scenarios from Storage ---------------- */
+/* ---------------- list scenarios from Storage (with fallback) ---------------- */
 async function listScenarioIdsFromStorage(root) {
-  const { storage } = getFirebase();
   const clean = String(root || "").replace(/^\/+|\/+$/g, "");
-  setStatus(`Listing '${clean}/'… (SDK)`);
+  setStatus(`Listing '${clean}/'…`);
+
   try {
-    const res = await listAll(stRef(storage, clean));
-    const ids = (res.prefixes || []).map(p => p.name);
-    log("SDK listAll prefixes:", ids);
+    const { prefixes } = await listFolderCombined(clean);
+    const ids = (prefixes || []).map(full => full.replace(/^scenarios\/?/,"")).filter(Boolean);
+    log("Scenario folders:", ids);
     return ids;
   } catch (e) {
     showError("Storage list error under '" + clean + "': " + (e?.message || e));
@@ -206,48 +232,49 @@ async function listScenarioIdsFromStorage(root) {
   }
 }
 
-/* ---------------- stop discovery: deep scan ---------------- */
+/* ---------------- stop discovery: deep scan (SDK+REST per folder) ---------------- */
 const IMAGE_RX = /\.(jpe?g|png|webp)$/i;
 const SKIP_FOLDER_RX = /^(ai|results|overlays|masks)$/i;
 const MAX_COLLECT = 500; // safety cap
 
 async function listImagesDeep(prefixPath, maxDepth){
-  const { storage } = getFirebase();
-  const queue = [{ ref: stRef(storage, prefixPath.replace(/\/+/g,"/")), depth: 0, path: prefixPath }];
   const out = [];
-  let scannedFolders = 0;
+  const queue = [{ path: String(prefixPath || "").replace(/\/+$/,""), depth: 0 }];
+  let scanned = 0;
 
   while (queue.length) {
-    const { ref, depth, path } = queue.shift();
-    scannedFolders++;
-    setStatus(`Scanning ${path} (depth ${depth})… found ${out.length} so far`);
+    const { path, depth } = queue.shift();
+    scanned++;
+    setStatus(`Scanning ${path}/ (depth ${depth})… found ${out.length} so far`);
 
     let listing;
     try {
-      listing = await listAll(ref);
+      listing = await listFolderCombined(path);
     } catch (e) {
-      warn("listAll failed at", path, e?.message || e);
+      warn("list failed at", path, e?.message || e);
       continue;
     }
 
     // Items at this level
     for (const it of (listing.items || [])) {
-      if (IMAGE_RX.test(it.name)) {
-        out.push(it);
-        if (out.length >= MAX_COLLECT) return out;
-      }
+      const full = it.name || "";
+      const name = full.split("/").pop() || "";
+      if (IMAGE_RX.test(name)) out.push(full);
+      if (out.length >= MAX_COLLECT) break;
     }
+    if (out.length >= MAX_COLLECT) break;
 
     // Descend to subfolders
     if (depth < maxDepth) {
       for (const p of (listing.prefixes || [])) {
-        const name = (p.name || "").trim();
-        if (SKIP_FOLDER_RX.test(name)) continue;
-        queue.push({ ref: p, depth: depth + 1, path: (path + "/" + name).replace(/\/+/g,"/") });
+        const leaf = p.split("/").pop() || "";
+        if (SKIP_FOLDER_RX.test(leaf)) continue;
+        queue.push({ path: p, depth: depth + 1 });
       }
     }
   }
-  log("Scanned folders:", scannedFolders, "Collected items:", out.length);
+
+  log("Scanned folders:", scanned, "Collected files:", out.length);
   return out;
 }
 
@@ -257,38 +284,40 @@ async function ensureStopsForCurrentFromStorage() {
   const basePath = `${ROOT}/${current.id}`;
   setStatus(`Looking for photos under '${basePath}/'…`);
 
-  // Deep scan up to 3 levels
-  let items = await listImagesDeep(basePath, 3);
+  // Deep scan up to 3 levels using combined (SDK+REST) listing
+  let filePaths = await listImagesDeep(basePath, 3);
 
-  if (!items.length) {
+  if (!filePaths.length) {
     setStatus("No images found in storage for this scenario.");
     current._stops = [];
     renderThumbs();
     return;
   }
 
-  setStatus(`Found ${items.length} file(s). Fetching URLs…`);
+  setStatus(`Found ${filePaths.length} file(s). Fetching URLs…`);
   // Sort for nice ordering
-  items.sort((a, b) => a.fullPath.localeCompare(b.fullPath, undefined, { numeric: true, sensitivity: "base" }));
+  filePaths.sort((a, b) => a.localeCompare(b, undefined, { numeric: true, sensitivity: "base" }));
 
   // Parallelize getDownloadURL with small concurrency
-  const stops = new Array(items.length);
+  const { storage } = getFirebase();
+  const stops = new Array(filePaths.length);
   let i = 0;
-  const conc = Math.min(6, items.length);
+  const conc = Math.min(6, filePaths.length);
 
   async function worker(){
     while (true) {
       const idx = i++;
-      if (idx >= items.length) break;
-      const r = items[idx];
+      if (idx >= filePaths.length) break;
+      const fullPath = filePaths[idx];
       try {
-        const url = await getDownloadURL(r);
-        stops[idx] = { type:"photo", title:r.name, storagePath:r.fullPath, imageURL:url, radiusMeters:50 };
+        const url = await getDownloadURL(stRef(storage, fullPath));
+        const title = fullPath.split("/").pop() || "photo";
+        stops[idx] = { type:"photo", title, storagePath:fullPath, imageURL:url, radiusMeters:50 };
       } catch (e) {
-        warn("getDownloadURL failed:", r.fullPath, e?.message || e);
+        warn("getDownloadURL failed:", fullPath, e?.message || e);
         stops[idx] = null;
       }
-      if (idx % 10 === 0) setStatus(`Fetching URLs… ${idx+1}/${items.length}`);
+      if (idx % 10 === 0) setStatus(`Fetching URLs… ${idx+1}/${filePaths.length}`);
     }
   }
   await Promise.all(Array.from({ length: conc }, worker));
@@ -417,7 +446,56 @@ export async function loadStop(i){
   f.requestRenderAll();
 }
 
-/* ---------------- AI helpers ---------------- */
+/* ---------------- Guide / Export helpers for AI uploader ---------------- */
+async function getBlobSDKFirst(refLike, timeoutMs){
+  try{
+    const { storage } = getFirebase();
+    const ref = stRef(storage, toStorageRefString(refLike));
+    const blob = await withTimeout(storageGetBlob(ref), timeoutMs || 20000, "storage/getblob-timeout");
+    return blob;
+  }catch(_e){
+    try{
+      const url = /^https?:\/\//i.test(refLike) ? refLike : await getDownloadURL(stRef(getFirebase().storage, toStorageRefString(refLike)));
+      const blob = await withTimeout(blobFromURL(url, 15000), timeoutMs || 20000, "fetch-timeout");
+      baseTainted = true;
+      return blob;
+    }catch(e2){
+      throw e2;
+    }
+  }
+}
+
+async function resolveForStop(stop, timeoutMs){
+  const seeds = [
+    stop.imageURL,
+    stop.gsUri,
+    stop.storagePath,
+    stop.thumbURL,
+    stop && stop.imageData && stop.imageData.data
+      ? "data:image/" + (stop.imageData.format || "jpeg") + ";base64," + stop.imageData.data
+      : null
+  ].filter(Boolean);
+
+  const extras = [];
+  if (seeds.length){
+    for (let i=0;i<seeds.length;i++){
+      const cands = candidateOriginals(seeds[i]).slice(0, 6);
+      for (let j=0;j<cands.length;j++) extras.push(cands[j]);
+    }
+  }
+
+  const tried = new Set();
+  for (let i=0;i<seeds.length;i++){
+    const s = seeds[i]; if (tried.has(s)) continue; tried.add(s);
+    try{ const bl = await getBlobSDKFirst(s, timeoutMs); lastBaseURL = s; return bl; }catch(_e){}
+  }
+  for (let i=0;i<extras.length;i++){
+    const s = extras[i]; if (tried.has(s)) continue; tried.add(s);
+    try{ const bl = await getBlobSDKFirst(s, timeoutMs); lastBaseURL = s; return bl; }catch(_e){}
+  }
+  throw new Error("Could not resolve image for stop.");
+}
+
 export async function getGuideImageURLForCurrentStop(){
   if (!current || stopIndex < 0) throw new Error("No stop selected");
   const s = current._stops[stopIndex];
@@ -692,7 +770,6 @@ export function wireScenarioUI(){
       const info = getStorageInfo();
       setRootPill("storage: " + ROOT + " | bucket: " + info.bucketHost);
       await loadScenarios();
-      const sel = $("scenarioSel");
       if (sel && !sel.value && scenarios.length > 0){
         sel.value = scenarios[0].id;
         sel.dispatchEvent(new Event("change"));
