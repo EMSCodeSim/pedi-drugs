@@ -1,5 +1,5 @@
-// scenarios.js — storage-only loader with thumbnails + canvas display
-// Requires: firebase-core.js (same folder) and FabricJS loaded before this module.
+// scenarios.js — Storage-only scenario loader + image display (canvas + <img> fallback)
+// Drop next to your HTML. Requires: firebase-core.js (same folder) and FabricJS on page.
 
 import {
   getFirebase,
@@ -15,18 +15,17 @@ import {
   getBlob as storageGetBlob,
 } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-storage.js";
 
-/* ---------- tiny helpers ---------- */
+/* -------- tiny helpers -------- */
 const $ = (id) => document.getElementById(id);
 const setTxt = (id, t) => { const el=$(id); if (el) el.textContent=t; };
 const log  = (...a) => { try{ console.log("[scenarios]", ...a); }catch(_){} };
 const warn = (...a) => { try{ console.warn("[scenarios]", ...a); }catch(_){} };
 
-/* ---------- canvas + fallback <img> ---------- */
+/* -------- canvas + fallback <img> -------- */
 let f=null, baseImage=null;
-
 function ensureCanvas(){
   if (f) return f;
-  if (!window.fabric) throw new Error("fabric not loaded");
+  if (!window.fabric) { warn("fabric missing; using <img> fallback only"); return null; }
   f = new fabric.Canvas("c", { backgroundColor:"#061621", preserveObjectStacking:true });
   window.addEventListener("resize", fitCanvas);
   fitCanvas();
@@ -46,19 +45,23 @@ function fitCanvas(){
   }
 }
 
-/* ---------- state ---------- */
+/* -------- state -------- */
 const ROOT = "scenarios";
-let scenarios = [];            // [{id}]
+let scenarios = [];          // scenario ids (folder names)
 let currentId = "";
-let stops = [];                // [{path,url,title}]
+let stops = [];              // [{path,url,title}]
 let stopIdx = -1;
 
-/* ---------- storage listing ---------- */
+/* -------- storage listing -------- */
 async function listScenarioIds(){
   const { storage } = getFirebase();
-  const res = await listAll(stRef(storage, ROOT));
-  return (res.prefixes || []).map(p => p.name);
+  const rootRef = stRef(storage, ROOT);
+  const res = await listAll(rootRef);
+  const ids = (res.prefixes || []).map(p => p.name);
+  log("Scenario IDs:", ids);
+  return ids;
 }
+
 async function listFilesUnderScenario(id){
   const { storage } = getFirebase();
   const base = `${ROOT}/${id}`;
@@ -68,6 +71,7 @@ async function listFilesUnderScenario(id){
     (res.items || []).forEach(it => paths.push(it.fullPath || `${prefix}/${it.name}`));
     for (const sub of (res.prefixes || [])) {
       const leaf = (sub.name || "").toLowerCase();
+      // skip only big/generated folders
       if (leaf === "masks" || leaf === "overlays") continue;
       if (leaf === "results" && prefix.toLowerCase().endsWith("/ai")) continue;
       await walk(sub.fullPath || `${prefix}/${sub.name}`);
@@ -77,6 +81,7 @@ async function listFilesUnderScenario(id){
   log(`Found ${paths.length} under ${base}`, paths.slice(0,12));
   return paths;
 }
+
 async function buildStopsFromPaths(paths){
   const { storage } = getFirebase();
   const out = [];
@@ -89,7 +94,18 @@ async function buildStopsFromPaths(paths){
   return out;
 }
 
-/* ---------- rendering ---------- */
+/* -------- UI rendering -------- */
+function renderScenarioSelect(){
+  const sel = $("scenarioSel");
+  if (!sel) return;
+  sel.innerHTML = '<option value="">Select scenario…</option>';
+  for (const id of scenarios){
+    const o = document.createElement("option");
+    o.value = id; o.textContent = id;
+    sel.appendChild(o);
+  }
+}
+
 function renderThumbs(){
   const row = $("thumbRow"); if (!row) return;
   row.innerHTML = "";
@@ -99,6 +115,7 @@ function renderThumbs(){
     img.className = "thumb" + (i===stopIdx?" active":"");
     img.src = s.url; img.alt = s.title; img.title = s.path;
     img.onclick = () => loadStop(i);
+    img.onerror = () => { img.style.opacity=0.5; img.title="thumb load error"; };
     row.appendChild(img);
   });
 }
@@ -108,10 +125,9 @@ async function loadStop(i){
   const s = stops[i]; if (!s) return;
   setTxt("statusPill", `Loading: ${s.title}`);
   try{
-    ensureCanvas();
     const blob = await tryBlobThenFetch(s);
-    await setCanvasFromBlob(blob);
-    const fb = $("fullsizeFallback");
+    await setCanvasFromBlob(blob);          // canvas if available
+    const fb = $("fullsizeFallback");       // always show the <img> too
     if (fb){ fb.src = s.url; fb.style.display = "block"; }
     setTxt("statusPill", `Loaded: ${s.title}`);
   }catch(e){
@@ -133,20 +149,22 @@ async function tryBlobThenFetch(stop){
   if (!r.ok) throw new Error("fetch blob " + r.status);
   return await r.blob();
 }
+
 async function setCanvasFromBlob(blob){
-  ensureCanvas();
+  const canvas = ensureCanvas();
+  if (!canvas) return; // no fabric; rely on <img> fallback
   return new Promise((res,rej)=>{
     const u = URL.createObjectURL(blob);
     fabric.Image.fromURL(u, (img)=>{
       if (!img){ URL.revokeObjectURL(u); rej(new Error("fabric null")); return; }
       baseImage = img; img.set({ selectable:false, evented:false });
-      f.clear(); f.add(img); img.moveTo(0); fitCanvas(); f.requestRenderAll();
+      canvas.clear(); canvas.add(img); img.moveTo(0); fitCanvas(); canvas.requestRenderAll();
       URL.revokeObjectURL(u); res();
     }, { crossOrigin:"anonymous" });
   });
 }
 
-/* ---------- UI: exported wireScenarioUI() ---------- */
+/* -------- exported: wireScenarioUI -------- */
 export function wireScenarioUI(){
   const sel = $("scenarioSel");
   if (sel){
@@ -164,46 +182,57 @@ export function wireScenarioUI(){
       if (stops.length) loadStop(0);
     };
   }
-
   const refresh = $("refreshBtn");
   if (refresh) refresh.onclick = () => { if (sel) sel.dispatchEvent(new Event("change")); };
-
   const toggleTools = $("toggleTools");
   if (toggleTools){
     toggleTools.onclick = ()=>{
       const app = $("app");
-      const collapse = !app?.classList.contains("toolsCollapsed");
-      if (app) app.classList.toggle("toolsCollapsed", collapse);
-      toggleTools.textContent = collapse ? "Show Tools" : "Hide Tools";
+      const collapsed = !app?.classList.contains("toolsCollapsed");
+      if (app) app.classList.toggle("toolsCollapsed", collapsed);
+      toggleTools.textContent = collapsed ? "Show Tools" : "Hide Tools";
       fitCanvas();
     };
   }
-
   window.addEventListener("resize", fitCanvas);
 }
 
-/* ---------- exported bootScenarios() ---------- */
+/* -------- exported: bootScenarios -------- */
 export async function bootScenarios(){
-  const info = getStorageInfo();
-  setTxt("rootPill", `bucket: ${info.bucketHost} | root: ${ROOT}`);
-  const user = await ensureAuthed();
-  setTxt("authPill", `anon ✔ (${String(user?.uid||"anon").slice(0,8)})`);
+  try{
+    const info = getStorageInfo();
+    setTxt("rootPill", `bucket: ${info.bucketHost} | root: ${ROOT}`);
+    const user = await ensureAuthed();
+    setTxt("authPill", `anon ✔ (${String(user?.uid||"anon").slice(0,8)})`);
 
-  const sel = $("scenarioSel");
-  if (sel){
-    sel.innerHTML = '<option value="">Select scenario…</option>';
     scenarios = await listScenarioIds();
-    scenarios.forEach(id => {
-      const o=document.createElement("option");
-      o.value=id; o.textContent=id; sel.appendChild(o);
-    });
+    renderScenarioSelect();
     setTxt("statusPill", `${scenarios.length} scenario(s)`);
-    if (scenarios.length){ sel.value = scenarios[0]; sel.dispatchEvent(new Event("change")); }
+
+    const sel = $("scenarioSel");
+    if (sel && scenarios.length){
+      sel.value = scenarios[0];
+      sel.dispatchEvent(new Event("change"));
+    }
+  }catch(e){
+    warn("bootScenarios error:", e);
+    setTxt("statusPill", "Failed to list scenarios (see console).");
   }
 }
 
-/* ---------- expose for console ---------- */
-if (typeof window !== "undefined") {
-  window.__SCENARIOS = { bootScenarios, wireScenarioUI };
+/* -------- auto-boot: ensures the list appears -------- */
+function autoBoot(){
+  try{
+    wireScenarioUI();
+    bootScenarios();
+  }catch(e){ warn("autoBoot error:", e); }
 }
+if (document.readyState === "loading"){
+  document.addEventListener("DOMContentLoaded", autoBoot, { once:true });
+}else{
+  autoBoot();
+}
+
+/* expose for console */
+if (typeof window !== "undefined") window.__SCENARIOS = { bootScenarios, wireScenarioUI };
 export default { bootScenarios, wireScenarioUI };
