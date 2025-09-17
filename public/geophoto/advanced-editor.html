@@ -8,14 +8,15 @@
     :root { --bg:#0f1115; --panel:#171923; --text:#e6e6e6; --muted:#a4a8b3; --accent:#6aa3ff; --edge:#232634; }
     * { box-sizing: border-box; }
     html,body { height:100%; margin:0; background:var(--bg); color:var(--text); font:14px/1.35 system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif; }
-    .app { display:grid; grid-template-columns: 360px 1fr 360px; height:100%; }
+    .app { display:grid; grid-template-columns: 360px 1fr 380px; height:100%; }
 
     .left { background:var(--panel); border-right:1px solid var(--edge); padding:14px; overflow:auto; }
     h1,h2 { margin:0 0 10px; font-size:16px; color:#fff; }
     h2 { font-size:14px; color:#dfe7ff; margin-top:14px; }
-    label { display:block; font-size:12px; color:#a4a8b3; margin:0 0 6px; }
+    label { display:block; font-size:12px; color:var(--muted); margin:0 0 6px; }
     select,input[type="text"] {
-      width:100%; background:#131621; color:#e8e8e8; border:1px solid #272b3a; padding:8px 10px; border-radius:8px; outline:none;
+      width:100%; background:#131621; color:#e8e8e8; border:1px solid #272b3a;
+      padding:8px 10px; border-radius:8px; outline:none;
     }
     .btn { display:inline-flex; align-items:center; justify-content:center; gap:6px;
       background:#1f2534; color:#e8f0ff; border:1px solid #2b3246; padding:8px 10px;
@@ -31,13 +32,14 @@
     .thumb .cap { position:absolute; bottom:0; left:0; right:0; background:linear-gradient(transparent, rgba(0,0,0,.7)); color:#dfe7ff; font-size:11px; padding:24px 6px 6px; }
     .thumb.active { outline:2px solid var(--accent); }
 
-    .center { display:flex; align-items:center; justify-content:center; background:#0b0e14; position:relative; }
+    .center { display:flex; align-items:center; justify-content:center; background:#0b0e14; }
     #mainCanvas { width: min(98%, 1400px); height: auto; max-height: 96%; background:#0a0d13; border-radius:12px; border:1px solid var(--edge); }
 
     .right { background:var(--panel); border-left:1px solid var(--edge); padding:14px; overflow:auto; }
     .pill { font-size:11px; color:#9fb0ff; opacity:.95; border:1px solid #2b3246; padding:4px 8px; border-radius:999px; display:inline-block; margin-left:6px; }
     .status { margin-top:8px; font-size:12px; color:#b9c3d9; min-height:1.4em; }
     .sep { height:1px; background:#262a38; margin:14px 0; }
+    pre { background:#0d1320; border:1px solid #263355; border-radius:8px; padding:10px; color:#bcd0ff; white-space:pre-wrap; word-break:break-word; max-height:260px; overflow:auto; }
     small { color:#9aa6be; }
   </style>
 </head>
@@ -65,272 +67,4 @@
       </div>
 
       <h2>Base path (Storage)</h2>
-      <label for="basePath">All subfolders become scenarios (default <code>scenarios/</code>)</label>
-      <input id="basePath" type="text" value="scenarios/" />
-      <div class="row">
-        <button class="btn" id="btnSetBase">Use Path</button>
-        <button class="btn" id="btnSetupFirebase">Override Config</button>
-      </div>
-
-      <h2>Jump to scenario by link / ID</h2>
-      <input id="quickInput" placeholder="Paste a Storage URL or scenario ID (-OZKwt...)" />
-      <div class="row">
-        <button class="btn" id="btnQuickLoad">Load Folder</button>
-        <button class="btn" id="btnAddDirect">Add Image</button>
-        <button class="btn" id="btnQuickOpen">Open URL</button>
-      </div>
-
-      <h2>Slides / Photos</h2>
-      <div id="thumbs" class="thumbs"></div>
-    </aside>
-
-    <!-- CENTER: canvas -->
-    <main class="center">
-      <canvas id="mainCanvas" width="1600" height="900"></canvas>
-    </main>
-
-    <!-- RIGHT: status/help -->
-    <aside class="right">
-      <h1>Status</h1>
-      <div class="status" id="statusMsg">Ready</div>
-      <div class="sep"></div>
-      <small>If listing is empty, check Storage **Rules** allow <code>read</code>/<code>list</code> for <code>scenarios/**</code> for signed-in (anonymous) users, and that Anonymous sign-in is enabled.</small>
-    </aside>
-
-  </div>
-
-  <!-- Firebase v10 (module SDK) -->
-  <script type="module">
-    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-app.js";
-    import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-auth.js";
-    import { getStorage, ref as stRef, listAll, getDownloadURL } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-storage.js";
-
-    // ---------- DOM ----------
-    const $ = (id)=>document.getElementById(id);
-    const sel = $("scenarioSelect"), thumbsEl = $("thumbs"), canvas = $("mainCanvas");
-    const ctx = canvas.getContext("2d");
-    const statusMsg = $("statusMsg"), authPill = $("authPill"), fbPill = $("fbPill");
-    const basePathInput = $("basePath"), quickInput = $("quickInput");
-
-    // ---------- Firebase config ----------
-    const DEFAULT_CFG = {
-      apiKey:"AIzaSyDM6DpRSeZueVKRpbyJyDmhf8WY66KyCDk",
-      authDomain:"dailyquiz-d5279.firebaseapp.com",
-      projectId:"dailyquiz-d5279",
-      storageBucket:"dailyquiz-d5279.appspot.com",
-      appId:"1:94577748034:web:c032d3a1d72db1313de5db"
-    };
-    // per-origin override if you've used "Override Config" on this domain
-    const savedCfg = (()=>{ try{ return JSON.parse(localStorage.getItem("fbConfig")||"null"); }catch{ return null; } })();
-    const cfg = window.FIREBASE_CONFIG || savedCfg || DEFAULT_CFG;
-
-    // Always bind Storage to the appspot bucket (stable, tokenless operations)
-    const FORCE_BUCKET_GS = "gs://dailyquiz-d5279.appspot.com";
-
-    const app = initializeApp(cfg);
-    const auth = getAuth(app);
-    const storage = getStorage(app, FORCE_BUCKET_GS);
-
-    // ---------- helpers ----------
-    const ensureSlash = p => p ? (p.endsWith("/") ? p : p + "/") : "";
-    const setMsg = t => statusMsg.textContent = t;
-
-    async function ensureAuthed(){
-      return new Promise((resolve,reject)=>{
-        const unsub = onAuthStateChanged(auth, u=>{
-          if (u){ authPill.textContent = "auth: anon ✓ " + u.uid.slice(0,8); unsub(); resolve(u); }
-          else   signInAnonymously(auth).catch(e=>{ authPill.textContent="auth: failed"; unsub(); reject(e); });
-        });
-      });
-    }
-
-    // Convert download URL → storage path ("scenarios/<id>/<file>")
-    function pathFromDownloadURL(url){
-      try{
-        const u = decodeURIComponent(url.trim());
-        let m = u.match(/firebasestorage\.googleapis\.com\/v0\/b\/([^/]+)\/o\/([^?]+)/i);
-        if (m) return m[2];
-        m = u.match(/([^/]+)\.firebasestorage\.app\/o\/([^?]+)/i);
-        if (m) return m[2];
-      }catch{}
-      return "";
-    }
-    // Given a URL or raw ID, return a folder like "scenarios/<id>/"
-    function folderFromURLorID(v){
-      const s = (v||"").trim();
-      if (!s) return "";
-      if (s.startsWith("http")){
-        const p = pathFromDownloadURL(s);
-        if (!p) return "";
-        const parts = p.split("/");
-        const i = parts.indexOf("scenarios");
-        if (i>=0 && parts[i+1]) return `scenarios/${parts[i+1]}/`;
-        return "";
-      }
-      if (/^-[A-Za-z0-9_]+$/.test(s)) return `scenarios/${s}/`; // looks like a DB push ID
-      return ensureSlash(s); // treat as raw folder path
-    }
-
-    // ---------- Storage listing ----------
-    async function listScenarioFolders(base){
-      const baseRef = stRef(storage, ensureSlash(base));
-      const res = await listAll(baseRef);
-      return res.prefixes || [];
-    }
-    async function listAllRecursiveImages(dirRef, acc=[]){
-      const res = await listAll(dirRef);
-      for (const item of res.items){
-        if (/\.(png|jpe?g|webp|gif)$/i.test(item.name)) acc.push(item);
-      }
-      for (const p of res.prefixes) await listAllRecursiveImages(p, acc);
-      return acc;
-    }
-    function option(text, value){ const o=document.createElement("option"); o.textContent=text; o.value=value; return o; }
-
-    async function refreshScenarioList(){
-      sel.innerHTML = '<option disabled>Loading…</option>';
-      const base = ensureSlash((basePathInput?.value || localStorage.getItem("geophoto_basePath") || "scenarios/").trim());
-      basePathInput.value = base;
-      localStorage.setItem("geophoto_basePath", base);
-
-      try{
-        const folders = await listScenarioFolders(base);
-        sel.innerHTML = "";
-        if (!folders.length){
-          sel.appendChild(option(`(no scenario folders under ${base})`, ""));
-          setMsg(`No scenario folders under ${base}`);
-          return;
-        }
-        folders.forEach(p => sel.appendChild(option(p.name || p.fullPath.replace(/\/$/,"").split("/").pop(), p.fullPath)));
-        setMsg("Connected ✓ Storage folders listed.");
-      }catch(e){
-        sel.innerHTML = "";
-        sel.appendChild(option("(error listing folders)", ""));
-        setMsg("Listing error: " + (e.code || e.message));
-      }
-    }
-
-    // ---------- thumbnails / canvas ----------
-    let images=[], currentIndex=-1;
-    function clearThumbs(){ thumbsEl.innerHTML = ""; }
-    function setActiveThumb(i){ [...thumbsEl.children].forEach((el,idx)=>el.classList.toggle("active", idx===i)); }
-    function addThumb(o){
-      images.push(o);
-      const div=document.createElement("div"); div.className="thumb"; div.title=o.path||"";
-      const img=document.createElement("img"); img.loading="lazy"; img.decoding="async"; img.src=o.url;
-      const cap=document.createElement("div"); cap.className="cap"; cap.textContent=o.name||"image";
-      div.appendChild(img); div.appendChild(cap);
-      const idx=images.length-1; div.addEventListener("click",()=>selectImage(idx));
-      thumbsEl.appendChild(div);
-    }
-    function selectImage(i){
-      if (i<0 || i>=images.length) return;
-      currentIndex=i; setActiveThumb(i); drawToCanvas(images[i].url);
-    }
-    function drawToCanvas(url){
-      const img=new Image();
-      img.onload=()=>{
-        ctx.fillStyle="#0a0d13"; ctx.fillRect(0,0,canvas.width,canvas.height);
-        const cw=canvas.width, ch=canvas.height, iw=img.naturalWidth, ih=img.naturalHeight;
-        const s=Math.min(cw/iw, ch/ih), dw=Math.round(iw*s), dh=Math.round(ih*s);
-        const dx=Math.round((cw-dw)/2), dy=Math.round((ch-dh)/2);
-        ctx.drawImage(img, dx, dy, dw, dh);
-      };
-      img.onerror=()=>console.warn("Failed to load", url);
-      img.crossOrigin="anonymous";
-      img.src=url;
-    }
-
-    async function loadScenarioImages(){
-      const fullPath = sel.value;
-      if (!fullPath){ setMsg("No scenario selected."); return; }
-      clearThumbs(); images=[]; currentIndex=-1; setMsg("Loading images…");
-
-      try{
-        const dirRef = stRef(storage, ensureSlash(fullPath));
-        const items = await listAllRecursiveImages(dirRef);
-        if (!items.length){ setMsg("No images found in "+fullPath); return; }
-        for (const it of items){
-          const url = await getDownloadURL(it);
-          addThumb({ name: it.name, url, path: it.fullPath });
-        }
-        selectImage(0);
-        setMsg(`Loaded ${items.length} image(s).`);
-      }catch(e){
-        console.error(e);
-        setMsg("Failed to list images: " + (e.code || e.message));
-      }
-    }
-
-    // ---------- Quick actions ----------
-    $("btnQuickLoad").addEventListener("click", async ()=>{
-      const folder = folderFromURLorID(quickInput.value);
-      if (!folder){ setMsg("Could not parse folder from input."); return; }
-      // Put folder into dropdown and load it
-      sel.innerHTML = ""; sel.appendChild(option(folder.replace(/\/$/,"").split("/").pop(), folder));
-      sel.value = folder;
-      await loadScenarioImages();
-    });
-
-    // Add a single image via URL (works even if list is blocked)
-    $("btnAddDirect").addEventListener("click", async ()=>{
-      const u = (quickInput.value||"").trim();
-      if (!u) return;
-      try{
-        // Try to normalize through SDK (if rules allow); otherwise keep the original signed URL
-        let finalURL = u;
-        const path = pathFromDownloadURL(u);
-        if (path){
-          try { finalURL = await getDownloadURL(stRef(storage, path)); } catch { /* unauthorized → keep signed URL */ }
-        }
-        const name = finalURL.split('/').pop().split('?')[0] || 'image';
-        addThumb({ name, url: finalURL, path: path || u });
-        if (images.length === 1) selectImage(0);
-        setMsg("Added image from URL.");
-      }catch(e){
-        setMsg("Could not add URL: " + (e.code || e.message));
-      }
-    });
-
-    // Open URL AND add to page
-    $("btnQuickOpen").addEventListener("click", ()=>{
-      const u = (quickInput.value||"").trim();
-      if (!u) return;
-      const name = u.split('/').pop().split('?')[0] || 'image';
-      addThumb({ name, url: u, path: u });
-      if (images.length === 1) selectImage(0);
-      window.open(u, "_blank");
-    });
-
-    // ---------- Wire buttons ----------
-    $("scenarioRefresh").addEventListener("click", refreshScenarioList);
-    $("scenarioLoadImgs").addEventListener("click", loadScenarioImages);
-    $("scenarioPrev").addEventListener("click", ()=>{ if (images.length) selectImage((currentIndex-1+images.length)%images.length); });
-    $("scenarioNext").addEventListener("click", ()=>{ if (images.length) selectImage((currentIndex+1)%images.length); });
-    $("btnSetBase").addEventListener("click", refreshScenarioList);
-
-    // ---------- Boot ----------
-    (async ()=>{
-      try{
-        await ensureAuthed();
-        fbPill.textContent = "bucket: dailyquiz-d5279.appspot.com";
-        const savedBase = localStorage.getItem("geophoto_basePath");
-        basePathInput.value = savedBase || "scenarios/";
-        await refreshScenarioList();
-      }catch(e){
-        authPill.textContent = "auth: failed";
-        setMsg(`Auth failed: ${e.code || e.message}`);
-      }
-    })();
-
-    // Optional per-origin config override
-    $("btnSetupFirebase").addEventListener("click", ()=>{
-      const example = JSON.stringify(DEFAULT_CFG, null, 2);
-      const txt = prompt("Paste Firebase Web Config JSON to override (saved for this domain):", example);
-      if (!txt) return;
-      try{ localStorage.setItem("fbConfig", txt); alert("Saved. Reload the page to apply."); }
-      catch(e){ alert("Invalid JSON, not saved."); }
-    });
-  </script>
-</body>
-</html>
+      <label for="basePath">
