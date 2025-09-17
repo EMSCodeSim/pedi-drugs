@@ -47,7 +47,7 @@
   <header>
     <button id="toggleTools" title="Hide/Show side panels">Hide Tools</button>
     <div class="pill" id="authPill">Auth: …</div>
-    <div class="pill" id="statusPill">Idle</div>
+    <div class="pill" id="statusPill">Booting…</div>
     <div class="pill" id="rootPill">root: —</div>
   </header>
 
@@ -172,25 +172,80 @@
 <!-- Fabric (must load before scenarios.js) -->
 <script src="https://cdn.jsdelivr.net/npm/fabric@5.3.0/dist/fabric.min.js"></script>
 
-<!-- Modules -->
+<!-- Modules (robust dynamic import with on-screen errors) -->
 <script type="module">
-  import { initFirebase } from "./firebase-core.js";   /* shim re-exports your existing firebase-core (2).js */
-  import SCN from "./scenarios.js";
+  const errbar = document.getElementById("errbar");
+  const statusPill = document.getElementById("statusPill");
+  const setStatusEarly = (t) => { if (statusPill) statusPill.textContent = t; };
+
+  function showError(e) {
+    if (!errbar) return;
+    errbar.style.display = "block";
+    errbar.textContent = (e && (e.message || e)) || String(e);
+    console.error(e);
+  }
+
+  async function importFirst(candidates) {
+    for (const raw of candidates) {
+      const url = raw;
+      try {
+        const head = await fetch(url, { method: "HEAD", cache: "no-store" });
+        if (!head.ok) continue;
+        return await import(url);
+      } catch (e) {
+        // try next
+      }
+    }
+    throw new Error("Could not import any of: " + candidates.join(", "));
+  }
 
   window.addEventListener("DOMContentLoaded", async () => {
     try {
-      initFirebase();
+      setStatusEarly("Resolving modules…");
+
+      // Try multiple filenames for local dev convenience
+      const core = await importFirst([
+        "./firebase-core.js",
+        "./firebase-core%20(3).js",
+        "./firebase-core%20(2).js"
+      ]);
+
+      core.initFirebase();
+
+      const SCNmod = await importFirst([
+        "./scenarios.js",
+        "./scenarios%20(3).js",
+        "./scenarios%20(2).js"
+      ]);
+      const SCN = SCNmod.default || SCNmod;
+
       SCN.wireScenarioUI();
+      setStatusEarly("Booting scenarios…");
       await SCN.bootScenarios();
+      setStatusEarly("Ready");
     } catch (e) {
-      const err = document.getElementById("errbar");
-      if (err) { err.style.display="block"; err.textContent = e && (e.message || String(e)); }
-      console.error(e);
+      showError(e);
+      setStatusEarly("Failed to boot");
+    }
+
+    // Try to load AI uploader (any name)
+    const aiCandidates = [
+      "./ai-upload.js",
+      "./ai-upload%20(3).js",
+      "./ai-upload%20(2).js",
+      "./ai-upload.legacy.js"
+    ];
+    for (const ai of aiCandidates) {
+      try {
+        const head = await fetch(ai, { method: "HEAD", cache: "no-store" });
+        if (head.ok) {
+          const s = document.createElement("script");
+          s.src = ai; document.body.appendChild(s);
+          break;
+        }
+      } catch {}
     }
   });
 </script>
-
-<!-- AI uploader (non-module) -->
-<script src="./ai-upload.js"></script>
 </body>
 </html>
