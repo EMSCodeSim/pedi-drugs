@@ -1,4 +1,5 @@
-// scenarios.js — Storage-only scenario loader + editor wiring (FIXED ROOT = 'scenarios/')
+// scenarios.js — Storage-only scenario loader + editor wiring
+// ROOT fixed to 'scenarios/' and includes REST fallback when listAll() retries out.
 
 import {
   getFirebase,
@@ -10,7 +11,6 @@ import {
 
 import {
   ref as dbRef,
-  get,
   set,
   remove
 } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-database.js";
@@ -21,7 +21,9 @@ import {
   listAll,
   getBlob as storageGetBlob,
   uploadBytesResumable,
-  deleteObject
+  deleteObject,
+  setMaxOperationRetryTime,
+  setMaxUploadRetryTime
 } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-storage.js";
 
 /* ---------------- DOM helpers & status ---------------- */
@@ -185,52 +187,51 @@ async function resolveForStop(stop, timeoutMs){
 }
 
 /* ---------------- Scenario state ---------------- */
-const FORCE_ROOT = "scenarios";     // << fixed Storage root
+const FORCE_ROOT = "scenarios";     // fixed Storage root
 let ROOT = FORCE_ROOT;
 
 let scenarios = [];
 let current = null;
 let stopIndex = -1;
 
-const { db } = getFirebase();
-
-function setStops(sc, stops){
-  const next = Object.assign({}, sc || {});
-  next.stops = Array.isArray(stops) ? stops.slice() : [];
-  next.photos = undefined; next.images = undefined;
-  current._raw = next;
-  current._stops = next.stops;
-}
-
-function populateScenarios(){
-  const sel = $("scenarioSel");
-  if (!sel) return;
-  sel.innerHTML = '<option value="">Select scenario…</option>';
-  for (let i=0;i<scenarios.length;i++){
-    const sc = scenarios[i];
-    const o = document.createElement("option");
-    o.value = sc.id;
-    o.textContent = sc.title || sc.id;
-    sel.appendChild(o);
-  }
-}
-
 /* ---------------- Storage-only discovery ---------------- */
-async function detectStorageRoot() {
-  return FORCE_ROOT; // always use /scenarios
+
+// REST fallback (works even if SDK listAll keeps retrying)
+async function listScenarioIdsREST(bucketHost, rootPrefix){
+  const clean = String(rootPrefix || "").replace(/^\/+|\/+$/g, "") + "/";
+  const url = "https://firebasestorage.googleapis.com/v0/b/" +
+              encodeURIComponent(bucketHost) +
+              "/o?delimiter=%2F&prefix=" + encodeURIComponent(clean);
+  const r = await fetch(url, { cache: "no-store" });
+  if (!r.ok) throw new Error("rest-list HTTP " + r.status);
+  const j = await r.json();
+  const prefixes = Array.isArray(j.prefixes) ? j.prefixes : [];
+  // prefixes like "scenarios/-OYr8mtena.../"  -> extract the folder part
+  return prefixes
+    .map(p => p.replace(clean, "").replace(/\/$/, ""))
+    .filter(Boolean);
 }
 
 async function listScenarioIdsFromStorage(root) {
   const { storage } = getFirebase();
+  const clean = String(root || "").replace(/^\/+|\/+$/g, "");
   try {
-    const clean = String(root || "").replace(/^\/+|\/+$/g, "");
     const res = await listAll(stRef(storage, clean));
     const ids = (res.prefixes || []).map(p => p.name);
     if (!ids.length) setStatus("No scenario folders found under '" + clean + "/'.");
     return ids;
   } catch (e) {
-    showError("Storage list error under '" + root + "': " + (e && (e.message || e)));
-    return [];
+    // SDK timed out — use REST fallback
+    const info = getStorageInfo();
+    setStatus("Retrying via REST…");
+    try{
+      const ids = await listScenarioIdsREST(info.bucketHost || (storage.bucket || "").replace("gs://",""), clean);
+      if (!ids.length) setStatus("No scenario folders found under '" + clean + "/'.");
+      return ids;
+    }catch(e2){
+      showError("Storage list error under '" + root + "': " + (e2?.message || e2));
+      return [];
+    }
   }
 }
 
@@ -285,9 +286,30 @@ async function loadScenarios(){
 function subscribeScenarios(){ /* no-op for Storage */ }
 
 /* ---------------- Thumbs & stop loading ---------------- */
+function setStops(sc, stops){
+  const next = Object.assign({}, sc || {});
+  next.stops = Array.isArray(stops) ? stops.slice() : [];
+  next.photos = undefined; next.images = undefined;
+  current._raw = next;
+  current._stops = next.stops;
+}
+
+function populateScenarios(){
+  const sel = $("scenarioSel");
+  if (!sel) return;
+  sel.innerHTML = '<option value="">Select scenario…</option>';
+  for (let i=0;i<scenarios.length;i++){
+    const sc = scenarios[i];
+    const o = document.createElement("option");
+    o.value = sc.id;
+    o.textContent = sc.title || sc.id;
+    sel.appendChild(o);
+  }
+}
+
 function dataURLFromStored(stored){
   if (typeof stored === "string") return stored;
-  if (stored && stored.data) return "data:image/" + (stored.format || "jpeg") + ";base64/" + stored.data;
+  if (stored && stored.data) return "data:image/" + (stored.format || "jpeg") + ";base64," + stored.data;
   return "";
 }
 
@@ -677,6 +699,14 @@ export function wireScenarioUI(){
 export async function bootScenarios(){
   fitCanvas();
   await ensureAuthed();
+
+  // Make the SDK less eager to time out before we switch to REST
+  try {
+    const { storage } = getFirebase();
+    setMaxOperationRetryTime(storage, 60000); // 60s
+    setMaxUploadRetryTime(storage, 60000);
+  } catch(_e){}
+
   ROOT = FORCE_ROOT;
   const info = getStorageInfo();
   setRootPill("storage: " + ROOT + " | bucket: " + info.bucketHost);
