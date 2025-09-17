@@ -1,7 +1,8 @@
 // scenarios.js — Storage-only scenario loader (SDK + REST fallback)
 // Scans Storage for images under scenarios/<id>/… and shows them.
-// FIX: don't skip the whole `ai` folder; only skip ai/results, overlays, masks.
-// Depth increased to 6 and better debugging when zero images are found.
+// - Don't skip whole `ai` folder; only skip ai/results, overlays, masks
+// - Depth = 6
+// - "Full native size" toggle + <img> fallback if canvas render fails
 
 import {
   getFirebase,
@@ -56,17 +57,37 @@ function ensureCanvas(){
   fitCanvas(); return f;
 }
 export function fitCanvas(){
-  const cEl = $("c"); if (!cEl || !f) return;
+  const cEl = $("c");
+  if (!cEl || !f) return;
+
+  const fullsize = !!($("fullsizeToggle")?.checked);
+  if (baseImage && fullsize) {
+    // FULL NATIVE SIZE (pixel-for-pixel)
+    const bw = baseImage.width  || 1;
+    const bh = baseImage.height || 1;
+    f.setWidth(bw);
+    f.setHeight(bh);
+    baseImage.set({ scaleX: 1, scaleY: 1, left: 0, top: 0 });
+    f.requestRenderAll();
+    return;
+  }
+
+  // FIT-TO-PANEL (default)
   const wrap = cEl.parentElement || document.body;
   const targetW = Math.max(320, wrap.clientWidth - 8);
   const targetH = Math.max(240, wrap.clientHeight - 8);
-  f.setWidth(targetW); f.setHeight(targetH);
+  f.setWidth(targetW);
+  f.setHeight(targetH);
   if (baseImage){
     const bw = baseImage.width || 1, bh = baseImage.height || 1;
     const scale = Math.min(targetW / bw, targetH / bh);
-    baseImage.set({ scaleX: scale, scaleY: scale, left: (targetW - bw*scale)/2, top: (targetH - bh*scale)/2 });
-    f.requestRenderAll();
+    baseImage.set({
+      scaleX: scale, scaleY: scale,
+      left: (targetW - bw * scale) / 2,
+      top:  (targetH - bh * scale) / 2
+    });
   }
+  f.requestRenderAll();
 }
 export function isCanvasTainted(){ return !!baseTainted; }
 export function getLastLoadedBaseURL(){ return lastBaseURL; }
@@ -86,20 +107,56 @@ function withTimeout(p, ms, tag){
     p.then(v=>{ clearTimeout(t); resolve(v); }).catch(e=>{ clearTimeout(t); reject(e); });
   });
 }
+
+// NEW: fabric load with fullsize toggle + <img> fallback
 async function setBaseFromBlob(blob){
-  ensureCanvas(); baseTainted = false;
+  ensureCanvas();
+  baseTainted = false;
+
+  const url = URL.createObjectURL(blob);
+
   return await new Promise((resolve, reject)=>{
-    const url = URL.createObjectURL(blob);
-    fabric.Image.fromURL(url, function(img){
-      URL.revokeObjectURL(url);
-      if (!img) { reject(new Error("img-null")); return; }
-      baseImage = img; img.set({ selectable:false, evented:false, erasable:false });
-      f.clear(); f.add(img); img.moveTo(0); fitCanvas(); f.requestRenderAll();
+    fabric.Image.fromURL(url, (img)=>{
+      if (!img) { URL.revokeObjectURL(url); reject(new Error("img-null")); return; }
+
+      baseImage = img;
+      img.set({ selectable:false, evented:false, erasable:false });
+
+      // hide fallback <img> if previously shown
+      const fb = $("fullsizeFallback");
+      if (fb) { fb.style.display = "none"; fb.src = ""; }
+
+      f.clear();
+      f.add(img);
+      img.moveTo(0);
+
+      // Respect "full native size" toggle immediately
+      const fullsize = !!($("fullsizeToggle")?.checked);
+      if (fullsize) {
+        f.setWidth(img.width);
+        f.setHeight(img.height);
+        img.set({ left:0, top:0, scaleX:1, scaleY:1 });
+      }
+
+      fitCanvas();
+      f.requestRenderAll();
       setExportEnabled(true);
+
       const info = $("canvasInfo");
       if (info) info.textContent = `Base image: ${img.width}×${img.height}`;
+
+      setTimeout(()=>URL.revokeObjectURL(url), 0);
       resolve({ w: img.width, h: img.height });
     }, { crossOrigin: "anonymous" });
+  }).catch(err=>{
+    // fabric failed → show fallback <img> so user still sees the photo
+    const fb = $("fullsizeFallback");
+    if (fb){
+      fb.src = url;
+      fb.style.display = "block";
+    }
+    setExportEnabled(false);
+    throw err;
   });
 }
 
@@ -182,7 +239,7 @@ async function listScenarioIdsFromStorage(root) {
 const IMAGE_RX = /\.(jpe?g|png|webp)$/i;
 const MAX_COLLECT = 500;
 
-// NEW: only skip specific junk paths (not whole `ai` folder)
+// Only skip these junk paths (not whole `ai`)
 function shouldSkipFolderPath(path){
   const p = String(path || "").toLowerCase();
   if (p.endsWith("/ai/results")) return true;
@@ -218,7 +275,6 @@ async function listImagesDeep(prefixPath, maxDepth){
     }
   }
   if (!out.length){
-    // small debug aid so we can see what's actually there
     console.debug("[scenarios] zero images under", prefixPath, "— first-level listing:");
     try { console.debug(await listFolderCombined(prefixPath)); } catch(_e){}
   }
@@ -415,6 +471,12 @@ export function wireScenarioUI(){
     };
   }
 
+  // react to fullsize toggle
+  const fullToggle = $("fullsizeToggle");
+  if (fullToggle){
+    fullToggle.addEventListener("change", ()=> fitCanvas());
+  }
+
   const sel = $("scenarioSel");
   if (sel){
     sel.onchange = async function(){
@@ -507,7 +569,6 @@ async function ensureStopsForCurrentFromStorage() {
   const basePath = `${ROOT}/${current.id}`;
   setStatus(`Looking for photos under '${basePath}/'…`);
 
-  // Increased depth to 6, don't blanket-skip `ai`
   const filePaths = await listImagesDeep(basePath, 6);
   if (!filePaths.length) {
     setStatus("No images found in storage for this scenario.");
@@ -566,7 +627,7 @@ async function loadScenarios(){
 }
 
 export async function bootScenarios(){
-  try { ensureCanvas(); } catch(_e) { /* fabric may init later when first image loads */ }
+  try { ensureCanvas(); } catch(_e) { /* fabric may init later */ }
   await ensureAuthed();
 
   ROOT = FORCE_ROOT;
