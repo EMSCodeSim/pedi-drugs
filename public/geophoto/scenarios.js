@@ -1,7 +1,7 @@
-// scenarios.js — Storage-only loader w/ strong diagnostics + dual REST fallbacks
-// - Fixed root: 'scenarios/'
-// - Tries SDK listAll() first; if empty or errors, tries REST on both bucket hosts
-// - Shows detailed status in the UI (status pill) and console
+// scenarios.js — Storage-only scenario loader + advanced editor wiring
+// - Auto-detects root between 'scenarios/' and 'geophoto/scenarios/'
+// - Uses SDK listAll() first; if empty or errors, falls back to REST on two hosts
+// - Shows clear status + console logs
 
 import {
   getFirebase,
@@ -31,8 +31,8 @@ import {
 /* ---------------- tiny DOM helpers ---------------- */
 const $ = (id) => document.getElementById(id);
 const errbarEl = () => $("errbar");
-const log = (...a) => { try{ console.log("[scenarios]", ...a); }catch(_){}; };
-const warn = (...a) => { try{ console.warn("[scenarios]", ...a); }catch(_){}; };
+const log  = (...a) => { try{ console.log("[scenarios]", ...a); }catch(_e){}; };
+const warn = (...a) => { try{ console.warn("[scenarios]", ...a); }catch(_e){}; };
 
 export function setAuthPill(t){ const el=$("authPill"); if (el) el.textContent="Auth: "+t; }
 export function setStatus(t){ const el=$("statusPill"); if (el){ el.textContent=t; } log(t); }
@@ -68,7 +68,6 @@ async function blobFromURL(url, timeoutMs){
   const t = setTimeout(()=>ctrl.abort(), timeoutMs || 15000);
   try{
     const r = await fetch(url, { signal: ctrl.signal, mode:"cors", cache:"force-cache" });
-    clearTimeout(t);
     if (!r.ok) throw new Error("fetch-failed " + r.status);
     return await r.blob();
   } finally { clearTimeout(t); }
@@ -186,9 +185,7 @@ async function resolveForStop(stop, timeoutMs){
 }
 
 /* ---------------- Scenario state ---------------- */
-const FORCE_ROOT = "scenarios"; // fixed Storage root
-let ROOT = FORCE_ROOT;
-
+let ROOT = "scenarios"; // will be auto-detected to 'geophoto/scenarios' if present
 let scenarios = [];
 let current = null;
 let stopIndex = -1;
@@ -257,7 +254,7 @@ async function listScenarioIdsFromStorage(root) {
   const { appspot, fsa } = deriveBucketNames();
   log("REST buckets:", { appspot, fsa });
 
-  // Try firebasestorage.app first (console shows this host), then appspot.com
+  // Try firebasestorage.app first, then appspot.com
   try {
     setStatus(`REST listing on ${fsa}…`);
     const ids = await listFoldersREST(fsa, clean);
@@ -315,18 +312,6 @@ async function ensureStopsForCurrentFromStorage() {
   setStops(current._raw, current._stops);
   renderThumbs();
   setStatus(`${current._stops.length} photo(s)`);
-}
-
-/* ---------------- load list ---------------- */
-async function loadScenarios(){
-  await ensureAuthed();
-  setStatus("Loading scenarios from storage…");
-
-  const ids = await listScenarioIdsFromStorage(ROOT);
-  scenarios = ids.map(id => ({ id, title: id, createdAt: 0, _raw: { id, title: id }, _stops: [] }));
-
-  populateScenarios();
-  setStatus(`${scenarios.length} scenario(s) in storage`);
 }
 
 /* ---------------- thumbs + stop loading ---------------- */
@@ -508,7 +493,7 @@ export async function addResultAsNewStop(url){
   renderThumbs();
 }
 
-/* ---------------- basic overlay shelf + tools (unchanged from prior) ---------------- */
+/* ---------------- basic overlay shelf + tools ---------------- */
 async function fetchOverlayList(folder){
   try{
     const r = await fetch("https://fireopssim.com/geophoto/overlays/index.json", { cache:"force-cache" });
@@ -713,14 +698,7 @@ export function wireScenarioUI(){
   if (refresh){
     refresh.onclick = async function(){
       await ensureAuthed();
-      ROOT = FORCE_ROOT;
-      const info = getStorageInfo();
-      setRootPill("storage: " + ROOT + " | bucket: " + info.bucketHost);
-      await loadScenarios();
-      if (sel && !sel.value && scenarios.length > 0){
-        sel.value = scenarios[0].id;
-        sel.dispatchEvent(new Event("change"));
-      }
+      await detectAndLoadRoot(); // re-run detection on refresh
     };
   }
 
@@ -732,26 +710,47 @@ export function wireScenarioUI(){
   wireExportAndSave();
 }
 
-export async function bootScenarios(){
-  fitCanvas();
-  await ensureAuthed();
+/* ---------------- detection + boot ---------------- */
+async function detectAndLoadRoot(){
+  const candidates = ["scenarios", "geophoto/scenarios"];
+  let ids = [];
+  for (const cand of candidates) {
+    setStatus(`Probing '${cand}/'…`);
+    try { ids = await listScenarioIdsFromStorage(cand); } catch(_e){ ids = []; }
+    if (ids.length) { ROOT = cand; break; }
+  }
+  if (!ids.length) {
+    ROOT = candidates[0]; // default to 'scenarios'
+    ids = await listScenarioIdsFromStorage(ROOT);
+  }
 
-  try {
-    const { storage } = getFirebase();
-    setMaxOperationRetryTime(storage, 60000); // widen retry window a bit
-    setMaxUploadRetryTime(storage, 60000);
-  } catch(_e){}
-
-  ROOT = FORCE_ROOT;
   const info = getStorageInfo();
-  setRootPill("storage: " + ROOT + " | bucket: " + info.bucketHost);
-  await loadScenarios();
+  setRootPill(`storage: ${ROOT} | bucket: ${info.bucketHost || "?"}`);
+
+  scenarios = ids.map(id => ({ id, title: id, createdAt: 0, _raw: { id, title: id }, _stops: [] }));
+  populateScenarios();
+  setStatus(`${scenarios.length} scenario(s) in storage`);
 
   const sel = $("scenarioSel");
   if (sel && !sel.value && scenarios.length > 0){
     sel.value = scenarios[0].id;
     sel.dispatchEvent(new Event("change"));
   }
+}
+
+export async function bootScenarios(){
+  fitCanvas();
+  await ensureAuthed();
+
+  // Make SDK a bit more tolerant
+  try {
+    const { storage } = getFirebase();
+    setMaxOperationRetryTime(storage, 60000);
+    setMaxUploadRetryTime(storage, 60000);
+  } catch(_e){}
+
+  await detectAndLoadRoot();
+
   const uid = (await ensureAuthed()).uid || "anon";
   setAuthPill("anon ✔ (" + String(uid).slice(0,8) + ")");
 }
