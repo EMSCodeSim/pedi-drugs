@@ -1,19 +1,19 @@
-// scenarios.js — robust scenario loader + editor wiring (STORAGE-ONLY)
+// scenarios.js — Storage-only scenario loader + editor wiring
 
 import {
   getFirebase,
   ensureAuthed,
   getStorageInfo,
   toStorageRefString,
-  candidateOriginals
+  candidateOriginals,
+  initFirebase // exported by your core; harmless if unused here
 } from "./firebase-core.js";
 
 import {
   ref as dbRef,
   get,
   set,
-  remove,
-  onValue
+  remove
 } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-database.js";
 
 import {
@@ -53,13 +53,12 @@ function setExportEnabled(on){
 /* ---------------- Fabric canvas ---------------- */
 export const f = new fabric.Canvas("c", { backgroundColor:"#061621", preserveObjectStacking:true });
 let baseImage = null;
-let baseTainted = false;       // disables export/save only (AI can still run)
-let lastBaseURL = null;        // the exact URL/blob/data used to load the base
+let baseTainted = false;
+let lastBaseURL = null;
 
 export function isCanvasTainted(){ return !!baseTainted; }
 export function getLastLoadedBaseURL(){ return lastBaseURL; }
 
-/* Utilities for loading images safely w/ CORS fallbacks */
 async function blobFromURL(url, timeoutMs){
   const ctrl = new AbortController();
   const t = setTimeout(()=>ctrl.abort(), timeoutMs || 15000);
@@ -114,12 +113,8 @@ export function setBaseAsTextSlide(text, fontSize){
   tb.isBaseText = true;
 
   f.add(rect); f.add(tb); rect.moveTo(0); f.requestRenderAll();
-
-  const info = $("canvasInfo");
-  if (info) info.textContent = "Text slide";
-
-  baseTainted = false;
-  lastBaseURL = "data:text/plain;base64," + btoa(text || "");
+  const info = $("canvasInfo"); if (info) info.textContent = "Text slide";
+  baseTainted = false; lastBaseURL = "data:text/plain;base64," + btoa(text || "");
   setExportEnabled(true);
 }
 
@@ -142,7 +137,6 @@ export function fitCanvas(){
 }
 
 async function getBlobSDKFirst(refLike, timeoutMs){
-  // Try SDK getBlob → falls back to fetch URL
   try{
     const { storage } = getFirebase();
     const ref = stRef(storage, toStorageRefString(refLike));
@@ -152,25 +146,11 @@ async function getBlobSDKFirst(refLike, timeoutMs){
     try{
       const url = /^https?:\/\//i.test(refLike) ? refLike : await getDownloadURL(stRef(getFirebase().storage, toStorageRefString(refLike)));
       const blob = await withTimeout(blobFromURL(url, 15000), timeoutMs || 20000, "fetch-timeout");
-      baseTainted = true; // URL fetch may taint canvas
+      baseTainted = true;
       return blob;
     }catch(e2){
       throw e2;
     }
-  }
-}
-
-async function getBlobFetchFirst(refLike, timeoutMs){
-  // Prefer URL fetch first (quicker for public URLs), then SDK.
-  try{
-    const url = /^https?:\/\//i.test(refLike) ? refLike : await getDownloadURL(stRef(getFirebase().storage, toStorageRefString(refLike)));
-    const blob = await withTimeout(blobFromURL(url, 12000), timeoutMs || 20000, "fetch-timeout");
-    baseTainted = true;
-    return blob;
-  }catch(_e){
-    const { storage } = getFirebase();
-    const ref = stRef(storage, toStorageRefString(refLike));
-    return await withTimeout(storageGetBlob(ref), timeoutMs || 20000, "storage/getblob-timeout");
   }
 }
 
@@ -187,7 +167,6 @@ async function resolveForStop(stop, timeoutMs){
 
   const extras = [];
   if (seeds.length){
-    // also try candidate originals (bigger variants)
     for (let i=0;i<seeds.length;i++){
       const cands = candidateOriginals(seeds[i]).slice(0, 6);
       for (let j=0;j<cands.length;j++) extras.push(cands[j]);
@@ -196,22 +175,12 @@ async function resolveForStop(stop, timeoutMs){
 
   const tried = new Set();
   for (let i=0;i<seeds.length;i++){
-    const s = seeds[i];
-    if (tried.has(s)) continue; tried.add(s);
-    try{
-      const bl = await getBlobSDKFirst(s, timeoutMs);
-      lastBaseURL = s;
-      return bl;
-    }catch(_e){}
+    const s = seeds[i]; if (tried.has(s)) continue; tried.add(s);
+    try{ const bl = await getBlobSDKFirst(s, timeoutMs); lastBaseURL = s; return bl; }catch(_e){}
   }
   for (let i=0;i<extras.length;i++){
-    const s = extras[i];
-    if (tried.has(s)) continue; tried.add(s);
-    try{
-      const bl = await getBlobSDKFirst(s, timeoutMs);
-      lastBaseURL = s;
-      return bl;
-    }catch(_e){}
+    const s = extras[i]; if (tried.has(s)) continue; tried.add(s);
+    try{ const bl = await getBlobSDKFirst(s, timeoutMs); lastBaseURL = s; return bl; }catch(_e){}
   }
   throw new Error("Could not resolve image for stop.");
 }
@@ -224,12 +193,6 @@ let stopIndex = -1;
 
 const { db } = getFirebase();
 
-function coerceStops(sc){
-  if (sc && Array.isArray(sc.stops)) return sc.stops;
-  if (sc && Array.isArray(sc.photos)) return sc.photos;
-  if (sc && Array.isArray(sc.images)) return sc.images;
-  return [];
-}
 function setStops(sc, stops){
   const next = Object.assign({}, sc || {});
   next.stops = Array.isArray(stops) ? stops.slice() : [];
@@ -246,24 +209,12 @@ function populateScenarios(){
     const sc = scenarios[i];
     const o = document.createElement("option");
     o.value = sc.id;
-    o.textContent = (sc.title || "(untitled)") + (sc.active ? "" : " (inactive)");
+    o.textContent = sc.title || sc.id;
     sel.appendChild(o);
   }
 }
 
-async function fetchNode(path){
-  try {
-    const snap = await get(dbRef(db, path));
-    return snap.exists() ? (snap.val() || {}) : {};
-  } catch (_e) {
-    return {};
-  }
-}
-
-/* ---------------- Storage-only scenario discovery ---------------- */
-
-// Prefer Storage path "geophoto/scenarios" if it actually exists in Storage.
-// Otherwise fall back to "scenarios".
+/* ---------------- Storage-only discovery ---------------- */
 async function detectStorageRoot() {
   const { storage } = getFirebase();
   try {
@@ -275,22 +226,30 @@ async function detectStorageRoot() {
   return "scenarios";
 }
 
-// Storage: list scenario IDs by folder name (prefix under ROOT/)
 async function listScenarioIdsFromStorage(root) {
   const { storage } = getFirebase();
-  const res = await listAll(stRef(storage, root));
-  return (res.prefixes || []).map(p => p.name);
+  try {
+    const res = await listAll(stRef(storage, root));
+    return (res.prefixes || []).map(p => p.name);
+  } catch (e) {
+    showError("Storage list error: " + (e && (e.message || e)));
+    return [];
+  }
 }
 
-// Storage: when a scenario is selected, fetch its images (stops)
-// Only image files at the folder root are considered (.jpg/.jpeg/.png/.webp)
 async function ensureStopsForCurrentFromStorage() {
   if (!current || (current._stops && current._stops.length)) return;
 
   setStatus("Loading photos from storage…");
   const { storage } = getFirebase();
   const folderRef = stRef(storage, `${ROOT}/${current.id}`);
-  const listing = await listAll(folderRef);
+  let listing;
+  try {
+    listing = await listAll(folderRef);
+  } catch (e) {
+    showError("Cannot list folder: " + (e && (e.message || e)));
+    return;
+  }
 
   const imgRefs = (listing.items || []).filter(r => /\.(jpe?g|png|webp)$/i.test(r.name));
   imgRefs.sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: "base" }));
@@ -305,16 +264,8 @@ async function ensureStopsForCurrentFromStorage() {
       const r = imgRefs[idx];
       try {
         const url = await getDownloadURL(r);
-        stops[idx] = {
-          type: "photo",
-          title: r.name,
-          storagePath: r.fullPath,
-          imageURL: url,
-          radiusMeters: 50
-        };
-      } catch (_e) {
-        stops[idx] = null;
-      }
+        stops[idx] = { type:"photo", title:r.name, storagePath:r.fullPath, imageURL:url, radiusMeters:50 };
+      } catch (_e) { stops[idx] = null; }
     }
   }
   await Promise.all(Array.from({ length: conc }, worker));
@@ -324,7 +275,7 @@ async function ensureStopsForCurrentFromStorage() {
   setStatus(`${current._stops.length} photo(s)`);
 }
 
-/* ---------------- Storage-only: Load & subscribe ---------------- */
+/* ---------------- Load & (no) subscribe ---------------- */
 async function loadScenarios(){
   await ensureAuthed();
   setStatus("Loading scenarios from storage…");
@@ -335,14 +286,7 @@ async function loadScenarios(){
   populateScenarios();
   setStatus(`${scenarios.length} scenario(s) in storage`);
 }
-
-let unsubA = null, unsubB = null;
-function subscribeScenarios(){
-  // Storage has no realtime watchers; use the Refresh button to reload.
-  try{ if (typeof unsubA === "function") unsubA(); }catch(_){}
-  try{ if (typeof unsubB === "function") unsubB(); }catch(_){}
-  unsubA = null; unsubB = null;
-}
+function subscribeScenarios(){ /* no-op for Storage */ }
 
 /* ---------------- Thumbs & stop loading ---------------- */
 function dataURLFromStored(stored){
@@ -396,24 +340,7 @@ export async function loadStop(i){
   try{
     showLoad(true);
     const blob = await resolveForStop(s, 25000);
-    const d = await setBaseFromBlob(blob);
-
-    // if the base is tiny, try higher-res alternates
-    const minGood = 860;
-    const naturalW = baseImage ? baseImage.width : 0;
-    const naturalH = baseImage ? baseImage.height : 0;
-    if (!baseTainted && (naturalW < minGood && naturalH < minGood)){
-      const seeds = lastBaseURL || s.imageURL || s.thumbURL || s.storagePath || s.gsUri;
-      const extras = candidateOriginals(seeds).slice(0, 6);
-      for (let j=0;j<extras.length;j++){
-        try{
-          const bl2 = await getBlobSDKFirst(extras[j], 12000);
-          lastBaseURL = extras[j];
-          const d2 = await setBaseFromBlob(bl2);
-          if (d2.naturalW >= minGood || d2.naturalH >= minGood) break;
-        } catch (_e){}
-      }
-    }
+    await setBaseFromBlob(blob);
   } catch (e){
     if (s.imageData && s.imageData.data){
       setBaseAsTextSlide("(embedded data render failed; showing text)");
@@ -435,8 +362,7 @@ export async function loadStop(i){
           backgroundColor: ov.backgroundColor || "rgba(0,0,0,0.6)", padding: (ov.padding != null ? ov.padding : 8),
           cornerStyle:"circle", transparentCorners:false, editable:true
         });
-        tb._kind = "text";
-        f.add(tb);
+        tb._kind = "text"; f.add(tb);
       } else if (ov && ov.src){
         await new Promise((res)=>{
           fabric.Image.fromURL(ov.src, function(img){
@@ -446,8 +372,7 @@ export async function loadStop(i){
               flipX: !!ov.flipX, flipY: !!ov.flipY,
               erasable: true, cornerStyle:"circle", transparentCorners:false
             });
-            img._kind = "overlay";
-            f.add(img); res();
+            img._kind = "overlay"; f.add(img); res();
           }, { crossOrigin: "anonymous" });
         });
       }
@@ -456,12 +381,12 @@ export async function loadStop(i){
   f.requestRenderAll();
 }
 
-/* ---------------- Guide / Export helpers used by AI uploader ---------------- */
+/* ---------------- Guide / Export helpers for AI uploader ---------------- */
 export async function getGuideImageURLForCurrentStop(){
   if (!current || stopIndex < 0) throw new Error("No stop selected");
   const s = current._stops[stopIndex];
 
-  if (lastBaseURL && (/^https?:\/\//i.test(lastBaseURL) || lastBaseURL.indexOf("data:") === 0 || lastBaseURL.indexOf("blob:") === 0)) {
+  if (lastBaseURL && (/^https?:\/\//i.test(lastBaseURL) || lastBaseURL.startsWith("data:") || lastBaseURL.startsWith("blob:"))) {
     return lastBaseURL;
   }
   if (s && s.imageURL && /^https?:\/\//i.test(s.imageURL)) return s.imageURL;
@@ -487,20 +412,16 @@ export function hasOverlays(){
 }
 
 export function getCompositeDataURL(){
-  // If tainted, return null to force guideURL upload path only
   if (baseTainted) return null;
-  try{
-    return f.toDataURL({ format:"png", quality: 0.92, multiplier: 1 });
-  }catch(_e){
-    return null;
-  }
+  try{ return f.toDataURL({ format:"png", quality: 0.92, multiplier: 1 }); }
+  catch(_e){ return null; }
 }
 
 export async function saveResultBlobToStorage(blob){
   if (!current || stopIndex < 0) throw new Error("No stop selected");
   const { storage } = getFirebase();
   const ts = Date.now();
-  const path = "scenarios/" + current.id + "/ai/results/" + ts + "_stop" + stopIndex + ".jpg";
+  const path = `${ROOT}/${current.id}/ai/results/${ts}_stop${stopIndex}.jpg`;
   const ref = stRef(storage, path);
 
   await new Promise((resolve, reject)=>{
@@ -508,14 +429,12 @@ export async function saveResultBlobToStorage(blob){
     const t = setTimeout(function(){ try{ task.cancel(); }catch(_e){}; reject(Object.assign(new Error("upload/timeout"),{code:"upload/timeout"})); }, 90000);
     task.on("state_changed", function(){}, function(err){ clearTimeout(t); reject(err); }, function(){ clearTimeout(t); resolve(); });
   });
-
   return await getDownloadURL(ref);
 }
 
 export async function addResultAsNewStop(url){
   if (!current || stopIndex < 0) return;
   const base = current._stops[stopIndex];
-  const ts = Date.now();
   const newStop = {
     type: "photo",
     title: (base.title || "") + " (AI)",
@@ -528,16 +447,11 @@ export async function addResultAsNewStop(url){
   const next = current._stops.slice(); next.push(newStop);
   const updated = Object.assign({}, current._raw); setStops(updated, next);
 
-  try{
-    await set(dbRef(getFirebase().db, ROOT + "/" + current.id), updated);  // harmless if DB node doesn't exist
-  }catch(_e){}
+  try{ await set(dbRef(getFirebase().db, ROOT + "/" + current.id), updated); }catch(_e){}
   renderThumbs();
 }
 
-/* ---------------- Overlay shelf + brushes + text + selection + export (unchanged) ---------------- */
-// (All your existing UI wiring code for overlay shelf, brushes, text tools, selection tools, and export/save remains here unchanged.)
-// — The rest of this file continues exactly as your previous version —
-
+/* ---------------- Simple overlay shelf + tools ---------------- */
 async function fetchOverlayList(folder){
   try{
     const r = await fetch("https://fireopssim.com/geophoto/overlays/index.json", { cache:"force-cache" });
@@ -545,13 +459,12 @@ async function fetchOverlayList(folder){
       const j = await r.json();
       if (j && Array.isArray(j[folder])) {
         const base = "https://fireopssim.com/geophoto/overlays/" + folder + "/";
-        return j[folder].map(function(name){ return base + name; });
+        return j[folder].map(name => base + name);
       }
     }
   }catch(_e){}
-
   const base = "https://fireopssim.com/geophoto/overlays/" + folder + "/";
-  return [1,2,3,4,5].map(function(n){ return base + n + ".png"; });
+  return [1,2,3,4,5].map(n => base + n + ".png");
 }
 
 function wireOverlayShelf(){
@@ -596,8 +509,7 @@ function wireBrushes(){
   const b = $("brushSize"); const e = $("eraserSize");
   if (b){ b.oninput = function(){ const v=+b.value||10; f.isDrawingMode = true; f.freeDrawingBrush = new fabric.PencilBrush(f); f.freeDrawingBrush.width = v; }; }
   if (e){ e.oninput = function(){ const v=+e.value||24; f.isDrawingMode = true; f.freeDrawingBrush = new fabric.EraserBrush(f); f.freeDrawingBrush.width = v; }; }
-  const pan = $("panMode");
-  if (pan){ pan.onclick = function(){ f.isDrawingMode = false; }; }
+  const pan = $("panMode"); if (pan){ pan.onclick = function(){ f.isDrawingMode = false; }; }
 }
 
 function wireTextTools(){
@@ -614,11 +526,7 @@ function wireTextTools(){
 
 function wireSelectionTools(){
   const del = $("deleteSel");
-  if (del){
-    del.onclick = function(){
-      const a = f.getActiveObject(); if (a) f.remove(a);
-    };
-  }
+  if (del){ del.onclick = function(){ const a = f.getActiveObject(); if (a) f.remove(a); }; }
 }
 
 function wireExportAndSave(){
@@ -669,7 +577,7 @@ export function wireScenarioUI(){
   if (sel){
     sel.onchange = async function(){
       const id = sel.value;
-      current = scenarios.find(function(s){ return s.id === id; }) || null;
+      current = scenarios.find(s => s.id === id) || null;
       stopIndex = -1;
       renderThumbs();
       f.clear(); baseImage = null; fitCanvas();
@@ -706,7 +614,7 @@ export function wireScenarioUI(){
 
         const next = current._stops.slice(); next[stopIndex] = s;
         const updated = Object.assign({}, current._raw); setStops(updated, next);
-        await set(dbRef(getFirebase().db, ROOT + "/" + current.id), updated);
+        await set(dbRef(getFirebase().db, ROOT + "/" + current.id), updated); // harmless if DB node absent
         current._raw = updated; current._stops = next;
         const msg = $("metaMsg"); if (msg) msg.textContent = "Saved ✓";
       }catch(e){
@@ -754,10 +662,9 @@ export function wireScenarioUI(){
       const info = getStorageInfo();
       setRootPill("root: " + ROOT + " | bucket: " + info.bucketHost);
       await loadScenarios();
-      subscribeScenarios();
       if (sel && !sel.value && scenarios.length > 0){
         sel.value = scenarios[0].id;
-        const ev = new Event("change"); sel.dispatchEvent(ev);
+        sel.dispatchEvent(new Event("change"));
       }
     };
   }
@@ -778,40 +685,17 @@ export async function bootScenarios(){
   const info = getStorageInfo();
   setRootPill("root: " + ROOT + " | bucket: " + info.bucketHost);
   await loadScenarios();
-  subscribeScenarios();
 
   const sel = $("scenarioSel");
   if (sel && !sel.value && scenarios.length > 0){
     sel.value = scenarios[0].id;
-    const ev = new Event("change"); sel.dispatchEvent(ev);
+    sel.dispatchEvent(new Event("change"));
   }
-
   const uid = (await ensureAuthed()).uid || "anon";
   setAuthPill("anon ✔ (" + String(uid).slice(0,8) + ")");
 }
 
-/* ---------------- expose a single shared instance to avoid duplicate state ---------------- */
-const __SCENARIOS_API__ = {
-  // status + UI helpers
-  setAIStatus, setAuthPill, setStatus, setRootPill,
-  // canvas + export
-  f, isCanvasTainted, getLastLoadedBaseURL, getCompositeDataURL,
-  // scenario + stop control
-  getCurrent, getStopIndex, loadStop, hasOverlays,
-  // guide / results
-  getGuideImageURLForCurrentStop, saveResultBlobToStorage, addResultAsNewStop,
-  // boot + ui
-  wireScenarioUI, bootScenarios
-};
-
-if (typeof window !== "undefined") {
-  window.__SCENARIOS = __SCENARIOS_API__;
-}
-
-export default __SCENARIOS_API__;
-
-
-/* ---------------- Viewer Controls (unchanged; keep your existing handlers) ---------------- */
+/* ---------------- expose API ---------------- */
 function wireViewerControls(){
   const info = $("canvasInfo");
   window.addEventListener("resize", fitCanvas);
@@ -820,3 +704,17 @@ function wireViewerControls(){
 
 export function getCurrent(){ return current; }
 export function getStopIndex(){ return stopIndex; }
+
+const __SCENARIOS_API__ = {
+  setAIStatus, setAuthPill, setStatus, setRootPill,
+  f, isCanvasTainted, getLastLoadedBaseURL, getCompositeDataURL,
+  getCurrent, getStopIndex, loadStop, hasOverlays,
+  getGuideImageURLForCurrentStop, saveResultBlobToStorage, addResultAsNewStop,
+  wireScenarioUI, bootScenarios
+};
+
+if (typeof window !== "undefined") {
+  window.__SCENARIOS = __SCENARIOS_API__;
+}
+
+export default __SCENARIOS_API__;
