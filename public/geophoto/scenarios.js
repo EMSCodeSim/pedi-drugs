@@ -1,12 +1,11 @@
-// scenarios.js — Storage-only scenario loader + editor wiring
+// scenarios.js — Storage-only scenario loader + editor wiring (FIXED ROOT = 'scenarios/')
 
 import {
   getFirebase,
   ensureAuthed,
   getStorageInfo,
   toStorageRefString,
-  candidateOriginals,
-  initFirebase // exported by your core; harmless if unused here
+  candidateOriginals
 } from "./firebase-core.js";
 
 import {
@@ -186,7 +185,9 @@ async function resolveForStop(stop, timeoutMs){
 }
 
 /* ---------------- Scenario state ---------------- */
-let ROOT = "scenarios";
+const FORCE_ROOT = "scenarios";     // << fixed Storage root
+let ROOT = FORCE_ROOT;
+
 let scenarios = [];
 let current = null;
 let stopIndex = -1;
@@ -216,23 +217,19 @@ function populateScenarios(){
 
 /* ---------------- Storage-only discovery ---------------- */
 async function detectStorageRoot() {
-  const { storage } = getFirebase();
-  try {
-    const probe = await listAll(stRef(storage, "geophoto/scenarios"));
-    if ((probe.prefixes && probe.prefixes.length) || (probe.items && probe.items.length)) {
-      return "geophoto/scenarios";
-    }
-  } catch (_e) {}
-  return "scenarios";
+  return FORCE_ROOT; // always use /scenarios
 }
 
 async function listScenarioIdsFromStorage(root) {
   const { storage } = getFirebase();
   try {
-    const res = await listAll(stRef(storage, root));
-    return (res.prefixes || []).map(p => p.name);
+    const clean = String(root || "").replace(/^\/+|\/+$/g, "");
+    const res = await listAll(stRef(storage, clean));
+    const ids = (res.prefixes || []).map(p => p.name);
+    if (!ids.length) setStatus("No scenario folders found under '" + clean + "/'.");
+    return ids;
   } catch (e) {
-    showError("Storage list error: " + (e && (e.message || e)));
+    showError("Storage list error under '" + root + "': " + (e && (e.message || e)));
     return [];
   }
 }
@@ -242,10 +239,9 @@ async function ensureStopsForCurrentFromStorage() {
 
   setStatus("Loading photos from storage…");
   const { storage } = getFirebase();
-  const folderRef = stRef(storage, `${ROOT}/${current.id}`);
   let listing;
   try {
-    listing = await listAll(folderRef);
+    listing = await listAll(stRef(storage, `${ROOT}/${current.id}`.replace(/\/+/g,"/")));
   } catch (e) {
     showError("Cannot list folder: " + (e && (e.message || e)));
     return;
@@ -275,7 +271,7 @@ async function ensureStopsForCurrentFromStorage() {
   setStatus(`${current._stops.length} photo(s)`);
 }
 
-/* ---------------- Load & (no) subscribe ---------------- */
+/* ---------------- Load (no subscribe for Storage) ---------------- */
 async function loadScenarios(){
   await ensureAuthed();
   setStatus("Loading scenarios from storage…");
@@ -291,7 +287,7 @@ function subscribeScenarios(){ /* no-op for Storage */ }
 /* ---------------- Thumbs & stop loading ---------------- */
 function dataURLFromStored(stored){
   if (typeof stored === "string") return stored;
-  if (stored && stored.data) return "data:image/" + (stored.format || "jpeg") + ";base64," + stored.data;
+  if (stored && stored.data) return "data:image/" + (stored.format || "jpeg") + ";base64/" + stored.data;
   return "";
 }
 
@@ -658,9 +654,9 @@ export function wireScenarioUI(){
   if (refresh){
     refresh.onclick = async function(){
       await ensureAuthed();
-      ROOT = await detectStorageRoot();
+      ROOT = FORCE_ROOT;
       const info = getStorageInfo();
-      setRootPill("root: " + ROOT + " | bucket: " + info.bucketHost);
+      setRootPill("storage: " + ROOT + " | bucket: " + info.bucketHost);
       await loadScenarios();
       if (sel && !sel.value && scenarios.length > 0){
         sel.value = scenarios[0].id;
@@ -681,9 +677,9 @@ export function wireScenarioUI(){
 export async function bootScenarios(){
   fitCanvas();
   await ensureAuthed();
-  ROOT = await detectStorageRoot();
+  ROOT = FORCE_ROOT;
   const info = getStorageInfo();
-  setRootPill("root: " + ROOT + " | bucket: " + info.bucketHost);
+  setRootPill("storage: " + ROOT + " | bucket: " + info.bucketHost);
   await loadScenarios();
 
   const sel = $("scenarioSel");
