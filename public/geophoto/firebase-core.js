@@ -17,7 +17,7 @@ export const firebaseConfig = {
   authDomain: "dailyquiz-d5279.firebaseapp.com",
   databaseURL: "https://dailyquiz-d5279-default-rtdb.firebaseio.com",
   projectId: "dailyquiz-d5279",
-  storageBucket: "dailyquiz-d5279.firebasestorage.app",
+  storageBucket: "dailyquiz-d5279.firebasestorage.app", // accept either form
   appId: "1:94577748034:web:c032d3a1d72db1313de5db",
   measurementId: "G-19DVN7NNH7"
 };
@@ -34,7 +34,8 @@ function normalizeBucketHost(hostOrUrl = "") {
   if (matchGapi) return matchGapi[1].replace(".firebasestorage.app", ".appspot.com");
   const matchApp = hostOrUrl.match(/https?:\/\/([^/]+)\.firebasestorage\.app/i);
   if (matchApp) return (matchApp[1] + ".appspot.com");
-  return hostOrUrl.replace(".firebasestorage.app", ".appspot.com");
+  // plain host
+  return hostOrUrl.replace(".firebasestorage.app", ".appspot.com"); // SDK prefers *.appspot.com for gs://
 }
 
 /* ---------------- Init / accessors ---------------- */
@@ -47,6 +48,8 @@ export function initFirebase(explicitBucketHost = "") {
   _bucketHost = normalizeBucketHost(explicitBucketHost || firebaseConfig.storageBucket);
   _bucketGs = `gs://${_bucketHost}`;
   _storage = getStorage(_app, _bucketGs);
+
+  console.log("[firebase-core] storage bucket:", _bucketHost, "| gs:", _bucketGs);
 }
 
 export function getFirebase() {
@@ -72,20 +75,13 @@ export async function ensureAuthed() {
 }
 
 /* ---------------- Ref coercion ---------------- */
-/**
- * Convert various inputs into a ref string that works with `ref(storage, ...)`.
- * Returns one of:
- *  - `gs://bucket/path` (preferred)
- *  - `path/inside/current/bucket` (if already relative)
- *  - `https://...` (left as-is; handled via fetch branch)
- */
 export function toStorageRefString(s) {
   if (!s) return s;
   let v = ("" + s).trim();
   try { v = decodeURIComponent(v); } catch {}
-  if (v.startsWith("gs://")) return v; // pass through intact
+  if (v.startsWith("gs://")) return v;
 
-  // googleapis style with token, etc.
+  // googleapis style
   let m = v.match(/^https?:\/\/firebasestorage\.googleapis\.com\/v0\/b\/([^/]+)\/o\/([^?]+)/i);
   if (m) {
     const bucket = m[1].replace(".firebasestorage.app", ".appspot.com");
@@ -101,11 +97,9 @@ export function toStorageRefString(s) {
     return `gs://${bucket}/${obj}`;
   }
 
-  // If it's a plain http(s) to some CDN or external host, keep it as URL
-  if (/^https?:\/\//i.test(v)) return v;
+  if (/^https?:\/\//i.test(v)) return v; // external URL stays http(s)
 
-  // Otherwise it's already a relative path inside the current bucket
-  return v;
+  return v; // relative path in current bucket
 }
 
 /* ---------------- Blob fetch with timeout ---------------- */
@@ -116,19 +110,12 @@ function withTimeout(promise, ms, label = "timeout") {
   ]);
 }
 
-/**
- * Get a Blob from a Storage ref *or* an HTTP URL.
- * - Prefers Storage SDK for `gs://` and relative paths.
- * - Falls back to `fetch` for http(s).
- * - Times out (rejects) after `timeoutMs` (default 25s).
- */
 export async function getBlobFromRefString(refStr, timeoutMs = 25000) {
   await ensureAuthed();
   const { storage } = getFirebase();
   const coerced = toStorageRefString(refStr);
 
   try {
-    // http(s) — fetch directly
     if (/^https?:\/\//i.test(coerced)) {
       const r = await withTimeout(
         fetch(coerced, { mode: "cors", credentials: "omit", cache: "no-store" }),
@@ -138,12 +125,9 @@ export async function getBlobFromRefString(refStr, timeoutMs = 25000) {
       if (!r.ok) throw new Error("HTTP " + r.status);
       return await r.blob();
     }
-
-    // gs://bucket/path  OR relative path
-    const ref = stRef(storage, coerced); // SDK accepts both `gs://...` and `relative/path`
+    const ref = stRef(storage, coerced);
     return await withTimeout(getBlob(ref), timeoutMs, "storage/getblob-timeout");
   } catch (err) {
-    // Helpful console for debugging paths
     console.warn("[getBlobFromRefString] failed:", { input: refStr, coerced }, err);
     throw err;
   }
@@ -163,7 +147,7 @@ export function candidateOriginals(pathOrUrl) {
   variants.forEach(v => variants.add(v.replace(/(\.[a-z0-9]+)\1$/i, "$1")));
 
   for (const v of variants) {
-    const gsOrPath = toStorageRefString(v); // may become gs://bucket/path
+    const gsOrPath = toStorageRefString(v);
     out.add(gsOrPath);
     if (/^https?:\/\//i.test(s) && qs) out.add(`${v}?${qs}`);
   }
@@ -179,7 +163,7 @@ export async function uploadSmallText(path, text, contentType = "text/plain") {
   return await getDownloadURL(ref);
 }
 
-/* ---------------- Root detection for scenarios.js ---------------- */
+/* ---------------- Root detection (DB) ---------------- */
 export async function detectScenariosRoot() {
   const { db } = getFirebase();
   try {
