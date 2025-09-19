@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>test-edit · Storage Scenarios Loader</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <style>
+    :root { --bg:#0b1622; --fg:#e8f0fb; --muted:#9fb3c8; --accent:#4aa3ff; --err:#ff6473; }
+    html,body { height:100%; margin:0; background:var(--bg); color:var(--fg); font:14px/1.45 system-ui,-apple-system,Segoe UI,Roboto,sans-serif; }
+    .top { display:flex; gap:12px; align-items:center; justify-content:space-between; padding:10px 12px; border-bottom:1px solid #17314a; background:#0e1f2f; }
+    .pill { background:#102133; border:1px solid #1f4063; border-radius:999px; padding:6px 10px; color:#cfe0f5; margin-right:6px; }
+    .muted { color:var(--muted); }
+    .wrap { display:grid; grid-template-columns: 340px 1fr; height: calc(100vh - 52px); }
+    aside { border-right:1px solid #17314a; padding:12px; overflow:auto; }
+    main  { padding:12px; overflow:auto; }
+    select,button,input { background:#0f2234; color:var(--fg); border:1px solid #254766; border-radius:6px; padding:8px 10px; width:100%; box-sizing:border-box; }
+    button { cursor:pointer; }
+    #err { display:none; color:var(--err); font-weight:600; margin:8px 0; }
+    #grid { display:grid; grid-template-columns: repeat(auto-fill, minmax(160px,1fr)); gap:10px; }
+    .card { background:#0f2234; border:1px solid #1e3c58; border-radius:8px; padding:8px; }
+    .card img { width:100%; height:140px; object-fit:cover; border-radius:6px; }
+    .small { font-size:12px; color:var(--muted); margin-top:6px; word-break:break-all; }
+    a { color:var(--accent); text-decoration:none; }
+    code { background:#102133; padding:2px 6px; border-radius:5px; }
+  </style>
+</head>
+<body>
+  <div class="top">
+    <div>
+      <span class="pill" id="authPill">auth…</span>
+      <span class="pill" id="bucketPill">bucket: —</span>
+      <span class="pill" id="statusPill">ready</span>
+    </div>
+    <div class="muted">test-edit · loads <code>scenarios/&lt;id&gt;/…</code> from Cloud Storage</div>
+  </div>
+
+  <div class="wrap">
+    <aside>
+      <div id="err"></div>
+
+      <label>Scenario folder</label>
+      <div style="display:flex; gap:8px; align-items:center; margin-top:6px;">
+        <select id
