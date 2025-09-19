@@ -45,7 +45,7 @@ function fitCanvas(){
 }
 
 /* -------- state -------- */
-const ROOT_CANDIDATES = ["scenarios", "geophoto/scenarios"]; // try both
+const ROOT_CANDIDATES = ["scenarios", "geophoto/scenarios"];
 let ACTIVE_ROOT = "scenarios";
 let scenarios = [];          // scenario ids (folder names)
 let currentId = "";
@@ -53,52 +53,58 @@ let stops = [];              // [{path,url,title}]
 let stopIdx = -1;
 
 /* ===================== Storage listing ===================== */
-/**
- * Firebase "folders" are prefixes. Depending on how files were uploaded,
- * listAll(root).prefixes may be empty even if objects exist at root/<id>/...
- * This function derives IDs from BOTH prefixes and first segments of item paths.
- */
 async function listScenarioIdsForRoot(root){
   const { storage } = getFirebase();
-
-  // Ensure trailing slash to hint "directory"
   const normRoot = root.replace(/\/+$/,"");
-  const rootRef = stRef(storage, normRoot + "/");
 
-  const res = await listAll(rootRef);
-  console.log("[DEBUG] listAll result for", normRoot, {
-    prefixes: (res.prefixes || []).map(p => ({ name: p.name, fullPath: p.fullPath })),
-    itemsLen: (res.items || []).length,
-    sampleItems: (res.items || []).slice(0,5).map(i => i.fullPath)
-  });
+  // 1) Normal list at the root
+  const ids1 = await listIdsAtPrefix(storage, normRoot + "/");
+  if (ids1.length) {
+    log("IDs via root list:", ids1);
+    return ids1.sort();
+  }
 
-  const ids = new Set();
+  // 2) Fallback scan by first character (handles buckets that hide root prefixes)
+  const chars = ["-"];
+  for (let i=48;i<=57;i++) chars.push(String.fromCharCode(i));  // 0–9
+  for (let i=65;i<=90;i++) chars.push(String.fromCharCode(i));  // A–Z
+  for (let i=97;i<=122;i++) chars.push(String.fromCharCode(i)); // a–z
 
-  // Prefer explicit subfolder prefixes
-  (res.prefixes || []).forEach(p => {
-    if (p?.name) ids.add(p.name);
-    else if (p?.fullPath) {
-      const parts = p.fullPath.split("/").filter(Boolean);
-      const leaf = parts[parts.length - 1];
-      if (leaf) ids.add(leaf);
-    }
-  });
-
-  // Fallback: derive from items (e.g., scenarios/<id>/file.jpg)
-  (res.items || []).forEach(item => {
-    const fp = (item.fullPath || "").replace(/^\/+/,"");
-    const parts = fp.split("/").filter(Boolean);
-    // Cases to handle:
-    //  - "scenarios/<id>/file.jpg"
-    //  - "<id>/file.jpg" (if provider omitted the root)
-    const idx = (parts[0] === normRoot && parts.length > 1) ? 1 : 0;
-    const candidate = parts[idx];
-    if (candidate && candidate !== normRoot) ids.add(candidate);
-  });
-
-  const out = Array.from(ids).sort();
-  console.log("[DEBUG] Scenario IDs found:", out);
+  const found = new Set();
+  for (const ch of chars){
+    const sub = await listIdsAtPrefix(storage, `${normRoot}/${ch}`);
+    sub.forEach(s => found.add(s));
+  }
+  const out = Array.from(found).sort();
+  log("IDs via fallback scan:", out);
   return out;
+}
+
+async function listIdsAtPrefix(storage, prefixPath){
+  const ids = new Set();
+  try{
+    const res = await listAll(stRef(storage, prefixPath));
+    // explicit subfolders
+    (res.prefixes || []).forEach(p => {
+      const leaf = p?.name || (p?.fullPath?.split("/").filter(Boolean).slice(-1)[0]);
+      if (leaf) ids.add(leaf);
+    });
+    // derive from items (scenarios/<id>/file.jpg)
+    (res.items || []).forEach(item => {
+      const fp = (item.fullPath || "").replace(/^\/+/,"");
+      const parts = fp.split("/").filter(Boolean);
+      if (!parts.length) return;
+      // if the first segment equals 'scenarios' or 'geophoto', take the next one
+      let idx = 0;
+      if (parts[0] === "scenarios" && parts.length > 1) idx = 1;
+      else if (parts[0] === "geophoto" && parts[1] === "scenarios" && parts.length > 2) idx = 2;
+      const id = parts[idx];
+      if (id && id !== "scenarios") ids.add(id);
+    });
+  }catch(e){
+    warn("listIdsAtPrefix error", prefixPath, e?.code||e?.message||e);
+  }
+  return Array.from(ids);
 }
 
 async function pickActiveRoot(){
@@ -106,13 +112,10 @@ async function pickActiveRoot(){
     try {
       const ids = await listScenarioIdsForRoot(root);
       if (ids.length) { ACTIVE_ROOT = root; return ids; }
-      // If zero, keep trying next root
     } catch (e){
       warn("Root check failed for", root, e?.message||e);
-      // try next
     }
   }
-  // default
   ACTIVE_ROOT = ROOT_CANDIDATES[0];
   return [];
 }
@@ -126,7 +129,6 @@ async function listFilesUnderScenario(id){
     (res.items || []).forEach(it => paths.push(it.fullPath || `${prefix}/${it.name}`));
     for (const sub of (res.prefixes || [])) {
       const leaf = (sub.name || "").toLowerCase();
-      // skip only big/generated folders
       if (leaf === "masks" || leaf === "overlays") continue;
       if (leaf === "results" && prefix.toLowerCase().endsWith("/ai")) continue;
       await walk((sub.fullPath || `${prefix}/${sub.name}`).replace(/\/+/g,"/"));
@@ -181,8 +183,8 @@ async function loadStop(i){
   setTxt("statusPill", `Loading: ${s.title}`);
   try{
     const blob = await tryBlobThenFetch(s);
-    await setCanvasFromBlob(blob);          // canvas if available
-    const fb = $("fullsizeFallback");       // always show the <img> too
+    await setCanvasFromBlob(blob);
+    const fb = $("fullsizeFallback");
     if (fb){ fb.src = s.url; fb.style.display = "block"; }
     setTxt("statusPill", `Loaded: ${s.title}`);
   }catch(e){
@@ -209,7 +211,7 @@ async function tryBlobThenFetch(stop){
 
 async function setCanvasFromBlob(blob){
   const canvas = ensureCanvas();
-  if (!canvas) return; // no fabric; rely on <img> fallback
+  if (!canvas) return;
   return new Promise((res,rej)=>{
     const u = URL.createObjectURL(blob);
     fabric.Image.fromURL(u, (img)=>{
@@ -291,7 +293,7 @@ export async function bootScenarios(setStatus = ()=>{}, showError = ()=>{}){
       const errbar = $("errbar");
       if (errbar){
         errbar.style.display = "block";
-        errbar.textContent = `No scenario folders found under "${ACTIVE_ROOT}". Ensure your Storage rules allow read/list for '${ACTIVE_ROOT}/**' and that folders exist.`;
+        errbar.textContent = `No scenario folders found under "${ACTIVE_ROOT}". Ensure Storage rules allow list/read for '${ACTIVE_ROOT}/**' and that folders exist.`;
       }
     }
   }catch(e){
@@ -305,7 +307,7 @@ export async function bootScenarios(setStatus = ()=>{}, showError = ()=>{}){
   }
 }
 
-/* -------- auto-boot (kept) -------- */
+/* -------- auto-boot -------- */
 function autoBoot(){
   try{
     wireScenarioUI();
