@@ -52,42 +52,52 @@ let currentId = "";
 let stops = [];              // [{path,url,title}]
 let stopIdx = -1;
 
-/* -------- storage listing -------- */
+/* ===================== Storage listing ===================== */
 /**
- * Firebase "folders" are prefixes. Sometimes listAll(root).prefixes is empty
- * even when you have objects like `scenarios/<id>/file.jpg`.
- * This function derives IDs from BOTH prefixes and the first segment of item paths.
+ * Firebase "folders" are prefixes. Depending on how files were uploaded,
+ * listAll(root).prefixes may be empty even if objects exist at root/<id>/...
+ * This function derives IDs from BOTH prefixes and first segments of item paths.
  */
 async function listScenarioIdsForRoot(root){
   const { storage } = getFirebase();
-  const rootRef = stRef(storage, root);
+
+  // Ensure trailing slash to hint "directory"
+  const normRoot = root.replace(/\/+$/,"");
+  const rootRef = stRef(storage, normRoot + "/");
+
   const res = await listAll(rootRef);
+  console.log("[DEBUG] listAll result for", normRoot, {
+    prefixes: (res.prefixes || []).map(p => ({ name: p.name, fullPath: p.fullPath })),
+    itemsLen: (res.items || []).length,
+    sampleItems: (res.items || []).slice(0,5).map(i => i.fullPath)
+  });
 
   const ids = new Set();
 
-  // Derive IDs from items (e.g., scenarios/<id>/file.jpg)
-  (res.items || []).forEach(item => {
-    const fp = item.fullPath || "";
-    // Expect: "<root>/<id>/...". Grab the segment after root.
-    const parts = fp.split("/");
-    // If the bucket returns fullPath without the root, just take parts[0]
-    const idx = (parts[0] === root && parts.length > 1) ? 1 : 0;
-    const candidate = parts[idx];
-    if (candidate && candidate !== root) ids.add(candidate);
-  });
-
-  // Add explicit subfolder prefixes if present
+  // Prefer explicit subfolder prefixes
   (res.prefixes || []).forEach(p => {
     if (p?.name) ids.add(p.name);
     else if (p?.fullPath) {
-      const parts = p.fullPath.split("/");
+      const parts = p.fullPath.split("/").filter(Boolean);
       const leaf = parts[parts.length - 1];
       if (leaf) ids.add(leaf);
     }
   });
 
+  // Fallback: derive from items (e.g., scenarios/<id>/file.jpg)
+  (res.items || []).forEach(item => {
+    const fp = (item.fullPath || "").replace(/^\/+/,"");
+    const parts = fp.split("/").filter(Boolean);
+    // Cases to handle:
+    //  - "scenarios/<id>/file.jpg"
+    //  - "<id>/file.jpg" (if provider omitted the root)
+    const idx = (parts[0] === normRoot && parts.length > 1) ? 1 : 0;
+    const candidate = parts[idx];
+    if (candidate && candidate !== normRoot) ids.add(candidate);
+  });
+
   const out = Array.from(ids).sort();
-  log(`Scenario IDs for ${root}:`, out);
+  console.log("[DEBUG] Scenario IDs found:", out);
   return out;
 }
 
@@ -109,17 +119,17 @@ async function pickActiveRoot(){
 
 async function listFilesUnderScenario(id){
   const { storage } = getFirebase();
-  const base = `${ACTIVE_ROOT}/${id}`;
+  const base = `${ACTIVE_ROOT}/${id}`.replace(/\/+/g,"/");
   const paths = [];
   async function walk(prefix){
-    const res = await listAll(stRef(storage, prefix));
+    const res = await listAll(stRef(storage, prefix + "/"));
     (res.items || []).forEach(it => paths.push(it.fullPath || `${prefix}/${it.name}`));
     for (const sub of (res.prefixes || [])) {
       const leaf = (sub.name || "").toLowerCase();
       // skip only big/generated folders
       if (leaf === "masks" || leaf === "overlays") continue;
       if (leaf === "results" && prefix.toLowerCase().endsWith("/ai")) continue;
-      await walk(sub.fullPath || `${prefix}/${sub.name}`);
+      await walk((sub.fullPath || `${prefix}/${sub.name}`).replace(/\/+/g,"/"));
     }
   }
   await walk(base);
@@ -139,7 +149,7 @@ async function buildStopsFromPaths(paths){
   return out;
 }
 
-/* -------- UI rendering -------- */
+/* ===================== UI rendering ===================== */
 function renderScenarioSelect(){
   const sel = $("scenarioSel");
   if (!sel) return;
@@ -211,7 +221,7 @@ async function setCanvasFromBlob(blob){
   });
 }
 
-/* -------- exported: wireScenarioUI -------- */
+/* ===================== Exports ===================== */
 export function wireScenarioUI(){
   const sel = $("scenarioSel");
   if (sel){
@@ -251,7 +261,6 @@ export function wireScenarioUI(){
   window.addEventListener("resize", fitCanvas);
 }
 
-/* -------- exported: bootScenarios -------- */
 export async function bootScenarios(setStatus = ()=>{}, showError = ()=>{}){
   try{
     const info = getStorageInfo();
@@ -261,9 +270,15 @@ export async function bootScenarios(setStatus = ()=>{}, showError = ()=>{}){
     setTxt("authPill", `anon ✔ (${String(user?.uid||"anon").slice(0,8)})`);
 
     // Detect active root by trying both candidates
-    scenarios = await pickActiveRoot();
-    setTxt("rootPill", `bucket: ${info.bucketHost} | root: ${ACTIVE_ROOT}`);
+    scenarios = [];
+    for (const root of ROOT_CANDIDATES) {
+      try {
+        const ids = await listScenarioIdsForRoot(root);
+        if (ids.length) { ACTIVE_ROOT = root; scenarios = ids; break; }
+      } catch (e) { warn("root try failed", root, e); }
+    }
 
+    setTxt("rootPill", `bucket: ${info.bucketHost} | root: ${ACTIVE_ROOT}`);
     renderScenarioSelect();
     setTxt("statusPill", `${scenarios.length} scenario(s)`);
 
