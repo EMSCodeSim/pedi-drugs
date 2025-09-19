@@ -33,7 +33,7 @@
     #thumbRow { display:grid; grid-template-columns: repeat(auto-fill, 84px); gap:8px; overflow:auto; max-height:40vh; }
     #thumbRow img.thumb { width:84px; height:84px; object-fit:cover; border-radius:8px; opacity:.85; border:2px solid transparent; background:#000; }
     #thumbRow img.thumb.active { border-color: var(--accent); opacity:1; }
-    #errbar { display:none; background:#3a1010; color:#ffd7d7; padding:8px 10px; border-radius:8px; margin:6px 0; }
+    #errbar { display:none; background:#3a1010; color:#ffd7d7; padding:8px 10px; border-radius:8px; margin:6px 0; white-space:pre-wrap; }
     #loader { position:fixed; inset:0; display:none; place-items:center; background:rgba(0,0,0,.35); z-index:10; }
     #loader .box { background:#0f1720; padding:14px 18px; border-radius:10px; box-shadow:0 10px 30px rgba(0,0,0,.4); }
     #app.toolsCollapsed #left, #app.toolsCollapsed #right { display:none; }
@@ -44,6 +44,7 @@
     #debug b { color:#a7d3ff; }
     #debug .fail { color:#ffb3b3; }
     #debug .ok { color:#a7ffb3; }
+    #fullsizeFallback { display:none; width:100%; height:auto; border-radius:10px; }
   </style>
 </head>
 <body>
@@ -102,6 +103,7 @@
     <div id="stageWrap">
       <div id="stage">
         <canvas id="c" width="1580" height="900"></canvas>
+        <img id="fullsizeFallback" alt="photo"/>
       </div>
       <div id="loader"><div class="box">Loading…</div></div>
     </div>
@@ -196,7 +198,6 @@
     console.error(e);
   }
 
-  // Try direct dynamic import (some hosts reject HEAD or lie about status)
   async function tryImport(url) {
     try {
       const mod = await import(url);
@@ -216,31 +217,17 @@
     throw new Error("Could not import any of:\n" + candidateUrls.join("\n"));
   }
 
-  // Build a broad set of candidates for both modules
   function buildCandidates(baseNames) {
-    const dirs = [
-      "./",                 // same folder
-      "../",                // parent
-      "./geophoto/",        // common folder name used
-      "../geophoto/",       // parent/geophoto
-      "/",                  // site root (if hosted at root)
-      "/geophoto/"          // site root/geophoto
-    ];
+    const dirs = ["./","../","./geophoto/","../geophoto/","/","/geophoto/"];
     const names = [];
     for (const b of baseNames) {
-      names.push(`${b}.js`);
-      names.push(`${b} (3).js`);
-      names.push(`${b} (2).js`);
-      names.push(`${b} (1).js`);
-      names.push(`${b}.legacy.js`);
+      names.push(`${b}.js`, `${b} (3).js`, `${b} (2).js`, `${b} (1).js`, `${b}.legacy.js`);
     }
-    // Add URL-encoded versions for space variants
     const namesEncoded = names.map(n => n.replaceAll(" ", "%20"));
     const allNames = [...new Set([...names, ...namesEncoded])];
 
     const out = [];
     for (const d of dirs) for (const n of allNames) out.push(d + n);
-    // Add cache-busters
     const ts = Date.now();
     return out.map(u => u + `?v=${ts}`);
   }
@@ -250,33 +237,30 @@
       debug.textContent = "Resolving modules…";
       setStatus("Resolving modules…");
 
-      // 1) firebase-core.js must exist somewhere
+      // 1) firebase-core.js
       const coreCandidates = buildCandidates(["firebase-core"]);
       logDbg("<b>firebase-core candidates:</b>");
       coreCandidates.forEach(u => logDbg(u));
-
       const core = await importFirst(coreCandidates);
       if (!core || typeof core.initFirebase !== "function") {
         throw new Error("firebase-core loaded but initFirebase() is missing.");
       }
-      await core.initFirebase();
+      await core.initFirebase(); // ok if sync
       setStatus("Firebase ready");
 
-      // 2) scenarios.js — your loader
-      const scnCandidates = buildCandidates(["scenarios", "scenarios-ui"]);
+      // 2) scenarios.js
+      const scnCandidates = buildCandidates(["scenarios","scenarios-ui"]);
       logDbg("<b>scenarios candidates:</b>");
       scnCandidates.forEach(u => logDbg(u));
-
       const SCNmod = await importFirst(scnCandidates);
       const SCN = SCNmod.default || SCNmod;
-
       if (!SCN || !SCN.bootScenarios || !SCN.wireScenarioUI) {
         throw new Error("scenarios module loaded but expected exports are missing (bootScenarios/wireScenarioUI).");
       }
 
       SCN.wireScenarioUI();
       setStatus("Booting scenarios…");
-      await SCN.bootScenarios();
+      await SCN.bootScenarios(setStatus, showError);
       setStatus("Ready");
       logDbg("<b class='ok'>✓ scenarios booted</b>");
     } catch (e) {
@@ -296,7 +280,6 @@
     }
   });
 
-  // UI chrome
   document.getElementById("toggleTools").onclick = function(){
     const app = document.getElementById("app");
     const collapse = !app.classList.contains("toolsCollapsed");
