@@ -2,42 +2,287 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <title>test-edit · Storage Scenarios Loader</title>
+  <title>test-edit · Storage Diagnostics</title>
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <style>
-    :root { --bg:#0b1622; --fg:#e8f0fb; --muted:#9fb3c8; --accent:#4aa3ff; --err:#ff6473; }
+    :root { --bg:#0b1622; --panel:#0f2133; --fg:#e8f0fb; --muted:#9fb3c8; --ok:#2dd48f; --bad:#ff6b6b; --warn:#ffc857; --accent:#4aa3ff; }
     html,body { height:100%; margin:0; background:var(--bg); color:var(--fg); font:14px/1.45 system-ui,-apple-system,Segoe UI,Roboto,sans-serif; }
-    .top { display:flex; gap:12px; align-items:center; justify-content:space-between; padding:10px 12px; border-bottom:1px solid #17314a; background:#0e1f2f; }
-    .pill { background:#102133; border:1px solid #1f4063; border-radius:999px; padding:6px 10px; color:#cfe0f5; margin-right:6px; }
+    header { padding:10px 12px; border-bottom:1px solid #17314a; background:#0e1f2f; display:flex; align-items:center; justify-content:space-between; gap:12px; }
+    .pills { display:flex; gap:8px; flex-wrap:wrap; }
+    .pill { background:#102133; border:1px solid #1f4063; border-radius:999px; padding:6px 10px; color:#cfe0f5; }
+    main { display:grid; grid-template-columns: 420px 1fr; height: calc(100vh - 52px); }
+    aside { border-right:1px solid #17314a; padding:12px; overflow:auto; background:var(--panel); }
+    section { padding:12px; overflow:auto; }
+    h3 { margin:10px 0 6px; font-size:13px; color:#cfe0f5; }
     .muted { color:var(--muted); }
-    .wrap { display:grid; grid-template-columns: 340px 1fr; height: calc(100vh - 52px); }
-    aside { border-right:1px solid #17314a; padding:12px; overflow:auto; }
-    main  { padding:12px; overflow:auto; }
-    select,button,input { background:#0f2234; color:var(--fg); border:1px solid #254766; border-radius:6px; padding:8px 10px; width:100%; box-sizing:border-box; }
+    .steps { list-style:none; padding:0; margin:0; display:flex; flex-direction:column; gap:8px; }
+    .step { background:#0e2031; border:1px solid #1a3a57; border-radius:10px; padding:10px; }
+    .row { display:flex; justify-content:space-between; gap:12px; align-items:center; }
+    .status { font-weight:700; }
+    .ok { color:var(--ok); }
+    .fail { color:var(--bad); }
+    .warn { color:var(--warn); }
+    pre { background:#0b1b2a; border:1px solid #15314a; padding:10px; border-radius:8px; overflow:auto; }
+    code { background:#0b1b2a; padding:2px 6px; border-radius:5px; border:1px solid #14324c; }
+    label { display:block; margin:8px 0 4px; }
+    input,button,select { background:#0f2234; color:var(--fg); border:1px solid #254766; border-radius:6px; padding:8px 10px; }
+    input,select { width:100%; box-sizing:border-box; }
     button { cursor:pointer; }
-    #err { display:none; color:var(--err); font-weight:600; margin:8px 0; }
-    #grid { display:grid; grid-template-columns: repeat(auto-fill, minmax(160px,1fr)); gap:10px; }
+    .grid { display:grid; grid-template-columns: repeat(auto-fill, minmax(160px,1fr)); gap:10px; }
     .card { background:#0f2234; border:1px solid #1e3c58; border-radius:8px; padding:8px; }
     .card img { width:100%; height:140px; object-fit:cover; border-radius:6px; }
     .small { font-size:12px; color:var(--muted); margin-top:6px; word-break:break-all; }
-    a { color:var(--accent); text-decoration:none; }
-    code { background:#102133; padding:2px 6px; border-radius:5px; }
+    .err { color:var(--bad); font-weight:700; }
+    .btnrow { display:flex; gap:8px; flex-wrap:wrap; }
   </style>
 </head>
 <body>
-  <div class="top">
-    <div>
-      <span class="pill" id="authPill">auth…</span>
+  <header>
+    <div class="pills">
+      <span class="pill" id="appPill">app: —</span>
+      <span class="pill" id="authPill">auth: —</span>
       <span class="pill" id="bucketPill">bucket: —</span>
-      <span class="pill" id="statusPill">ready</span>
+      <span class="pill" id="statusPill">status: starting…</span>
     </div>
-    <div class="muted">test-edit · loads <code>scenarios/&lt;id&gt;/…</code> from Cloud Storage</div>
-  </div>
+    <div class="muted" id="envPill"></div>
+  </header>
 
-  <div class="wrap">
+  <main>
     <aside>
-      <div id="err"></div>
+      <h3>Controls</h3>
+      <div class="btnrow">
+        <button id="runAllBtn">Run All Diagnostics</button>
+        <button id="copyBtn" title="Copy diagnostics JSON">Copy Output</button>
+      </div>
 
-      <label>Scenario folder</label>
-      <div style="display:flex; gap:8px; align-items:center; margin-top:6px;">
-        <select id
+      <label>Known Storage Path (direct read test)</label>
+      <input id="pathInput" value="scenarios/-OZH6KD_krWW-FODi4A_/1756945542530.jpg" />
+
+      <label>Scenario to Inspect (leave blank to auto-pick first)</label>
+      <input id="scenarioInput" placeholder="-OYr8mtenaZY..." />
+
+      <h3>Troubleshooting Hints</h3>
+      <div class="muted">
+        • Storage rules must include:
+        <br><code>match /scenarios { allow list: if request.auth != null }</code>
+        <br><code>match /scenarios/{allPaths=**} { allow read: if request.auth != null }</code>
+        <br><br>• SDK must target <code>gs://dailyquiz-d5279.appspot.com</code><br>
+        • Run this page from your app domain (not GitHub viewer).
+      </div>
+    </aside>
+
+    <section>
+      <h3>Steps</h3>
+      <ul id="steps" class="steps"></ul>
+
+      <h3>Images (if any)</h3>
+      <div id="grid" class="grid"></div>
+    </section>
+  </main>
+
+  <script type="module">
+    // --- Firebase v10 Modules ---
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-app.js";
+    import { getAuth, onAuthStateChanged, signInAnonymously, getIdToken } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-auth.js";
+    import { getStorage, ref as stRef, listAll, getDownloadURL } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-storage.js";
+
+    // --- Project config (DailyQuiz) ---
+    const firebaseConfig = {
+      apiKey: "AIzaSyDM6DpRSeZueVKRpbyJyDmhf8WY66KyCDk",
+      authDomain: "dailyquiz-d5279.firebaseapp.com",
+      projectId: "dailyquiz-d5279",
+      storageBucket: "dailyquiz-d5279.firebasestorage.app" // config string (CDN URL style)
+    };
+
+    // --- DOM helpers ---
+    const $ = id => document.getElementById(id);
+    const set = (id, t) => { const el=$(id); if (el) el.textContent = t; };
+    const stepsEl = $("steps");
+    const out = []; // structured diagnostics to copy
+    const startTs = new Date().toISOString();
+
+    const env = {
+      startedAt: startTs,
+      href: location.href,
+      origin: location.origin,
+      userAgent: navigator.userAgent,
+      storageBucket_config: firebaseConfig.storageBucket,
+      storageBucket_gs_override: "gs://dailyquiz-d5279.appspot.com"
+    };
+    set("envPill", new URL(location.href).host);
+    set("bucketPill", "bucket: dailyquiz-d5279.appspot.com");
+    set("appPill", "app: initializing…");
+
+    function addStep(title, status, details) {
+      const li = document.createElement("li");
+      li.className = "step";
+      const row = document.createElement("div");
+      row.className = "row";
+      const t = document.createElement("div");
+      t.textContent = title;
+      const s = document.createElement("div");
+      s.className = "status " + (status==="ok"?"ok":status==="fail"?"fail":"warn");
+      s.textContent = status.toUpperCase();
+      row.appendChild(t); row.appendChild(s);
+      li.appendChild(row);
+      if (details) {
+        const pre = document.createElement("pre");
+        pre.textContent = typeof details === "string" ? details : JSON.stringify(details, null, 2);
+        li.appendChild(pre);
+      }
+      stepsEl.appendChild(li);
+      out.push({ title, status, details });
+    }
+
+    async function runAll() {
+      $("grid").innerHTML = "";
+      stepsEl.innerHTML = "";
+      out.length = 0;
+
+      addStep("Environment", "ok", env);
+
+      // 1) Initialize app
+      let app, auth, storage;
+      try {
+        app = initializeApp(firebaseConfig);
+        auth = getAuth(app);
+        storage = getStorage(app, "gs://dailyquiz-d5279.appspot.com"); // IMPORTANT: gs:// uses appspot.com
+        set("appPill", "app: initialized");
+        addStep("Initialize Firebase", "ok", { projectId: app.options.projectId, storage_gs: "gs://dailyquiz-d5279.appspot.com" });
+      } catch (e) {
+        set("appPill", "app: failed");
+        addStep("Initialize Firebase", "fail", String(e));
+        set("statusPill", "status: init failed");
+        return;
+      }
+
+      // 2) Sign in anonymously
+      set("statusPill", "status: signing in…");
+      let user = null, idToken = null;
+      try {
+        if (!auth.currentUser) await signInAnonymously(auth);
+        user = await new Promise(res => onAuthStateChanged(auth, u => res(u), { once:true }));
+        if (user) idToken = await getIdToken(user);
+        set("authPill", `auth: anon ✔ (${String(user?.uid||"").slice(0,8)})`);
+        addStep("Auth (anonymous)", "ok", { uid: user.uid, tokenPreview: idToken?.slice(0,12)+"…" });
+      } catch (e) {
+        set("authPill", "auth: failed");
+        addStep("Auth (anonymous)", "fail", String(e));
+      }
+
+      // 3) Direct-read test for a known path (does NOT need list permission)
+      set("statusPill", "status: testing direct read…");
+      const testPath = $("pathInput").value.trim();
+      try {
+        const url = await getDownloadURL(stRef(storage, testPath));
+        addStep("Direct getDownloadURL(path)", "ok", { path: testPath, url });
+        renderCards([testPath], [url]);
+      } catch (e) {
+        addStep("Direct getDownloadURL(path)", "fail", explainStorageError(e));
+      }
+
+      // 4) Try listing scenarios root via SDK (requires allow list on /scenarios)
+      set("statusPill", "status: listing scenarios (SDK) …");
+      let scenarioIds = [];
+      try {
+        const res = await listAll(stRef(storage, "scenarios/"));
+        const ids = new Set();
+        (res.prefixes||[]).forEach(p => ids.add(p.name || p.fullPath.split("/").pop()));
+        (res.items||[]).forEach(it => {
+          const parts = (it.fullPath || "").split("/").filter(Boolean);
+          if (parts[0]==="scenarios" && parts[1]) ids.add(parts[1]);
+        });
+        scenarioIds = Array.from(ids).sort();
+        addStep("SDK listAll('scenarios/')", "ok", { count: scenarioIds.length, ids: scenarioIds.slice(0,20) });
+      } catch (e) {
+        addStep("SDK listAll('scenarios/')", "fail", explainStorageError(e));
+      }
+
+      // 5) Optional: pick a scenario and list files
+      const preferId = $("scenarioInput").value.trim();
+      const chosen = preferId || scenarioIds[0];
+      if (chosen) {
+        set("statusPill", `status: listing files for ${chosen} …`);
+        try {
+          const files = await listFilesRecursive(storage, `scenarios/${chosen}`);
+          addStep(`List files under scenarios/${chosen}`, "ok", { count: files.length, sample: files.slice(0,20) });
+          if (files.length) {
+            const urls = await Promise.all(files.slice(0,12).map(p => getDownloadURL(stRef(storage, p)).catch(e => ({ error: e.code||String(e), path:p }))));
+            const okPaths = [], okUrls = [];
+            urls.forEach((u,i)=>{ if (typeof u==="string") { okPaths.push(files[i]); okUrls.push(u);} });
+            renderCards(okPaths, okUrls);
+            addStep("Resolve URLs for first files", okUrls.length ? "ok" : "fail", { resolved: okUrls.length });
+          }
+        } catch (e) {
+          addStep(`List files under scenarios/${chosen}`, "fail", explainStorageError(e));
+        }
+      } else {
+        addStep("Choose scenario", "warn", "No scenarios returned from SDK listing; listing likely blocked by rules.");
+      }
+
+      set("statusPill", "status: done");
+    }
+
+    async function listFilesRecursive(storage, prefix) {
+      const out = [];
+      async function walk(pfx) {
+        const res = await listAll(stRef(storage, pfx.replace(/\/+$/,"") + "/"));
+        (res.items||[]).forEach(it => out.push(it.fullPath || `${pfx}/${it.name}`));
+        for (const sub of (res.prefixes||[])) {
+          const name = (sub.name || "").toLowerCase();
+          if (name==="masks" || name==="overlays") continue;
+          if (name==="results" && pfx.toLowerCase().endsWith("/ai")) continue;
+          await walk(sub.fullPath || `${pfx}/${sub.name}`);
+        }
+      }
+      await walk(prefix);
+      return out;
+    }
+
+    function explainStorageError(e) {
+      const code = e?.code || "";
+      if (code.includes("storage/unauthorized")) {
+        return "storage/unauthorized — rules blocked. Ensure: allow list on /scenarios and allow read under /scenarios/**, and that auth is enabled.";
+      }
+      if (code.includes("auth/operation-not-allowed")) {
+        return "Anonymous auth disabled. Enable Anonymous sign-in in Firebase Auth.";
+      }
+      if (code.includes("storage/object-not-found")) {
+        return "storage/object-not-found — path may be wrong.";
+      }
+      return e?.message || String(e);
+    }
+
+    function renderCards(paths, urls) {
+      const grid = $("grid");
+      urls.forEach((u,i)=>{
+        const card = document.createElement("div");
+        card.className="card";
+        const img = document.createElement("img");
+        img.loading="lazy"; img.crossOrigin="anonymous"; img.referrerPolicy="no-referrer";
+        img.src = u;
+        const p = document.createElement("div"); p.className="small"; p.textContent = paths[i];
+        const a = document.createElement("a"); a.href=u; a.target="_blank"; a.rel="noopener"; a.textContent = "open";
+        const tools = document.createElement("div"); tools.className="small"; tools.appendChild(a);
+        card.appendChild(img); card.appendChild(p); card.appendChild(tools);
+        grid.appendChild(card);
+      });
+    }
+
+    // Wire buttons
+    $("runAllBtn").onclick = runAll;
+    $("copyBtn").onclick = () => {
+      const payload = {
+        env,
+        diagnostics: out,
+      };
+      navigator.clipboard.writeText(JSON.stringify(payload, null, 2)).then(()=>{
+        alert("Diagnostics copied to clipboard.");
+      });
+    };
+
+    // Auto-run on load
+    runAll();
+  </script>
+</body>
+</html>
