@@ -53,22 +53,50 @@ let stops = [];              // [{path,url,title}]
 let stopIdx = -1;
 
 /* -------- storage listing -------- */
+/**
+ * Firebase "folders" are prefixes. Sometimes listAll(root).prefixes is empty
+ * even when you have objects like `scenarios/<id>/file.jpg`.
+ * This function derives IDs from BOTH prefixes and the first segment of item paths.
+ */
 async function listScenarioIdsForRoot(root){
   const { storage } = getFirebase();
   const rootRef = stRef(storage, root);
   const res = await listAll(rootRef);
-  const ids = (res.prefixes || []).map(p => p.name);
-  log(`Scenario IDs for ${root}:`, ids);
-  return ids;
+
+  const ids = new Set();
+
+  // Derive IDs from items (e.g., scenarios/<id>/file.jpg)
+  (res.items || []).forEach(item => {
+    const fp = item.fullPath || "";
+    // Expect: "<root>/<id>/...". Grab the segment after root.
+    const parts = fp.split("/");
+    // If the bucket returns fullPath without the root, just take parts[0]
+    const idx = (parts[0] === root && parts.length > 1) ? 1 : 0;
+    const candidate = parts[idx];
+    if (candidate && candidate !== root) ids.add(candidate);
+  });
+
+  // Add explicit subfolder prefixes if present
+  (res.prefixes || []).forEach(p => {
+    if (p?.name) ids.add(p.name);
+    else if (p?.fullPath) {
+      const parts = p.fullPath.split("/");
+      const leaf = parts[parts.length - 1];
+      if (leaf) ids.add(leaf);
+    }
+  });
+
+  const out = Array.from(ids).sort();
+  log(`Scenario IDs for ${root}:`, out);
+  return out;
 }
 
 async function pickActiveRoot(){
   for (const root of ROOT_CANDIDATES){
     try {
       const ids = await listScenarioIdsForRoot(root);
-      if (ids.length) { ACTIVE_ROOT = root; return ids; } // found usable root with folders
-      // If zero, still accept but keep trying next in case assets live under the other prefix
-      if (!ids.length) { ACTIVE_ROOT = root; return ids; }
+      if (ids.length) { ACTIVE_ROOT = root; return ids; }
+      // If zero, keep trying next root
     } catch (e){
       warn("Root check failed for", root, e?.message||e);
       // try next
