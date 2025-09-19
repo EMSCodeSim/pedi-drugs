@@ -1,9 +1,8 @@
-// scenarios.js — Advanced Editor (secure + single-file friendly)
-// - Single-file via:
-//     ?path=scenarios/<id>/<file>
-//     ?file=<downloadURL>   (encoded OR unencoded; will auto-stitch token)
+// scenarios.js — Advanced Editor (secure + single-file)
+// - Single-file: ?path=scenarios/<id>/<file>  OR  ?file=<downloadURL> (encoded or not; token auto-stitched)
 // - Auth-first boot (works with rules requiring request.auth != null)
-// - If not single-file, falls back to robust scenario listing
+// - Robust listing fallback (SDK -> REST -> sweep) when not single-file
+// - IMPORTANT FIX: hide canvas when using <img> fallback so blank canvas won't cover the image.
 
 import {
   getFirebase,
@@ -36,8 +35,15 @@ function withTimeout(p, ms=TIMEOUT_MS, label="timeout"){
 /* -------------------- canvas + fallback <img> -------------------- */
 let f=null, baseImage=null;
 function ensureCanvas(){
+  const canvasEl = $("c");
+  if (!window.fabric) {
+    // Fabric not present → make sure canvas element doesn't cover fallback.
+    if (canvasEl) canvasEl.style.display = "none";
+    warn("fabric missing; using <img> fallback only");
+    return null;
+  }
   if (f) return f;
-  if (!window.fabric) { warn("fabric missing; using <img> fallback only"); return null; }
+  if (canvasEl) canvasEl.style.display = ""; // ensure visible when we use canvas
   f = new fabric.Canvas("c", { backgroundColor:"#061621", preserveObjectStacking:true });
   window.addEventListener("resize", fitCanvas);
   fitCanvas();
@@ -66,26 +72,21 @@ let stops = [];       // [{path,url,title}]
 let stopIdx = -1;
 
 /* -------------------- single-file mode -------------------- */
-// Parse query params but also allow grabbing the raw tail after "?file="
 function getQueryParams(){
   try { return new URLSearchParams(location.search); }
   catch { return new URLSearchParams(); }
 }
-
-// Accept both encoded and unencoded ?file= URLs.
-// If browser split token/alt params, reattach them.
 function getSingleFileURLFromQuery(){
   const qp = getQueryParams();
 
-  // 1) Prefer a clean ?path= (we'll resolve to URL)
+  // Prefer storage path
   const storagePath = qp.get("path");
   if (storagePath) return { type:"path", value: decodeURIComponent(storagePath) };
 
-  // 2) Try normal ?file=
+  // Normal ?file=
   let file = qp.get("file");
   if (file) {
     file = decodeURIComponent(file);
-    // If token or alt got split into their own params, add them back
     const hasTokenInUrl = /[?&]token=/.test(file);
     const hasAltInUrl   = /[?&]alt=/.test(file);
     const token = qp.get("token");
@@ -96,20 +97,16 @@ function getSingleFileURLFromQuery(){
     return { type:"url", value: url.toString() };
   }
 
-  // 3) Last resort: if the current href contains "?file=" followed by an unencoded URL,
-  // grab everything after "?file=" (handles cases where extra params were not parsed).
+  // Last resort: raw tail after ?file=
   const href = String(location.href);
   const idx = href.indexOf("?file=");
   if (idx >= 0) {
-    let tail = href.slice(idx + 6);        // after "?file="
-    // If there are our page's own params preceding file, guard by '&file=' too
+    let tail = href.slice(idx + 6);
     const ampIdx = tail.indexOf("&file=");
     if (ampIdx >= 0) tail = tail.slice(ampIdx + 6);
-    // decode once; leave any remaining encoded pieces as-is
     try { tail = decodeURIComponent(tail); } catch {}
     return { type:"url", value: tail };
   }
-
   return null;
 }
 
@@ -126,8 +123,7 @@ async function loadSingleFileIfRequested(){
       const url = await getDownloadURL(stRef(storage, spec.value));
       stop = { path: spec.value, url, title: spec.value.split("/").pop() || "photo" };
     }catch(e){
-      const errbar = $("errbar");
-      if (errbar){ errbar.style.display="block"; errbar.textContent = `Failed to resolve ?path: ${e?.code||e?.message||e}`; }
+      showErr(`Failed to resolve ?path: ${e?.code||e?.message||e}`);
       return true; // attempted single-file; keep normal UI hidden
     }
   }
@@ -144,7 +140,7 @@ async function loadSingleFileIfRequested(){
   return true;
 }
 
-/* -------------------- storage listing (when not single-file) -------------------- */
+/* -------------------- listing (when not single-file) -------------------- */
 async function sdkListPrefixesAt(storage, prefixPath){
   const res = await withTimeout(listAll(stRef(storage, prefixPath)), TIMEOUT_MS, "storage/list-timeout");
   const ids = new Set();
@@ -164,7 +160,6 @@ async function sdkListPrefixesAt(storage, prefixPath){
   });
   return Array.from(ids);
 }
-
 async function restListPrefixes(bucketHost, prefix){
   const q = new URLSearchParams({ prefix: prefix.endsWith("/")?prefix:prefix+"/", delimiter:"/" }).toString();
   const url = `https://firebasestorage.googleapis.com/v0/b/${bucketHost}/o?${q}`;
@@ -174,7 +169,6 @@ async function restListPrefixes(bucketHost, prefix){
   const prefixes = Array.isArray(j.prefixes) ? j.prefixes : [];
   return prefixes.map(p => p.split("/").filter(Boolean).pop()).filter(Boolean);
 }
-
 async function sweepByFirstChar(storage, root){
   const chars = ["-"]; for (let i=48;i<=57;i++) chars.push(String.fromCharCode(i));
   for (let i=65;i<=90;i++) chars.push(String.fromCharCode(i));
@@ -185,7 +179,6 @@ async function sweepByFirstChar(storage, root){
   }
   return Array.from(found);
 }
-
 async function listScenarioIdsForRoot(root){
   const { storage } = getFirebase();
   const { bucketHost } = getStorageInfo();
@@ -208,7 +201,6 @@ async function listScenarioIdsForRoot(root){
 
   return [];
 }
-
 async function pickActiveRoot(){
   for (const root of ROOT_CANDIDATES){
     try {
@@ -219,7 +211,6 @@ async function pickActiveRoot(){
   ACTIVE_ROOT = ROOT_CANDIDATES[0];
   return [];
 }
-
 async function listFilesUnderScenario(id){
   const { storage } = getFirebase();
   const base = `${ACTIVE_ROOT}/${id}`.replace(/\/+/g,"/");
@@ -238,7 +229,6 @@ async function listFilesUnderScenario(id){
   log(`Found ${paths.length} under ${base}`, paths.slice(0,12));
   return paths;
 }
-
 async function buildStopsFromPaths(paths){
   const { storage } = getFirebase();
   const out = [];
@@ -262,7 +252,6 @@ function renderScenarioSelect(){
     sel.appendChild(o);
   }
 }
-
 function renderThumbs(){
   const row = $("thumbRow"); if (!row) return;
   row.innerHTML = "";
@@ -277,23 +266,40 @@ function renderThumbs(){
   });
 }
 
+/* Toggle canvas/img visibility helpers */
+function showCanvasOnly(){
+  const canvasEl = $("c"), imgEl = $("fullsizeFallback");
+  if (imgEl) imgEl.style.display = "none";
+  if (canvasEl) canvasEl.style.display = ""; // visible
+}
+function showImageOnly(){
+  const canvasEl = $("c"), imgEl = $("fullsizeFallback");
+  if (canvasEl) canvasEl.style.display = "none";
+  if (imgEl) { imgEl.style.display = "block"; }
+}
+
 async function loadStop(i){
   stopIdx = i;
   const s = stops[i]; if (!s) return;
   setTxt("statusPill", `Loading: ${s.title}`);
+
   try{
+    // Try Storage blob first (works for paths and gs-derived refs)
     const blob = await tryBlobThenFetch(s);
-    await setCanvasFromBlob(blob);
+    await setCanvasFromBlob(blob);  // if fabric present, this will render
+    showCanvasOnly();               // <-- canvas good, hide <img>
     const fb = $("fullsizeFallback");
-    if (fb){ fb.src = s.url; fb.style.display = "block"; }
+    if (fb) fb.src = s.url;         // keep a ready fallback source
     setTxt("statusPill", `Loaded: ${s.title}`);
   }catch(e){
     warn("loadStop error:", e);
+    // Canvas failed or not available → use <img> fallback and HIDE canvas
     const fb = $("fullsizeFallback");
-    if (fb){ fb.src = s.url; fb.style.display = "block"; }
-    setTxt("statusPill", "Load failed (fallback shown)");
+    if (fb){ fb.src = s.url; }
+    showImageOnly();                // <-- make image visible, hide canvas
+    setTxt("statusPill", "Loaded (fallback image)");
     const errbar = $("errbar");
-    if (errbar){ errbar.style.display="block"; errbar.textContent = `Load error: ${e?.code||e?.message||e}`; }
+    if (errbar){ errbar.style.display="block"; errbar.textContent = `Canvas load error: ${e?.code||e?.message||e}`; }
   }
   renderThumbs();
 }
@@ -311,7 +317,7 @@ async function tryBlobThenFetch(stop){
 
 async function setCanvasFromBlob(blob){
   const canvas = ensureCanvas();
-  if (!canvas) return;
+  if (!canvas) throw new Error("fabric/canvas unavailable");
   return new Promise((res,rej)=>{
     const u = URL.createObjectURL(blob);
     fabric.Image.fromURL(u, (img)=>{
@@ -341,8 +347,7 @@ export function wireScenarioUI(){
         setTxt("statusPill", `${stops.length} file(s) resolved`);
         if (stops.length) loadStop(0);
       }catch(e){
-        const errbar = $("errbar");
-        if (errbar){ errbar.style.display="block"; errbar.textContent = `List error: ${e?.code||e?.message||e}`; }
+        showErr(`List error: ${e?.code||e?.message||e}`);
         setTxt("statusPill", "Failed to list files (see console).");
         warn("listFilesUnderScenario error:", e);
       }
@@ -363,20 +368,26 @@ export function wireScenarioUI(){
   window.addEventListener("resize", fitCanvas);
 }
 
+function showErr(msg){
+  const errbar = $("errbar");
+  if (errbar){ errbar.style.display="block"; errbar.textContent = msg; }
+}
+
 export async function bootScenarios(setStatus = ()=>{}, showError = ()=>{}){
   try{
     const info = getStorageInfo();
     setTxt("rootPill", `bucket: ${info.bucketHost} | root: (detecting…)`);
 
-    // Secure rules require auth (Anonymous sign-in enabled)
-    const user = await ensureAuthed();
-    setTxt("authPill", `anon ✔ (${String(user?.uid||"anon").slice(0,8)})`);
+    // Secure rules require auth for listing; single-file via ?file= works either way.
+    const user = await ensureAuthed().catch(e => { warn("auth failed (continuing for direct URL)", e); return null; });
+    if (user) setTxt("authPill", `anon ✔ (${String(user?.uid||"anon").slice(0,8)})`);
+    else setTxt("authPill", "auth skipped");
 
-    // >>> Single-file mode takes precedence <<<
+    // --- Single-file takes precedence ---
     const handled = await loadSingleFileIfRequested();
     if (handled) {
       setTxt("rootPill", `bucket: ${info.bucketHost} | single-file`);
-      return; // skip listing entirely
+      return;
     }
 
     // Otherwise, detect a root and list scenarios
@@ -399,20 +410,12 @@ export async function bootScenarios(setStatus = ()=>{}, showError = ()=>{}){
       sel.dispatchEvent(new Event("change"));
     }
     if (!scenarios.length){
-      const errbar = $("errbar");
-      if (errbar){
-        errbar.style.display = "block";
-        errbar.textContent = `No scenario folders found under "${ACTIVE_ROOT}". (Auth required; check rules & App Check.)`;
-      }
+      showErr(`No scenario folders found under "${ACTIVE_ROOT}". (Auth required; check rules & App Check.)`);
     }
   }catch(e){
     warn("bootScenarios error:", e);
     setTxt("statusPill", "Failed to boot scenarios (see console).");
-    const errbar = $("errbar");
-    if (errbar){
-      errbar.style.display = "block";
-      errbar.textContent = `Boot error: ${e?.code || e?.message || e}`;
-    }
+    showErr(`Boot error: ${e?.code || e?.message || e}`);
   }
 }
 
