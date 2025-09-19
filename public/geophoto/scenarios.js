@@ -1,5 +1,4 @@
 // scenarios.js — Storage-only scenario loader + image display (canvas + <img> fallback)
-// Drop next to your HTML. Requires: firebase-core.js (same folder) and FabricJS on page.
 
 import {
   getFirebase,
@@ -46,25 +45,43 @@ function fitCanvas(){
 }
 
 /* -------- state -------- */
-const ROOT = "scenarios";
+const ROOT_CANDIDATES = ["scenarios", "geophoto/scenarios"]; // try both
+let ACTIVE_ROOT = "scenarios";
 let scenarios = [];          // scenario ids (folder names)
 let currentId = "";
 let stops = [];              // [{path,url,title}]
 let stopIdx = -1;
 
 /* -------- storage listing -------- */
-async function listScenarioIds(){
+async function listScenarioIdsForRoot(root){
   const { storage } = getFirebase();
-  const rootRef = stRef(storage, ROOT);
+  const rootRef = stRef(storage, root);
   const res = await listAll(rootRef);
   const ids = (res.prefixes || []).map(p => p.name);
-  log("Scenario IDs:", ids);
+  log(`Scenario IDs for ${root}:`, ids);
   return ids;
+}
+
+async function pickActiveRoot(){
+  for (const root of ROOT_CANDIDATES){
+    try {
+      const ids = await listScenarioIdsForRoot(root);
+      if (ids.length) { ACTIVE_ROOT = root; return ids; } // found usable root with folders
+      // If zero, still accept but keep trying next in case assets live under the other prefix
+      if (!ids.length) { ACTIVE_ROOT = root; return ids; }
+    } catch (e){
+      warn("Root check failed for", root, e?.message||e);
+      // try next
+    }
+  }
+  // default
+  ACTIVE_ROOT = ROOT_CANDIDATES[0];
+  return [];
 }
 
 async function listFilesUnderScenario(id){
   const { storage } = getFirebase();
-  const base = `${ROOT}/${id}`;
+  const base = `${ACTIVE_ROOT}/${id}`;
   const paths = [];
   async function walk(prefix){
     const res = await listAll(stRef(storage, prefix));
@@ -89,7 +106,7 @@ async function buildStopsFromPaths(paths){
     try{
       const url = await getDownloadURL(stRef(storage, p));
       out.push({ path:p, url, title: p.split("/").pop() || "photo" });
-    }catch(e){ warn("getDownloadURL:", p, e?.message||e); }
+    }catch(e){ warn("getDownloadURL:", p, e?.code || e?.message || e); }
   }
   return out;
 }
@@ -135,6 +152,8 @@ async function loadStop(i){
     const fb = $("fullsizeFallback");
     if (fb){ fb.src = s.url; fb.style.display = "block"; }
     setTxt("statusPill", "Load failed (fallback shown)");
+    const errbar = $("errbar");
+    if (errbar){ errbar.style.display="block"; errbar.textContent = `Load error: ${e?.code||e?.message||e}`; }
   }
   renderThumbs();
 }
@@ -172,14 +191,21 @@ export function wireScenarioUI(){
       currentId = sel.value || "";
       if (!currentId){ stops=[]; renderThumbs(); return; }
       setTxt("statusPill","Listing files…");
-      const paths = await listFilesUnderScenario(currentId);
-      setTxt("debugBox", `Paths (${paths.length})\n${paths.slice(0,12).join("\n")}${paths.length>12? "\n…" : ""}`);
-      if (!paths.length){ stops=[]; renderThumbs(); setTxt("statusPill","No images found."); return; }
-      setTxt("statusPill","Resolving URLs…");
-      stops = await buildStopsFromPaths(paths);
-      renderThumbs();
-      setTxt("statusPill", `${stops.length} file(s) resolved`);
-      if (stops.length) loadStop(0);
+      try{
+        const paths = await listFilesUnderScenario(currentId);
+        setTxt("debug", `<b>Paths (${paths.length})</b><br>${paths.slice(0,24).map(p=>p).join("<br>")}${paths.length>24? "<br>…" : ""}`);
+        if (!paths.length){ stops=[]; renderThumbs(); setTxt("statusPill","No images found."); return; }
+        setTxt("statusPill","Resolving URLs…");
+        stops = await buildStopsFromPaths(paths);
+        renderThumbs();
+        setTxt("statusPill", `${stops.length} file(s) resolved`);
+        if (stops.length) loadStop(0);
+      }catch(e){
+        const errbar = $("errbar");
+        if (errbar){ errbar.style.display="block"; errbar.textContent = `List error: ${e?.code||e?.message||e}`; }
+        setTxt("statusPill", "Failed to list files (see console).");
+        warn("listFilesUnderScenario error:", e);
+      }
     };
   }
   const refresh = $("refreshBtn");
@@ -198,14 +224,18 @@ export function wireScenarioUI(){
 }
 
 /* -------- exported: bootScenarios -------- */
-export async function bootScenarios(){
+export async function bootScenarios(setStatus = ()=>{}, showError = ()=>{}){
   try{
     const info = getStorageInfo();
-    setTxt("rootPill", `bucket: ${info.bucketHost} | root: ${ROOT}`);
+    setTxt("rootPill", `bucket: ${info.bucketHost} | root: (detecting…)`);
+
     const user = await ensureAuthed();
     setTxt("authPill", `anon ✔ (${String(user?.uid||"anon").slice(0,8)})`);
 
-    scenarios = await listScenarioIds();
+    // Detect active root by trying both candidates
+    scenarios = await pickActiveRoot();
+    setTxt("rootPill", `bucket: ${info.bucketHost} | root: ${ACTIVE_ROOT}`);
+
     renderScenarioSelect();
     setTxt("statusPill", `${scenarios.length} scenario(s)`);
 
@@ -214,13 +244,25 @@ export async function bootScenarios(){
       sel.value = scenarios[0];
       sel.dispatchEvent(new Event("change"));
     }
+    if (!scenarios.length){
+      const errbar = $("errbar");
+      if (errbar){
+        errbar.style.display = "block";
+        errbar.textContent = `No scenario folders found under "${ACTIVE_ROOT}". Ensure your Storage rules allow read/list for '${ACTIVE_ROOT}/**' and that folders exist.`;
+      }
+    }
   }catch(e){
     warn("bootScenarios error:", e);
     setTxt("statusPill", "Failed to list scenarios (see console).");
+    const errbar = $("errbar");
+    if (errbar){
+      errbar.style.display = "block";
+      errbar.textContent = `Boot error: ${e?.code || e?.message || e}`;
+    }
   }
 }
 
-/* -------- auto-boot: ensures the list appears -------- */
+/* -------- auto-boot (kept) -------- */
 function autoBoot(){
   try{
     wireScenarioUI();
