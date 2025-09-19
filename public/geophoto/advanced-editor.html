@@ -1,393 +1,137 @@
-// scenarios.js — Advanced Editor
-// - Single-file mode: ?file=<downloadURL> OR ?path=scenarios/<id>/<file>
-// - Secure auth-first boot (works with rules requiring request.auth != null)
-// - Robust listing (SDK -> REST -> sweep) only if single-file not used
-
-import {
-  getFirebase,
-  ensureAuthed,
-  getStorageInfo,
-  toStorageRefString,
-} from "./firebase-core.js";
-
-import {
-  ref as stRef,
-  listAll,
-  getDownloadURL,
-  getBlob as storageGetBlob,
-} from "https://www.gstatic.com/firebasejs/10.12.4/firebase-storage.js";
-
-/* -------------------- small helpers -------------------- */
-const $ = (id) => document.getElementById(id);
-const setTxt = (id, t) => { const el=$(id); if (el) el.textContent=t; };
-const log  = (...a) => { try{ console.log("[scenarios]", ...a); }catch(_){} };
-const warn = (...a) => { try{ console.warn("[scenarios]", ...a); }catch(_){} };
-
-const TIMEOUT_MS = 6000;
-function withTimeout(p, ms=TIMEOUT_MS, label="timeout"){
-  return Promise.race([
-    p,
-    new Promise((_,rej)=>setTimeout(()=>rej(Object.assign(new Error(label),{code:label})), ms))
-  ]);
-}
-
-/* -------------------- canvas + fallback <img> -------------------- */
-let f=null, baseImage=null;
-function ensureCanvas(){
-  if (f) return f;
-  if (!window.fabric) { warn("fabric missing; using <img> fallback only"); return null; }
-  f = new fabric.Canvas("c", { backgroundColor:"#061621", preserveObjectStacking:true });
-  window.addEventListener("resize", fitCanvas);
-  fitCanvas();
-  return f;
-}
-function fitCanvas(){
-  if (!f) return;
-  const wrap = f.lowerCanvasEl.parentElement || document.body;
-  const w = Math.max(320, wrap.clientWidth  - 8);
-  const h = Math.max(240, wrap.clientHeight - 8);
-  f.setWidth(w); f.setHeight(h);
-  if (baseImage){
-    const bw = baseImage.width || 1, bh = baseImage.height || 1;
-    const s = Math.min(w/bw, h/bh);
-    baseImage.set({ scaleX:s, scaleY:s, left:(w - bw*s)/2, top:(h - bh*s)/2 });
-    f.requestRenderAll();
-  }
-}
-
-/* -------------------- state -------------------- */
-const ROOT_CANDIDATES = ["scenarios", "geophoto/scenarios"];
-let ACTIVE_ROOT = "scenarios";
-let scenarios = [];   // scenario ids (folder names)
-let currentId = "";
-let stops = [];       // [{path,url,title}]
-let stopIdx = -1;
-
-/* -------------------- single-file mode -------------------- */
-function getQP(){ try{ return new URLSearchParams(location.search); }catch{ return new URLSearchParams(); } }
-function qpStr(name){ const v=getQP().get(name); return v?decodeURIComponent(v):""; }
-
-/**
- * If ?file=<downloadURL> or ?path=<storage path> is present, load just that one
- * and skip all scenario listing.
- */
-async function loadSingleFileIfRequested(){
-  const directUrl = qpStr("file");       // full https://firebasestorage.googleapis.com/... URL
-  const storagePath = qpStr("path");     // e.g., scenarios/<id>/<file>
-  if (!directUrl && !storagePath) return false;
-
-  let stop;
-  if (directUrl){
-    stop = { path: directUrl, url: directUrl, title: (directUrl.split("/").pop()||"").split("?")[0] || "photo" };
-  } else {
-    try{
-      const { storage } = getFirebase();
-      const url = await getDownloadURL(stRef(storage, storagePath));
-      stop = { path: storagePath, url, title: storagePath.split("/").pop() || "photo" };
-    }catch(e){
-      const errbar = $("errbar");
-      if (errbar){ errbar.style.display="block"; errbar.textContent = `Failed to resolve ?path: ${e?.code||e?.message||e}`; }
-      return true;
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Advanced Editor · GeoPhoto</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <style>
+    :root {
+      --bg: #0a1520;
+      --panel: #112235;
+      --text: #e7f1ff;
+      --muted: #89a3bd;
+      --accent: #4aa3ff;
+      --danger: #ff5c5c;
     }
-  }
+    html, body { height:100%; margin:0; background:var(--bg); color:var(--text); font:14px/1.45 system-ui, -apple-system, Segoe UI, Roboto, sans-serif; }
+    a { color: var(--accent); text-decoration: none; }
 
-  // Hide scenario UI
-  const sel = $("scenarioSel"); if (sel) sel.disabled = true;
-  const header = document.querySelector(".scenario-header"); if (header) header.style.display="none";
+    #app { display:grid; grid-template-columns: 320px 1fr; height:100vh; }
+    #app.toolsCollapsed { grid-template-columns: 0 1fr; }
 
-  stops = [stop];
-  stopIdx = 0;
-  setTxt("statusPill","Single-file mode");
-  renderThumbs();
-  await loadStop(0);
-  return true;
-}
-
-/* -------------------- storage listing (fallback when not single-file) -------------------- */
-async function sdkListPrefixesAt(storage, prefixPath){
-  const res = await withTimeout(listAll(stRef(storage, prefixPath)), TIMEOUT_MS, "storage/list-timeout");
-  const ids = new Set();
-  (res.prefixes || []).forEach(p => {
-    const leaf = p?.name || (p?.fullPath?.split("/").filter(Boolean).slice(-1)[0]);
-    if (leaf) ids.add(leaf);
-  });
-  (res.items || []).forEach(item => {
-    const fp = (item.fullPath || "").replace(/^\/+/,"");
-    const parts = fp.split("/").filter(Boolean);
-    if (!parts.length) return;
-    let idx = 0;
-    if (parts[0] === "scenarios" && parts.length > 1) idx = 1;
-    else if (parts[0] === "geophoto" && parts[1] === "scenarios" && parts.length > 2) idx = 2;
-    const id = parts[idx];
-    if (id && id !== "scenarios") ids.add(id);
-  });
-  return Array.from(ids);
-}
-
-async function restListPrefixes(bucketHost, prefix){
-  const q = new URLSearchParams({ prefix: prefix.endsWith("/")?prefix:prefix+"/", delimiter:"/" }).toString();
-  const url = `https://firebasestorage.googleapis.com/v0/b/${bucketHost}/o?${q}`;
-  const r = await withTimeout(fetch(url, { mode:"cors", cache:"no-store" }), TIMEOUT_MS, "rest/list-timeout");
-  if (!r.ok) throw new Error(`rest list HTTP ${r.status}`);
-  const j = await r.json();
-  const prefixes = Array.isArray(j.prefixes) ? j.prefixes : [];
-  return prefixes.map(p => p.split("/").filter(Boolean).pop()).filter(Boolean);
-}
-
-async function sweepByFirstChar(storage, root){
-  const chars = ["-"]; for (let i=48;i<=57;i++) chars.push(String.fromCharCode(i));
-  for (let i=65;i<=90;i++) chars.push(String.fromCharCode(i));
-  for (let i=97;i<=122;i++) chars.push(String.fromCharCode(i));
-  const found = new Set();
-  for (const ch of chars){
-    try{ (await sdkListPrefixesAt(storage, `${root}/${ch}`)).forEach(x=>found.add(x)); }catch(_){}
-  }
-  return Array.from(found);
-}
-
-async function listScenarioIdsForRoot(root){
-  const { storage } = getFirebase();
-  const { bucketHost } = getStorageInfo();
-  const normRoot = root.replace(/\/+$/,"");
-
-  try{
-    const ids = await sdkListPrefixesAt(storage, normRoot + "/");
-    if (ids.length) { log("IDs via SDK root:", ids); return ids.sort(); }
-  }catch(e){ warn("SDK root list failed:", e?.code||e?.message||e); }
-
-  try{
-    const ids2 = await restListPrefixes(bucketHost, normRoot);
-    if (ids2.length) { log("IDs via REST:", ids2); return ids2.sort(); }
-  }catch(e){ warn("REST list failed:", e?.code||e?.message||e); }
-
-  try{
-    const ids3 = await sweepByFirstChar(storage, normRoot);
-    if (ids3.length) { log("IDs via sweep:", ids3); return ids3.sort(); }
-  }catch(e){ warn("Sweep failed:", e?.code||e?.message||e); }
-
-  return [];
-}
-
-async function pickActiveRoot(){
-  for (const root of ROOT_CANDIDATES){
-    try {
-      const ids = await listScenarioIdsForRoot(root);
-      if (ids.length) { ACTIVE_ROOT = root; return ids; }
-    } catch (e){ warn("Root check failed for", root, e?.message||e); }
-  }
-  ACTIVE_ROOT = ROOT_CANDIDATES[0];
-  return [];
-}
-
-async function listFilesUnderScenario(id){
-  const { storage } = getFirebase();
-  const base = `${ACTIVE_ROOT}/${id}`.replace(/\/+/g,"/");
-  const paths = [];
-  async function walk(prefix){
-    const res = await listAll(stRef(storage, prefix + "/"));
-    (res.items || []).forEach(it => paths.push(it.fullPath || `${prefix}/${it.name}`));
-    for (const sub of (res.prefixes || [])) {
-      const leaf = (sub.name || "").toLowerCase();
-      if (leaf === "masks" || leaf === "overlays") continue;
-      if (leaf === "results" && prefix.toLowerCase().endsWith("/ai")) continue;
-      await walk((sub.fullPath || `${prefix}/${sub.name}`).replace(/\/+/g,"/"));
+    /* Left tools panel */
+    .left {
+      background: var(--panel);
+      border-right: 1px solid #17314a;
+      padding: 14px 12px;
+      overflow:auto;
     }
-  }
-  await walk(base);
-  log(`Found ${paths.length} under ${base}`, paths.slice(0,12));
-  return paths;
-}
-
-async function buildStopsFromPaths(paths){
-  const { storage } = getFirebase();
-  const out = [];
-  for (const p of paths){
-    try{
-      const url = await getDownloadURL(stRef(storage, p));
-      out.push({ path:p, url, title: p.split("/").pop() || "photo" });
-    }catch(e){ warn("getDownloadURL:", p, e?.code || e?.message || e); }
-  }
-  return out;
-}
-
-/* -------------------- UI rendering -------------------- */
-function renderScenarioSelect(){
-  const sel = $("scenarioSel");
-  if (!sel) return;
-  sel.innerHTML = '<option value="">Select scenario…</option>';
-  for (const id of scenarios){
-    const o = document.createElement("option");
-    o.value = id; o.textContent = id;
-    sel.appendChild(o);
-  }
-}
-
-function renderThumbs(){
-  const row = $("thumbRow"); if (!row) return;
-  row.innerHTML = "";
-  if (!stops.length){ row.innerHTML = '<div class="pill small">No photos/slides</div>'; return; }
-  stops.forEach((s,i)=>{
-    const img = document.createElement("img");
-    img.className = "thumb" + (i===stopIdx?" active":"");
-    img.src = s.url; img.alt = s.title; img.title = s.path;
-    img.onclick = () => loadStop(i);
-    img.onerror = () => { img.style.opacity=0.5; img.title="thumb load error"; };
-    row.appendChild(img);
-  });
-}
-
-async function loadStop(i){
-  stopIdx = i;
-  const s = stops[i]; if (!s) return;
-  setTxt("statusPill", `Loading: ${s.title}`);
-  try{
-    const blob = await tryBlobThenFetch(s);
-    await setCanvasFromBlob(blob);
-    const fb = $("fullsizeFallback");
-    if (fb){ fb.src = s.url; fb.style.display = "block"; }
-    setTxt("statusPill", `Loaded: ${s.title}`);
-  }catch(e){
-    warn("loadStop error:", e);
-    const fb = $("fullsizeFallback");
-    if (fb){ fb.src = s.url; fb.style.display = "block"; }
-    setTxt("statusPill", "Load failed (fallback shown)");
-    const errbar = $("errbar");
-    if (errbar){ errbar.style.display="block"; errbar.textContent = `Load error: ${e?.code||e?.message||e}`; }
-  }
-  renderThumbs();
-}
-
-async function tryBlobThenFetch(stop){
-  try{
-    const { storage } = getFirebase();
-    const r = stRef(storage, toStorageRefString(stop.path || stop.url));
-    return await storageGetBlob(r);
-  }catch(_){}
-  const r = await fetch(stop.url, { mode:"cors", cache:"force-cache" });
-  if (!r.ok) throw new Error("fetch blob " + r.status);
-  return await r.blob();
-}
-
-async function setCanvasFromBlob(blob){
-  const canvas = ensureCanvas();
-  if (!canvas) return;
-  return new Promise((res,rej)=>{
-    const u = URL.createObjectURL(blob);
-    fabric.Image.fromURL(u, (img)=>{
-      if (!img){ URL.revokeObjectURL(u); rej(new Error("fabric null")); return; }
-      baseImage = img; img.set({ selectable:false, evented:false });
-      canvas.clear(); canvas.add(img); img.moveTo(0); fitCanvas(); canvas.requestRenderAll();
-      URL.revokeObjectURL(u); res();
-    }, { crossOrigin:"anonymous" });
-  });
-}
-
-/* -------------------- exports -------------------- */
-export function wireScenarioUI(){
-  const sel = $("scenarioSel");
-  if (sel){
-    sel.onchange = async () => {
-      currentId = sel.value || "";
-      if (!currentId){ stops=[]; renderThumbs(); return; }
-      setTxt("statusPill","Listing files…");
-      try{
-        const paths = await listFilesUnderScenario(currentId);
-        setTxt("debug", `<b>Paths (${paths.length})</b><br>${paths.slice(0,24).map(p=>p).join("<br>")}${paths.length>24? "<br>…" : ""}`);
-        if (!paths.length){ stops=[]; renderThumbs(); setTxt("statusPill","No images found."); return; }
-        setTxt("statusPill","Resolving URLs…");
-        stops = await buildStopsFromPaths(paths);
-        renderThumbs();
-        setTxt("statusPill", `${stops.length} file(s) resolved`);
-        if (stops.length) loadStop(0);
-      }catch(e){
-        const errbar = $("errbar");
-        if (errbar){ errbar.style.display="block"; errbar.textContent = `List error: ${e?.code||e?.message||e}`; }
-        setTxt("statusPill", "Failed to list files (see console).");
-        warn("listFilesUnderScenario error:", e);
-      }
-    };
-  }
-  const refresh = $("refreshBtn");
-  if (refresh) refresh.onclick = () => { if (sel) sel.dispatchEvent(new Event("change")); };
-  const toggleTools = $("toggleTools");
-  if (toggleTools){
-    toggleTools.onclick = ()=>{
-      const app = $("app");
-      const collapsed = !app?.classList.contains("toolsCollapsed");
-      if (app) app.classList.toggle("toolsCollapsed", collapsed);
-      toggleTools.textContent = collapsed ? "Show Tools" : "Hide Tools";
-      fitCanvas();
-    };
-  }
-  window.addEventListener("resize", fitCanvas);
-}
-
-export async function bootScenarios(setStatus = ()=>{}, showError = ()=>{}){
-  try{
-    const info = getStorageInfo();
-    setTxt("rootPill", `bucket: ${info.bucketHost} | root: (detecting…)`);
-
-    // Secure rules require auth (Anonymous sign-in enabled)
-    const user = await ensureAuthed();
-    setTxt("authPill", `anon ✔ (${String(user?.uid||"anon").slice(0,8)})`);
-
-    // >>> Single-file mode takes precedence <<<
-    const handled = await loadSingleFileIfRequested();
-    if (handled) {
-      setTxt("rootPill", `bucket: ${info.bucketHost} | single-file`);
-      return; // skip listing entirely
+    .pillrow { display:flex; gap:8px; flex-wrap:wrap; margin: 0 0 8px 0; }
+    .pill {
+      background:#0e1c2b; color:#cfe0f5; border:1px solid #1c3651;
+      padding:6px 10px; border-radius:999px; white-space:nowrap;
+    }
+    .pill.small { font-size:12px; padding:4px 8px; }
+    .scenario-header { display:flex; gap:8px; align-items:center; margin:8px 0; }
+    select, input, button, textarea {
+      background:#0d1a29; color:#e7f1ff; border:1px solid #1e3955; border-radius:6px;
+      padding:8px 10px; width:100%; box-sizing:border-box;
+    }
+    button { cursor:pointer; }
+    .btn { background:#12365a; border-color:#1f4d79; }
+    .btn:hover { filter:brightness(1.1); }
+    #errbar {
+      display:none; background:#2a0f15; border:1px solid #5d2028; color:#ffb3bf;
+      padding:10px 12px; border-radius:8px; margin:10px 0;
+    }
+    #debug {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+      color: var(--muted);
+      border:1px dashed #28425f; border-radius:6px; padding:8px; margin-top:10px;
+      max-height: 160px; overflow:auto;
     }
 
-    // Otherwise, detect a root and list scenarios
-    scenarios = [];
-    for (const root of ROOT_CANDIDATES) {
-      setTxt("statusPill", `Booting ${root}…`);
-      try {
-        const ids = await listScenarioIdsForRoot(root);
-        if (ids.length) { ACTIVE_ROOT = root; scenarios = ids; break; }
-      } catch (e) { warn("root try failed", root, e); }
+    /* Right viewer */
+    .right { position:relative; overflow:hidden; }
+    .topbar {
+      display:flex; gap:8px; align-items:center; justify-content:space-between;
+      padding:10px 12px; border-bottom:1px solid #17314a; background:#0e1f2f;
     }
-
-    setTxt("rootPill", `bucket: ${info.bucketHost} | root: ${ACTIVE_ROOT}`);
-    renderScenarioSelect();
-    setTxt("statusPill", `${scenarios.length} scenario(s)`);
-
-    const sel = $("scenarioSel");
-    if (sel && scenarios.length){
-      sel.value = scenarios[0];
-      sel.dispatchEvent(new Event("change"));
+    .right-inner {
+      display:grid; grid-template-rows: 1fr auto; height: calc(100% - 50px);
     }
-    if (!scenarios.length){
-      const errbar = $("errbar");
-      if (errbar){
-        errbar.style.display = "block";
-        errbar.textContent = `No scenario folders found under "${ACTIVE_ROOT}". (Auth required; check rules & App Check.)`;
-      }
-    }
-  }catch(e){
-    warn("bootScenarios error:", e);
-    setTxt("statusPill", "Failed to boot scenarios (see console).");
-    const errbar = $("errbar");
-    if (errbar){
-      errbar.style.display = "block";
-      errbar.textContent = `Boot error: ${e?.code || e?.message || e}`;
-    }
-  }
-}
+    #stage { display:flex; align-items:center; justify-content:center; height:100%; }
+    #c { width:100%; height:100%; background:#061621; }
+    #fullsizeFallback { display:none; max-width:100%; max-height:100%; }
 
-/* -------------------- auto-boot -------------------- */
-function autoBoot(){
-  try{
-    wireScenarioUI();
-    bootScenarios();
-  }catch(e){ warn("autoBoot error:", e); }
-}
-if (document.readyState === "loading"){
-  document.addEventListener("DOMContentLoaded", autoBoot, { once:true });
-}else{
-  autoBoot();
-}
+    #thumbRow {
+      display:flex; gap:8px; overflow-x:auto; padding:10px 12px;
+      border-top:1px solid #17314a; background:#0e1f2f;
+    }
+    .thumb { height:72px; border-radius:6px; border:2px solid transparent; object-fit:cover; }
+    .thumb:hover { filter:brightness(1.1); }
+    .thumb.active { border-color: var(--accent); }
+    #toggleTools {
+      position:absolute; left:8px; top:8px; z-index:5;
+      background:#13273b; border-color:#204565;
+    }
+  </style>
+</head>
+<body>
+  <div id="app">
+    <!-- LEFT: tools -->
+    <aside class="left">
+      <div class="pillrow">
+        <span class="pill" id="authPill">auth…</span>
+        <span class="pill" id="rootPill">bucket: — | root: —</span>
+        <span class="pill" id="statusPill">Ready</span>
+      </div>
 
-/* expose for console */
-if (typeof window !== "undefined") window.__SCENARIOS = { bootScenarios, wireScenarioUI };
-export default { bootScenarios, wireScenarioUI };
+      <div id="errbar"></div>
+
+      <div class="scenario-header">
+        <label style="min-width:95px;">SCENARIOS</label>
+        <select id="scenarioSel" title="Available scenarios"></select>
+        <button id="refreshBtn" class="btn" style="flex:0 0 auto;">Refresh</button>
+      </div>
+
+      <section>
+        <h3 style="margin:12px 0 6px 0; font-size:13px; color:#b9d2eb;">PHOTOS / SLIDES</h3>
+        <div id="debug"></div>
+      </section>
+    </aside>
+
+    <!-- RIGHT: viewer -->
+    <main class="right">
+      <button id="toggleTools" class="btn">Hide Tools</button>
+      <div class="topbar">
+        <div>Advanced Editor</div>
+        <div style="font-size:12px;color:var(--muted)">
+          Tip: Single-file mode → <code>?file=&lt;downloadURL&gt;</code> or <code>?path=scenarios/&lt;id&gt;/&lt;file&gt;</code>
+        </div>
+      </div>
+
+      <div class="right-inner">
+        <div id="stage">
+          <!-- Fabric canvas (used when available) -->
+          <canvas id="c"></canvas>
+          <!-- Always keep an <img> fallback for direct display -->
+          <img id="fullsizeFallback" alt="preview" />
+        </div>
+
+        <!-- Thumbnails -->
+        <div id="thumbRow"></div>
+      </div>
+    </main>
+  </div>
+
+  <!-- Fabric.js (for canvas zoom/pan/overlays). Safe to keep; scenarios.js uses it if present. -->
+  <script src="https://cdn.jsdelivr.net/npm/fabric@5.3.0/dist/fabric.min.js" defer></script>
+
+  <!-- Firebase core setup for your project -->
+  <script type="module" src="./firebase-core.js"></script>
+
+  <!-- Scenarios logic (includes single-file mode and robust listing fallbacks) -->
+  <script type="module" src="./scenarios.js"></script>
+</body>
+</html>
