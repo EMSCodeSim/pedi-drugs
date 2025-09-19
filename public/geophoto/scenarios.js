@@ -20,6 +20,15 @@ const setTxt = (id, t) => { const el=$(id); if (el) el.textContent=t; };
 const log  = (...a) => { try{ console.log("[scenarios]", ...a); }catch(_){} };
 const warn = (...a) => { try{ console.warn("[scenarios]", ...a); }catch(_){} };
 
+const TIMEOUT_MS = 6000; // short timeout so we never "hang" on root detection
+
+function withTimeout(promise, ms, label="timeout"){
+  return Promise.race([
+    promise,
+    new Promise((_,rej)=>setTimeout(()=>rej(Object.assign(new Error(label),{code:label})), ms))
+  ]);
+}
+
 /* -------- canvas + fallback <img> -------- */
 let f=null, baseImage=null;
 function ensureCanvas(){
@@ -53,18 +62,51 @@ let stops = [];              // [{path,url,title}]
 let stopIdx = -1;
 
 /* ===================== Storage listing ===================== */
-async function listScenarioIdsForRoot(root){
-  const { storage } = getFirebase();
-  const normRoot = root.replace(/\/+$/,"");
+async function sdkListPrefixesAt(storage, prefixPath){
+  // Normal SDK listAll() with a timeout
+  const res = await withTimeout(listAll(stRef(storage, prefixPath)), TIMEOUT_MS, "storage/list-timeout");
+  const ids = new Set();
+  (res.prefixes || []).forEach(p => {
+    const leaf = p?.name || (p?.fullPath?.split("/").filter(Boolean).slice(-1)[0]);
+    if (leaf) ids.add(leaf);
+  });
+  // derive from items (scenarios/<id>/file.jpg)
+  (res.items || []).forEach(item => {
+    const fp = (item.fullPath || "").replace(/^\/+/,"");
+    const parts = fp.split("/").filter(Boolean);
+    if (!parts.length) return;
+    let idx = 0;
+    if (parts[0] === "scenarios" && parts.length > 1) idx = 1;
+    else if (parts[0] === "geophoto" && parts[1] === "scenarios" && parts.length > 2) idx = 2;
+    const id = parts[idx];
+    if (id && id !== "scenarios") ids.add(id);
+  });
+  return Array.from(ids);
+}
 
-  // 1) Normal list at the root
-  const ids1 = await listIdsAtPrefix(storage, normRoot + "/");
-  if (ids1.length) {
-    log("IDs via root list:", ids1);
-    return ids1.sort();
-  }
+async function restListPrefixes(bucketHost, prefix){
+  // Use Firebase REST: https://firebasestorage.googleapis.com/v0/b/<bucket>/o?prefix=scenarios/&delimiter=/
+  // Works with your open read rules.
+  const q = new URLSearchParams({
+    prefix: prefix.endsWith("/") ? prefix : prefix + "/",
+    delimiter: "/",
+    // no pageToken for first page; your folder count is small
+  }).toString();
 
-  // 2) Fallback scan by first character (handles buckets that hide root prefixes)
+  const url = `https://firebasestorage.googleapis.com/v0/b/${bucketHost}/o?${q}`;
+  const r = await withTimeout(fetch(url, { mode:"cors", cache:"no-store" }), TIMEOUT_MS, "rest/list-timeout");
+  if (!r.ok) throw new Error(`rest list HTTP ${r.status}`);
+  const j = await r.json();
+  const prefixes = Array.isArray(j.prefixes) ? j.prefixes : [];
+  // j.prefixes entries look like "scenarios/<id>/"
+  const ids = prefixes.map(p => {
+    const parts = p.split("/").filter(Boolean);
+    return parts[parts.length-1] || "";
+  }).filter(Boolean);
+  return Array.from(new Set(ids));
+}
+
+async function sweepByFirstChar(storage, root){
   const chars = ["-"];
   for (let i=48;i<=57;i++) chars.push(String.fromCharCode(i));  // 0–9
   for (let i=65;i<=90;i++) chars.push(String.fromCharCode(i));  // A–Z
@@ -72,39 +114,38 @@ async function listScenarioIdsForRoot(root){
 
   const found = new Set();
   for (const ch of chars){
-    const sub = await listIdsAtPrefix(storage, `${normRoot}/${ch}`);
-    sub.forEach(s => found.add(s));
+    try{
+      const ids = await sdkListPrefixesAt(storage, `${root}/${ch}`);
+      ids.forEach(x=>found.add(x));
+    }catch(e){ /* ignore */ }
   }
-  const out = Array.from(found).sort();
-  log("IDs via fallback scan:", out);
-  return out;
+  return Array.from(found);
 }
 
-async function listIdsAtPrefix(storage, prefixPath){
-  const ids = new Set();
+async function listScenarioIdsForRoot(root){
+  const { storage } = getFirebase();
+  const { bucketHost } = getStorageInfo();
+  const normRoot = root.replace(/\/+$/,"");
+
+  // 1) SDK root list
   try{
-    const res = await listAll(stRef(storage, prefixPath));
-    // explicit subfolders
-    (res.prefixes || []).forEach(p => {
-      const leaf = p?.name || (p?.fullPath?.split("/").filter(Boolean).slice(-1)[0]);
-      if (leaf) ids.add(leaf);
-    });
-    // derive from items (scenarios/<id>/file.jpg)
-    (res.items || []).forEach(item => {
-      const fp = (item.fullPath || "").replace(/^\/+/,"");
-      const parts = fp.split("/").filter(Boolean);
-      if (!parts.length) return;
-      // if the first segment equals 'scenarios' or 'geophoto', take the next one
-      let idx = 0;
-      if (parts[0] === "scenarios" && parts.length > 1) idx = 1;
-      else if (parts[0] === "geophoto" && parts[1] === "scenarios" && parts.length > 2) idx = 2;
-      const id = parts[idx];
-      if (id && id !== "scenarios") ids.add(id);
-    });
-  }catch(e){
-    warn("listIdsAtPrefix error", prefixPath, e?.code||e?.message||e);
-  }
-  return Array.from(ids);
+    const ids1 = await sdkListPrefixesAt(storage, normRoot + "/");
+    if (ids1.length) { log("IDs via SDK root:", ids1); return ids1.sort(); }
+  }catch(e){ warn("SDK root list failed:", e?.code||e?.message||e); }
+
+  // 2) REST list with delimiter
+  try{
+    const ids2 = await restListPrefixes(bucketHost, normRoot);
+    if (ids2.length) { log("IDs via REST:", ids2); return ids2.sort(); }
+  }catch(e){ warn("REST list failed:", e?.code||e?.message||e); }
+
+  // 3) Sweep by first character
+  try{
+    const ids3 = await sweepByFirstChar(storage, normRoot);
+    if (ids3.length) { log("IDs via sweep:", ids3); return ids3.sort(); }
+  }catch(e){ warn("Sweep failed:", e?.code||e?.message||e); }
+
+  return [];
 }
 
 async function pickActiveRoot(){
@@ -271,9 +312,9 @@ export async function bootScenarios(setStatus = ()=>{}, showError = ()=>{}){
     const user = await ensureAuthed();
     setTxt("authPill", `anon ✔ (${String(user?.uid||"anon").slice(0,8)})`);
 
-    // Detect active root by trying both candidates
     scenarios = [];
     for (const root of ROOT_CANDIDATES) {
+      setTxt("statusPill", `Booting ${root}…`);
       try {
         const ids = await listScenarioIdsForRoot(root);
         if (ids.length) { ACTIVE_ROOT = root; scenarios = ids; break; }
