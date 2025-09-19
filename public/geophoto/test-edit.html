@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <title>test-edit · Storage Diagnostics</title>
+  <title>test-edit · Storage Deep Diagnostics</title>
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <style>
     :root { --bg:#0b1622; --panel:#0f2133; --fg:#e8f0fb; --muted:#9fb3c8; --ok:#2dd48f; --bad:#ff6b6b; --warn:#ffc857; --accent:#4aa3ff; }
@@ -19,9 +19,7 @@
     .step { background:#0e2031; border:1px solid #1a3a57; border-radius:10px; padding:10px; }
     .row { display:flex; justify-content:space-between; gap:12px; align-items:center; }
     .status { font-weight:700; }
-    .ok { color:var(--ok); }
-    .fail { color:var(--bad); }
-    .warn { color:var(--warn); }
+    .ok { color:var(--ok); } .fail { color:var(--bad); } .warn { color:var(--warn); }
     pre { background:#0b1b2a; border:1px solid #15314a; padding:10px; border-radius:8px; overflow:auto; }
     code { background:#0b1b2a; padding:2px 6px; border-radius:5px; border:1px solid #14324c; }
     label { display:block; margin:8px 0 4px; }
@@ -32,7 +30,6 @@
     .card { background:#0f2234; border:1px solid #1e3c58; border-radius:8px; padding:8px; }
     .card img { width:100%; height:140px; object-fit:cover; border-radius:6px; }
     .small { font-size:12px; color:var(--muted); margin-top:6px; word-break:break-all; }
-    .err { color:var(--bad); font-weight:700; }
     .btnrow { display:flex; gap:8px; flex-wrap:wrap; }
   </style>
 </head>
@@ -55,7 +52,7 @@
         <button id="copyBtn" title="Copy diagnostics JSON">Copy Output</button>
       </div>
 
-      <label>Known Storage Path (direct read test)</label>
+      <label>Known Storage Path (direct read)</label>
       <input id="pathInput" value="scenarios/-OZH6KD_krWW-FODi4A_/1756945542530.jpg" />
 
       <label>Scenario to Inspect (leave blank to auto-pick first)</label>
@@ -63,11 +60,10 @@
 
       <h3>Troubleshooting Hints</h3>
       <div class="muted">
-        • Storage rules must include:
-        <br><code>match /scenarios { allow list: if request.auth != null }</code>
-        <br><code>match /scenarios/{allPaths=**} { allow read: if request.auth != null }</code>
-        <br><br>• SDK must target <code>gs://dailyquiz-d5279.appspot.com</code><br>
-        • Run this page from your app domain (not GitHub viewer).
+        Storage rules must include:<br/>
+        <code>match /scenarios { allow list: if request.auth != null }</code><br/>
+        <code>match /scenarios/{allPaths=**} { allow read: if request.auth != null }</code><br/><br/>
+        SDK must target <code>gs://dailyquiz-d5279.appspot.com</code> (note <em>appspot.com</em>).
       </div>
     </aside>
 
@@ -81,25 +77,25 @@
   </main>
 
   <script type="module">
-    // --- Firebase v10 Modules ---
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-app.js";
     import { getAuth, onAuthStateChanged, signInAnonymously, getIdToken } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-auth.js";
     import { getStorage, ref as stRef, listAll, getDownloadURL } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-storage.js";
 
-    // --- Project config (DailyQuiz) ---
     const firebaseConfig = {
       apiKey: "AIzaSyDM6DpRSeZueVKRpbyJyDmhf8WY66KyCDk",
       authDomain: "dailyquiz-d5279.firebaseapp.com",
       projectId: "dailyquiz-d5279",
-      storageBucket: "dailyquiz-d5279.firebasestorage.app" // config string (CDN URL style)
+      storageBucket: "dailyquiz-d5279.firebasestorage.app"
     };
 
-    // --- DOM helpers ---
     const $ = id => document.getElementById(id);
-    const set = (id, t) => { const el=$(id); if (el) el.textContent = t; };
+    const set = (id, t) => { const el=$(id); if (el) el.textContent=t; };
     const stepsEl = $("steps");
-    const out = []; // structured diagnostics to copy
+    const out = [];
     const startTs = new Date().toISOString();
+    set("envPill", new URL(location.href).host);
+    set("bucketPill", "bucket: dailyquiz-d5279.appspot.com");
+    set("appPill", "app: initializing…");
 
     const env = {
       startedAt: startTs,
@@ -109,17 +105,15 @@
       storageBucket_config: firebaseConfig.storageBucket,
       storageBucket_gs_override: "gs://dailyquiz-d5279.appspot.com"
     };
-    set("envPill", new URL(location.href).host);
-    set("bucketPill", "bucket: dailyquiz-d5279.appspot.com");
-    set("appPill", "app: initializing…");
 
+    function now() { return new Date().toISOString(); }
     function addStep(title, status, details) {
       const li = document.createElement("li");
       li.className = "step";
       const row = document.createElement("div");
       row.className = "row";
       const t = document.createElement("div");
-      t.textContent = title;
+      t.textContent = `${title}  @ ${now()}`;
       const s = document.createElement("div");
       s.className = "status " + (status==="ok"?"ok":status==="fail"?"fail":"warn");
       s.textContent = status.toUpperCase();
@@ -131,7 +125,15 @@
         li.appendChild(pre);
       }
       stepsEl.appendChild(li);
-      out.push({ title, status, details });
+      out.push({ title, status, details, ts: now() });
+    }
+
+    function withTimeout(promise, ms, label){
+      let t;
+      return Promise.race([
+        promise.finally(()=>clearTimeout(t)),
+        new Promise((_,rej)=>{ t=setTimeout(()=>rej(new Error(`${label||'timeout'} (${ms}ms)`)), ms); })
+      ]);
     }
 
     async function runAll() {
@@ -141,12 +143,12 @@
 
       addStep("Environment", "ok", env);
 
-      // 1) Initialize app
+      // 1) Init
       let app, auth, storage;
       try {
         app = initializeApp(firebaseConfig);
         auth = getAuth(app);
-        storage = getStorage(app, "gs://dailyquiz-d5279.appspot.com"); // IMPORTANT: gs:// uses appspot.com
+        storage = getStorage(app, "gs://dailyquiz-d5279.appspot.com");
         set("appPill", "app: initialized");
         addStep("Initialize Firebase", "ok", { projectId: app.options.projectId, storage_gs: "gs://dailyquiz-d5279.appspot.com" });
       } catch (e) {
@@ -156,36 +158,48 @@
         return;
       }
 
-      // 2) Sign in anonymously
+      // 2) Auth (anon)
       set("statusPill", "status: signing in…");
-      let user = null, idToken = null;
+      let user=null, token=null;
       try {
         if (!auth.currentUser) await signInAnonymously(auth);
-        user = await new Promise(res => onAuthStateChanged(auth, u => res(u), { once:true }));
-        if (user) idToken = await getIdToken(user);
-        set("authPill", `auth: anon ✔ (${String(user?.uid||"").slice(0,8)})`);
-        addStep("Auth (anonymous)", "ok", { uid: user.uid, tokenPreview: idToken?.slice(0,12)+"…" });
+        user = await withTimeout(new Promise(res => onAuthStateChanged(auth, u => res(u), { once:true })), 8000, "auth wait");
+        token = user ? await getIdToken(user) : null;
+        set("authPill", user ? `auth: anon ✔ (${String(user.uid).slice(0,8)})` : "auth: failed");
+        addStep("Auth (anonymous)", user ? "ok" : "fail", user ? { uid:user.uid, tokenPreview: token?.slice(0,12)+"…" } : "no user");
       } catch (e) {
         set("authPill", "auth: failed");
         addStep("Auth (anonymous)", "fail", String(e));
       }
 
-      // 3) Direct-read test for a known path (does NOT need list permission)
-      set("statusPill", "status: testing direct read…");
+      // 3) Direct getDownloadURL (no list needed)
+      set("statusPill", "status: direct read test…");
       const testPath = $("pathInput").value.trim();
       try {
-        const url = await getDownloadURL(stRef(storage, testPath));
+        const url = await withTimeout(getDownloadURL(stRef(storage, testPath)), 10000, "getDownloadURL timeout");
         addStep("Direct getDownloadURL(path)", "ok", { path: testPath, url });
         renderCards([testPath], [url]);
       } catch (e) {
-        addStep("Direct getDownloadURL(path)", "fail", explainStorageError(e));
+        const details = explainStorageError(e, { path: testPath });
+        addStep("Direct getDownloadURL(path)", "fail", details);
       }
 
-      // 4) Try listing scenarios root via SDK (requires allow list on /scenarios)
-      set("statusPill", "status: listing scenarios (SDK) …");
+      // 4) REST list (prefix=scenarios/) — does not require SDK
+      set("statusPill", "status: REST list scenarios…");
+      try {
+        const url = "https://firebasestorage.googleapis.com/v0/b/dailyquiz-d5279.firebasestorage.app/o?prefix=scenarios/&delimiter=/";
+        const r = await withTimeout(fetch(url, { cache:"no-store" }), 10000, "REST list timeout");
+        const j = await r.json();
+        addStep("REST list /scenarios", r.ok ? "ok" : "fail", { http:r.status, prefixes:j.prefixes||[], raw:j });
+      } catch (e) {
+        addStep("REST list /scenarios", "fail", String(e));
+      }
+
+      // 5) SDK listAll('scenarios/')
+      set("statusPill", "status: SDK list scenarios…");
       let scenarioIds = [];
       try {
-        const res = await listAll(stRef(storage, "scenarios/"));
+        const res = await withTimeout(listAll(stRef(storage, "scenarios/")), 12000, "listAll timeout");
         const ids = new Set();
         (res.prefixes||[]).forEach(p => ids.add(p.name || p.fullPath.split("/").pop()));
         (res.items||[]).forEach(it => {
@@ -193,31 +207,32 @@
           if (parts[0]==="scenarios" && parts[1]) ids.add(parts[1]);
         });
         scenarioIds = Array.from(ids).sort();
-        addStep("SDK listAll('scenarios/')", "ok", { count: scenarioIds.length, ids: scenarioIds.slice(0,20) });
+        addStep("SDK listAll('scenarios/')", "ok", { count: scenarioIds.length, ids: scenarioIds.slice(0,30) });
       } catch (e) {
         addStep("SDK listAll('scenarios/')", "fail", explainStorageError(e));
       }
 
-      // 5) Optional: pick a scenario and list files
+      // 6) If we have an id (from input or auto), list its files + resolve first few
       const preferId = $("scenarioInput").value.trim();
       const chosen = preferId || scenarioIds[0];
       if (chosen) {
-        set("statusPill", `status: listing files for ${chosen} …`);
+        set("statusPill", `status: list files for ${chosen}…`);
         try {
           const files = await listFilesRecursive(storage, `scenarios/${chosen}`);
           addStep(`List files under scenarios/${chosen}`, "ok", { count: files.length, sample: files.slice(0,20) });
           if (files.length) {
-            const urls = await Promise.all(files.slice(0,12).map(p => getDownloadURL(stRef(storage, p)).catch(e => ({ error: e.code||String(e), path:p }))));
-            const okPaths = [], okUrls = [];
-            urls.forEach((u,i)=>{ if (typeof u==="string") { okPaths.push(files[i]); okUrls.push(u);} });
-            renderCards(okPaths, okUrls);
-            addStep("Resolve URLs for first files", okUrls.length ? "ok" : "fail", { resolved: okUrls.length });
+            const first = files.slice(0,12);
+            const urls = await Promise.all(first.map(p => getDownloadURL(stRef(storage, p)).catch(e => ({ error: e.code||String(e), path:p }))));
+            const okPaths=[], okUrls=[];
+            urls.forEach((u,i)=>{ if (typeof u==="string") { okPaths.push(first[i]); okUrls.push(u); } });
+            if (okUrls.length) renderCards(okPaths, okUrls);
+            addStep("Resolve URLs for first files", okUrls.length ? "ok" : "fail", { resolved: okUrls.length, errors: urls.filter(u=>typeof u!=="string") });
           }
         } catch (e) {
           addStep(`List files under scenarios/${chosen}`, "fail", explainStorageError(e));
         }
       } else {
-        addStep("Choose scenario", "warn", "No scenarios returned from SDK listing; listing likely blocked by rules.");
+        addStep("Choose scenario", "warn", "No scenarios returned.");
       }
 
       set("statusPill", "status: done");
@@ -226,7 +241,7 @@
     async function listFilesRecursive(storage, prefix) {
       const out = [];
       async function walk(pfx) {
-        const res = await listAll(stRef(storage, pfx.replace(/\/+$/,"") + "/"));
+        const res = await withTimeout(listAll(stRef(storage, pfx.replace(/\/+$/,"") + "/")), 12000, "listAll timeout");
         (res.items||[]).forEach(it => out.push(it.fullPath || `${pfx}/${it.name}`));
         for (const sub of (res.prefixes||[])) {
           const name = (sub.name || "").toLowerCase();
@@ -239,28 +254,21 @@
       return out;
     }
 
-    function explainStorageError(e) {
+    function explainStorageError(e, extra) {
       const code = e?.code || "";
-      if (code.includes("storage/unauthorized")) {
-        return "storage/unauthorized — rules blocked. Ensure: allow list on /scenarios and allow read under /scenarios/**, and that auth is enabled.";
-      }
-      if (code.includes("auth/operation-not-allowed")) {
-        return "Anonymous auth disabled. Enable Anonymous sign-in in Firebase Auth.";
-      }
-      if (code.includes("storage/object-not-found")) {
-        return "storage/object-not-found — path may be wrong.";
-      }
-      return e?.message || String(e);
+      let msg = e?.message || String(e);
+      if (code) msg = `${code}: ${msg}`;
+      if (code.includes("storage/unauthorized")) msg += " — Rules blocked (missing allow read/list?) or not signed in.";
+      if (code.includes("storage/object-not-found")) msg += " — The path is incorrect or file missing.";
+      if (String(e).includes("timeout")) msg += " — The SDK/REST call did not respond (network or rules).";
+      return Object.assign({ message: msg }, extra||{});
     }
 
     function renderCards(paths, urls) {
-      const grid = $("grid");
+      const grid = $("grid"); grid.innerHTML = "";
       urls.forEach((u,i)=>{
-        const card = document.createElement("div");
-        card.className="card";
-        const img = document.createElement("img");
-        img.loading="lazy"; img.crossOrigin="anonymous"; img.referrerPolicy="no-referrer";
-        img.src = u;
+        const card = document.createElement("div"); card.className="card";
+        const img = document.createElement("img"); img.loading="lazy"; img.crossOrigin="anonymous"; img.referrerPolicy="no-referrer"; img.src = u;
         const p = document.createElement("div"); p.className="small"; p.textContent = paths[i];
         const a = document.createElement("a"); a.href=u; a.target="_blank"; a.rel="noopener"; a.textContent = "open";
         const tools = document.createElement("div"); tools.className="small"; tools.appendChild(a);
@@ -269,19 +277,8 @@
       });
     }
 
-    // Wire buttons
     $("runAllBtn").onclick = runAll;
-    $("copyBtn").onclick = () => {
-      const payload = {
-        env,
-        diagnostics: out,
-      };
-      navigator.clipboard.writeText(JSON.stringify(payload, null, 2)).then(()=>{
-        alert("Diagnostics copied to clipboard.");
-      });
-    };
-
-    // Auto-run on load
+    $("copyBtn").onclick = () => navigator.clipboard.writeText(JSON.stringify({ env, diagnostics: out }, null, 2)).then(()=>alert("Diagnostics copied."));
     runAll();
   </script>
 </body>
