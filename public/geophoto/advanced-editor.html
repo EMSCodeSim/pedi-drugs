@@ -2,136 +2,38 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <title>Advanced Editor · GeoPhoto</title>
+  <title>Photo Viewer</title>
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <style>
-    :root {
-      --bg: #0a1520;
-      --panel: #112235;
-      --text: #e7f1ff;
-      --muted: #89a3bd;
-      --accent: #4aa3ff;
-      --danger: #ff5c5c;
-    }
-    html, body { height:100%; margin:0; background:var(--bg); color:var(--text); font:14px/1.45 system-ui, -apple-system, Segoe UI, Roboto, sans-serif; }
-    a { color: var(--accent); text-decoration: none; }
-
-    #app { display:grid; grid-template-columns: 320px 1fr; height:100vh; }
-    #app.toolsCollapsed { grid-template-columns: 0 1fr; }
-
-    /* Left tools panel */
-    .left {
-      background: var(--panel);
-      border-right: 1px solid #17314a;
-      padding: 14px 12px;
-      overflow:auto;
-    }
-    .pillrow { display:flex; gap:8px; flex-wrap:wrap; margin: 0 0 8px 0; }
-    .pill {
-      background:#0e1c2b; color:#cfe0f5; border:1px solid #1c3651;
-      padding:6px 10px; border-radius:999px; white-space:nowrap;
-    }
-    .pill.small { font-size:12px; padding:4px 8px; }
-    .scenario-header { display:flex; gap:8px; align-items:center; margin:8px 0; }
-    select, input, button, textarea {
-      background:#0d1a29; color:#e7f1ff; border:1px solid #1e3955; border-radius:6px;
-      padding:8px 10px; width:100%; box-sizing:border-box;
-    }
-    button { cursor:pointer; }
-    .btn { background:#12365a; border-color:#1f4d79; }
-    .btn:hover { filter:brightness(1.1); }
-    #errbar {
-      display:none; background:#2a0f15; border:1px solid #5d2028; color:#ffb3bf;
-      padding:10px 12px; border-radius:8px; margin:10px 0;
-    }
-    #debug {
-      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
-      color: var(--muted);
-      border:1px dashed #28425f; border-radius:6px; padding:8px; margin-top:10px;
-      max-height: 160px; overflow:auto;
-    }
-
-    /* Right viewer */
-    .right { position:relative; overflow:hidden; }
-    .topbar {
-      display:flex; gap:8px; align-items:center; justify-content:space-between;
-      padding:10px 12px; border-bottom:1px solid #17314a; background:#0e1f2f;
-    }
-    .right-inner {
-      display:grid; grid-template-rows: 1fr auto; height: calc(100% - 50px);
-    }
-    #stage { display:flex; align-items:center; justify-content:center; height:100%; }
-    #c { width:100%; height:100%; background:#061621; }
-    #fullsizeFallback { display:none; max-width:100%; max-height:100%; }
-
-    #thumbRow {
-      display:flex; gap:8px; overflow-x:auto; padding:10px 12px;
-      border-top:1px solid #17314a; background:#0e1f2f;
-    }
-    .thumb { height:72px; border-radius:6px; border:2px solid transparent; object-fit:cover; }
-    .thumb:hover { filter:brightness(1.1); }
-    .thumb.active { border-color: var(--accent); }
-    #toggleTools {
-      position:absolute; left:8px; top:8px; z-index:5;
-      background:#13273b; border-color:#204565;
-    }
+    :root { --bg:#0b1622; --fg:#e8f0fb; --muted:#9fb3c8; --accent:#4aa3ff; --err:#ff6473; }
+    html,body { height:100%; margin:0; background:var(--bg); color:var(--fg); font:14px/1.45 system-ui, -apple-system, Segoe UI, Roboto, sans-serif; }
+    .top { display:flex; gap:10px; align-items:center; justify-content:space-between;
+           padding:10px 12px; border-bottom:1px solid #17314a; background:#0e1f2f; }
+    .top small { color:var(--muted); }
+    #status { color:var(--muted); }
+    #err { display:none; color:var(--err); font-weight:600; }
+    .stage { height: calc(100vh - 52px); display:flex; align-items:center; justify-content:center; }
+    #img { max-width: 100%; max-height: 100%; display:none; }
+    .hint { position:fixed; bottom:10px; left:12px; color:var(--muted); font-size:12px; }
+    code { background:#102133; padding:2px 6px; border-radius:5px; }
   </style>
 </head>
 <body>
-  <div id="app">
-    <!-- LEFT: tools -->
-    <aside class="left">
-      <div class="pillrow">
-        <span class="pill" id="authPill">auth…</span>
-        <span class="pill" id="rootPill">bucket: — | root: —</span>
-        <span class="pill" id="statusPill">Ready</span>
-      </div>
-
-      <div id="errbar"></div>
-
-      <div class="scenario-header">
-        <label style="min-width:95px;">SCENARIOS</label>
-        <select id="scenarioSel" title="Available scenarios"></select>
-        <button id="refreshBtn" class="btn" style="flex:0 0 auto;">Refresh</button>
-      </div>
-
-      <section>
-        <h3 style="margin:12px 0 6px 0; font-size:13px; color:#b9d2eb;">PHOTOS / SLIDES</h3>
-        <div id="debug"></div>
-      </section>
-    </aside>
-
-    <!-- RIGHT: viewer -->
-    <main class="right">
-      <button id="toggleTools" class="btn">Hide Tools</button>
-      <div class="topbar">
-        <div>Advanced Editor</div>
-        <div style="font-size:12px;color:var(--muted)">
-          Tip: Single-file mode → <code>?file=&lt;downloadURL&gt;</code> or <code>?path=scenarios/&lt;id&gt;/&lt;file&gt;</code>
-        </div>
-      </div>
-
-      <div class="right-inner">
-        <div id="stage">
-          <!-- Fabric canvas (used when available) -->
-          <canvas id="c"></canvas>
-          <!-- Always keep an <img> fallback for direct display -->
-          <img id="fullsizeFallback" alt="preview" />
-        </div>
-
-        <!-- Thumbnails -->
-        <div id="thumbRow"></div>
-      </div>
-    </main>
+  <div class="top">
+    <div><strong>Photo Viewer</strong> <small id="status">ready</small></div>
+    <div id="err"></div>
+  </div>
+  <div class="stage">
+    <img id="img" alt="photo" crossorigin="anonymous" />
+  </div>
+  <div class="hint">
+    Tip: use <code>?file=&lt;downloadURL&gt;</code> or <code>?path=scenarios/&lt;id&gt;/&lt;file&gt;</code>
   </div>
 
-  <!-- Fabric.js (for canvas zoom/pan/overlays). Safe to keep; scenarios.js uses it if present. -->
-  <script src="https://cdn.jsdelivr.net/npm/fabric@5.3.0/dist/fabric.min.js" defer></script>
-
-  <!-- Firebase core setup for your project -->
+  <!-- Firebase core (kept minimal) -->
   <script type="module" src="./firebase-core.js"></script>
 
-  <!-- Scenarios logic (includes single-file mode and robust listing fallbacks) -->
-  <script type="module" src="./scenarios.js"></script>
+  <!-- Minimal viewer logic -->
+  <script type="module" src="./viewer.js"></script>
 </body>
 </html>
