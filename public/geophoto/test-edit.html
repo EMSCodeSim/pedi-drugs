@@ -1,29 +1,243 @@
-// REST helpers (auth header) — replace SDK calls with these
-async function getIdTokenStrict() {
-  const { getAuth } = await import("https://www.gstatic.com/firebasejs/10.12.4/firebase-auth.js");
-  const u = getAuth().currentUser;
-  if (!u) throw new Error("No user; sign-in required");
-  return await u.getIdToken(true);
-}
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Test Edit — Upload & View (New Storage)</title>
+  <style>
+    :root { font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif; }
+    body { margin: 0; padding: 16px; background: #0b1220; color: #e8eefc; }
+    h1 { margin: 0 0 12px; font-size: 20px; }
+    .bar { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 12px; }
+    .card { background: #111a2e; border: 1px solid #1b2b50; border-radius: 14px; padding: 12px; }
+    .muted { color: #b8c4e2; opacity: 0.9; font-size: 12px; }
+    input, button, select { background: #091125; color: #e8eefc; border: 1px solid #20407a; border-radius: 10px; padding: 8px 10px; }
+    button { cursor: pointer; }
+    button.primary { background: #1a3fbb; border-color: #2c5cff; }
+    #gallery { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 12px; }
+    .thumb { background: #0b1429; border: 1px solid #1a2b50; border-radius: 12px; overflow: hidden; }
+    .thumb img { width: 100%; height: 160px; object-fit: cover; display: block; }
+    .thumb .meta { padding: 8px; font-size: 12px; color: #c9d6f5; }
+    .row { display: flex; gap: 8px; align-items: center; }
+    .row > * { flex: 0 0 auto; }
+    .row .grow { flex: 1 1 240px; }
+    .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; }
+    a { color: #9ec5ff; text-decoration: none; }
+    .spacer { height: 8px; }
+  </style>
+</head>
+<body>
+  <h1>Test Edit — Upload & View (New Storage + Supabase)</h1>
+  <div class="card" id="authCard">
+    <div class="row" style="justify-content:space-between; gap:12px; flex-wrap:wrap">
+      <div class="row" style="gap:8px">
+        <button id="btnAnon" class="primary">Sign in Anonymously</button>
+        <div class="muted" id="authState">Not signed in</div>
+      </div>
+      <div class="row" style="gap:8px; align-items:center">
+        <strong class="muted">Supabase</strong>
+        <input id="supabaseKey" class="mono grow" placeholder="Paste SUPABASE anon/public key (stored locally)" />
+        <button id="btnSaveSb">Save Key</button>
+        <div class="muted" id="sbState">Not initialized</div>
+      </div>
+    </div>
+  </div>
+    </div>
+  </div>
 
-// List prefixes under scenarios/ using REST + ID token
-async function restListPrefixes(prefix = "scenarios/") {
-  const idToken = await getIdTokenStrict();
-  const url = `https://firebasestorage.googleapis.com/v0/b/dailyquiz-d5279.firebasestorage.app/o?prefix=${encodeURIComponent(prefix)}&delimiter=/`;
-  const r = await fetch(url, { headers: { Authorization: `Bearer ${idToken}` }, cache: "no-store" });
-  if (!r.ok) throw new Error(`REST list failed: ${r.status}`);
-  const j = await r.json();
-  return (j.prefixes || []).map(p => p.replace(/^scenarios\//, "").replace(/\/$/, ""));
-}
+  <div class="card" style="margin-top:12px">
+    <div class="bar">
+      <label class="muted">Scenario ID</label>
+      <input id="scenarioId" class="mono" placeholder="e.g. -OZKwtRwHXxsM7tLQcnV" />
+      <input id="fileInput" type="file" accept="image/*" />
+      <button id="btnUpload" class="primary">Upload Photo</button>
+      <button id="btnRefresh">Refresh Gallery</button>
+    </div>
+    <div class="muted">Uploads to <span class="mono">scenarios/&lt;scenarioId&gt;/</span> in <span class="mono">dailyquiz-d5279.firebasestorage.app</span>.</div>
+  </div>
 
-// Get a media URL for a path using REST + ID token
-async function restGetMediaURL(path) {
-  const idToken = await getIdTokenStrict();
-  const metaURL = `https://firebasestorage.googleapis.com/v0/b/dailyquiz-d5279.firebasestorage.app/o/${encodeURIComponent(path)}`;
-  const r = await fetch(metaURL, { headers: { Authorization: `Bearer ${idToken}` }, cache: "no-store" });
-  if (!r.ok) throw new Error(`REST meta failed: ${r.status}`);
-  const j = await r.json();
-  const token = (j.downloadTokens || "").split(",")[0];
-  if (!token) throw new Error("No download token on object");
-  return `${metaURL}?alt=media&token=${token}`;
-}
+  <div id="gallery" style="margin-top:12px"></div>
+
+  <template id="thumbTpl">
+    <div class="thumb">
+      <a class="full" target="_blank" rel="noopener">
+        <img />
+      </a>
+      <div class="meta mono">
+        <div class="path"></div>
+      </div>
+    </div>
+  </template>
+
+  <script type="module">
+    // --- Firebase core ---
+    import { initializeApp, getApps } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-app.js";
+    import { getAuth, onAuthStateChanged, signInAnonymously } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-auth.js";
+    import { getStorage, ref as sRef, uploadBytes } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-storage.js";
+    import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.4";
+
+    // --- Firebase ---
+    const existing = getApps();
+    const app = existing.length ? existing[0] : initializeApp({
+      apiKey: "", authDomain: "", projectId: "", storageBucket: "dailyquiz-d5279.appspot.com"
+    });
+    const auth = getAuth();
+    const storage = getStorage(app, "gs://dailyquiz-d5279.appspot.com");
+
+    // --- Supabase (browser-safe) ---
+    const SUPABASE_URL = "https://qwhuciodtyotgrbeakdu.supabase.co";
+    function getSupabaseKey() {
+      // Prefer injected key on window, then localStorage, then empty.
+      return window.SUPABASE_KEY || localStorage.getItem("SUPABASE_KEY") || "";
+    }
+    let supabase = null;
+    function initSupabase() {
+      const key = getSupabaseKey();
+      if (!key) return null;
+      supabase = createClient(SUPABASE_URL, key, {
+        auth: { persistSession: false },
+        global: { headers: { "x-app": "test-edit" } }
+      });
+      return supabase;
+    }
+    initSupabase();
+
+    async function getIdTokenStrict() {
+      const u = auth.currentUser;
+      if (!u) throw new Error("No user; sign-in required");
+      return await u.getIdToken(true);
+    }
+
+    async function restListFiles(prefix) {
+      const idToken = await getIdTokenStrict();
+      const base = "https://firebasestorage.googleapis.com/v0/b/dailyquiz-d5279.firebasestorage.app/o";
+      const url = `${base}?prefix=${encodeURIComponent(prefix)}&delimiter=/`;
+      const r = await fetch(url, { headers: { Authorization: `Bearer ${idToken}` }, cache: "no-store" });
+      if (!r.ok) throw new Error(`REST list failed: ${r.status}`);
+      const j = await r.json();
+      return (j.items || []).map(it => it.name);
+    }
+
+    async function restGetMediaURL(path) {
+      const idToken = await getIdTokenStrict();
+      const metaURL = `https://firebasestorage.googleapis.com/v0/b/dailyquiz-d5279.firebasestorage.app/o/${encodeURIComponent(path)}`;
+      const r = await fetch(metaURL, { headers: { Authorization: `Bearer ${idToken}` }, cache: "no-store" });
+      if (!r.ok) throw new Error(`REST meta failed: ${r.status}`);
+      const j = await r.json();
+      const token = (j.downloadTokens || "").split(",")[0];
+      if (!token) throw new Error("No download token on object");
+      return `${metaURL}?alt=media&token=${token}`;
+    }
+
+    const elAuthState = document.getElementById("authState");
+    const elBtnAnon = document.getElementById("btnAnon");
+    const elScenarioId = document.getElementById("scenarioId");
+    const elFile = document.getElementById("fileInput");
+    const elUpload = document.getElementById("btnUpload");
+    const elRefresh = document.getElementById("btnRefresh");
+    const elGallery = document.getElementById("gallery");
+    const elSbKey = document.getElementById("supabaseKey");
+    const elSaveSb = document.getElementById("btnSaveSb");
+    const elSbState = document.getElementById("sbState");
+    const tpl = document.getElementById("thumbTpl").content;
+
+    onAuthStateChanged(auth, (u) => {
+      if (u) {
+        elAuthState.textContent = `Signed in (uid: ${u.uid.slice(0, 6)}…)`;
+      } else {
+        elAuthState.textContent = "Not signed in";
+      }
+    });
+
+    // Load saved Supabase key
+    elSbKey.value = localStorage.getItem("SUPABASE_KEY") || "";
+    function updateSbState() {
+      elSbState.textContent = supabase ? "Initialized" : "Not initialized";
+    }
+    updateSbState();
+    elSaveSb.addEventListener("click", () => {
+      const k = (elSbKey.value || "").trim();
+      if (!k) { alert("Enter a Supabase anon/public key"); return; }
+      localStorage.setItem("SUPABASE_KEY", k);
+      initSupabase();
+      updateSbState();
+      alert("Supabase key saved locally. Client initialized.");
+    });
+
+    elBtnAnon.addEventListener("click", async () => {
+      try {
+        await signInAnonymously(auth);
+      } catch (e) {
+        alert("Anon sign-in failed: " + e.message);
+      }
+    });
+
+    elUpload.addEventListener("click", async () => {
+      const sid = (elScenarioId.value || "").trim();
+      if (!sid) return alert("Enter a Scenario ID first.");
+      const f = elFile.files?.[0];
+      if (!f) return alert("Choose a file to upload.");
+      if (!auth.currentUser) return alert("Sign in first (Anon is fine).");
+      try {
+        const path = `scenarios/${sid}/${Date.now()}_${f.name.replace(/\s+/g, "_")}`;
+        const ref = sRef(storage, path);
+        await uploadBytes(ref, f, { contentType: f.type || "application/octet-stream" });
+        alert("Uploaded! Refreshing gallery…");
+        await loadGallery();
+      } catch (e) {
+        console.error(e);
+        alert("Upload failed: " + e.message);
+      }
+    });
+
+    elRefresh.addEventListener("click", loadGallery);
+
+    async function loadGallery() {
+      const sid = (elScenarioId.value || "").trim();
+      if (!sid) return alert("Enter a Scenario ID first.");
+      if (!auth.currentUser) return alert("Sign in first.");
+      const prefix = `scenarios/${sid}/`;
+      elGallery.innerHTML = "<div class=muted>Loading…</div>";
+      try {
+        const names = await restListFiles(prefix);
+        elGallery.innerHTML = "";
+        if (!names.length) {
+          elGallery.innerHTML = '<div class="muted">No files yet. Upload above.</div>';
+          return;
+        }
+        for (const name of names) {
+          const url = await restGetMediaURL(name);
+          const node = document.importNode(tpl, true);
+          node.querySelector("img").src = url;
+          node.querySelector(".full").href = url;
+          node.querySelector(".path").textContent = name;
+          elGallery.appendChild(node);
+          // Optional: record to Supabase (if you have a table & RLS rules). Commented by default.
+          // if (supabase) {
+          //   try {
+          //     await supabase.from('photos').upsert({
+          //       scenario_id: sid,
+          //       path: name,
+          //       media_url: url,
+          //       updated_at: new Date().toISOString()
+          //     });
+          //   } catch (e) { console.warn('Supabase upsert skipped/failed:', e.message); }
+          // }
+        }
+      } catch (e) {
+        console.error(e);
+        elGallery.innerHTML = `<div class=muted>Error loading gallery: ${e.message}</div>`;
+      }
+    }
+
+    // Optional: Autofill a previous Scenario ID via URL (?sid=…)
+    const params = new URLSearchParams(location.search);
+    const sid = params.get("sid");
+    if (sid) elScenarioId.value = sid;
+
+    const params = new URLSearchParams(location.search);
+    const sid = params.get("sid");
+    if (sid) elScenarioId.value = sid;
+  </script>
+</body>
+</html>
