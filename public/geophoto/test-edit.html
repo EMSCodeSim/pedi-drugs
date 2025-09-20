@@ -3,62 +3,83 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>FireOpsSim — Uploader + Viewer (Single File)</title>
+<title>FireOpsSim Admin — Create Scenario then Add Photos</title>
 <style>
   :root{--bg:#0b1220;--card:#111a2e;--muted:#b8c4e2;--line:#1b2b50;--ink:#e8eefc;--accent:#2c5cff;--ok:#7CFF7C;--bad:#FF7C7C}
+  *{box-sizing:border-box}
   body{margin:0;padding:16px;background:var(--bg);color:var(--ink);font:14px/1.45 system-ui,Arial}
   h1{margin:0 0 12px;font-size:20px}
   .row{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:8px 0}
-  input,button{background:#091125;color:var(--ink);border:1px solid #20407a;border-radius:10px;padding:8px 10px}
-  input.mono{font-family:ui-monospace,Menlo,Consolas,monospace}
+  input,button,textarea{background:#091125;color:var(--ink);border:1px solid #20407a;border-radius:10px;padding:8px 10px}
+  input.mono,.mono{font-family:ui-monospace,Menlo,Consolas,monospace}
+  textarea{min-height:72px;width:100%}
   button{cursor:pointer}
   button.primary{background:#1a3fbb;border-color:var(--accent)}
   .card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:12px;margin:12px 0}
   .muted{color:var(--muted);opacity:.95}
-  #status{white-space:pre-wrap;background:#0c1530;border:1px solid #1b2b50;border-radius:10px;padding:10px;max-height:220px;overflow:auto}
+  #status{white-space:pre-wrap;background:#0c1530;border:1px solid #1b2b50;border-radius:10px;padding:10px;max-height:240px;overflow:auto}
   #grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:12px}
   .thumb{background:#0b1429;border:1px solid #1a2b50;border-radius:12px;overflow:hidden}
   .thumb img{width:100%;height:160px;object-fit:cover;display:block}
   .thumb .meta{padding:8px;font-size:12px}
   a{color:#9ec5ff}
-  /* Lightbox */
-  #lightbox{position:fixed;inset:0;background:rgba(0,0,0,.9);display:none;align-items:center;justify-content:center;z-index:9999}
-  #lightbox img{max-width:95vw;max-height:90vh}
-  #lightbox .close{position:absolute;top:12px;right:12px;background:#222;color:#fff;border:0;border-radius:10px;padding:8px 10px;cursor:pointer}
   #preview img{max-width:100%;height:auto;border-radius:10px;border:1px solid #1a2b50}
   .actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
+  .hidden{display:none!important}
 </style>
 </head>
 <body>
-  <h1>FireOpsSim — Uploader + Viewer</h1>
+  <h1>FireOpsSim — Admin</h1>
 
   <div class="card">
     <div class="row">
-      <label class="muted">Bucket</label>
-      <input class="mono" value="gs://fireopssim.appspot.com" readonly />
-      <label class="muted">Scenario ID</label>
-      <input id="scenarioId" class="mono" placeholder="-Oabc123 (required)" />
+      <div class="muted">DB:</div><div class="mono">dailyquiz-d5279 (Realtime DB)</div>
+      <div class="muted">Photos:</div><div class="mono">gs://fireopssim.appspot.com</div>
     </div>
-    <div class="row">
-      <input id="fileInput" type="file" accept="image/*" capture="environment" />
-      <button id="btnInit" class="primary">Init</button>
-      <button id="btnUpload" class="primary">Upload Photo</button>
-      <button id="btnRefresh">Refresh Gallery</button>
-      <button id="btnLatest">View Latest</button>
-    </div>
-    <div class="muted">
-      Files upload to <span class="mono">scenarios/&lt;scenarioId&gt;/</span> in the default bucket.<br/>
-      Use the <strong>gs://</strong> name (not <code>firebasestorage.app</code>). Serve over <strong>HTTPS</strong> for camera access.
+
+    <!-- Step 1: Create Scenario (ID = Name) -->
+    <div>
+      <strong>Step 1 — Create Scenario</strong>
+      <div class="row">
+        <label class="muted">Scenario Name (becomes Scenario ID)</label>
+        <input id="scenarioName" placeholder="e.g., House_Fire_Elm_St" style="min-width:280px">
+        <label class="muted">Dispatch (optional)</label>
+        <input id="dispatch" placeholder="Engine 1, Engine 2…" style="min-width:280px">
+        <button id="btnCreate" class="primary">Create Scenario</button>
+        <span id="createStatus" class="muted">idle</span>
+      </div>
+      <div class="row">
+        <label class="muted">Scenario ID</label>
+        <input id="scenarioId" class="mono" placeholder="(created above)" style="min-width:360px" readonly>
+        <button id="btnCopyId">Copy ID</button>
+      </div>
+      <div class="muted">We’ll write to <span class="mono">/scenarios/&lt;ID&gt;</span> in the old DB and upload photos to <span class="mono">scenarios/&lt;ID&gt;/</span> in the FireOpsSim bucket.</div>
     </div>
   </div>
 
-  <div id="preview" class="card" style="display:none">
-    <strong>Uploaded Preview</strong>
-    <div class="muted">The file you just uploaded.</div>
-    <div id="previewImgWrap" style="margin-top:8px"></div>
-    <div class="actions">
-      <a id="previewOpen" target="_blank" rel="noopener">Open in new tab</a>
-      <button id="copyUrl">Copy URL</button>
+  <!-- Step 2: Add Photos -->
+  <div class="card">
+    <strong>Step 2 — Add Photos</strong>
+    <div id="photoGate" class="muted">Create a scenario first.</div>
+
+    <div id="uploader" class="hidden">
+      <div class="row">
+        <input id="fileInput" type="file" accept="image/*" capture="environment" />
+        <button id="btnUpload" class="primary">Upload Photo</button>
+        <button id="btnRefresh">Refresh Gallery</button>
+        <button id="btnLatest">View Latest</button>
+        <span id="upStatus" class="muted">waiting</span>
+      </div>
+
+      <div id="preview" class="hidden" style="margin-top:6px">
+        <strong>Preview</strong>
+        <div class="muted">Most recent upload.</div>
+        <div id="previewImgWrap" style="margin-top:8px"></div>
+        <div class="actions">
+          <a id="previewOpen" target="_blank" rel="noopener">Open</a>
+          <button id="copyUrl">Copy URL</button>
+        </div>
+      </div>
     </div>
   </div>
 
@@ -71,81 +92,190 @@
     <div class="muted">No photos yet. Click “Refresh Gallery”.</div>
   </div>
 
-  <div id="lightbox">
-    <button class="close" id="lbClose">✕ Close</button>
-    <img id="lbImg" alt="Preview" />
-  </div>
-
   <template id="thumbTpl">
     <div class="thumb">
       <a class="full" href="#" target="_blank" rel="noopener">
         <img />
       </a>
-      <div class="meta mono">
-        <div class="path"></div>
-      </div>
+      <div class="meta mono"><div class="path"></div></div>
     </div>
   </template>
 
-  <!-- Firebase Compat SDKs -->
+  <!-- Firebase Compat SDKs (same style as your working test-edit) -->
   <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-storage-compat.js"></script>
 
   <script>
   (function(){
+    // ===== Utilities =====
     const $ = id => document.getElementById(id);
-    const logBox = $('status');
-    const log = (m, cls) => {
-      const t = `[${new Date().toLocaleTimeString()}] ${m}`;
+    const statusEl = $('status');
+    const log = (m, color) => {
       const line = document.createElement('div');
-      if (cls) line.style.color = cls === 'ok' ? '#7CFF7C' : (cls === 'bad' ? '#FF7C7C' : '#FFD37C');
-      line.textContent = t;
-      logBox.appendChild(line);
-      logBox.scrollTop = logBox.scrollHeight;
-      console.debug(t);
+      if (color) line.style.color = color;
+      line.textContent = `[${new Date().toLocaleTimeString()}] ${m}`;
+      statusEl.appendChild(line);
+      statusEl.scrollTop = statusEl.scrollHeight;
+      console.log(m);
     };
-    const ok = m=>log(m,'ok'), bad = m=>log(m,'bad');
+    const ok  = (m)=>log(m,'#7CFF7C');
+    const bad = (m)=>log(m,'#FF7C7C');
 
-    // Client-safe config
-    const firebaseConfig = {
+    function sanitizeId(raw){
+      return (raw||'').trim()
+        .replace(/\s+/g, '_')          // spaces → _
+        .replace(/[^\w\-\.]/g, '')     // only word chars, dash, dot
+        .replace(/_+/g,'_')            // collapse __
+        .replace(/^_+|_+$/g,'');       // trim _
+    }
+    const safeName = s => (s||'photo').replace(/[^\w.\-]+/g,'_');
+
+    // ===== Firebase configs =====
+    const cfgDB = {
+      apiKey:"AIzaSyDM6DpRSeZueVKRpbyJyDmhf8WY66KyCDk",
+      authDomain:"dailyquiz-d5279.firebaseapp.com",
+      databaseURL:"https://dailyquiz-d5279-default-rtdb.firebaseio.com",
+      projectId:"dailyquiz-d5279",
+      storageBucket:"dailyquiz-d5279.appspot.com",
+      appId:"1:94577748034:web:c032d3a1d72db1313de5db",
+      measurementId:"G-19DVN7NNH7"
+    };
+    const cfgFO = {
       apiKey: "AIzaSyBzwc75u8pG73OKcHN8ti2ADbucjKMHme8",
       authDomain: "fireopssim.firebaseapp.com",
       projectId: "fireopssim",
-      storageBucket: "fireopssim.firebasestorage.app" // HTTPS domain; gs:// bound below
+      storageBucket: "fireopssim.appspot.com"
     };
 
-    let app=null, auth=null, storage=null, user=null;
+    // ===== Init apps (compat) =====
+    const appDB = firebase.initializeApp(cfgDB);               // [DEFAULT] DB
+    const appFO = firebase.initializeApp(cfgFO, "fireops");    // Storage
+    const db     = firebase.database(appDB);
+    const authDB = firebase.auth(appDB);
+    const authFO = firebase.auth(appFO);
 
-    function safeName(s){ return (s||'photo').replace(/[^\w.\-]+/g,'_'); }
-    function prefix(){
-      const sid = ($('scenarioId').value || '').trim();
-      if (!sid) throw new Error('Enter a scenarioId first.');
-      return `scenarios/${sid}`;
+    // *** same working logic as test-edit ***
+    const storage = firebase.storage(appFO, "gs://fireopssim.appspot.com");
+    storage.setMaxOperationRetryTime(60000);
+    storage.setMaxUploadRetryTime(120000);
+
+    // ===== State =====
+    let scenarioId = null;
+    let foUser = null;
+
+    async function signIn(){
+      try{ await authDB.signInAnonymously().catch(()=>{});}catch{}
+      try{
+        const cred = await authFO.signInAnonymously();
+        foUser = cred && cred.user;
+        ok('Auth OK (FO anon uid='+(foUser && foUser.uid || 'unknown')+')');
+      }catch(e){
+        bad('FO anon auth failed: '+(e.code||'')+' '+(e.message||e));
+      }
     }
 
-    async function init(){
+    function openUploaderGate(on){
+      $('photoGate').classList.toggle('hidden', on);
+      $('uploader').classList.toggle('hidden', !on);
+    }
+
+    // ===== Step 1: Create scenario (ID = Name) =====
+    async function createScenario(){
       try{
-        if (!firebase.apps.length) app = firebase.initializeApp(firebaseConfig);
-        else app = firebase.app();
-        ok('App initialized.');
+        const raw = $('scenarioName').value;
+        const id  = sanitizeId(raw);
+        if (!id){ $('createStatus').textContent='enter a name'; bad('No scenario name.'); return; }
+        $('createStatus').textContent='creating…';
 
-        auth = firebase.auth();
-        user = (await auth.signInAnonymously()).user;
-        ok('Auth OK (anon uid='+(user && user.uid || 'unknown')+')');
+        const dispatch = ($('dispatch').value||'').trim();
+        const base = { id, title:id, dispatch, description:dispatch, createdAt: Date.now(), active:true, stops:[] };
 
-        storage = firebase.storage(app, "gs://fireopssim.appspot.com");
-        storage.setMaxOperationRetryTime(60000);
-        storage.setMaxUploadRetryTime(120000);
-        ok('Storage bound to gs://fireopssim.appspot.com');
+        // write to old DB under deterministic id
+        const multi={};
+        multi[`scenarios/${id}`]=base;
+        multi[`geophoto/scenarios/${id}`]=base;
+        await db.ref().update(multi);
+
+        scenarioId = id;
+        $('scenarioId').value = id;
+        $('scenarioId').readOnly = true;
+        $('scenarioName').readOnly = true;
+        $('btnCreate').disabled = true;
+        $('createStatus').textContent='created ✓';
+        ok('Scenario created with ID='+id);
+        openUploaderGate(true);
       }catch(e){
-        bad('Init error: '+(e.code?e.code+' ':'')+(e.message||e));
-        throw e;
+        $('createStatus').textContent='error';
+        bad('Create scenario error: '+(e.message||e));
+      }
+    }
+
+    // ===== Step 2: Upload photo (test-edit logic) =====
+    async function upload(){
+      try{
+        if (!scenarioId){ alert('Create a scenario first.'); return; }
+        if (!foUser) await signIn();
+
+        const f = $('fileInput').files && $('fileInput').files[0];
+        if (!f){ alert('Pick a photo first.'); return; }
+        if (f.size > 12*1024*1024){ alert('Max 12 MB'); return; }
+
+        $('upStatus').textContent='uploading…';
+        const path = `scenarios/${scenarioId}/${Date.now()}_${safeName(f.name)}`;
+        log('Uploading to: '+path);
+
+        const ref = storage.ref().child(path);
+        const task = ref.put(f, { contentType: f.type || 'image/jpeg', cacheControl:'public,max-age=31536000,immutable' });
+
+        task.on('state_changed',
+          snap=>{
+            const pct = Math.round(100*snap.bytesTransferred/snap.totalBytes);
+            $('upStatus').textContent = pct + '%';
+          },
+          err=>{
+            $('upStatus').textContent='error';
+            bad('Upload error: '+(err.code||'')+' '+(err.message||err));
+          },
+          async ()=>{
+            ok('Upload finished.');
+            const url = await ref.getDownloadURL();
+            ok('URL ready.');
+            showPreview(url);
+            await appendStopToDB({
+              type:'photo', imageURL:url, thumbURL:url,
+              storagePath: ref.fullPath,
+              gsUri: `gs://fireopssim.appspot.com/${ref.fullPath}`,
+              backend:'fireops', at: Date.now(), radiusMeters:5, overlays:[]
+            });
+            $('upStatus').textContent='saved ✓';
+            await refresh();
+          }
+        );
+      }catch(e){
+        $('upStatus').textContent='error';
+        bad('Upload failed: '+(e.message||e));
+      }
+    }
+
+    async function appendStopToDB(stop){
+      try{
+        const snap = await db.ref(`scenarios/${scenarioId}/stops`).get();
+        const arr = snap.exists()? (snap.val()||[]) : [];
+        arr.push(stop);
+        const multi={};
+        multi[`scenarios/${scenarioId}/stops`] = arr;
+        multi[`geophoto/scenarios/${scenarioId}/stops`] = arr;
+        await db.ref().update(multi);
+        ok('Stop metadata saved.');
+      }catch(e){
+        bad('DB write error: '+(e.message||e));
       }
     }
 
     function showPreview(url){
-      $('preview').style.display = '';
+      $('preview').classList.remove('hidden');
       const wrap = $('previewImgWrap');
       wrap.innerHTML = '';
       const img = document.createElement('img');
@@ -158,101 +288,64 @@
       };
     }
 
-    async function upload(){
-      try{
-        if (!storage) await init();
-        const f = $('fileInput').files && $('fileInput').files[0];
-        if (!f){ alert('Pick or take a photo first'); log('No file selected.'); return; }
-        if (f.size > 10*1024*1024){ alert('Max 10 MB'); return; }
-
-        const path = `${prefix()}/${Date.now()}_${safeName(f.name)}`;
-        log('Uploading → '+path);
-        const r = storage.ref().child(path);
-        await r.put(f, { contentType: f.type || 'image/jpeg' });
-        ok('Upload OK.');
-
-        const url = await r.getDownloadURL();
-        ok('URL ready.');
-        showPreview(url);
-
-        await refresh(); // update gallery
-      }catch(e){
-        bad('Upload error: '+(e.code?e.code+' ':'')+(e.message||e));
-        alert('Upload failed: ' + (e.message||e));
-      }
-    }
-
     async function refresh(){
       try{
-        if (!storage) await init();
-        const pfx = prefix();
-        log('Listing '+pfx+' …');
-        const folderRef = storage.ref().child(pfx);
-        const { items } = await folderRef.listAll();
-        const urls = await Promise.all(items.map(async it=>{
-          try { return await it.getDownloadURL(); } catch(e){ return null; }
-        }));
-        // newest first (filenames begin with timestamp)
+        if (!scenarioId){ return; }
+        const folder = storage.ref().child(`scenarios/${scenarioId}`);
+        log('Listing: scenarios/'+scenarioId);
+        const { items } = await folder.listAll();
+        const urls = await Promise.all(items.map(it => it.getDownloadURL().catch(()=>null)));
         const entries = items.map((it,i)=>({it,url:urls[i]}))
-                             .sort((a,b)=>(b.it.name||'').localeCompare(a.it.name||''));
+                             .sort((a,b)=> (b.it.name||'').localeCompare(a.it.name||''));
         renderGrid(entries);
-        ok(`Listed ${entries.length} item(s).`);
+        ok(`Listed ${entries.length} file(s).`);
       }catch(e){
-        bad('Refresh error: '+(e.code?e.code+' ':'')+(e.message||e));
+        bad('Refresh error: '+(e.message||e));
       }
     }
 
     function renderGrid(entries){
       const grid = $('grid');
       grid.innerHTML = '';
-      if (!entries.length){
-        grid.innerHTML = '<div class="muted">No photos found.</div>';
-        return;
-      }
+      if (!entries.length){ grid.innerHTML = '<div class="muted">No photos found.</div>'; return; }
       const tpl = $('thumbTpl').content;
       entries.forEach(({it,url})=>{
         const node = document.importNode(tpl, true);
         node.querySelector('.path').textContent = it.fullPath || it.name;
-        if (url){
-          node.querySelector('img').src = url;
-          node.querySelector('.full').href = url;
-          node.querySelector('a.full').addEventListener('click', (ev)=>{
-            ev.preventDefault(); openLightbox(url);
-          });
-        }
+        node.querySelector('img').src = url || '';
+        const a = node.querySelector('a.full');
+        a.href = url || '#';
+        if (!url) a.removeAttribute('href');
         grid.appendChild(node);
       });
     }
 
-    async function viewLatest(){
-      try{
-        if (!storage) await init();
-        const pfx = prefix();
-        const { items } = await storage.ref().child(pfx).listAll();
-        if (!items.length){ alert('No files in this scenario yet.'); return; }
-        const latest = items.sort((a,b)=>(b.name||'').localeCompare(a.name||''))[0];
-        const url = await latest.getDownloadURL();
-        openLightbox(url);
-      }catch(e){
-        bad('View Latest error: '+(e.code?e.code+' ':'')+(e.message||e));
-      }
-    }
-
-    function openLightbox(url){
-      $('lbImg').src = url;
-      $('lightbox').style.display = 'flex';
-    }
-    $('lbClose').onclick = ()=>{ $('lightbox').style.display = 'none'; $('lbImg').src=''; };
-
-    // Wire buttons
-    $('btnInit').addEventListener('click', init);
+    // ===== Wire UI =====
+    $('btnCreate').addEventListener('click', createScenario);
+    $('btnCopyId').addEventListener('click', async ()=>{
+      if(!$('scenarioId').value) return;
+      try{ await navigator.clipboard.writeText($('scenarioId').value); ok('Scenario ID copied.'); }catch{}
+    });
     $('btnUpload').addEventListener('click', upload);
     $('btnRefresh').addEventListener('click', refresh);
-    $('btnLatest').addEventListener('click', viewLatest);
+    $('btnLatest').addEventListener('click', async ()=>{
+      try{
+        if (!scenarioId) return;
+        const { items } = await storage.ref().child(`scenarios/${scenarioId}`).listAll();
+        if (!items.length){ alert('No files yet.'); return; }
+        const latest = items.sort((a,b)=> (b.name||'').localeCompare(a.name||''))[0];
+        const url = await latest.getDownloadURL();
+        window.open(url, '_blank');
+      }catch(e){ bad('View latest error: '+(e.message||e)); }
+    });
 
-    log('Ready. Click Init, enter Scenario ID, then Upload/Refresh/View Latest.');
+    // Boot
+    (async function(){
+      log('Booting…');
+      await signIn();
+      log('Ready. Enter scenario name and click Create.');
+    })();
   })();
   </script>
 </body>
 </html>
-
