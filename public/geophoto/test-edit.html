@@ -23,6 +23,7 @@
     .row > * { flex: 0 0 auto; }
     .row .grow { flex: 1 1 240px; }
     a { color: #9ec5ff; text-decoration: none; }
+    code { background:#0f1730; padding:2px 4px; border-radius:6px; }
   </style>
 </head>
 <body>
@@ -35,24 +36,41 @@
 
       <label class="muted">Folder</label>
       <select id="folderMode">
-        <option value="scenari">scenari (flat)</option>
-        <option value="scenarios">scenarios/&lt;scenarioId&gt;</option>
+        <option value="scenarios_root">scenarios (flat root)</option>
+        <option value="scenarios_nested">scenarios/&lt;scenarioId&gt;</option>
       </select>
 
       <label class="muted">Scenario ID</label>
-      <input id="scenarioId" class="mono" placeholder="only required if using scenarios/&lt;id&gt;" />
+      <input id="scenarioId" class="mono" placeholder="only for scenarios/&lt;id&gt;" />
 
       <input id="fileInput" type="file" accept="image/*" capture="environment" />
       <button id="btnUpload" class="primary">Upload Photo</button>
       <button id="btnRefresh">Refresh Gallery</button>
     </div>
     <div class="muted">
-      By default, this lists <span class="mono">geophoto/scenari/</span> and uploads into the same folder.
-      Change “Folder” to use <span class="mono">scenarios/&lt;scenarioId&gt;</span> instead.
+      This lists from and uploads to your chosen prefix. From your screenshot, your file is in
+      <span class="mono">geophoto/scenarios/</span>, so choose <em>scenarios (flat root)</em>.
     </div>
   </div>
 
   <div id="gallery" style="margin-top:12px"></div>
+
+  <div id="rlsHint" class="card" style="margin-top:12px; display:none">
+    <div class="muted">
+      <strong>Uploads blocked by Row Level Security.</strong><br/>
+      In Supabase SQL editor, run policies like:
+      <pre class="mono" style="white-space:pre-wrap">-- Allow public read of geophoto
+create policy "geophoto read anon" on storage.objects
+for select to anon using (bucket_id = 'geophoto');
+
+-- Allow public insert (uploads) to geophoto
+create policy "geophoto insert anon" on storage.objects
+for insert to anon with check (bucket_id = 'geophoto');</pre>
+      (Optional, tighter): limit uploads to the <code>scenarios/</code> prefix:
+      <pre class="mono" style="white-space:pre-wrap">create policy "geophoto insert anon scenarios only" on storage.objects
+for insert to anon with check (bucket_id = 'geophoto' and position('scenarios/' in name) = 1);</pre>
+    </div>
+  </div>
 
   <template id="thumbTpl">
     <div class="thumb">
@@ -68,7 +86,7 @@
   <script type="module">
     import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.4";
 
-    // --- Your project credentials ---
+    // --- Your project (from earlier) ---
     const SUPABASE_URL = "https://qwhuciodtyotgrbeakdu.supabase.co";
     const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InF3aHVjaW9kdHlvdGdyYmVha2R1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTgzMTcwNTcsImV4cCI6MjA3Mzg5MzA1N30.4TOChR01-9s0o7zus140ImUF6slesCLuEpa6JY-LSBQ";
     const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
@@ -81,22 +99,21 @@
     const elUpload     = document.getElementById('btnUpload');
     const elRefresh    = document.getElementById('btnRefresh');
     const elGallery    = document.getElementById('gallery');
+    const elRlsHint    = document.getElementById('rlsHint');
     const tpl          = document.getElementById('thumbTpl').content;
 
-    // Defaults
+    // Defaults to match your screenshot
     elBucket.value = 'geophoto';
-    elFolderMode.value = 'scenari';
+    elFolderMode.value = 'scenarios_root';
 
-    // Compute the folder prefix we will use for BOTH listing and uploading
     function getPrefix() {
-      const mode = (elFolderMode.value || 'scenari');
+      const mode = elFolderMode.value;
       const sid  = (elScenarioId.value || '').trim();
-      if (mode === 'scenari') return 'scenari';
+      if (mode === 'scenarios_root') return 'scenarios';   // shows files directly under /scenarios
       if (!sid) throw new Error('Scenario ID is required for scenarios/<id>');
       return `scenarios/${sid}`;
     }
 
-    // Upload (writes into the chosen folder)
     async function uploadPhoto() {
       try {
         const bucket = (elBucket.value || '').trim();
@@ -106,7 +123,7 @@
         if (!file) throw new Error('Please take or select a photo first');
 
         const prefix   = getPrefix();
-        const safeName = (file.name || 'image.jpg').replace(/\s+/g, '_');
+        const safeName = (file.name || 'image.jpg').replace(/\\s+/g, '_');
         const path     = `${prefix}/${Date.now()}_${safeName}`;
 
         const { error } = await supabase.storage.from(bucket).upload(path, file, {
@@ -118,19 +135,20 @@
         alert('Upload successful!');
         await loadGallery();
       } catch (err) {
-        alert('Upload failed: ' + (err.message || err));
         console.error(err);
+        alert('Upload failed: ' + (err.message || err));
+        const msg = String(err.message || '').toLowerCase();
+        if (msg.includes('row-level security')) elRlsHint.style.display = 'block';
       }
     }
 
-    // Signed URL helper (works with public or private buckets)
     async function getSignedUrl(bucket, path) {
       const { data, error } = await supabase.storage.from(bucket).createSignedUrl(path, 60 * 60 * 6); // 6h
       if (error) throw error;
       return data.signedUrl;
     }
 
-    // List files one level at the prefix (be permissive about "file" shape)
+    // Permissive list (SDK payload shape varies)
     async function listFiles(bucket, prefix) {
       const { data, error } = await supabase.storage.from(bucket).list(prefix, {
         limit: 1000,
@@ -141,24 +159,21 @@
         if (msg.includes('not found') || msg.includes('does not exist')) return [];
         throw error;
       }
-      // Accept entries as files if they have a name and any indicator fields
       return (data || [])
         .filter(e => e && e.name && (e.id || e.metadata || e.updated_at || e.created_at))
         .map(e => ({ path: `${prefix}/${e.name}` }));
     }
 
-    // Load gallery from the chosen folder
     async function loadGallery() {
       try {
         const bucket = (elBucket.value || '').trim();
         if (!bucket) throw new Error('Bucket is required');
 
         elGallery.innerHTML = '<div class="muted">Loading…</div>';
-
         const prefix = getPrefix();
-        const files = await listFiles(bucket, prefix);
-
+        const files  = await listFiles(bucket, prefix);
         elGallery.innerHTML = '';
+
         if (!files.length) {
           elGallery.innerHTML = `<div class="muted">No photos found in <span class="mono">${prefix}/</span>. Upload above.</div>`;
           return;
@@ -185,12 +200,11 @@
       }
     }
 
-    // Events
     elUpload.addEventListener('click', uploadPhoto);
     elRefresh.addEventListener('click', loadGallery);
     elFolderMode.addEventListener('change', loadGallery);
 
-    // Auto-load on first open
+    // Initial load
     loadGallery();
   </script>
 </body>
