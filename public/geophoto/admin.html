@@ -40,7 +40,6 @@
     #loader{position:fixed;inset:0;display:none;place-items:center;background:rgba(6,12,20,.55);backdrop-filter:blur(2px);z-index:98}
     .spinner{width:42px;height:42px;border-radius:999px;border:4px solid rgba(255,255,255,.25);border-top-color:#fff;animation:spin 1s linear infinite}
     @keyframes spin{to{transform:rotate(360deg)}}
-    /* log box */
     #log{white-space:pre-wrap;background:#0c1530;border:1px solid #1b2b50;border-radius:10px;padding:8px;max-height:220px;overflow:auto}
   </style>
 </head>
@@ -143,13 +142,16 @@
     const show = (el, on)=> (typeof el==='string'?$(el):el).classList.toggle('hidden', !on);
     const sayErr = (m)=>{ const b=$('errbar'); b.textContent=m; b.style.display='block'; setTimeout(()=>b.style.display='none', 5000); };
     const busy = (on)=> $('loader').style.display = on ? 'grid' : 'none';
-    const log = (t)=>{ const L=$('log'); L.textContent = (L.textContent==='—'?'':L.textContent+'\n') + t; console.log('[LOG]',t); };
+    const log = (t)=>{ const L=$('log'); L.textContent = (L.textContent==='—'?'':L.textContent+'\\n') + t; console.log('[LOG]',t); };
 
     /* ---------- Firebase ---------- */
     import { initializeApp, getApps } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-app.js";
     import { getDatabase, ref as dbRef, push, update, get } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-database.js";
     import { getAuth as getAuthMod, signInAnonymously as anonSignIn, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-auth.js";
-    import { getStorage, ref as stRef, uploadBytesResumable, getDownloadURL, listAll } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-storage.js";
+    import {
+      getStorage, ref as stRef, uploadBytesResumable, getDownloadURL, listAll,
+      setMaxOperationRetryTime, setMaxUploadRetryTime, uploadString
+    } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-storage.js";
 
     /* ---------- App A (DB): dailyquiz ---------- */
     const cfgDB = {
@@ -175,7 +177,10 @@
     };
     const appFO = initializeApp(cfgFO, "fireops-storage");
     const authFO = getAuthMod(appFO);
-    const storage = getStorage(appFO, FIREOPS_GS_BUCKET); // ← hard-pinned to new bucket
+    const storage = getStorage(appFO, FIREOPS_GS_BUCKET); // hard-pinned to new bucket
+    // Give SDK generous retry windows
+    setMaxOperationRetryTime(storage, 120_000); // list/get
+    setMaxUploadRetryTime(storage,   300_000);  // upload
 
     async function ensureAuthed(){
       if (!authDB.currentUser) {
@@ -210,6 +215,7 @@
       show('step2', !!scenarioId);
       show('galleryCard', !!scenarioId);
       renderGallery();
+      if (scenarioId) verifyListFromFireOps();
     }
 
     function renderGallery(){
@@ -304,10 +310,10 @@
       $('radius').value='5';
     };
 
-    /* ---------- Upload helpers ---------- */
+    /* ---------- Progress watcher (guard = 240s) ---------- */
     function watchTask(task, which){
       return new Promise((res,rej)=>{
-        const killer = setTimeout(()=>{ try{task.cancel();}catch{} rej(new Error('Upload timed out')); }, 60_000);
+        const killer = setTimeout(()=>{ try{task.cancel();}catch{} rej(new Error('Upload timed out (client guard 240s)')); }, 240000);
         task.on('state_changed',
           s=>{
             const pct=Math.round(100*s.bytesTransferred/s.totalBytes);
@@ -320,21 +326,42 @@
       });
     }
 
+    /* ---------- Tiny preflight write to same prefix ---------- */
+    async function preflightWrite(prefix){
+      const path = `${prefix}/_diag_${Date.now()}.png`;
+      const bytes = new Uint8Array([137,80,78,71,13,10,26,10,0,0,0,13,73,72,68,82,0,0,0,1,0,0,0,1,8,6,0,0,0,31,21,196,137,0,0,0,10,73,68,65,84,120,1,99,0,1,0,0,5,0,1,13,10,43,96,0,0,0,0,73,69,78,68,174,66,96,130]);
+      const ref = stRef(storage, path);
+      await uploadString(ref, btoa(String.fromCharCode(...bytes)), 'base64', {
+        contentType: 'image/png', cacheControl: 'public,max-age=60'
+      });
+      return path;
+    }
+
+    /* ---------- Primary upload to FireOpsSim ---------- */
     async function uploadToFireOps(ts, fullDataURL, thumbDataURL){
-      // Always try FireOpsSim Storage first (this is the new photo bucket)
-      const fullRef  = stRef(storage, `scenarios/${scenarioId}/${ts}.jpg`);
-      const thmbRef  = stRef(storage, `scenarios/${scenarioId}/thumbs/${ts}.jpg`);
+      await ensureAuthed();
+      const scenarioPath = `scenarios/${scenarioId}`;
+      const fullRef  = stRef(storage, `${scenarioPath}/${ts}.jpg`);
+      const thmbRef  = stRef(storage, `${scenarioPath}/thumbs/${ts}.jpg`);
       const meta     = { contentType:'image/jpeg', cacheControl:'public,max-age=31536000,immutable' };
 
       log(`→ FireOps upload start
-  bucket: ${fullRef.bucket}
+  gsBucket: ${fullRef.bucket}
   fullPath: ${fullRef.fullPath}
   thumbPath: ${thmbRef.fullPath}`);
 
-      const t1 = uploadBytesResumable(fullRef,  dataURLtoBlob(fullDataURL), meta);
-      await watchTask(t1,'full');
-      const t2 = uploadBytesResumable(thmbRef,  dataURLtoBlob(thumbDataURL), meta);
-      await watchTask(t2,'thumb');
+      try {
+        const pf = await preflightWrite(scenarioPath);
+        log(`preflight OK (${pf})`);
+      } catch (e) {
+        log(`preflight FAILED: ${e.code||''} ${e.message||e}`);
+        throw e;
+      }
+
+      const fullTask  = uploadBytesResumable(fullRef,  dataURLtoBlob(fullDataURL), meta);
+      await watchTask(fullTask,'full');
+      const thumbTask = uploadBytesResumable(thmbRef,  dataURLtoBlob(thumbDataURL), meta);
+      await watchTask(thumbTask,'thumb');
 
       const imageURL = await getDownloadURL(fullRef);
       const thumbURL = await getDownloadURL(thmbRef).catch(()=>imageURL);
@@ -342,13 +369,11 @@
       log(`✓ FireOps upload OK
   url: ${imageURL}`);
 
-      // Post-upload proof: list from SAME bucket/prefix
-      const folderRef = stRef(storage, `scenarios/${scenarioId}`);
       try{
-        const listing = await listAll(folderRef);
-        log(`listAll(${folderRef.fullPath}) → ${listing.items.length} files`);
+        const listing = await listAll(stRef(storage, scenarioPath));
+        log(`listAll(${scenarioPath}) → ${listing.items.length} file(s)`);
       }catch(e){
-        log(`listAll error: ${e?.message||e}`);
+        log(`listAll error: ${e?.code||''} ${e?.message||e}`);
       }
 
       return {
@@ -359,8 +384,8 @@
       };
     }
 
+    /* ---------- Legacy function fallback (kept) ---------- */
     async function uploadViaLegacy(ts, fullDataURL){
-      // (Kept) Your legacy Cloud Function fallback in dailyquiz project
       const u = authDB.currentUser || (await ensureAuthed()).dbUser;
       const token = u ? await u.getIdToken() : null;
       const resp = await fetch('https://us-central1-dailyquiz-d5279.cloudfunctions.net/uploadScenarioImage', {
@@ -378,14 +403,31 @@
       return { backend:'legacy-fn', imageURL:j.url, thumbURL:j.url, storagePath:j.path, gsUri:j.gsUri||'' };
     }
 
+    /* ---------- Final inline fallback (never lose the photo) ---------- */
+    function uploadInlineFallback(fullDataURL, thumbDataURL){
+      log('⚠ Using inline base64 fallback (no cloud write succeeded).');
+      return {
+        backend: 'inline-base64',
+        imageURL: fullDataURL,
+        thumbURL: thumbDataURL,
+        storagePath: '',
+        gsUri: ''
+      };
+    }
+
+    /* ---------- Master dispatcher ---------- */
     async function uploadBlobs(ts, fullDataURL, thumbDataURL){
       await ensureAuthed();
-      try{
+      try {
         return await uploadToFireOps(ts, fullDataURL, thumbDataURL);
-      }catch(e1){
+      } catch (e1) {
         log(`FireOps upload failed: ${e1?.code||''} ${e1?.message||e1}`);
-        // fallback stays, but we log clearly if used
-        return await uploadViaLegacy(ts, fullDataURL);
+        try {
+          return await uploadViaLegacy(ts, fullDataURL);
+        } catch (e2) {
+          log(`Legacy fallback failed: ${e2?.code||''} ${e2?.message||e2}`);
+          return uploadInlineFallback(fullDataURL, thumbDataURL);
+        }
       }
     }
 
@@ -402,6 +444,18 @@
       await update(dbRef(db), multi);
       localStops = stops;
       renderGallery();
+    }
+
+    /* ---------- Verify list directly from new bucket (manual) ---------- */
+    async function verifyListFromFireOps(){
+      if(!scenarioId) return;
+      try{
+        const folderRef = stRef(storage, `scenarios/${scenarioId}`);
+        const listing = await listAll(folderRef);
+        log(`VERIFY listAll(${folderRef.fullPath}) → ${listing.items.length} files in FireOps bucket`);
+      }catch(e){
+        log(`VERIFY list error: ${e?.message||e}`);
+      }
     }
 
     /* ---------- Save Photo ---------- */
@@ -432,6 +486,9 @@
 
         $('saveStatus').textContent='saved ✓';
         show('afterSave', true);
+
+        // Extra verification after save
+        await verifyListFromFireOps();
       }catch(e){
         $('saveStatus').textContent='error';
         sayErr(e.message||String(e));
@@ -450,29 +507,14 @@
       $('radius').value='5';
     };
 
-    /* ---------- Gallery: fetch straight from new bucket for verification ---------- */
-    async function refreshGalleryFromNewBucket(){
-      if(!scenarioId) return;
-      try{
-        const folderRef = stRef(storage, `scenarios/${scenarioId}`);
-        const listing = await listAll(folderRef);
-        log(`VERIFY listAll(${folderRef.fullPath}) → ${listing.items.length} files in FireOps bucket`);
-      }catch(e){
-        log(`VERIFY list error: ${e?.message||e}`);
-      }
-    }
-
-    // After each gate change, try a verification list
-    function gateAndVerify(){
-      gate();
-      refreshGalleryFromNewBucket();
-    }
-
-    // Hook gate override (call where scenarioId set)
-    // (we call gate() directly in create; also call verify)
-    // For clarity, we keep both:
-    // gate();
-
+    // Picker bindings
+    const openInput = id => $(id).click();
+    document.getElementById('btnCamera').addEventListener('click', ()=>openInput('inCamera'));
+    document.getElementById('btnLibrary').addEventListener('click',()=>openInput('inLibrary'));
+    document.getElementById('btnUpload').addEventListener('click', ()=>openInput('inUpload'));
+    document.getElementById('inCamera').addEventListener('change', e=> onPick(e.target.files?.[0]));
+    document.getElementById('inLibrary').addEventListener('change',e=> onPick(e.target.files?.[0]));
+    document.getElementById('inUpload').addEventListener('change', e=> onPick(e.target.files?.[0]));
   </script>
 </body>
 </html>
