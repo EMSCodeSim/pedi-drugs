@@ -1,47 +1,47 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
 <head>
-  <meta charset="utf-8" />
-  <title>FireOps SIM — Scenario Builder (Create Button Fix)</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <meta name="theme-color" content="#0b0f14" />
-  <style>
-    :root{--bg:#0b0f14;--bg2:#0d121c;--panel:#0f1624;--text:#eaf2ff;--muted:#9fb2d6;--edge:rgba(255,255,255,.14)}
-    *{box-sizing:border-box}
-    html,body{margin:0;height:100%;color:var(--text);font-family:system-ui,-apple-system,Segoe UI,Inter,Roboto,Arial,sans-serif;
-      background:radial-gradient(1200px 600px at 12% -8%, rgba(10,132,255,.22), transparent 60%),
-                 radial-gradient(1200px 600px at 110% 0%, rgba(255,59,48,.16), transparent 60%),
-                 linear-gradient(165deg,var(--bg2),var(--bg) 55%)}
-    header{position:sticky;top:0;z-index:10;background:#0b0f14;border-bottom:1px solid var(--edge);isolation:isolate}
-    .bar{max-width:1100px;margin:0 auto;padding:12px;display:flex;gap:10px;align-items:center;justify-content:space-between}
-    .brand{font-weight:900}
-    .tag{font-size:12px;color:#a6c4ff;background:#0b1a35;border:1px solid #214987;border-radius:10px;padding:6px 10px}
-    main{max-width:1100px;margin:14px auto 30px;padding:0 12px;display:grid;gap:12px}
-    .card{background:linear-gradient(180deg,rgba(255,255,255,.02),transparent 26%),
-                 linear-gradient(180deg,#0f1624,#0e1420);border:1px solid var(--edge);border-radius:16px;padding:14px}
-    .hidden{display:none !important}
-    label{display:block;font-weight:700;margin-top:8px}
-    input,textarea,select{width:100%;padding:10px 12px;border-radius:12px;background:#0b1322;color:#eaf2ff;border:1px solid var(--edge)}
-    textarea{min-height:90px}
-    .row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
-    .btn{appearance:none;border:1px solid var(--edge);background:#132136;color:#fff;border-radius:12px;padding:10px 14px;font-weight:700;cursor:pointer}
-    .btn.ghost{background:transparent}
-    .btn[disabled]{opacity:.6;cursor:not-allowed}
-    .hint{font-size:12px;color:var(--muted)}
-    .barWrap{height:10px;border:1px solid var(--edge);border-radius:8px;background:#0c1322;overflow:hidden}
-    .bar{height:100%;width:0;background:linear-gradient(90deg,#2484ff,#63dbff)}
-    .preview{width:100%;max-height:70vh;display:grid;place-items:center;background:#050e19;border:1px solid var(--edge);border-radius:14px;overflow:hidden}
-    .preview img{max-width:100%;max-height:70vh;object-fit:contain;display:block}
-    #gallery{display:grid;gap:10px;grid-template-columns:repeat(auto-fill,minmax(120px,1fr))}
-    .gItem{border:1px solid var(--edge);border-radius:12px;overflow:hidden;background:#0b1322}
-    .gItem img{width:100%;height:100%;object-fit:cover;display:block;aspect-ratio:1/1}
-    .gCap{padding:6px 8px;font-size:12px;color:#9fb2d6}
-    #errbar{position:fixed;left:12px;bottom:12px;z-index:99;display:none;padding:10px 12px;border-radius:12px;border:1px solid #7a2b2b;background:#2b0d0d;color:#ffd7d7}
-    #loader{position:fixed;inset:0;display:none;place-items:center;background:rgba(6,12,20,.55);backdrop-filter:blur(2px);z-index:98}
-    .spinner{width:42px;height:42px;border-radius:999px;border:4px solid rgba(255,255,255,.25);border-top-color:#fff;animation:spin 1s linear infinite}
-    @keyframes spin{to{transform:rotate(360deg)}}
-    #log{white-space:pre-wrap;background:#0c1530;border:1px solid #1b2b50;border-radius:10px;padding:8px;max-height:260px;overflow:auto}
-  </style>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>FireOps SIM — Scenario Builder (Compat, DB old • Photos new)</title>
+<meta name="theme-color" content="#0b0f14" />
+<style>
+  :root{--bg:#0b0f14;--bg2:#0d121c;--panel:#0f1624;--text:#eaf2ff;--muted:#9fb2d6;--edge:rgba(255,255,255,.14)}
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%;color:var(--text);font-family:system-ui,-apple-system,Segoe UI,Inter,Roboto,Arial,sans-serif;
+    background:radial-gradient(1200px 600px at 12% -8%, rgba(10,132,255,.22), transparent 60%),
+               radial-gradient(1200px 600px at 110% 0%, rgba(255,59,48,.16), transparent 60%),
+               linear-gradient(165deg,var(--bg2),var(--bg) 55%)}
+  header{position:sticky;top:0;z-index:10;background:#0b0f14;border-bottom:1px solid var(--edge);isolation:isolate}
+  .bar{max-width:1100px;margin:0 auto;padding:12px;display:flex;gap:10px;align-items:center;justify-content:space-between}
+  .brand{font-weight:900}
+  .tag{font-size:12px;color:#a6c4ff;background:#0b1a35;border:1px solid #214987;border-radius:10px;padding:6px 10px}
+  main{max-width:1100px;margin:14px auto 30px;padding:0 12px;display:grid;gap:12px}
+  .card{background:linear-gradient(180deg,rgba(255,255,255,.02),transparent 26%),
+               linear-gradient(180deg,#0f1624,#0e1420);border:1px solid var(--edge);border-radius:16px;padding:14px}
+  .hidden{display:none!important}
+  label{display:block;font-weight:700;margin-top:8px}
+  input,textarea,select{width:100%;padding:10px 12px;border-radius:12px;background:#0b1322;color:#eaf2ff;border:1px solid var(--edge)}
+  textarea{min-height:90px}
+  .row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+  .btn{appearance:none;border:1px solid var(--edge);background:#132136;color:#fff;border-radius:12px;padding:10px 14px;font-weight:700;cursor:pointer}
+  .btn.ghost{background:transparent}
+  .btn[disabled]{opacity:.6;cursor:not-allowed}
+  .hint{font-size:12px;color:#9fb2d6}
+  .barWrap{height:10px;border:1px solid var(--edge);border-radius:8px;background:#0c1322;overflow:hidden}
+  .bar{height:100%;width:0;background:linear-gradient(90deg,#2484ff,#63dbff)}
+  .preview{width:100%;max-height:70vh;display:grid;place-items:center;background:#050e19;border:1px solid var(--edge);border-radius:14px;overflow:hidden}
+  .preview img{max-width:100%;max-height:70vh;object-fit:contain;display:block}
+  #gallery{display:grid;gap:10px;grid-template-columns:repeat(auto-fill,minmax(120px,1fr))}
+  .gItem{border:1px solid var(--edge);border-radius:12px;overflow:hidden;background:#0b1322}
+  .gItem img{width:100%;height:100%;object-fit:cover;display:block;aspect-ratio:1/1}
+  .gCap{padding:6px 8px;font-size:12px;color:#9fb2d6}
+  #errbar{position:fixed;left:12px;bottom:12px;z-index:99;display:none;padding:10px 12px;border-radius:12px;border:1px solid #7a2b2b;background:#2b0d0d;color:#ffd7d7}
+  #loader{position:fixed;inset:0;display:none;place-items:center;background:rgba(6,12,20,.55);backdrop-filter:blur(2px);z-index:98}
+  .spinner{width:42px;height:42px;border-radius:999px;border:4px solid rgba(255,255,255,.25);border-top-color:#fff;animation:spin 1s linear infinite}
+  @keyframes spin{to{transform:rotate(360deg)}}
+  #log{white-space:pre-wrap;background:#0c1530;border:1px solid #1b2b50;border-radius:10px;padding:8px;max-height:260px;overflow:auto}
+</style>
 </head>
 <body>
   <div id="errbar"></div>
@@ -64,7 +64,8 @@
       <label>Dispatch (optional)</label>
       <textarea id="sDispatch" placeholder="Engine 1, Engine 2, Medic 1…"></textarea>
       <div class="row" style="margin-top:10px">
-        <button id="createBtn" class="btn">Create Scenario</button>
+        <!-- Inline onclick backstop so it always fires -->
+        <button id="createBtn" class="btn" onclick="window._onCreateScenario && window._onCreateScenario()">Create Scenario</button>
         <span id="s1Status" class="hint">idle</span>
       </div>
     </section>
@@ -131,39 +132,30 @@
       <div id="galleryEmpty" class="hint">No photos yet.</div>
       <div style="margin-top:10px">
         <strong>Status Log</strong>
-        <div id="log">—</div>
+        <div id="log">Booting…</div>
       </div>
     </section>
   </main>
 
-  <!-- Firebase (modules) -->
-  <script type="module">
-    // Global diagnostics (catch anything that would block handlers)
-    window.addEventListener('error', e => {
-      const box = document.getElementById('log');
-      box.textContent += (box.textContent==='—'?'':'\\n') + 'window.error: ' + (e.message||e);
-    });
-    window.addEventListener('unhandledrejection', e => {
-      const box = document.getElementById('log');
-      box.textContent += (box.textContent==='—'?'':'\\n') + 'unhandledrejection: ' + (e.reason && (e.reason.message||e.reason));
-    });
+  <!-- Firebase COMPAT SDKs (no modules) -->
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-storage-compat.js"></script>
 
-    const $   = (id)=>document.getElementById(id);
-    const log = (t)=>{ const L=$('log'); L.textContent = (L.textContent==='—'?'':L.textContent+'\\n') + t; console.log('[LOG]',t); };
-    const show = (el, on)=> (typeof el==='string'?$(el):el).classList.toggle('hidden', !on);
+  <script>
+  (function(){
+    // Global diagnostics
+    window.addEventListener('error', e => log('window.error: ' + (e.message||e)));
+    window.addEventListener('unhandledrejection', e => log('unhandledrejection: ' + (e.reason && (e.reason.message||e.reason))));
+
+    const $ = id => document.getElementById(id);
+    const log = (t)=>{ const L=$('log'); L.textContent = (L.textContent ? L.textContent+'\n' : '') + t; console.log('[LOG]',t); };
+    const show = (id, on)=> $(id).classList.toggle('hidden', !on);
     const sayErr = (m)=>{ const b=$('errbar'); b.textContent=m; b.style.display='block'; setTimeout(()=>b.style.display='none', 5000); };
     const busy = (on)=> $('loader').style.display = on ? 'grid' : 'none';
 
-    // Firebase SDKs
-    import { initializeApp, getApps } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-app.js";
-    import { getDatabase, ref as dbRef, push, update, get } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-database.js";
-    import { getAuth as getAuthMod, signInAnonymously as anonSignIn, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-auth.js";
-    import {
-      getStorage, ref as stRef, uploadBytesResumable, getDownloadURL, listAll,
-      setMaxOperationRetryTime, setMaxUploadRetryTime, uploadString
-    } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-storage.js";
-
-    // ---- Configs (OLD DB, NEW Storage) ----
+    // --- Firebase configs ---
     const cfgDB = {
       apiKey:"AIzaSyDM6DpRSeZueVKRpbyJyDmhf8WY66KyCDk",
       authDomain:"dailyquiz-d5279.firebaseapp.com",
@@ -173,7 +165,6 @@
       appId:"1:94577748034:web:c032d3a1d72db1313de5db",
       measurementId:"G-19DVN7NNH7"
     };
-    const FIREOPS_GS_BUCKET = "gs://fireopssim.appspot.com";
     const cfgFO = {
       apiKey: "AIzaSyBzwc75u8pG73OKcHN8ti2ADbucjKMHme8",
       authDomain: "fireopssim.firebaseapp.com",
@@ -181,42 +172,46 @@
       storageBucket: "fireopssim.appspot.com"
     };
 
-    // ---- Initialize apps (after DOM ready) ----
-    let appDB, appFO, db, authDB, authFO, storage;
-    function initFirebase(){
-      appDB = getApps().find(a=>a.name==='[DEFAULT]') || initializeApp(cfgDB);
-      db    = getDatabase(appDB);
-      authDB= getAuthMod(appDB);
+    // --- Init apps (compat, no modules) ---
+    const appDB = firebase.initializeApp(cfgDB);                  // [DEFAULT] (old DB)
+    const appFO = firebase.initializeApp(cfgFO, "fireops");       // secondary app for photos
 
-      appFO = initializeApp(cfgFO, "fireops-storage");
-      authFO= getAuthMod(appFO);
-      storage = getStorage(appFO, FIREOPS_GS_BUCKET);
-      setMaxOperationRetryTime(storage, 120_000);
-      setMaxUploadRetryTime(storage,   300_000);
-      log('Firebase initialized (DB old / Storage new).');
-    }
+    const db     = firebase.database(appDB);
+    const authDB = firebase.auth(appDB);
+    const authFO = firebase.auth(appFO);
+    const store  = firebase.storage(appFO); // bound to fireopssim.appspot.com
+    // Generous retry windows
+    store.setMaxOperationRetryTime(120000);
+    store.setMaxUploadRetryTime(300000);
 
-    // ---- Robust auth that won't stall UI ----
-    function waitForAuthOnce(auth){
-      return new Promise((resolve) => {
-        const unsub = onAuthStateChanged(auth, (u) => { if (u) { unsub(); resolve(u); } });
-        // If nothing fires in 5s, continue without blocking UI
-        setTimeout(()=>{ try{unsub();}catch{} resolve(auth.currentUser || null); }, 5000);
+    // Ensure Anonymous Auth but NEVER block UI
+    (async function warmupAuth(){
+      try{ await authDB.signInAnonymously(); }catch(e){ log('DB anon auth failed: '+(e.code||'')+' '+(e.message||e)); }
+      try{ await authFO.signInAnonymously(); }catch(e){ log('FO anon auth failed: '+(e.code||'')+' '+(e.message||e)); }
+      log('Auth warmup attempted.');
+    })();
+
+    // --- State ---
+    let scenarioId=null, pendingImg=null, fullURL=null, thumbURL=null;
+    let pendingFullDataURL=null, pendingThumbDataURL=null, pendingGeo=null;
+    let localStops=[];
+
+    function renderGallery(){
+      const host=$('gallery'); const empty=$('galleryEmpty');
+      host.innerHTML='';
+      if(!localStops.length){ empty.textContent='No photos yet.'; show('galleryEmpty', true); return; }
+      show('galleryEmpty', false);
+      localStops.forEach((s,i)=>{
+        const card=document.createElement('div'); card.className='gItem';
+        const img=document.createElement('img'); img.src=s.thumbURL||s.imageURL||''; img.alt=s.caption||('Stop '+(i+1));
+        const cap=document.createElement('div'); cap.className='gCap';
+        cap.textContent=(s.caption||('Stop '+(i+1))) + (s.gsUri?` • ${s.gsUri}`:'');
+        card.appendChild(img); card.appendChild(cap); host.appendChild(card);
       });
     }
-    async function ensureAuthedNonBlocking(){
-      try{
-        if (!authDB.currentUser) { await anonSignIn(authDB).catch(e=>log('DB anon sign-in failed: '+(e.message||e))); }
-        await waitForAuthOnce(authDB);
-      }catch(e){ log('DB auth error: '+(e.message||e)); }
-      try{
-        if (!authFO.currentUser) { await anonSignIn(authFO).catch(e=>log('FO anon sign-in failed: '+(e.message||e))); }
-        await waitForAuthOnce(authFO);
-      }catch(e){ log('FO auth error: '+(e.message||e)); }
-      log('Auth ready (non-blocking).');
-    }
+    function gate(){ show('step2', !!scenarioId); show('galleryCard', !!scenarioId); renderGallery(); }
 
-    // ---- Imaging helpers ----
+    // Imaging helpers
     const FULL_EDGE=1280, FULL_Q=0.75, THUMB_EDGE=480, THUMB_Q=0.8;
     const readAsDataURL = f => new Promise((res,rej)=>{ const r=new FileReader(); r.onload=()=>res(r.result); r.onerror=rej; r.readAsDataURL(f); });
     const loadImage = src => new Promise((res,rej)=>{ const i=new Image(); i.onload=()=>res(i); i.onerror=rej; i.src=src; });
@@ -228,39 +223,107 @@
     }
     function dataURLtoBlob(u){ const [h,b64]=u.split(','); const mime=(/data:(.*?);base64/).exec(h)[1]; const bin=atob(b64), a=new Uint8Array(bin.length); for(let i=0;i<bin.length;i++) a[i]=bin.charCodeAt(i); return new Blob([a],{type:mime}); }
 
-    // ---- State ----
-    let scenarioId=null, pendingImg=null, pendingFullDataURL=null, pendingThumbDataURL=null, pendingGeo=null;
-    let localStops=[];
-
-    function renderGallery(){
-      const host=$('gallery'); const empty=$('galleryEmpty');
-      host.innerHTML='';
-      if(!Array.isArray(localStops) || localStops.length===0){ empty.textContent='No photos yet.'; empty.classList.remove('hidden'); return; }
-      empty.classList.add('hidden');
-      localStops.forEach((s, i)=>{
-        const card=document.createElement('div'); card.className='gItem';
-        const img=document.createElement('img'); img.src=s.thumbURL||s.imageURL||''; img.alt=s.caption||('Stop '+(i+1));
-        const cap=document.createElement('div'); cap.className='gCap';
-        cap.textContent = (s.caption||('Stop '+(i+1))) + (s.gsUri?` • ${s.gsUri}`:'');
-        card.appendChild(img); card.appendChild(cap); host.appendChild(card);
+    // Progress guard
+    function watchTask(task, which){
+      return new Promise((res,rej)=>{
+        const killer=setTimeout(()=>{ try{task.cancel();}catch{} rej(new Error('Upload timed out (240s)')); },240000);
+        task.on('state_changed',
+          s=>{
+            const pct=Math.round(100*s.bytesTransferred/s.totalBytes);
+            if(which==='full'){ $('pctFull').textContent=pct+'%'; $('barFull').style.width=pct+'%'; }
+            else { $('pctThumb').textContent=pct+'%'; $('barThumb').style.width=pct+'%'; }
+          },
+          e=>{ clearTimeout(killer); rej(e); },
+          ()=>{ clearTimeout(killer); res(); }
+        );
       });
     }
-    function gate(){ $('step2').classList.toggle('hidden', !scenarioId); $('galleryCard').classList.toggle('hidden', !scenarioId); renderGallery(); }
 
-    // ---- Create Scenario (OLD DB) ----
+    // Tiny preflight write to the same prefix
+    async function preflightWrite(prefix){
+      const ref = store.ref().child(`${prefix}/_diag_${Date.now()}.txt`);
+      await ref.putString('ok', 'raw', { contentType:'text/plain', cacheControl:'public,max-age=60' });
+      return ref.fullPath;
+    }
+
+    // PRIMARY: upload to FireOpsSim bucket
+    async function uploadToFireOps(ts, fullDataURL, thumbDataURL){
+      const scenarioPath = `scenarios/${scenarioId}`;
+      const fullRef = store.ref().child(`${scenarioPath}/${ts}.jpg`);
+      const thmbRef = store.ref().child(`${scenarioPath}/thumbs/${ts}.jpg`);
+      const meta    = { contentType:'image/jpeg', cacheControl:'public,max-age=31536000,immutable' };
+
+      log(`→ FireOps upload start\n  bucket: ${store.app.options.storageBucket}\n  full: ${fullRef.fullPath}\n  thumb:${thmbRef.fullPath}`);
+
+      await preflightWrite(scenarioPath).then(p=>log('preflight OK ('+p+')'));
+
+      const t1 = fullRef.put(dataURLtoBlob(fullDataURL), meta);   await watchTask(t1,'full');
+      const t2 = thmbRef.put(dataURLtoBlob(thumbDataURL), meta);  await watchTask(t2,'thumb');
+
+      const imageURL = await fullRef.getDownloadURL();
+      const thumbURL = await thmbRef.getDownloadURL().catch(()=>imageURL);
+      log('✓ FireOps upload OK');
+
+      return {
+        backend:'fireops',
+        imageURL, thumbURL,
+        storagePath: fullRef.fullPath,
+        gsUri:`gs://${store.app.options.storageBucket}/${fullRef.fullPath}`
+      };
+    }
+
+    // Legacy fallback (kept, optional)
+    async function uploadViaLegacy(ts, fullDataURL){
+      try{
+        const u = authDB.currentUser; const token = u ? await u.getIdToken() : null;
+        const resp = await fetch('https://us-central1-dailyquiz-d5279.cloudfunctions.net/uploadScenarioImage', {
+          method:'POST',
+          headers:{'Content-Type':'application/json', ...(token?{Authorization:`Bearer ${token}`}:{})},
+          body: JSON.stringify({ scenarioId, fileName: `${ts}.jpg`, dataURL: fullDataURL })
+        });
+        if(!resp.ok) throw new Error('Function HTTP '+resp.status);
+        const j = await resp.json(); if(!j.ok) throw new Error(j.error||'Function error');
+        log('✓ Legacy function used');
+        return { backend:'legacy-fn', imageURL:j.url, thumbURL:j.url, storagePath:j.path, gsUri:j.gsUri||'' };
+      }catch(e){ log('Legacy fallback failed: '+(e.message||e)); throw e; }
+    }
+
+    function uploadInlineFallback(fullDataURL, thumbDataURL){
+      log('⚠ Inline base64 fallback.');
+      return { backend:'inline-base64', imageURL:fullDataURL, thumbURL:thumbDataURL, storagePath:'', gsUri:'' };
+    }
+
+    async function uploadBlobs(ts, fullDataURL, thumbDataURL){
+      try { return await uploadToFireOps(ts, fullDataURL, thumbDataURL); }
+      catch(e1){ log('FireOps upload failed: '+(e1.message||e1)); try{ return await uploadViaLegacy(ts, fullDataURL); } catch(e2){ return uploadInlineFallback(fullDataURL, thumbDataURL);} }
+    }
+
+    async function appendStopToDB(stop){
+      // read-modify-write to avoid overwriting
+      let stops=[]; try{ const snap=await db.ref(`scenarios/${scenarioId}/stops`).get(); stops = snap.exists() ? (snap.val()||[]) : []; }catch{}
+      stops.push(stop);
+      const multi={};
+      multi[`scenarios/${scenarioId}/stops`] = stops;
+      multi[`geophoto/scenarios/${scenarioId}/stops`] = stops;
+      await db.ref().update(multi);
+      localStops = stops;
+      renderGallery();
+    }
+
+    // ---- Button handlers ----
     async function onCreateScenario(){
       log('Create button clicked.');
       try{
-        await ensureAuthedNonBlocking(); // won't stall
         const title=($('sTitle').value||'').trim();
         if(!title){ $('s1Status').textContent='enter a name'; return; }
         $('s1Status').textContent='creating…';
 
-        const id = push(dbRef(db,'scenarios')).key;
+        const id = db.ref('scenarios').push().key;
         const dispatch=($('sDispatch').value||'').trim();
         const base = { id, title, dispatch, description:dispatch, createdAt: Date.now(), active:true, stops:[] };
+
         const multi={}; multi[`scenarios/${id}`]=base; multi[`geophoto/scenarios/${id}`]=base;
-        await update(dbRef(db), multi);
+        await db.ref().update(multi);
 
         scenarioId=id; localStops=[];
         $('s1Status').textContent='created ✓';
@@ -272,10 +335,11 @@
         log('Create scenario error: ' + (e?.message||e));
       }
     }
+    window._onCreateScenario = onCreateScenario; // inline backstop uses this
 
-    // ---- Photo pickers & save (unchanged pattern) ----
+    // Pickers
+    const open = id => $(id).click();
     function bindPickers(){
-      const open = id => $(id).click();
       $('btnCamera').addEventListener('click', ()=> open('inCamera'));
       $('btnLibrary').addEventListener('click',()=> open('inLibrary'));
       $('btnUpload').addEventListener('click', ()=> open('inUpload'));
@@ -293,12 +357,12 @@
         const dataURL = await readAsDataURL(file);
         const img = await loadImage(dataURL);
         pendingImg=img;
-        pendingFullDataURL  = downscale(img, 1280, 0.75);
-        pendingThumbDataURL = downscale(img, 480,  0.8);
+        pendingFullDataURL  = downscale(img, FULL_EDGE,  FULL_Q);
+        pendingThumbDataURL = downscale(img, THUMB_EDGE, THUMB_Q);
 
         $('previewImg').src = pendingFullDataURL;
-        $('imgInfo').textContent = `Original: ${img.width}×${img.height} → Saving ~${Math.min(1280, Math.max(img.width,img.height))} px`;
-        $('workArea').classList.remove('hidden');
+        $('imgInfo').textContent = `Original: ${img.width}×${img.height} → Saving ~${Math.round(Math.min(FULL_EDGE, Math.max(img.width,img.height)))} px`;
+        show('workArea', true);
         $('saveStatus').textContent='ready';
         $('pctFull').textContent='0%'; $('barFull').style.width='0%';
         $('pctThumb').textContent='0%'; $('barThumb').style.width='0%';
@@ -315,111 +379,21 @@
     }
     function resetWork(){
       pendingImg=pendingFullDataURL=pendingThumbDataURL=null;
-      $('previewImg').src=''; $('workArea').classList.add('hidden'); $('afterSave').classList.add('hidden');
+      $('previewImg').src=''; show('workArea',false); show('afterSave',false);
       $('pctFull').textContent='0%'; $('barFull').style.width='0%';
       $('pctThumb').textContent='0%'; $('barThumb').style.width='0%';
       $('radius').value='5';
     }
 
-    function watchTask(task, which){
-      return new Promise((res,rej)=>{
-        const killer = setTimeout(()=>{ try{task.cancel();}catch{} rej(new Error('Upload timed out (240s)')); }, 240000);
-        task.on('state_changed',
-          s=>{
-            const pct=Math.round(100*s.bytesTransferred/s.totalBytes);
-            if(which==='full'){ $('pctFull').textContent=pct+'%'; $('barFull').style.width=pct+'%'; }
-            else { $('pctThumb').textContent=pct+'%'; $('barThumb').style.width=pct+'%'; }
-          },
-          e=>{ clearTimeout(killer); rej(e); },
-          ()=>{ clearTimeout(killer); res(); }
-        );
-      });
-    }
-    async function preflightWrite(prefix){
-      const path = `${prefix}/_diag_${Date.now()}.png`;
-      const bytes = new Uint8Array([137,80,78,71,13,10,26,10,0,0,0,13,73,72,68,82,0,0,0,1,0,0,0,1,8,6,0,0,0,31,21,196,137,0,0,0,10,73,68,65,84,120,1,99,0,1,0,0,5,0,1,13,10,43,96,0,0,0,0,73,69,78,68,174,66,96,130]);
-      const ref = stRef(storage, path);
-      await uploadString(ref, btoa(String.fromCharCode(...bytes)), 'base64', {
-        contentType: 'image/png', cacheControl: 'public,max-age=60'
-      });
-      return path;
-    }
-    async function uploadToFireOps(ts, fullDataURL, thumbDataURL){
-      const scenarioPath = `scenarios/${scenarioId}`;
-      const fullRef  = stRef(storage, `${scenarioPath}/${ts}.jpg`);
-      const thmbRef  = stRef(storage, `${scenarioPath}/thumbs/${ts}.jpg`);
-      const meta     = { contentType:'image/jpeg', cacheControl:'public,max-age=31536000,immutable' };
-
-      log(`→ FireOps upload start
-  gsBucket: ${fullRef.bucket}
-  fullPath: ${fullRef.fullPath}
-  thumbPath: ${thmbRef.fullPath}`);
-
-      await preflightWrite(scenarioPath).then(p=>log('preflight OK ('+p+')'));
-
-      const fullTask  = uploadBytesResumable(fullRef,  dataURLtoBlob(fullDataURL), meta);
-      await watchTask(fullTask,'full');
-      const thumbTask = uploadBytesResumable(thmbRef,  dataURLtoBlob(thumbDataURL), meta);
-      await watchTask(thumbTask,'thumb');
-
-      const imageURL = await getDownloadURL(fullRef);
-      const thumbURL = await getDownloadURL(thmbRef).catch(()=>imageURL);
-      log('✓ FireOps upload OK');
-
-      return {
-        backend:'fireops',
-        imageURL, thumbURL,
-        storagePath: fullRef.fullPath,
-        gsUri:`gs://${fullRef.bucket}/${fullRef.fullPath}`
-      };
-    }
-    async function uploadViaLegacy(ts, fullDataURL){
-      // Kept for completeness; you can remove if not needed
-      try{
-        const u = authDB.currentUser;
-        const token = u ? await u.getIdToken() : null;
-        const resp = await fetch('https://us-central1-dailyquiz-d5279.cloudfunctions.net/uploadScenarioImage', {
-          method:'POST',
-          headers:{ 'Content-Type':'application/json', ...(token?{Authorization:`Bearer ${token}`}:{}) },
-          body: JSON.stringify({ scenarioId, fileName: `${ts}.jpg`, dataURL: fullDataURL })
-        });
-        if(!resp.ok) throw new Error('Function HTTP '+resp.status);
-        const j = await resp.json(); if(!j.ok) throw new Error(j.error||'Function error');
-        log('✓ Legacy function used');
-        return { backend:'legacy-fn', imageURL:j.url, thumbURL:j.url, storagePath:j.path, gsUri:j.gsUri||'' };
-      }catch(e){ log('Legacy fallback failed: '+(e.message||e)); throw e; }
-    }
-    function uploadInlineFallback(fullDataURL, thumbDataURL){
-      log('⚠ Inline base64 fallback.');
-      return { backend:'inline-base64', imageURL: fullDataURL, thumbURL: thumbDataURL, storagePath:'', gsUri:'' };
-    }
-    async function uploadBlobs(ts, fullDataURL, thumbDataURL){
-      try { return await uploadToFireOps(ts, fullDataURL, thumbDataURL); }
-      catch(e1){ log('FireOps upload failed: '+(e1.message||e1)); try{ return await uploadViaLegacy(ts, fullDataURL); } catch(e2){ return uploadInlineFallback(fullDataURL, thumbDataURL);} }
-    }
-
-    async function appendStopToDB(stop){
-      let stops=[];
-      try{
-        const snap = await get(dbRef(db, `scenarios/${scenarioId}/stops`));
-        stops = snap.exists()? (snap.val()||[]) : [];
-      }catch{}
-      stops.push(stop);
-      const multi={};
-      multi[`scenarios/${scenarioId}/stops`] = stops;
-      multi[`geophoto/scenarios/${scenarioId}/stops`] = stops;
-      await update(dbRef(db), multi);
-      localStops = stops;
-      renderGallery();
-    }
-
     async function onSavePhoto(){
       if(!(scenarioId && pendingFullDataURL)) return;
       try{
-        document.getElementById('saveStatus').textContent='uploading…'; document.getElementById('afterSave').classList.add('hidden');
+        $('saveStatus').textContent='uploading…'; show('afterSave',false);
+
         const ts = Date.now();
         const cloud = await uploadBlobs(ts, pendingFullDataURL, pendingThumbDataURL);
-        const r = Math.max(1, Math.min(1000, parseInt((document.getElementById('radius').value||'5'),10) || 5));
+
+        const r = Math.max(1, Math.min(1000, parseInt(($('radius').value||'5'),10) || 5));
         const stop = {
           type:'photo', title:'', caption:'',
           imageURL: cloud.imageURL || '',
@@ -430,28 +404,29 @@
           lat: pendingGeo?.lat ?? null, lng: pendingGeo?.lng ?? null, accuracy: pendingGeo?.accuracy ?? null,
           radiusMeters:r, overlays:[], at: ts
         };
+
         log(`Stop saved (backend=${stop.backend}) ${stop.gsUri||''}`);
         await appendStopToDB(stop);
-        document.getElementById('saveStatus').textContent='saved ✓';
-        document.getElementById('afterSave').classList.remove('hidden');
+
+        $('saveStatus').textContent='saved ✓';
+        show('afterSave', true);
       }catch(e){
-        document.getElementById('saveStatus').textContent='error';
+        $('saveStatus').textContent='error';
         sayErr(e.message||String(e));
         log('Save error: ' + (e?.message||e));
       }
     }
 
-    // ---- Bind everything AFTER DOM is ready ----
-    document.addEventListener('DOMContentLoaded', async ()=>{
-      log('DOM ready.');
-      initFirebase();
-      // Bind click handlers
-      document.getElementById('createBtn').addEventListener('click', onCreateScenario);
-      bindPickers();
-      // Non-blocking auth warmup
-      ensureAuthedNonBlocking();
-      log('Handlers bound. Click "Create Scenario".');
+    // Bind after DOM ready (and also have inline backstop)
+    document.addEventListener('DOMContentLoaded', ()=>{
+      try{
+        $('createBtn').addEventListener('click', onCreateScenario); // primary binding
+        bindPickers();
+        log('Ready. Click "Create Scenario".');
+      }catch(e){ log('Bind error: '+(e.message||e)); }
     });
+
+  })();
   </script>
 </body>
 </html>
