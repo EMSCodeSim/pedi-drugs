@@ -3,17 +3,17 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>FireOpsSim — Failsafe Uploader</title>
+  <title>FireOpsSim — Firebase Uploader (Minimal)</title>
   <style>
     :root { --bg:#0b1220; --card:#111a2e; --muted:#b8c4e2; --line:#1b2b50; --ink:#e8eefc; --accent:#2c5cff; }
     body{margin:0;padding:16px;background:var(--bg);color:var(--ink);font:14px/1.4 system-ui,Arial}
     h1{margin:0 0 12px;font-size:20px}
     .row{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:8px 0}
-    input, button, select{background:#091125;color:var(--ink);border:1px solid #20407a;border-radius:10px;padding:8px 10px}
+    input,button{background:#091125;color:var(--ink);border:1px solid #20407a;border-radius:10px;padding:8px 10px}
     input.mono{font-family:ui-monospace,Menlo,Consolas,monospace}
     button{cursor:pointer}
     button.primary{background:#1a3fbb;border-color:var(--accent)}
-    .card{background:var(--card);border:1px solid #1b2b50;border-radius:14px;padding:12px;margin:12px 0}
+    .card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:12px;margin:12px 0}
     .muted{color:var(--muted);opacity:.95}
     #grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:12px}
     .thumb{background:#0b1429;border:1px solid #1a2b50;border-radius:12px;overflow:hidden}
@@ -24,29 +24,22 @@
   </style>
 </head>
 <body>
-  <h1>FireOpsSim — Failsafe Uploader</h1>
+  <h1>FireOpsSim — Firebase Uploader (Minimal)</h1>
 
   <div class="card">
     <div class="row">
-      <label class="muted">Bucket (gs://)</label>
-      <input id="bucket" class="mono" placeholder="gs://fireopssim.appspot.com" />
-      <label class="muted">Folder</label>
-      <select id="folderMode">
-        <option value="scenari">scenarios (flat root)</option>
-        <option value="scenarios">scenarios/&lt;scenarioId&gt;</option>
-      </select>
+      <label class="muted">Bucket (fixed)</label>
+      <input id="bucket" class="mono" value="gs://fireopssim.appspot.com" readonly />
       <label class="muted">Scenario ID</label>
-      <input id="scenarioId" class="mono" placeholder="only for scenarios/&lt;id&gt;" />
+      <input id="scenarioId" class="mono" placeholder="-Oabc123 (required)" />
     </div>
     <div class="row">
       <input id="fileInput" type="file" accept="image/*" capture="environment" />
-      <!-- inline onclick (fallback) -->
-      <button id="btnUpload" class="primary" onclick="window.handleUpload && window.handleUpload()">Upload Photo</button>
+      <button id="btnUpload" class="primary">Upload Photo</button>
       <button id="btnRefresh">Refresh Gallery</button>
-      <button id="btnDiag">Diag</button>
     </div>
     <div class="muted">
-      Use the <span class="mono">gs://</span> bucket name (e.g., <span class="mono">gs://fireopssim.appspot.com</span>), not the HTTPS domain.
+      Files go to <span class="mono">scenarios/&lt;scenarioId&gt;/</span> in <span class="mono">gs://fireopssim.appspot.com</span>.
     </div>
   </div>
 
@@ -78,15 +71,12 @@
       setMaxOperationRetryTime, setMaxUploadRetryTime
     } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-storage.js";
 
-    // ---- DOM ----
+    // ---- DOM helpers ----
     const $ = (id)=>document.getElementById(id);
-    const elBucket = $('bucket');
     const elScenarioId = $('scenarioId');
-    const elFolderMode = $('folderMode');
     const elFile = $('fileInput');
     const elUpload = $('btnUpload');
     const elRefresh = $('btnRefresh');
-    const elDiag = $('btnDiag');
     const elLog = $('log');
     const elGrid = $('grid');
     const tpl = document.getElementById('thumbTpl').content;
@@ -97,128 +87,99 @@
       elLog.scrollTop = elLog.scrollHeight;
       console.debug(t);
     }
+    const safeName = s => (s||'photo').replace(/[^\w.\-]+/g,'_');
 
-    // ---- Config (client-safe) ----
+    // ---- Firebase (client-safe config) ----
     const firebaseConfig = {
       apiKey: "AIzaSyBzwc75u8pG73OKcHN8ti2ADbucjKMHme8",
       authDomain: "fireopssim.firebaseapp.com",
       projectId: "fireopssim",
-      storageBucket: "fireopssim.firebasestorage.app"
+      storageBucket: "fireopssim.firebasestorage.app" // HTTPS domain; gs:// set below
     };
 
-    // ---- State ----
-    let app = null, auth = null, storage = null, uid = null;
-
-    function getPrefix(){
-      const mode = elFolderMode.value || 'scenari';
-      const sid = (elScenarioId.value || '').trim();
-      if (mode === 'scenari') return 'scenarios';
-      if (!sid) throw new Error('Scenario ID is required for scenarios/<id>');
-      return `scenarios/${sid}`;
-    }
-    const safeName = s => (s||'photo').replace(/[^\w.\-]+/g,'_');
-
-    async function ensureInit(){
+    // ---- Init once ----
+    let app = null, auth = null, storage = null;
+    function ensureInit(){
       if (app && auth && storage) return;
-      log('Initializing Firebase…');
-
-      // If a previous app exists (hot reload), reuse it
       if (!getApps().length) app = initializeApp(firebaseConfig);
       else app = getApps()[0];
 
       auth = getAuth(app);
-      try {
-        await signInAnonymously(auth);
-        uid = (auth.currentUser && auth.currentUser.uid) || null;
-        log(`Auth OK (anon uid=${uid||'unknown'})`);
-      } catch (e) {
-        log(`Auth error: ${e?.message||e}`);
-        throw e;
-      }
+      signInAnonymously(auth).then(()=>{
+        log('Auth OK (anonymous).');
+      }).catch(e=>{
+        log('Auth error: '+(e?.message||e));
+      });
 
-      const gs = (elBucket.value || '').trim();
-      if (!gs.startsWith('gs://')) throw new Error('Bucket must start with gs:// (e.g., gs://fireopssim.appspot.com)');
-      storage = getStorage(app, gs);
+      // Pin to the correct gs:// bucket
+      storage = getStorage(app, "gs://fireopssim.appspot.com");
       setMaxOperationRetryTime(storage, 60_000);
       setMaxUploadRetryTime(storage, 120_000);
-      log(`Storage bound to ${gs}`);
+      log('Storage bound to gs://fireopssim.appspot.com');
+    }
+    ensureInit();
+
+    function prefix(){
+      const sid = (elScenarioId.value || '').trim();
+      if (!sid) throw new Error('Enter a scenarioId first.');
+      return `scenarios/${sid}`;
     }
 
     async function refreshGallery(){
-      await ensureInit();
-      const prefix = getPrefix();
-      log(`Listing ${prefix}…`);
-      const folder = ref(storage, prefix);
-      const res = await listAll(folder);
-      const items = res.items || [];
-      elGrid.innerHTML = '';
-      if (!items.length){
-        elGrid.innerHTML = '<div class="muted">No photos found.</div>';
-        log('No photos found.');
-        return;
+      try{
+        ensureInit();
+        const pfx = prefix();
+        log(`Listing ${pfx}…`);
+        const folder = ref(storage, pfx);
+        const res = await listAll(folder);
+        const items = res.items || [];
+        elGrid.innerHTML = '';
+        if (!items.length){
+          elGrid.innerHTML = '<div class="muted">No photos found.</div>';
+          log('No photos found.');
+          return;
+        }
+        for (const it of items){
+          let url = null;
+          try { url = await getDownloadURL(it); }
+          catch(e){ log(`getDownloadURL failed for ${it.fullPath}: ${e?.message||e}`); }
+          const node = document.importNode(tpl, true);
+          if (url){ node.querySelector('img').src = url; node.querySelector('.full').href = url; }
+          node.querySelector('.path').textContent = it.fullPath || it.name;
+          elGrid.appendChild(node);
+        }
+        log(`Listed ${items.length} item(s).`);
+      }catch(e){
+        log('Refresh error: '+(e?.message||e));
+        alert(e?.message||e);
       }
-      const urls = [];
-      for (const it of items){
-        try { urls.push(await getDownloadURL(it)); }
-        catch(e){ urls.push(null); log(`getDownloadURL failed for ${it.fullPath}: ${e?.message||e}`); }
-      }
-      urls.forEach((u,i)=>{
-        const it = items[i];
-        const node = document.importNode(tpl, true);
-        if (u){ node.querySelector('img').src = u; node.querySelector('.full').href = u; }
-        node.querySelector('.path').textContent = it.fullPath || it.name;
-        elGrid.appendChild(node);
-      });
-      log(`Listed ${items.length} item(s).`);
     }
 
-    // Expose handleUpload globally for inline onclick fallback
-    window.handleUpload = async function(){
+    async function handleUpload(){
       try{
-        log('Upload button clicked.');
-        await ensureInit();
-
+        ensureInit();
         const f = elFile.files && elFile.files[0];
-        if (!f){ alert('Pick or take a photo first'); log('No file selected.'); return; }
+        if (!f){ alert('Pick or take a photo first'); return; }
+        if (f.size > 10*1024*1024) { alert('Max 10 MB'); return; }
 
-        const prefix = getPrefix();
-        const path = `${prefix}/${Date.now()}_${safeName(f.name)}`;
-        log(`Uploading to ${path} (${(f.size/1048576).toFixed(2)} MB)…`);
-
-        const r = ref(storage, path);
-        await uploadBytes(r, f, { contentType: f.type || 'image/jpeg' });
+        const pfx = prefix();
+        const path = `${pfx}/${Date.now()}_${safeName(f.name)}`;
+        log(`Uploading to ${path}…`);
+        await uploadBytes(ref(storage, path), f, { contentType: f.type || 'image/jpeg' });
         log('Upload OK.');
         alert('Upload successful!');
         await refreshGallery();
       }catch(e){
-        console.error(e);
-        log(`Upload error: ${e?.code||''} ${e?.message||e}`);
-        alert('Upload failed: ' + (e?.message || e));
+        log('Upload error: '+(e?.message||e));
+        alert('Upload failed: '+(e?.message||e));
       }
-    };
+    }
 
-    // Also bind via addEventListener (primary path)
-    elUpload.addEventListener('click', ()=>window.handleUpload());
-    elRefresh.addEventListener('click', ()=>{ refreshGallery().catch(e=>{ log('Refresh error: '+(e?.message||e)); alert(e?.message||e); }); });
-    elDiag.addEventListener('click', async ()=>{
-      try {
-        await ensureInit();
-        log('Diag: small test upload…');
-        const blob = new Blob([Uint8Array.from([137,80,78,71,13,10,26,10,0,0,0,13,73,72,68,82,0,0,0,1,0,0,0,1,8,2,0,0,0,144,119,83,222,0,0,0,12,73,68,65,84,8,215,99,248,15,4,0,9,251,3,253,167,6,227,151,0,0,0,0,73,69,78,68,174,66,96,130])], {type:'image/png'});
-        const path = `${getPrefix()}/diag_${Date.now()}.png`;
-        await uploadBytes(ref(storage, path), blob, {contentType:'image/png'});
-        log('Diag upload OK: '+path);
-        alert('Diag upload OK: ' + path);
-      } catch (e) {
-        log('Diag error: ' + (e?.message||e));
-        alert('Diag error: ' + (e?.message||e));
-      }
-    });
+    // ---- Bind UI ----
+    elUpload.addEventListener('click', handleUpload);
+    elRefresh.addEventListener('click', ()=>{ refreshGallery(); });
 
-    // Defaults
-    elBucket.value = 'gs://fireopssim.appspot.com';
-    elFolderMode.value = 'scenari';
-    log('UI ready. Click Upload to test.');
+    log('UI ready. Enter a scenarioId, pick a photo, click Upload.');
   </script>
 </body>
 </html>
