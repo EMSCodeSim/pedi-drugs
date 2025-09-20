@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>FireOps SIM — Scenario Builder (Stall-Guard, DB old • Photos new)</title>
+<title>FireOps SIM — Scenario Builder (Cloud-write required)</title>
 <meta name="theme-color" content="#0b0f14" />
 <style>
   :root{--bg:#0b0f14;--bg2:#0d121c;--panel:#0f1624;--text:#eaf2ff;--muted:#9fb2d6;--edge:rgba(255,255,255,.14)}
@@ -36,7 +36,7 @@
   .gItem{border:1px solid var(--edge);border-radius:12px;overflow:hidden;background:#0b1322}
   .gItem img{width:100%;height:100%;object-fit:cover;display:block;aspect-ratio:1/1}
   .gCap{padding:6px 8px;font-size:12px;color:#9fb2d6}
-  #errbar{position:fixed;left:12px;bottom:12px;z-index:99;display:none;padding:10px 12px;border-radius:12px;border:1px solid #7a2b2b;background:#2b0d0d;color:#ffd7d7}
+  #errbar{position:fixed;left:12px;bottom:12px;z-index:99;display:none;padding:10px 12px;border-radius:12px;border:1px solid #7a2b2b;background:#2b0d0d;color:#ffd7d7;max-width:92vw}
   #loader{position:fixed;inset:0;display:none;place-items:center;background:rgba(6,12,20,.55);backdrop-filter:blur(2px);z-index:98}
   .spinner{width:42px;height:42px;border-radius:999px;border:4px solid rgba(255,255,255,.25);border-top-color:#fff;animation:spin 1s linear infinite}
   @keyframes spin{to{transform:rotate(360deg)}}
@@ -113,7 +113,7 @@
 
         <div class="row" style="margin-top:10px">
           <button id="saveBtn" class="btn">Save Photo</button>
-          <button id="forceLegacyBtn" class="btn ghost" title="Skip direct Storage write">Use legacy now</button>
+          <button id="diagBtn" class="btn ghost" title="Write tiny file to Storage">Test Storage</button>
           <button id="resetBtn" class="btn ghost">Choose another</button>
           <span id="saveStatus" class="hint">waiting</span>
         </div>
@@ -145,16 +145,16 @@
 
   <script>
   (function(){
-    window.addEventListener('error', e => log('window.error: ' + (e.message||e)));
-    window.addEventListener('unhandledrejection', e => log('unhandledrejection: ' + (e.reason && (e.reason.message||e.reason))));
-
+    // ===== UI helpers =====
     const $ = id => document.getElementById(id);
     const log = (t)=>{ const L=$('log'); L.textContent = (L.textContent ? L.textContent+'\\n' : '') + t; console.log('[LOG]',t); };
     const show = (id, on)=> $(id).classList.toggle('hidden', !on);
-    const sayErr = (m)=>{ const b=$('errbar'); b.textContent=m; b.style.display='block'; setTimeout(()=>b.style.display='none', 5000); };
-    const busy = (on)=> $('loader').style.display = on ? 'grid' : 'none';
+    const sayErr = (m)=>{ const b=$('errbar'); b.textContent=m; b.style.display='block'; setTimeout(()=>b.style.display='none', 6000); };
 
-    // --- Firebase configs ---
+    window.addEventListener('error', e => log('window.error: ' + (e.message||e)));
+    window.addEventListener('unhandledrejection', e => log('unhandledrejection: ' + (e.reason && (e.reason.message||e.reason))));
+
+    // ===== Configs =====
     const cfgDB = {
       apiKey:"AIzaSyDM6DpRSeZueVKRpbyJyDmhf8WY66KyCDk",
       authDomain:"dailyquiz-d5279.firebaseapp.com",
@@ -171,66 +171,31 @@
       storageBucket: "fireopssim.appspot.com"
     };
 
-    // --- Init apps (compat) ---
+    // ===== Init apps =====
     const appDB = firebase.initializeApp(cfgDB);                  // [DEFAULT] old DB
     const appFO = firebase.initializeApp(cfgFO, "fireops");       // secondary photos
-
     const db     = firebase.database(appDB);
     const authDB = firebase.auth(appDB);
     const authFO = firebase.auth(appFO);
-    const store  = firebase.storage(appFO); // fireopssim.appspot.com
+    const store  = firebase.storage(appFO);                       // binds to fireopssim.appspot.com
 
-    store.setMaxOperationRetryTime(120000);
-    store.setMaxUploadRetryTime(300000);
+    // Pin to exact bucket + build a root ref
+    const GS_BUCKET = 'gs://fireopssim.appspot.com';
+    const rootRef = store.refFromURL(GS_BUCKET); // ensures refs always under this bucket
 
+    // Upload behavior
+    const REQUIRE_CLOUD_SUCCESS = true; // <— no DB write unless file is in Storage
+
+    // Anonymous auth best-effort (don’t block UI)
     (async function warmupAuth(){
       try{ await authDB.signInAnonymously(); }catch(e){ log('DB anon auth failed: '+(e.code||'')+' '+(e.message||e)); }
       try{ await authFO.signInAnonymously(); }catch(e){ log('FO anon auth failed: '+(e.code||'')+' '+(e.message||e)); }
       log('Auth warmup attempted.');
     })();
 
-    // ---- Utilities ----
-    function withTimeout(promise, ms, label){
-      return Promise.race([
-        promise,
-        new Promise((_,rej)=> setTimeout(()=>rej(new Error(label+' timeout '+ms+'ms')), ms))
-      ]);
-    }
-
-    function watchUploadWithStallGuard(task, which){
-      return new Promise((res,rej)=>{
-        let lastBytes = -1;
-        let stallTimer = setTimeout(()=>{ try{task.cancel();}catch{} rej(new Error('Upload stalled (no progress 12s)')); }, 12000);
-        const killer = setTimeout(()=>{ try{task.cancel();}catch{} rej(new Error('Upload hard timeout 240s')); }, 240000);
-
-        task.on('state_changed',
-          s=>{
-            const pct = Math.round(100*s.bytesTransferred/s.totalBytes);
-            if (which==='full'){ $('pctFull').textContent=pct+'%'; $('barFull').style.width=pct+'%'; }
-            else { $('pctThumb').textContent=pct+'%'; $('barThumb').style.width=pct+'%'; }
-
-            if (s.bytesTransferred !== lastBytes){
-              lastBytes = s.bytesTransferred;
-              clearTimeout(stallTimer);
-              stallTimer = setTimeout(()=>{ try{task.cancel();}catch{} rej(new Error('Upload stalled (no progress 12s)')); }, 12000);
-            }
-          },
-          e=>{ clearTimeout(stallTimer); clearTimeout(killer); rej(e); },
-          ()=>{ clearTimeout(stallTimer); clearTimeout(killer); res(); }
-        );
-      });
-    }
-
-    async function preflightWrite(prefix){
-      // 4s timeout preflight; fail fast if rules/network block
-      const ref = store.ref().child(`${prefix}/_diag_${Date.now()}.txt`);
-      await withTimeout(ref.putString('ok','raw',{contentType:'text/plain',cacheControl:'public,max-age=60'}), 4000, 'preflight');
-      return ref.fullPath;
-    }
-
-    // ---- State ----
-    let scenarioId=null, pendingImg=null, pendingFullDataURL=null, pendingThumbDataURL=null, pendingGeo=null;
-    let localStops=[];
+    // ===== State =====
+    let scenarioId=null, localStops=[];
+    let pendingImg=null, pendingFullDataURL=null, pendingThumbDataURL=null, pendingGeo=null;
 
     function renderGallery(){
       const host=$('gallery'); const empty=$('galleryEmpty');
@@ -247,7 +212,7 @@
     }
     function gate(){ show('step2', !!scenarioId); show('galleryCard', !!scenarioId); renderGallery(); }
 
-    // Imaging helpers
+    // ===== Imaging =====
     const FULL_EDGE=1280, FULL_Q=0.75, THUMB_EDGE=480, THUMB_Q=0.8;
     const readAsDataURL = f => new Promise((res,rej)=>{ const r=new FileReader(); r.onload=()=>res(r.result); r.onerror=rej; r.readAsDataURL(f); });
     const loadImage = src => new Promise((res,rej)=>{ const i=new Image(); i.onload=()=>res(i); i.onerror=rej; i.src=src; });
@@ -259,7 +224,42 @@
     }
     function dataURLtoBlob(u){ const [h,b64]=u.split(','); const mime=(/data:(.*?);base64/).exec(h)[1]; const bin=atob(b64), a=new Uint8Array(bin.length); for(let i=0;i<bin.length;i++) a[i]=bin.charCodeAt(i); return new Blob([a],{type:mime}); }
 
-    // ---- Create Scenario (OLD DB) ----
+    // ===== Diagnostics / guards =====
+    function withTimeout(promise, ms, label){
+      return Promise.race([
+        promise,
+        new Promise((_,rej)=> setTimeout(()=>rej(new Error(label+' timeout '+ms+'ms')), ms))
+      ]);
+    }
+    function watchUpload(task, which){
+      return new Promise((res,rej)=>{
+        let lastBytes = -1;
+        let stallTimer = setTimeout(()=>{ try{task.cancel();}catch{} rej(new Error('Upload stalled (no progress 12s)')); }, 12000);
+        const killer = setTimeout(()=>{ try{task.cancel();}catch{} rej(new Error('Upload hard timeout 240s')); }, 240000);
+        task.on('state_changed',
+          s=>{
+            const pct=Math.round(100*s.bytesTransferred/s.totalBytes);
+            if(which==='full'){ $('pctFull').textContent=pct+'%'; $('barFull').style.width=pct+'%'; }
+            else { $('pctThumb').textContent=pct+'%'; $('barThumb').style.width=pct+'%'; }
+            if (s.bytesTransferred !== lastBytes){
+              lastBytes = s.bytesTransferred;
+              clearTimeout(stallTimer);
+              stallTimer = setTimeout(()=>{ try{task.cancel();}catch{} rej(new Error('Upload stalled (no progress 12s)')); }, 12000);
+            }
+          },
+          e=>{ clearTimeout(stallTimer); clearTimeout(killer); rej(e); },
+          ()=>{ clearTimeout(stallTimer); clearTimeout(killer); res(); }
+        );
+      });
+    }
+
+    async function preflightWrite(prefix){
+      const diag = rootRef.child(`${prefix}/_diag_${Date.now()}.txt`);
+      await withTimeout(diag.putString('ok','raw',{contentType:'text/plain',cacheControl:'public,max-age=60'}), 5000, 'preflight');
+      return diag.fullPath;
+    }
+
+    // ===== Create Scenario (OLD DB) =====
     async function onCreateScenario(){
       log('Create button clicked.');
       try{
@@ -286,7 +286,7 @@
     }
     window._onCreateScenario = onCreateScenario;
 
-    // Pickers
+    // ===== Pickers =====
     const open = id => $(id).click();
     function bindPickers(){
       $('btnCamera').addEventListener('click', ()=> open('inCamera'));
@@ -296,7 +296,7 @@
       $('inLibrary').addEventListener('change',e=> onPick(e.target.files?.[0]));
       $('inUpload').addEventListener('change', e=> onPick(e.target.files?.[0]));
       $('saveBtn').addEventListener('click', onSavePhoto);
-      $('forceLegacyBtn').addEventListener('click', ()=> onSavePhoto(true));
+      $('diagBtn').addEventListener('click', diagStorage);
       $('addAnotherBtn').addEventListener('click', resetWork);
       $('resetBtn').addEventListener('click', resetWork);
     }
@@ -335,28 +335,31 @@
       $('radius').value='5';
     }
 
+    // ===== Storage upload (NEW bucket, pinned) =====
     async function uploadToFireOps(ts, fullDataURL, thumbDataURL){
       const scenarioPath = `scenarios/${scenarioId}`;
-      const fullRef = store.ref().child(`${scenarioPath}/${ts}.jpg`);
-      const thmbRef = store.ref().child(`${scenarioPath}/thumbs/${ts}.jpg`);
+      const fullRef = rootRef.child(`${scenarioPath}/${ts}.jpg`);
+      const thmbRef = rootRef.child(`${scenarioPath}/thumbs/${ts}.jpg`);
       const meta    = { contentType:'image/jpeg', cacheControl:'public,max-age=31536000,immutable' };
 
-      log(`→ FireOps upload start\n  bucket: ${store.app.options.storageBucket}\n  full: ${fullRef.fullPath}\n  thumb:${thmbRef.fullPath}`);
+      log(`→ FireOps upload start
+  bucket: fireopssim.appspot.com
+  full:   ${fullRef.fullPath}
+  thumb:  ${thmbRef.fullPath}`);
 
-      // Try quick preflight; if it times out/fails we throw to fallback
       try{
         const pf = await preflightWrite(scenarioPath);
         log('preflight OK ('+pf+')');
       }catch(e){
-        log('preflight FAILED → '+(e.message||e));
+        log('preflight FAILED → '+(e.code||'')+' '+(e.message||e));
         throw e;
       }
 
       const t1 = fullRef.put(dataURLtoBlob(fullDataURL), meta);
-      await watchUploadWithStallGuard(t1,'full');
+      await watchUpload(t1,'full');
 
       const t2 = thmbRef.put(dataURLtoBlob(thumbDataURL), meta);
-      await watchUploadWithStallGuard(t2,'thumb');
+      await watchUpload(t2,'thumb');
 
       const imageURL = await withTimeout(fullRef.getDownloadURL(), 10000, 'getDownloadURL(full)');
       const thumbURL = await withTimeout(thmbRef.getDownloadURL().catch(()=>imageURL), 8000, 'getDownloadURL(thumb)');
@@ -366,41 +369,69 @@
         backend:'fireops',
         imageURL, thumbURL,
         storagePath: fullRef.fullPath,
-        gsUri:`gs://${store.app.options.storageBucket}/${fullRef.fullPath}`
+        gsUri:`gs://fireopssim.appspot.com/${fullRef.fullPath}`
       };
     }
 
-    async function uploadViaLegacy(ts, fullDataURL){
+    async function diagStorage(){
       try{
-        const u = authDB.currentUser; const token = u ? await u.getIdToken() : null;
-        const resp = await withTimeout(fetch('https://us-central1-dailyquiz-d5279.cloudfunctions.net/uploadScenarioImage', {
-          method:'POST',
-          headers:{ 'Content-Type':'application/json', ...(token?{Authorization:`Bearer ${token}`}:{}) },
-          body: JSON.stringify({ scenarioId, fileName: `${ts}.jpg`, dataURL: fullDataURL })
-        }), 15000, 'legacy fetch');
-        if(!resp.ok) throw new Error('Function HTTP '+resp.status);
-        const j = await resp.json(); if(!j.ok) throw new Error(j.error||'Function error');
-        log('✓ Legacy function used');
-        return { backend:'legacy-fn', imageURL:j.url, thumbURL:j.url, storagePath:j.path, gsUri:j.gsUri||'' };
-      }catch(e){ log('Legacy failed: '+(e.message||e)); throw e; }
-    }
-
-    function uploadInlineFallback(fullDataURL, thumbDataURL){
-      log('⚠ Inline base64 fallback.');
-      return { backend:'inline-base64', imageURL:fullDataURL, thumbURL:thumbDataURL, storagePath:'', gsUri:'' };
-    }
-
-    async function uploadBlobs(ts, fullDataURL, thumbDataURL, forceLegacy=false){
-      if (forceLegacy){
-        log('Forcing legacy uploader…');
-        try { return await uploadViaLegacy(ts, fullDataURL); }
-        catch(e){ return uploadInlineFallback(fullDataURL, thumbDataURL); }
+        const id = scenarioId || 'diag';
+        const path = `scenarios/${id}/_diag_${Date.now()}.txt`;
+        const ref = rootRef.child(path);
+        await ref.putString('ok','raw',{contentType:'text/plain',cacheControl:'public,max-age=60'});
+        const url = await ref.getDownloadURL();
+        log('Diagnostics: preflight/write OK → ' + url);
+      }catch(e){
+        log('Diagnostics FAILED: ' + (e.code || '') + ' ' + (e.message || e));
+        sayErr(e.message||String(e));
       }
-      try { return await uploadToFireOps(ts, fullDataURL, thumbDataURL); }
-      catch(e1){
-        log('FireOps path failed: '+(e1.message||e1));
-        try { return await uploadViaLegacy(ts, fullDataURL); }
-        catch(e2){ return uploadInlineFallback(fullDataURL, thumbDataURL); }
+    }
+
+    // ===== Append to DB only if cloud succeeded (REQUIRE_CLOUD_SUCCESS) =====
+    async function onSavePhoto(){
+      if(!(scenarioId && pendingFullDataURL)) return;
+      $('saveStatus').textContent='uploading…'; show('afterSave',false);
+
+      const ts = Date.now();
+      try{
+        const cloud = await uploadToFireOps(ts, pendingFullDataURL, pendingThumbDataURL);
+
+        const r = Math.max(1, Math.min(1000, parseInt(($('radius').value||'5'),10) || 5));
+        const stop = {
+          type:'photo', title:'', caption:'',
+          imageURL: cloud.imageURL || '',
+          thumbURL: cloud.thumbURL || '',
+          storagePath: cloud.storagePath || '',
+          gsUri: cloud.gsUri || '',
+          backend: cloud.backend || '',
+          lat: pendingGeo?.lat ?? null, lng: pendingGeo?.lng ?? null, accuracy: pendingGeo?.accuracy ?? null,
+          radiusMeters:r, overlays:[], at: ts
+        };
+
+        await appendStopToDB(stop);
+        log(`Stop saved (backend=${stop.backend}) ${stop.gsUri||''}`);
+        $('saveStatus').textContent='saved ✓';
+        show('afterSave', true);
+      }catch(e){
+        $('saveStatus').textContent='error';
+        log('Cloud write FAILED: ' + (e.code || '') + ' ' + (e.message || e));
+        if (REQUIRE_CLOUD_SUCCESS) {
+          sayErr('Cloud write failed — nothing was saved. Use "Test Storage" for details (Rules/App Check/Anon Auth).');
+        } else {
+          sayErr('Cloud write failed — saving inline fallback (not in Storage).');
+          // inline fallback (disabled by default; enable by setting REQUIRE_CLOUD_SUCCESS=false)
+          const stop = {
+            type:'photo', title:'', caption:'',
+            imageURL: pendingFullDataURL, thumbURL: pendingThumbDataURL,
+            storagePath:'', gsUri:'', backend:'inline-base64',
+            lat: pendingGeo?.lat ?? null, lng: pendingGeo?.lng ?? null, accuracy: pendingGeo?.accuracy ?? null,
+            radiusMeters: Math.max(1, Math.min(1000, parseInt(($('radius').value||'5'),10) || 5)),
+            overlays:[], at: ts
+          };
+          await appendStopToDB(stop);
+          $('saveStatus').textContent='saved (inline)';
+          show('afterSave', true);
+        }
       }
     }
 
@@ -415,45 +446,12 @@
       renderGallery();
     }
 
-    async function onSavePhoto(forceLegacy=false){
-      if(!(scenarioId && pendingFullDataURL)) return;
-      try{
-        $('saveStatus').textContent='uploading…'; show('afterSave',false);
-
-        const ts = Date.now();
-        const cloud = await uploadBlobs(ts, pendingFullDataURL, pendingThumbDataURL, forceLegacy);
-
-        const r = Math.max(1, Math.min(1000, parseInt(($('radius').value||'5'),10) || 5));
-        const stop = {
-          type:'photo', title:'', caption:'',
-          imageURL: cloud.imageURL || '',
-          thumbURL: cloud.thumbURL || '',
-          storagePath: cloud.storagePath || '',
-          gsUri: cloud.gsUri || '',
-          backend: cloud.backend || '',
-          lat: pendingGeo?.lat ?? null, lng: pendingGeo?.lng ?? null, accuracy: pendingGeo?.accuracy ?? null,
-          radiusMeters:r, overlays:[], at: ts
-        };
-
-        log(`Stop saved (backend=${stop.backend}) ${stop.gsUri||''}`);
-        await appendStopToDB(stop);
-
-        $('saveStatus').textContent='saved ✓';
-        show('afterSave', true);
-      }catch(e){
-        $('saveStatus').textContent='error';
-        sayErr(e.message||String(e));
-        log('Save error: ' + (e?.message||e));
-      }
-    }
-
-    function bindAll(){
+    // ===== Bind =====
+    document.addEventListener('DOMContentLoaded', ()=>{
       $('createBtn').addEventListener('click', onCreateScenario);
       bindPickers();
       log('Ready. Click "Create Scenario".');
-    }
-
-    document.addEventListener('DOMContentLoaded', bindAll);
+    });
 
   })();
   </script>
