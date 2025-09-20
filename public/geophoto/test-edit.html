@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Test Edit — Upload & View (Supabase with Camera)</title>
+  <title>Test Edit — Upload & View (Firebase with Camera)</title>
   <style>
     :root { font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif; }
     body { margin: 0; padding: 16px; background: #0b1220; color: #e8eefc; }
@@ -26,12 +26,12 @@
   </style>
 </head>
 <body>
-  <h1>Test Edit — Upload & View (Supabase with Camera)</h1>
+  <h1>Test Edit — Upload & View (Firebase with Camera)</h1>
 
   <div class="card">
     <div class="bar">
-      <label class="muted">Bucket</label>
-      <input id="bucket" class="mono" placeholder="e.g. geophoto" />
+      <label class="muted">Bucket (gs://)</label>
+      <input id="bucket" class="mono" placeholder="e.g. gs://fireopssim.appspot.com" />
       <label class="muted">Folder</label>
       <select id="folderMode">
         <option value="scenari">scenarios (flat root)</option>
@@ -43,7 +43,10 @@
       <button id="btnUpload" class="primary">Upload Photo</button>
       <button id="btnRefresh">Refresh Gallery</button>
     </div>
-    <div class="muted">Take a photo using your phone camera or select an existing image. Lists from and uploads to the selected prefix. For root files under <span class="mono">scenarios/</span>, keep Folder = "scenarios (flat root)". For per-scenario paths, choose "scenarios/&lt;scenarioId&gt;" and fill the ID.</div>
+    <div class="muted">
+      Take a photo using your phone camera or select an existing image. Lists from and uploads to the selected prefix.
+      For root files under <span class="mono">scenarios/</span>, keep Folder = "scenarios (flat root)". For per-scenario paths, choose "scenarios/&lt;scenarioId&gt;" and fill the ID.
+    </div>
   </div>
 
   <div id="gallery" style="margin-top:12px"></div>
@@ -60,12 +63,27 @@
   </template>
 
   <script type="module">
-    import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.4";
+    // --- Firebase v10 modular SDKs ---
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+    import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+    import {
+      getStorage, ref, uploadBytes, getDownloadURL, listAll
+    } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-storage.js";
 
-    const SUPABASE_URL = "https://qwhuciodtyotgrbeakdu.supabase.co";
-    const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InF3aHVjaW9kdHlvdGdyYmVha2R1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTgzMTcwNTcsImV4cCI6MjA3Mzg5MzA1N30.4TOChR01-9s0o7zus140ImUF6slesCLuEpa6JY-LSBQ";
-    const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
+    // --- FireOpsSim project config (from your details) ---
+    const firebaseConfig = {
+      apiKey: "AIzaSyBzwc75u8pG73OKcHN8ti2ADbucjKMHme8",
+      authDomain: "fireopssim.firebaseapp.com",
+      projectId: "fireopssim",
+      storageBucket: "fireopssim.firebasestorage.app" // HTTPS domain; gs:// set below
+    };
 
+    // Init app + anonymous auth (so rules can require request.auth != null)
+    const app = initializeApp(firebaseConfig);
+    const auth = getAuth(app);
+    await signInAnonymously(auth);
+
+    // --- UI elements ---
     const elBucket = document.getElementById('bucket');
     const elScenarioId = document.getElementById('scenarioId');
     const elFolderMode = document.getElementById('folderMode');
@@ -75,127 +93,90 @@
     const elGallery = document.getElementById('gallery');
     const tpl = document.getElementById('thumbTpl').content;
 
-    // RLS helper hint container
-    const rlsDivId = 'rlsHint';
-    if (!document.getElementById(rlsDivId)) {
-      const hint = document.createElement('div');
-      hint.id = rlsDivId;
-      hint.className = 'card';
-      hint.style.display = 'none';
-      hint.innerHTML = `
-        <div class="muted">
-          <strong>Uploads blocked by Row Level Security.</strong><br/>
-          In Supabase SQL editor, run policies like:
-          <pre class="mono" style="white-space:pre-wrap">-- Allow public read of geophoto
-create policy "geophoto read anon" on storage.objects
-for select to anon using (bucket_id = 'geophoto');
+    // Default to your project's default bucket
+    elBucket.value = 'gs://fireopssim.appspot.com';
 
--- Allow public insert (uploads) to geophoto
-create policy "geophoto insert anon" on storage.objects
-for insert to anon with check (bucket_id = 'geophoto');
-
--- Optional: limit uploads to the scenarios/ prefix
-create policy "geophoto insert anon scenarios only" on storage.objects
-for insert to anon with check (bucket_id = 'geophoto' and position('scenarios/' in name) = 1);</pre>
-        </div>`;
-      document.body.appendChild(hint);
+    // Build a Storage instance pinned to whichever bucket the user typed
+    function getStorageForBucket() {
+      const gs = (elBucket.value || '').trim();
+      if (!gs.startsWith('gs://')) throw new Error('Enter a valid gs:// bucket name');
+      return getStorage(app, gs);
     }
-    const elRlsHint = document.getElementById(rlsDivId);
 
-    elBucket.value = 'geophoto'; // default bucket
-
-    function getPrefix(bucket) {
+    function getPrefix() {
       const mode = (elFolderMode?.value || 'scenari');
       const sid  = (elScenarioId?.value || '').trim();
-      if (mode === 'scenari') return 'scenarios'; // map "scenari" option to scenarios root
+      if (mode === 'scenari') return 'scenarios'; // map "scenari" to scenarios root
       if (!sid) throw new Error('Scenario ID is required for scenarios/<sid>');
       return `scenarios/${sid}`;
-    }`;
+    }
+
+    function clampSize(file, maxMB=10){
+      const max = maxMB * 1024 * 1024;
+      if (file.size > max) throw new Error(`File too large (${(file.size/1024/1024).toFixed(1)} MB). Max ${maxMB} MB.`);
     }
 
     async function uploadPhoto() {
       try {
-        const bucket = (elBucket.value || '').trim();
-        const sid = (elScenarioId.value || '').trim();
+        const storage = getStorageForBucket();
         const mode = (elFolderMode?.value || 'scenari');
-        if (!bucket) throw new Error('Bucket is required');
-        if (mode === 'scenarios' && !sid) throw new Error('Scenario ID is required');
+        const sid = (elScenarioId.value || '').trim();
 
+        if (mode === 'scenarios' && !sid) throw new Error('Scenario ID is required');
         const file = elFile.files?.[0];
         if (!file) throw new Error('Please take or select a photo first');
 
-        const safeName = file.name.replace(/\s+/g, '_');
-        const prefix = getPrefix(bucket);
+        clampSize(file, 10);
+
+        const safeName = (file.name || 'photo').replace(/[^\w.\-]+/g, '_');
+        const prefix = getPrefix();
         const path = `${prefix}/${Date.now()}_${safeName}`;
-        const { error } = await supabase.storage.from(bucket).upload(path, file, {
-          contentType: file.type || 'image/jpeg',
-          upsert: true
-        });
-        if (error) throw error;
+        const r = ref(storage, path);
+        await uploadBytes(r, file, { contentType: file.type || 'image/jpeg' });
 
         alert('Upload successful!');
         await loadGallery();
       } catch (err) {
-        alert('Upload failed: ' + (err.message || err));
         console.error(err);
-        const msg = String(err.message || '').toLowerCase();
-        if (msg.includes('row-level security')) {
-          elRlsHint.style.display = 'block';
-          elRlsHint.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-        }
+        alert('Upload failed: ' + (err.message || err));
       }
     }
 
-    async function getSignedUrl(bucket, path) {
-      const { data, error } = await supabase.storage.from(bucket).createSignedUrl(path, 60 * 60 * 6);
-      if (error) throw error;
-      return data.signedUrl;
-    }
-
-    async function listFiles(bucket, prefix) {
-      const { data, error } = await supabase.storage.from(bucket).list(prefix, {
-        limit: 1000,
-        sortBy: { column: 'name', order: 'desc' }
-      });
-      if (error) {
-        const msg = (error.message || '').toLowerCase();
-        if (msg.includes('not found') || msg.includes('does not exist')) return [];
-        throw error;
-      }
-      // Be permissive: treat entries with a name and any of these fields as files
-      return (data || [])
-        .filter(e => e && e.name && (e.id || e.metadata || e.updated_at || e.created_at))
-        .map(e => ({ path: `${prefix}/${e.name}` }));
+    async function listFiles(storage, prefix) {
+      const folderRef = ref(storage, prefix);
+      const res = await listAll(folderRef);
+      // Return absolute refs for each item
+      return res.items || [];
     }
 
     async function loadGallery() {
       try {
-        const bucket = (elBucket.value || '').trim();
-        const sid = (elScenarioId.value || '').trim();
+        const storage = getStorageForBucket();
         const mode = (elFolderMode?.value || 'scenari');
-        if (!bucket) throw new Error('Bucket is required');
+        const sid  = (elScenarioId.value || '').trim();
         if (mode === 'scenarios' && !sid) throw new Error('Scenario ID is required');
 
         elGallery.innerHTML = '<div class="muted">Loading…</div>';
-        const prefix = getPrefix(bucket);
-        const files = await listFiles(bucket, prefix);
+        const prefix = getPrefix();
+        const items = await listFiles(storage, prefix);
+
         elGallery.innerHTML = '';
-        if (!files.length) {
+        if (!items.length) {
           elGallery.innerHTML = '<div class="muted">No photos uploaded yet.</div>';
           return;
         }
 
-        for (const f of files) {
-          const url = await getSignedUrl(bucket, f.path);
+        for (const itemRef of items) {
+          const url = await getDownloadURL(itemRef);
           const node = document.importNode(tpl, true);
           node.querySelector('img').src = url;
           node.querySelector('.full').href = url;
-          node.querySelector('.path').textContent = f.path;
+          node.querySelector('.path').textContent = itemRef.fullPath || itemRef.name || '(unknown)';
           elGallery.appendChild(node);
         }
       } catch (err) {
-        elGallery.innerHTML = `<div class=muted>Error: ${err.message}</div>`;
         console.error(err);
+        elGallery.innerHTML = `<div class="muted">Error: ${err.message}</div>`;
       }
     }
 
