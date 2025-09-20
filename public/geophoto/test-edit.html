@@ -17,7 +17,7 @@
   button.primary{background:#1a3fbb;border-color:var(--accent)}
   .card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:12px;margin:12px 0}
   .muted{color:var(--muted);opacity:.95}
-  #status{white-space:pre-wrap;background:#0c1530;border:1px solid #1b2b50;border-radius:10px;padding:10px;max-height:260px;overflow:auto}
+  #status{white-space:pre-wrap;background:#0c1530;border:1px solid #1b2b50;border-radius:10px;padding:10px;max-height:280px;overflow:auto}
   #grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:12px}
   .thumb{background:#0b1429;border:1px solid #1a2b50;border-radius:12px;overflow:hidden}
   .thumb img{width:100%;height:160px;object-fit:cover;display:block}
@@ -51,7 +51,7 @@
         <input id="scenarioId" class="mono" placeholder="(created above)" style="min-width:360px" readonly>
         <button id="btnCopyId">Copy ID</button>
       </div>
-      <div class="muted">Metadata writes to <span class="mono">/scenarios/&lt;ID&gt;</span> (old DB). Photos upload to <span class="mono">gs://fireopssim.appspot.com/scenarios/&lt;ID&gt;/</span>.</div>
+      <div class="muted">Writes to <span class="mono">/scenarios/&lt;ID&gt;</span> (old DB), photos to <span class="mono">gs://fireopssim.appspot.com/scenarios/&lt;ID&gt;/</span>.</div>
     </div>
   </div>
 
@@ -66,7 +66,8 @@
         <button id="btnUpload" class="primary">Upload Photo</button>
         <button id="btnRefresh">Refresh Gallery</button>
         <button id="btnLatest">View Latest</button>
-        <button id="btnDiag">Diagnostics</button>
+        <button id="btnDiag">Storage Diag</button>
+        <button id="btnDBDiag">DB Diag</button>
         <span id="upStatus" class="muted">waiting</span>
       </div>
     </div>
@@ -90,7 +91,7 @@
     </div>
   </template>
 
-  <!-- Firebase Compat SDKs (same style as the working test-edit page) -->
+  <!-- Firebase Compat SDKs -->
   <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js"></script>
@@ -105,15 +106,13 @@
 
     function sanitizeId(raw){
       return (raw||'').trim()
-        .replace(/\s+/g,'_')
-        .replace(/[^\w\-\.]/g,'')
-        .replace(/_+/g,'_')
-        .replace(/^_+|_+$/g,'');
+        .replace(/\s+/g,'_').replace(/[^\w\-\.]/g,'')
+        .replace(/_+/g,'_').replace(/^_+|_+$/g,'');
     }
     const safeName = s => (s||'photo').replace(/[^\w.\-]+/g,'_');
 
     // === Firebase configs ===
-    // Old Realtime DB project (for metadata)
+    // Old Realtime DB (metadata)
     const cfgDB = {
       apiKey:"AIzaSyDM6DpRSeZueVKRpbyJyDmhf8WY66KyCDk",
       authDomain:"dailyquiz-d5279.firebaseapp.com",
@@ -123,33 +122,44 @@
       appId:"1:94577748034:web:c032d3a1d72db1313de5db",
       measurementId:"G-19DVN7NNH7"
     };
-    // FireOpsSim project (for Storage)
+    // FireOpsSim (photos)
     const cfgFO = {
       apiKey:"AIzaSyBzwc75u8pG73OKcHN8ti2ADbucjKMHme8",
       authDomain:"fireopssim.firebaseapp.com",
       projectId:"fireopssim",
-      storageBucket:"fireopssim.appspot.com"   // ✅ bucket NAME (not .firebasestorage.app)
+      storageBucket:"fireopssim.appspot.com"
     };
 
-    // Init two apps:
-    const appDB = firebase.initializeApp(cfgDB);                    // default app → old DB
-    const appFO = firebase.initializeApp(cfgFO, "fireops");         // secondary app → FO Storage
-    const db     = firebase.database(appDB);
-    const authFO = firebase.auth(appFO);
+    // Init two apps
+    const appDB = firebase.initializeApp(cfgDB);                 // default app → DB
+    const appFO = firebase.initializeApp(cfgFO, "fireops");      // secondary app → Storage
 
-    // ✅ EXACTLY like the working test-edit: bind storage to the bucket via gs:// on the SAME app as auth
-    const storage = firebase.storage(appFO, "gs://fireopssim.appspot.com");
+    const db      = firebase.database(appDB);
+    const authDB  = firebase.auth(appDB);
+    const authFO  = firebase.auth(appFO);
+    const storage = firebase.storage(appFO, "gs://fireopssim.appspot.com"); // pin bucket
+
+    // Log DB auth state transitions (helps diagnose PERMISSION_DENIED)
+    authDB.onAuthStateChanged(u=>{
+      console.log('[DB AUTH]', u ? ('signed-in uid=' + u.uid) : 'no user');
+      log('[DB AUTH] ' + (u ? ('signed-in uid=' + u.uid) : 'no user'));
+    });
 
     let scenarioId = null;
-    let foUser = null;
+    let userDB = null, userFO = null;
 
-    async function signInFO(){
+    async function signInBoth(){
       try{
-        const cred = await authFO.signInAnonymously();
-        foUser = cred && cred.user;
-        ok('FO auth OK (uid='+(foUser && foUser.uid || 'unknown')+')');
+        const [cDB, cFO] = await Promise.all([
+          authDB.signInAnonymously(),
+          authFO.signInAnonymously()
+        ]);
+        userDB = cDB && cDB.user;
+        userFO = cFO && cFO.user;
+        ok('DB auth OK (uid='+(userDB && userDB.uid || 'unknown')+')');
+        ok('FO auth OK (uid='+(userFO && userFO.uid || 'unknown')+')');
       }catch(e){
-        bad('FO anon auth failed: '+(e.code||'')+' '+(e.message||e));
+        bad('Auth error: '+(e.code||'')+' '+(e.message||e));
       }
     }
 
@@ -158,16 +168,23 @@
       $('uploader').classList.toggle('hidden', !on);
     }
 
-    // Step 1 — Create scenario (ID = Name)
+    // Step 1 — Create scenario (ID = Name) in old DB
     async function createScenario(){
       try{
+        if (!userDB) await signInBoth(); // ensure DB auth before write
         const id = sanitizeId($('scenarioName').value);
         if (!id){ $('createStatus').textContent='enter a name'; bad('No scenario name.'); return; }
         $('createStatus').textContent='creating…';
+
         const dispatch = ($('dispatch').value||'').trim();
         const base = { id, title:id, dispatch, description:dispatch, createdAt: Date.now(), active:true, stops:[] };
-        const multi={}; multi[`scenarios/${id}`]=base; multi[`geophoto/scenarios/${id}`]=base;
+
+        const multi={};
+        multi[`scenarios/${id}`]=base;
+        multi[`geophoto/scenarios/${id}`]=base;
+
         await db.ref().update(multi);
+
         scenarioId = id;
         $('scenarioId').value = id;
         $('scenarioId').readOnly = true;
@@ -182,11 +199,11 @@
       }
     }
 
-    // Step 2 — Upload photo (same logic as the working test-edit)
+    // Step 2 — Upload photo to FO Storage
     async function upload(){
       try{
         if (!scenarioId){ alert('Create a scenario first.'); return; }
-        if (!foUser) await signInFO();
+        if (!userFO) await signInBoth();
 
         const f = $('fileInput').files && $('fileInput').files[0];
         if (!f){ alert('Pick a photo first.'); return; }
@@ -209,6 +226,7 @@
             ok('URL ready.');
 
             // Save stop metadata to old DB
+            if (!userDB) await signInBoth(); // ensure DB auth now too
             const snap = await db.ref(`scenarios/${scenarioId}/stops`).get();
             const arr  = snap.exists()? (snap.val()||[]) : [];
             arr.push({
@@ -262,16 +280,26 @@
       });
     }
 
-    // Diagnostics: proves auth+bucket path works from THIS page/origin
-    async function diag(){
+    // Diagnostics
+    async function diagStorage(){
       try{
-        if (!foUser) await signInFO();
+        if (!userFO) await signInBoth();
         const ping = storage.ref().child(`diag/_ping_${Date.now()}.txt`);
         await ping.putString('ok','raw',{contentType:'text/plain',cacheControl:'public,max-age=60'});
         const url = await ping.getDownloadURL();
-        ok('Diagnostics OK → '+url);
+        ok('Storage diag OK → '+url);
       }catch(e){
-        bad('Diagnostics FAILED: '+(e.code||'')+' '+(e.message||e));
+        bad('Storage diag FAILED: '+(e.code||'')+' '+(e.message||e));
+      }
+    }
+    async function diagDB(){
+      try{
+        if (!userDB) await signInBoth();
+        const key = db.ref('diag').push().key;
+        await db.ref('diag/'+key).set({ ok:true, at: Date.now() });
+        ok('DB diag OK (wrote /diag/'+key+')');
+      }catch(e){
+        bad('DB diag FAILED: '+(e.code||'')+' '+(e.message||e));
       }
     }
 
@@ -293,12 +321,13 @@
         window.open(url, '_blank');
       }catch(e){ bad('View latest error: '+(e.message||e)); }
     });
-    $('btnDiag').addEventListener('click', diag);
+    $('btnDiag').addEventListener('click', diagStorage);
+    $('btnDBDiag').addEventListener('click', diagDB);
 
     // Boot
     (async function(){
       log('Booting…');
-      await signInFO();               // sign in on SAME app used by storage
+      await signInBoth(); // sign in to BOTH apps up front
       log('Ready. Create scenario → upload.');
     })();
   })();
