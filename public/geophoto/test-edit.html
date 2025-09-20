@@ -1,1 +1,258 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>FireOpsSim — Uploader + Viewer (Single File)</title>
+<style>
+  :root{--bg:#0b1220;--card:#111a2e;--muted:#b8c4e2;--line:#1b2b50;--ink:#e8eefc;--accent:#2c5cff;--ok:#7CFF7C;--bad:#FF7C7C}
+  body{margin:0;padding:16px;background:var(--bg);color:var(--ink);font:14px/1.45 system-ui,Arial}
+  h1{margin:0 0 12px;font-size:20px}
+  .row{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:8px 0}
+  input,button{background:#091125;color:var(--ink);border:1px solid #20407a;border-radius:10px;padding:8px 10px}
+  input.mono{font-family:ui-monospace,Menlo,Consolas,monospace}
+  button{cursor:pointer}
+  button.primary{background:#1a3fbb;border-color:var(--accent)}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:12px;margin:12px 0}
+  .muted{color:var(--muted);opacity:.95}
+  #status{white-space:pre-wrap;background:#0c1530;border:1px solid #1b2b50;border-radius:10px;padding:10px;max-height:220px;overflow:auto}
+  #grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:12px}
+  .thumb{background:#0b1429;border:1px solid #1a2b50;border-radius:12px;overflow:hidden}
+  .thumb img{width:100%;height:160px;object-fit:cover;display:block}
+  .thumb .meta{padding:8px;font-size:12px}
+  a{color:#9ec5ff}
+  /* Lightbox */
+  #lightbox{position:fixed;inset:0;background:rgba(0,0,0,.9);display:none;align-items:center;justify-content:center;z-index:9999}
+  #lightbox img{max-width:95vw;max-height:90vh}
+  #lightbox .close{position:absolute;top:12px;right:12px;background:#222;color:#fff;border:0;border-radius:10px;padding:8px 10px;cursor:pointer}
+  #preview img{max-width:100%;height:auto;border-radius:10px;border:1px solid #1a2b50}
+  .actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
+</style>
+</head>
+<body>
+  <h1>FireOpsSim — Uploader + Viewer</h1>
+
+  <div class="card">
+    <div class="row">
+      <label class="muted">Bucket</label>
+      <input class="mono" value="gs://fireopssim.appspot.com" readonly />
+      <label class="muted">Scenario ID</label>
+      <input id="scenarioId" class="mono" placeholder="-Oabc123 (required)" />
+    </div>
+    <div class="row">
+      <input id="fileInput" type="file" accept="image/*" capture="environment" />
+      <button id="btnInit" class="primary">Init</button>
+      <button id="btnUpload" class="primary">Upload Photo</button>
+      <button id="btnRefresh">Refresh Gallery</button>
+      <button id="btnLatest">View Latest</button>
+    </div>
+    <div class="muted">
+      Files upload to <span class="mono">scenarios/&lt;scenarioId&gt;/</span> in the default bucket.<br/>
+      Use the <strong>gs://</strong> name (not <code>firebasestorage.app</code>). Serve over <strong>HTTPS</strong> for camera access.
+    </div>
+  </div>
+
+  <div id="preview" class="card" style="display:none">
+    <strong>Uploaded Preview</strong>
+    <div class="muted">The file you just uploaded.</div>
+    <div id="previewImgWrap" style="margin-top:8px"></div>
+    <div class="actions">
+      <a id="previewOpen" target="_blank" rel="noopener">Open in new tab</a>
+      <button id="copyUrl">Copy URL</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <strong>Status</strong>
+    <div id="status">Booting…</div>
+  </div>
+
+  <div id="grid" class="card">
+    <div class="muted">No photos yet. Click “Refresh Gallery”.</div>
+  </div>
+
+  <div id="lightbox">
+    <button class="close" id="lbClose">✕ Close</button>
+    <img id="lbImg" alt="Preview" />
+  </div>
+
+  <template id="thumbTpl">
+    <div class="thumb">
+      <a class="full" href="#" target="_blank" rel="noopener">
+        <img />
+      </a>
+      <div class="meta mono">
+        <div class="path"></div>
+      </div>
+    </div>
+  </template>
+
+  <!-- Firebase Compat SDKs -->
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-storage-compat.js"></script>
+
+  <script>
+  (function(){
+    const $ = id => document.getElementById(id);
+    const logBox = $('status');
+    const log = (m, cls) => {
+      const t = `[${new Date().toLocaleTimeString()}] ${m}`;
+      const line = document.createElement('div');
+      if (cls) line.style.color = cls === 'ok' ? '#7CFF7C' : (cls === 'bad' ? '#FF7C7C' : '#FFD37C');
+      line.textContent = t;
+      logBox.appendChild(line);
+      logBox.scrollTop = logBox.scrollHeight;
+      console.debug(t);
+    };
+    const ok = m=>log(m,'ok'), bad = m=>log(m,'bad');
+
+    // Client-safe config
+    const firebaseConfig = {
+      apiKey: "AIzaSyBzwc75u8pG73OKcHN8ti2ADbucjKMHme8",
+      authDomain: "fireopssim.firebaseapp.com",
+      projectId: "fireopssim",
+      storageBucket: "fireopssim.firebasestorage.app" // HTTPS domain; gs:// bound below
+    };
+
+    let app=null, auth=null, storage=null, user=null;
+
+    function safeName(s){ return (s||'photo').replace(/[^\w.\-]+/g,'_'); }
+    function prefix(){
+      const sid = ($('scenarioId').value || '').trim();
+      if (!sid) throw new Error('Enter a scenarioId first.');
+      return `scenarios/${sid}`;
+    }
+
+    async function init(){
+      try{
+        if (!firebase.apps.length) app = firebase.initializeApp(firebaseConfig);
+        else app = firebase.app();
+        ok('App initialized.');
+
+        auth = firebase.auth();
+        user = (await auth.signInAnonymously()).user;
+        ok('Auth OK (anon uid='+(user && user.uid || 'unknown')+')');
+
+        storage = firebase.storage(app, "gs://fireopssim.appspot.com");
+        storage.setMaxOperationRetryTime(60000);
+        storage.setMaxUploadRetryTime(120000);
+        ok('Storage bound to gs://fireopssim.appspot.com');
+      }catch(e){
+        bad('Init error: '+(e.code?e.code+' ':'')+(e.message||e));
+        throw e;
+      }
+    }
+
+    function showPreview(url){
+      $('preview').style.display = '';
+      const wrap = $('previewImgWrap');
+      wrap.innerHTML = '';
+      const img = document.createElement('img');
+      img.src = url;
+      wrap.appendChild(img);
+      $('previewOpen').href = url;
+      $('copyUrl').onclick = async () => {
+        try{ await navigator.clipboard.writeText(url); ok('URL copied.'); }
+        catch(e){ bad('Copy failed: '+(e.message||e)); }
+      };
+    }
+
+    async function upload(){
+      try{
+        if (!storage) await init();
+        const f = $('fileInput').files && $('fileInput').files[0];
+        if (!f){ alert('Pick or take a photo first'); log('No file selected.'); return; }
+        if (f.size > 10*1024*1024){ alert('Max 10 MB'); return; }
+
+        const path = `${prefix()}/${Date.now()}_${safeName(f.name)}`;
+        log('Uploading → '+path);
+        const r = storage.ref().child(path);
+        await r.put(f, { contentType: f.type || 'image/jpeg' });
+        ok('Upload OK.');
+
+        const url = await r.getDownloadURL();
+        ok('URL ready.');
+        showPreview(url);
+
+        await refresh(); // update gallery
+      }catch(e){
+        bad('Upload error: '+(e.code?e.code+' ':'')+(e.message||e));
+        alert('Upload failed: ' + (e.message||e));
+      }
+    }
+
+    async function refresh(){
+      try{
+        if (!storage) await init();
+        const pfx = prefix();
+        log('Listing '+pfx+' …');
+        const folderRef = storage.ref().child(pfx);
+        const { items } = await folderRef.listAll();
+        const urls = await Promise.all(items.map(async it=>{
+          try { return await it.getDownloadURL(); } catch(e){ return null; }
+        }));
+        // newest first (filenames begin with timestamp)
+        const entries = items.map((it,i)=>({it,url:urls[i]}))
+                             .sort((a,b)=>(b.it.name||'').localeCompare(a.it.name||''));
+        renderGrid(entries);
+        ok(`Listed ${entries.length} item(s).`);
+      }catch(e){
+        bad('Refresh error: '+(e.code?e.code+' ':'')+(e.message||e));
+      }
+    }
+
+    function renderGrid(entries){
+      const grid = $('grid');
+      grid.innerHTML = '';
+      if (!entries.length){
+        grid.innerHTML = '<div class="muted">No photos found.</div>';
+        return;
+      }
+      const tpl = $('thumbTpl').content;
+      entries.forEach(({it,url})=>{
+        const node = document.importNode(tpl, true);
+        node.querySelector('.path').textContent = it.fullPath || it.name;
+        if (url){
+          node.querySelector('img').src = url;
+          node.querySelector('.full').href = url;
+          node.querySelector('a.full').addEventListener('click', (ev)=>{
+            ev.preventDefault(); openLightbox(url);
+          });
+        }
+        grid.appendChild(node);
+      });
+    }
+
+    async function viewLatest(){
+      try{
+        if (!storage) await init();
+        const pfx = prefix();
+        const { items } = await storage.ref().child(pfx).listAll();
+        if (!items.length){ alert('No files in this scenario yet.'); return; }
+        const latest = items.sort((a,b)=>(b.name||'').localeCompare(a.name||''))[0];
+        const url = await latest.getDownloadURL();
+        openLightbox(url);
+      }catch(e){
+        bad('View Latest error: '+(e.code?e.code+' ':'')+(e.message||e));
+      }
+    }
+
+    function openLightbox(url){
+      $('lbImg').src = url;
+      $('lightbox').style.display = 'flex';
+    }
+    $('lbClose').onclick = ()=>{ $('lightbox').style.display = 'none'; $('lbImg').src=''; };
+
+    // Wire buttons
+    $('btnInit').addEventListener('click', init);
+    $('btnUpload').addEventListener('click', upload);
+    $('btnRefresh').addEventListener('click', refresh);
+    $('btnLatest').addEventListener('click', viewLatest);
+
+    log('Ready. Click Init, enter Scenario ID, then Upload/Refresh/View Latest.');
+  })();
+  </script>
+</body>
+</html>
 
