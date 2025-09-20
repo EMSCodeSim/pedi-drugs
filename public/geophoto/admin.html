@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <title>FireOps SIM — Scenario Builder (New Photo Bucket)</title>
+  <title>FireOps SIM — Scenario Builder (DB old, Storage new)</title>
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <meta name="theme-color" content="#0b0f14" />
   <style>
@@ -50,7 +50,7 @@
   <header>
     <div class="bar">
       <div class="brand">FireOps SIM — Scenario Builder</div>
-      <div class="tag">Target photo bucket: <strong>gs://fireopssim.appspot.com</strong></div>
+      <div class="tag">DB: dailyquiz-d5279 • Photos: <strong>gs://fireopssim.appspot.com</strong></div>
     </div>
   </header>
 
@@ -178,22 +178,24 @@
     const appFO = initializeApp(cfgFO, "fireops-storage");
     const authFO = getAuthMod(appFO);
     const storage = getStorage(appFO, FIREOPS_GS_BUCKET); // hard-pinned to new bucket
-    // Give SDK generous retry windows
-    setMaxOperationRetryTime(storage, 120_000); // list/get
-    setMaxUploadRetryTime(storage,   300_000);  // upload
+    setMaxOperationRetryTime(storage, 120_000);
+    setMaxUploadRetryTime(storage,   300_000);
 
+    /* ---------- Robust Anonymous Auth (FIXED) ---------- */
+    function waitForAuth(auth){
+      return new Promise((resolve)=>{
+        const unsub = onAuthStateChanged(auth, (u)=>{
+          if (u) { unsub(); resolve(u); }
+        });
+      });
+    }
     async function ensureAuthed(){
-      if (!authDB.currentUser) {
-        await anonSignIn(authDB);
-        await new Promise(res=> onAuthStateChanged(authDB, u=>u && res(), {once:true}));
-      }
-      if (!authFO.currentUser) {
-        await anonSignIn(authFO);
-        await new Promise(res=> onAuthStateChanged(authFO, u=>u && res(), {once:true}));
-      }
+      if (!authDB.currentUser) { await anonSignIn(authDB); await waitForAuth(authDB); }
+      if (!authFO.currentUser) { await anonSignIn(authFO); await waitForAuth(authFO); }
       return { dbUser: authDB.currentUser, foUser: authFO.currentUser };
     }
-    ensureAuthed().catch(()=>{});
+    // Pre-warm but don't block UI if it fails
+    ensureAuthed().catch(e=>log('Auth warmup error: '+(e.message||e)));
 
     /* ---------- Imaging ---------- */
     const FULL_EDGE=1280, FULL_Q=0.75, THUMB_EDGE=480, THUMB_Q=0.8;
@@ -237,7 +239,7 @@
       });
     }
 
-    /* ---------- Step 1 ---------- */
+    /* ---------- Step 1: Create Scenario (uses OLD DB settings) ---------- */
     $('createBtn').onclick = async ()=>{
       try{
         await ensureAuthed();
@@ -257,6 +259,7 @@
       }catch(e){
         $('s1Status').textContent='error';
         sayErr(e.message||String(e));
+        log('Create scenario error: ' + (e?.message||e));
       }
     };
 
@@ -310,7 +313,7 @@
       $('radius').value='5';
     };
 
-    /* ---------- Progress watcher (guard = 240s) ---------- */
+    /* ---------- Upload progress guard (240s) ---------- */
     function watchTask(task, which){
       return new Promise((res,rej)=>{
         const killer = setTimeout(()=>{ try{task.cancel();}catch{} rej(new Error('Upload timed out (client guard 240s)')); }, 240000);
@@ -337,7 +340,7 @@
       return path;
     }
 
-    /* ---------- Primary upload to FireOpsSim ---------- */
+    /* ---------- Primary upload to FireOpsSim Storage (NEW LOCATION) ---------- */
     async function uploadToFireOps(ts, fullDataURL, thumbDataURL){
       await ensureAuthed();
       const scenarioPath = `scenarios/${scenarioId}`;
@@ -384,7 +387,7 @@
       };
     }
 
-    /* ---------- Legacy function fallback (kept) ---------- */
+    /* ---------- Legacy function fallback (OLD LOGIC) ---------- */
     async function uploadViaLegacy(ts, fullDataURL){
       const u = authDB.currentUser || (await ensureAuthed()).dbUser;
       const token = u ? await u.getIdToken() : null;
@@ -403,7 +406,7 @@
       return { backend:'legacy-fn', imageURL:j.url, thumbURL:j.url, storagePath:j.path, gsUri:j.gsUri||'' };
     }
 
-    /* ---------- Final inline fallback (never lose the photo) ---------- */
+    /* ---------- Final inline fallback ---------- */
     function uploadInlineFallback(fullDataURL, thumbDataURL){
       log('⚠ Using inline base64 fallback (no cloud write succeeded).');
       return {
@@ -446,7 +449,6 @@
       renderGallery();
     }
 
-    /* ---------- Verify list directly from new bucket (manual) ---------- */
     async function verifyListFromFireOps(){
       if(!scenarioId) return;
       try{
@@ -487,7 +489,6 @@
         $('saveStatus').textContent='saved ✓';
         show('afterSave', true);
 
-        // Extra verification after save
         await verifyListFromFireOps();
       }catch(e){
         $('saveStatus').textContent='error';
