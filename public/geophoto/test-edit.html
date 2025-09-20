@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Test Edit — Upload & View (Supabase with Camera)</title>
+  <title>Test Edit — Upload & View (Supabase)</title>
   <style>
     :root { font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif; }
     body { margin: 0; padding: 16px; background: #0b1220; color: #e8eefc; }
@@ -26,22 +26,30 @@
   </style>
 </head>
 <body>
-  <h1>Test Edit — Upload & View (Supabase with Camera)</h1>
+  <h1>Test Edit — Upload & View (Supabase)</h1>
 
   <div class="card">
     <div class="bar">
       <label class="muted">Bucket</label>
       <input id="bucket" class="mono" placeholder="e.g. geophoto" />
-      $1<label class="muted">Folder</label>
+
+      <label class="muted">Folder</label>
       <select id="folderMode">
         <option value="scenari">scenari (flat)</option>
         <option value="scenarios">scenarios/&lt;scenarioId&gt;</option>
       </select>
+
+      <label class="muted">Scenario ID</label>
+      <input id="scenarioId" class="mono" placeholder="only required if using scenarios/&lt;id&gt;" />
+
       <input id="fileInput" type="file" accept="image/*" capture="environment" />
       <button id="btnUpload" class="primary">Upload Photo</button>
       <button id="btnRefresh">Refresh Gallery</button>
     </div>
-    <div class="muted">Take a photo using your phone camera or select an existing image. Uploaded to <span class="mono">{bucket}/scenarios/&lt;scenarioId&gt;/&lt;timestamp&gt;_filename</span>.</div>
+    <div class="muted">
+      By default, this lists <span class="mono">geophoto/scenari/</span> and uploads into the same folder.
+      Change “Folder” to use <span class="mono">scenarios/&lt;scenarioId&gt;</span> instead.
+    </div>
   </div>
 
   <div id="gallery" style="margin-top:12px"></div>
@@ -60,108 +68,130 @@
   <script type="module">
     import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.4";
 
+    // --- Your project credentials ---
     const SUPABASE_URL = "https://qwhuciodtyotgrbeakdu.supabase.co";
     const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InF3aHVjaW9kdHlvdGdyYmVha2R1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTgzMTcwNTcsImV4cCI6MjA3Mzg5MzA1N30.4TOChR01-9s0o7zus140ImUF6slesCLuEpa6JY-LSBQ";
     const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 
-    const elBucket = document.getElementById('bucket');
-    const elScenarioId = document.getElementById('scenarioId');
+    // --- Elements ---
+    const elBucket     = document.getElementById('bucket');
     const elFolderMode = document.getElementById('folderMode');
-    const elFile = document.getElementById('fileInput');
-    const elUpload = document.getElementById('btnUpload');
-    const elRefresh = document.getElementById('btnRefresh');
-    const elGallery = document.getElementById('gallery');
-    const tpl = document.getElementById('thumbTpl').content;
+    const elScenarioId = document.getElementById('scenarioId');
+    const elFile       = document.getElementById('fileInput');
+    const elUpload     = document.getElementById('btnUpload');
+    const elRefresh    = document.getElementById('btnRefresh');
+    const elGallery    = document.getElementById('gallery');
+    const tpl          = document.getElementById('thumbTpl').content;
 
-    elBucket.value = 'geophoto'; // default bucket
+    // Defaults
+    elBucket.value = 'geophoto';
+    elFolderMode.value = 'scenari';
 
-    function getPrefix(bucket) {
-      const mode = (elFolderMode?.value || 'scenari');
+    // Compute the folder prefix we will use for BOTH listing and uploading
+    function getPrefix() {
+      const mode = (elFolderMode.value || 'scenari');
       const sid  = (elScenarioId.value || '').trim();
       if (mode === 'scenari') return 'scenari';
-      if (!sid) throw new Error('Scenario ID is required for scenarios/<sid>');
+      if (!sid) throw new Error('Scenario ID is required for scenarios/<id>');
       return `scenarios/${sid}`;
     }
 
+    // Upload (writes into the chosen folder)
     async function uploadPhoto() {
       try {
         const bucket = (elBucket.value || '').trim();
-        const sid = (elScenarioId.value || '').trim();
-        const mode = (elFolderMode?.value || 'scenari');
         if (!bucket) throw new Error('Bucket is required');
-        if (mode === 'scenarios' && !sid) throw new Error('Scenario ID is required');
 
         const file = elFile.files?.[0];
         if (!file) throw new Error('Please take or select a photo first');
 
-        const safeName = file.name.replace(/\s+/g, '_');
-        const prefix = getPrefix(bucket);
-        const path = `${prefix}/${Date.now()}_${safeName}`;
+        const prefix   = getPrefix();
+        const safeName = (file.name || 'image.jpg').replace(/\s+/g, '_');
+        const path     = `${prefix}/${Date.now()}_${safeName}`;
+
         const { error } = await supabase.storage.from(bucket).upload(path, file, {
-          contentType: file.type || 'application/octet-stream',
-          upsert: true
+          contentType: file.type || 'image/jpeg',
+          upsert: true,
         });
         if (error) throw error;
 
         alert('Upload successful!');
         await loadGallery();
       } catch (err) {
-        alert('Upload failed: ' + err.message);
+        alert('Upload failed: ' + (err.message || err));
         console.error(err);
       }
     }
 
+    // Signed URL helper (works with public or private buckets)
     async function getSignedUrl(bucket, path) {
-      const { data, error } = await supabase.storage.from(bucket).createSignedUrl(path, 60 * 60 * 6);
+      const { data, error } = await supabase.storage.from(bucket).createSignedUrl(path, 60 * 60 * 6); // 6h
       if (error) throw error;
       return data.signedUrl;
     }
 
+    // List files one level at the prefix (be permissive about "file" shape)
     async function listFiles(bucket, prefix) {
       const { data, error } = await supabase.storage.from(bucket).list(prefix, {
-        limit: 100,
+        limit: 1000,
         sortBy: { column: 'name', order: 'desc' }
       });
       if (error) {
-        if ((error.message || '').toLowerCase().includes('not found')) return [];
+        const msg = (error.message || '').toLowerCase();
+        if (msg.includes('not found') || msg.includes('does not exist')) return [];
         throw error;
       }
-      return (data || []).filter(e => e && e.metadata).map(e => ({ path: `${prefix}/${e.name}` }));
+      // Accept entries as files if they have a name and any indicator fields
+      return (data || [])
+        .filter(e => e && e.name && (e.id || e.metadata || e.updated_at || e.created_at))
+        .map(e => ({ path: `${prefix}/${e.name}` }));
     }
 
+    // Load gallery from the chosen folder
     async function loadGallery() {
       try {
         const bucket = (elBucket.value || '').trim();
-        const sid = (elScenarioId.value || '').trim();
-        const mode = (elFolderMode?.value || 'scenari');
         if (!bucket) throw new Error('Bucket is required');
-        if (mode === 'scenarios' && !sid) throw new Error('Scenario ID is required');
 
         elGallery.innerHTML = '<div class="muted">Loading…</div>';
-        const prefix = getPrefix(bucket);
+
+        const prefix = getPrefix();
         const files = await listFiles(bucket, prefix);
+
         elGallery.innerHTML = '';
         if (!files.length) {
-          elGallery.innerHTML = '<div class="muted">No photos uploaded yet.</div>';
+          elGallery.innerHTML = `<div class="muted">No photos found in <span class="mono">${prefix}/</span>. Upload above.</div>`;
           return;
         }
 
         for (const f of files) {
-          const url = await getSignedUrl(bucket, f.path);
-          const node = document.importNode(tpl, true);
-          node.querySelector('img').src = url;
-          node.querySelector('.full').href = url;
-          node.querySelector('.path').textContent = f.path;
-          elGallery.appendChild(node);
+          try {
+            const url = await getSignedUrl(bucket, f.path);
+            const node = document.importNode(tpl, true);
+            node.querySelector('img').src = url;
+            node.querySelector('.full').href = url;
+            node.querySelector('.path').textContent = f.path;
+            elGallery.appendChild(node);
+          } catch (e) {
+            const err = document.createElement('div');
+            err.className = 'muted mono';
+            err.textContent = `Failed to sign: ${f.path} — ${e.message || e}`;
+            elGallery.appendChild(err);
+          }
         }
       } catch (err) {
-        elGallery.innerHTML = `<div class=muted>Error: ${err.message}</div>`;
+        elGallery.innerHTML = `<div class=muted>Error: ${err.message || err}</div>`;
         console.error(err);
       }
     }
 
+    // Events
     elUpload.addEventListener('click', uploadPhoto);
     elRefresh.addEventListener('click', loadGallery);
+    elFolderMode.addEventListener('change', loadGallery);
+
+    // Auto-load on first open
+    loadGallery();
   </script>
 </body>
 </html>
