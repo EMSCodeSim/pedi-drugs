@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <title>FireOps SIM — Scenario Builder (DB old, Storage new)</title>
+  <title>FireOps SIM — Scenario Builder (Create Button Fix)</title>
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <meta name="theme-color" content="#0b0f14" />
   <style>
@@ -35,12 +35,12 @@
     #gallery{display:grid;gap:10px;grid-template-columns:repeat(auto-fill,minmax(120px,1fr))}
     .gItem{border:1px solid var(--edge);border-radius:12px;overflow:hidden;background:#0b1322}
     .gItem img{width:100%;height:100%;object-fit:cover;display:block;aspect-ratio:1/1}
-    .gCap{padding:6px 8px;font-size:12px;color:var(--muted)}
+    .gCap{padding:6px 8px;font-size:12px;color:#9fb2d6}
     #errbar{position:fixed;left:12px;bottom:12px;z-index:99;display:none;padding:10px 12px;border-radius:12px;border:1px solid #7a2b2b;background:#2b0d0d;color:#ffd7d7}
     #loader{position:fixed;inset:0;display:none;place-items:center;background:rgba(6,12,20,.55);backdrop-filter:blur(2px);z-index:98}
     .spinner{width:42px;height:42px;border-radius:999px;border:4px solid rgba(255,255,255,.25);border-top-color:#fff;animation:spin 1s linear infinite}
     @keyframes spin{to{transform:rotate(360deg)}}
-    #log{white-space:pre-wrap;background:#0c1530;border:1px solid #1b2b50;border-radius:10px;padding:8px;max-height:220px;overflow:auto}
+    #log{white-space:pre-wrap;background:#0c1530;border:1px solid #1b2b50;border-radius:10px;padding:8px;max-height:260px;overflow:auto}
   </style>
 </head>
 <body>
@@ -130,7 +130,7 @@
       <div id="gallery"></div>
       <div id="galleryEmpty" class="hint">No photos yet.</div>
       <div style="margin-top:10px">
-        <strong>Upload Log</strong>
+        <strong>Status Log</strong>
         <div id="log">—</div>
       </div>
     </section>
@@ -138,13 +138,23 @@
 
   <!-- Firebase (modules) -->
   <script type="module">
-    const $ = (id)=>document.getElementById(id);
+    // Global diagnostics (catch anything that would block handlers)
+    window.addEventListener('error', e => {
+      const box = document.getElementById('log');
+      box.textContent += (box.textContent==='—'?'':'\\n') + 'window.error: ' + (e.message||e);
+    });
+    window.addEventListener('unhandledrejection', e => {
+      const box = document.getElementById('log');
+      box.textContent += (box.textContent==='—'?'':'\\n') + 'unhandledrejection: ' + (e.reason && (e.reason.message||e.reason));
+    });
+
+    const $   = (id)=>document.getElementById(id);
+    const log = (t)=>{ const L=$('log'); L.textContent = (L.textContent==='—'?'':L.textContent+'\\n') + t; console.log('[LOG]',t); };
     const show = (el, on)=> (typeof el==='string'?$(el):el).classList.toggle('hidden', !on);
     const sayErr = (m)=>{ const b=$('errbar'); b.textContent=m; b.style.display='block'; setTimeout(()=>b.style.display='none', 5000); };
     const busy = (on)=> $('loader').style.display = on ? 'grid' : 'none';
-    const log = (t)=>{ const L=$('log'); L.textContent = (L.textContent==='—'?'':L.textContent+'\\n') + t; console.log('[LOG]',t); };
 
-    /* ---------- Firebase ---------- */
+    // Firebase SDKs
     import { initializeApp, getApps } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-app.js";
     import { getDatabase, ref as dbRef, push, update, get } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-database.js";
     import { getAuth as getAuthMod, signInAnonymously as anonSignIn, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-auth.js";
@@ -153,7 +163,7 @@
       setMaxOperationRetryTime, setMaxUploadRetryTime, uploadString
     } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-storage.js";
 
-    /* ---------- App A (DB): dailyquiz ---------- */
+    // ---- Configs (OLD DB, NEW Storage) ----
     const cfgDB = {
       apiKey:"AIzaSyDM6DpRSeZueVKRpbyJyDmhf8WY66KyCDk",
       authDomain:"dailyquiz-d5279.firebaseapp.com",
@@ -163,11 +173,6 @@
       appId:"1:94577748034:web:c032d3a1d72db1313de5db",
       measurementId:"G-19DVN7NNH7"
     };
-    const appDB = getApps().find(a=>a.name==='[DEFAULT]') || initializeApp(cfgDB);
-    const db   = getDatabase(appDB);
-    const authDB = getAuthMod(appDB);
-
-    /* ---------- App B (Storage): FireOpsSim ---------- */
     const FIREOPS_GS_BUCKET = "gs://fireopssim.appspot.com";
     const cfgFO = {
       apiKey: "AIzaSyBzwc75u8pG73OKcHN8ti2ADbucjKMHme8",
@@ -175,29 +180,43 @@
       projectId: "fireopssim",
       storageBucket: "fireopssim.appspot.com"
     };
-    const appFO = initializeApp(cfgFO, "fireops-storage");
-    const authFO = getAuthMod(appFO);
-    const storage = getStorage(appFO, FIREOPS_GS_BUCKET); // hard-pinned to new bucket
-    setMaxOperationRetryTime(storage, 120_000);
-    setMaxUploadRetryTime(storage,   300_000);
 
-    /* ---------- Robust Anonymous Auth (FIXED) ---------- */
-    function waitForAuth(auth){
-      return new Promise((resolve)=>{
-        const unsub = onAuthStateChanged(auth, (u)=>{
-          if (u) { unsub(); resolve(u); }
-        });
+    // ---- Initialize apps (after DOM ready) ----
+    let appDB, appFO, db, authDB, authFO, storage;
+    function initFirebase(){
+      appDB = getApps().find(a=>a.name==='[DEFAULT]') || initializeApp(cfgDB);
+      db    = getDatabase(appDB);
+      authDB= getAuthMod(appDB);
+
+      appFO = initializeApp(cfgFO, "fireops-storage");
+      authFO= getAuthMod(appFO);
+      storage = getStorage(appFO, FIREOPS_GS_BUCKET);
+      setMaxOperationRetryTime(storage, 120_000);
+      setMaxUploadRetryTime(storage,   300_000);
+      log('Firebase initialized (DB old / Storage new).');
+    }
+
+    // ---- Robust auth that won't stall UI ----
+    function waitForAuthOnce(auth){
+      return new Promise((resolve) => {
+        const unsub = onAuthStateChanged(auth, (u) => { if (u) { unsub(); resolve(u); } });
+        // If nothing fires in 5s, continue without blocking UI
+        setTimeout(()=>{ try{unsub();}catch{} resolve(auth.currentUser || null); }, 5000);
       });
     }
-    async function ensureAuthed(){
-      if (!authDB.currentUser) { await anonSignIn(authDB); await waitForAuth(authDB); }
-      if (!authFO.currentUser) { await anonSignIn(authFO); await waitForAuth(authFO); }
-      return { dbUser: authDB.currentUser, foUser: authFO.currentUser };
+    async function ensureAuthedNonBlocking(){
+      try{
+        if (!authDB.currentUser) { await anonSignIn(authDB).catch(e=>log('DB anon sign-in failed: '+(e.message||e))); }
+        await waitForAuthOnce(authDB);
+      }catch(e){ log('DB auth error: '+(e.message||e)); }
+      try{
+        if (!authFO.currentUser) { await anonSignIn(authFO).catch(e=>log('FO anon sign-in failed: '+(e.message||e))); }
+        await waitForAuthOnce(authFO);
+      }catch(e){ log('FO auth error: '+(e.message||e)); }
+      log('Auth ready (non-blocking).');
     }
-    // Pre-warm but don't block UI if it fails
-    ensureAuthed().catch(e=>log('Auth warmup error: '+(e.message||e)));
 
-    /* ---------- Imaging ---------- */
+    // ---- Imaging helpers ----
     const FULL_EDGE=1280, FULL_Q=0.75, THUMB_EDGE=480, THUMB_Q=0.8;
     const readAsDataURL = f => new Promise((res,rej)=>{ const r=new FileReader(); r.onload=()=>res(r.result); r.onerror=rej; r.readAsDataURL(f); });
     const loadImage = src => new Promise((res,rej)=>{ const i=new Image(); i.onload=()=>res(i); i.onerror=rej; i.src=src; });
@@ -209,27 +228,15 @@
     }
     function dataURLtoBlob(u){ const [h,b64]=u.split(','); const mime=(/data:(.*?);base64/).exec(h)[1]; const bin=atob(b64), a=new Uint8Array(bin.length); for(let i=0;i<bin.length;i++) a[i]=bin.charCodeAt(i); return new Blob([a],{type:mime}); }
 
-    /* ---------- State ---------- */
-    let scenarioId=null, pendingFile=null, pendingImg=null, pendingFullDataURL=null, pendingThumbDataURL=null, pendingGeo=null;
+    // ---- State ----
+    let scenarioId=null, pendingImg=null, pendingFullDataURL=null, pendingThumbDataURL=null, pendingGeo=null;
     let localStops=[];
 
-    function gate(){
-      show('step2', !!scenarioId);
-      show('galleryCard', !!scenarioId);
-      renderGallery();
-      if (scenarioId) verifyListFromFireOps();
-    }
-
     function renderGallery(){
-      const host=$('gallery');
-      const empty=$('galleryEmpty');
+      const host=$('gallery'); const empty=$('galleryEmpty');
       host.innerHTML='';
-      if(!Array.isArray(localStops) || localStops.length===0){
-        empty.textContent='No photos yet.';
-        show(empty, true);
-        return;
-      }
-      show(empty, false);
+      if(!Array.isArray(localStops) || localStops.length===0){ empty.textContent='No photos yet.'; empty.classList.remove('hidden'); return; }
+      empty.classList.add('hidden');
       localStops.forEach((s, i)=>{
         const card=document.createElement('div'); card.className='gItem';
         const img=document.createElement('img'); img.src=s.thumbURL||s.imageURL||''; img.alt=s.caption||('Stop '+(i+1));
@@ -238,11 +245,13 @@
         card.appendChild(img); card.appendChild(cap); host.appendChild(card);
       });
     }
+    function gate(){ $('step2').classList.toggle('hidden', !scenarioId); $('galleryCard').classList.toggle('hidden', !scenarioId); renderGallery(); }
 
-    /* ---------- Step 1: Create Scenario (uses OLD DB settings) ---------- */
-    $('createBtn').onclick = async ()=>{
+    // ---- Create Scenario (OLD DB) ----
+    async function onCreateScenario(){
+      log('Create button clicked.');
       try{
-        await ensureAuthed();
+        await ensureAuthedNonBlocking(); // won't stall
         const title=($('sTitle').value||'').trim();
         if(!title){ $('s1Status').textContent='enter a name'; return; }
         $('s1Status').textContent='creating…';
@@ -255,38 +264,45 @@
 
         scenarioId=id; localStops=[];
         $('s1Status').textContent='created ✓';
+        log('Scenario created: '+id);
         gate();
       }catch(e){
         $('s1Status').textContent='error';
         sayErr(e.message||String(e));
         log('Create scenario error: ' + (e?.message||e));
       }
-    };
+    }
 
-    /* ---------- Pickers ---------- */
-    const open = id => $(id).click();
-    $('btnCamera').onclick  = ()=> open('inCamera');
-    $('btnLibrary').onclick = ()=> open('inLibrary');
-    $('btnUpload').onclick  = ()=> open('inUpload');
+    // ---- Photo pickers & save (unchanged pattern) ----
+    function bindPickers(){
+      const open = id => $(id).click();
+      $('btnCamera').addEventListener('click', ()=> open('inCamera'));
+      $('btnLibrary').addEventListener('click',()=> open('inLibrary'));
+      $('btnUpload').addEventListener('click', ()=> open('inUpload'));
+      $('inCamera').addEventListener('change', e=> onPick(e.target.files?.[0]));
+      $('inLibrary').addEventListener('change',e=> onPick(e.target.files?.[0]));
+      $('inUpload').addEventListener('change', e=> onPick(e.target.files?.[0]));
+      $('saveBtn').addEventListener('click', onSavePhoto);
+      $('addAnotherBtn').addEventListener('click', resetWork);
+      $('resetBtn').addEventListener('click', resetWork);
+    }
 
     async function onPick(file){
       if(!file || !scenarioId) return;
-      pendingFile=file;
       try{
         const dataURL = await readAsDataURL(file);
         const img = await loadImage(dataURL);
         pendingImg=img;
-        pendingFullDataURL  = downscale(img, FULL_EDGE,  FULL_Q);
-        pendingThumbDataURL = downscale(img, THUMB_EDGE, THUMB_Q);
+        pendingFullDataURL  = downscale(img, 1280, 0.75);
+        pendingThumbDataURL = downscale(img, 480,  0.8);
 
         $('previewImg').src = pendingFullDataURL;
-        $('imgInfo').textContent = `Original: ${img.width}×${img.height} → Saving ~${Math.round(Math.max(img.width,img.height) > FULL_EDGE ? FULL_EDGE : Math.max(img.width,img.height))} px`;
-        show('workArea', true);
+        $('imgInfo').textContent = `Original: ${img.width}×${img.height} → Saving ~${Math.min(1280, Math.max(img.width,img.height))} px`;
+        $('workArea').classList.remove('hidden');
         $('saveStatus').textContent='ready';
         $('pctFull').textContent='0%'; $('barFull').style.width='0%';
         $('pctThumb').textContent='0%'; $('barThumb').style.width='0%';
 
-        // GPS
         $('gpsLine').textContent='GPS: acquiring…'; pendingGeo=null;
         if(navigator.geolocation){
           navigator.geolocation.getCurrentPosition(
@@ -294,29 +310,20 @@
             _=>{ $('gpsLine').textContent='GPS: unavailable'; },
             {enableHighAccuracy:true,timeout:8000,maximumAge:0}
           );
-        }else{
-          $('gpsLine').textContent='GPS: not supported';
-        }
-      }catch(e){
-        sayErr('Could not read image: '+(e.message||e));
-      }
+        }else{$('gpsLine').textContent='GPS: not supported';}
+      }catch(e){ sayErr('Could not read image: '+(e.message||e)); }
     }
-    $('inCamera').addEventListener('change', e=> onPick(e.target.files?.[0]));
-    $('inLibrary').addEventListener('change',e=> onPick(e.target.files?.[0]));
-    $('inUpload').addEventListener('change', e=> onPick(e.target.files?.[0]));
-
-    $('resetBtn').onclick = ()=>{
-      pendingFile=pendingImg=pendingFullDataURL=pendingThumbDataURL=null;
-      $('previewImg').src=''; show('workArea',false); show('afterSave',false);
+    function resetWork(){
+      pendingImg=pendingFullDataURL=pendingThumbDataURL=null;
+      $('previewImg').src=''; $('workArea').classList.add('hidden'); $('afterSave').classList.add('hidden');
       $('pctFull').textContent='0%'; $('barFull').style.width='0%';
       $('pctThumb').textContent='0%'; $('barThumb').style.width='0%';
       $('radius').value='5';
-    };
+    }
 
-    /* ---------- Upload progress guard (240s) ---------- */
     function watchTask(task, which){
       return new Promise((res,rej)=>{
-        const killer = setTimeout(()=>{ try{task.cancel();}catch{} rej(new Error('Upload timed out (client guard 240s)')); }, 240000);
+        const killer = setTimeout(()=>{ try{task.cancel();}catch{} rej(new Error('Upload timed out (240s)')); }, 240000);
         task.on('state_changed',
           s=>{
             const pct=Math.round(100*s.bytesTransferred/s.totalBytes);
@@ -328,8 +335,6 @@
         );
       });
     }
-
-    /* ---------- Tiny preflight write to same prefix ---------- */
     async function preflightWrite(prefix){
       const path = `${prefix}/_diag_${Date.now()}.png`;
       const bytes = new Uint8Array([137,80,78,71,13,10,26,10,0,0,0,13,73,72,68,82,0,0,0,1,0,0,0,1,8,6,0,0,0,31,21,196,137,0,0,0,10,73,68,65,84,120,1,99,0,1,0,0,5,0,1,13,10,43,96,0,0,0,0,73,69,78,68,174,66,96,130]);
@@ -339,10 +344,7 @@
       });
       return path;
     }
-
-    /* ---------- Primary upload to FireOpsSim Storage (NEW LOCATION) ---------- */
     async function uploadToFireOps(ts, fullDataURL, thumbDataURL){
-      await ensureAuthed();
       const scenarioPath = `scenarios/${scenarioId}`;
       const fullRef  = stRef(storage, `${scenarioPath}/${ts}.jpg`);
       const thmbRef  = stRef(storage, `${scenarioPath}/thumbs/${ts}.jpg`);
@@ -353,13 +355,7 @@
   fullPath: ${fullRef.fullPath}
   thumbPath: ${thmbRef.fullPath}`);
 
-      try {
-        const pf = await preflightWrite(scenarioPath);
-        log(`preflight OK (${pf})`);
-      } catch (e) {
-        log(`preflight FAILED: ${e.code||''} ${e.message||e}`);
-        throw e;
-      }
+      await preflightWrite(scenarioPath).then(p=>log('preflight OK ('+p+')'));
 
       const fullTask  = uploadBytesResumable(fullRef,  dataURLtoBlob(fullDataURL), meta);
       await watchTask(fullTask,'full');
@@ -368,70 +364,38 @@
 
       const imageURL = await getDownloadURL(fullRef);
       const thumbURL = await getDownloadURL(thmbRef).catch(()=>imageURL);
-
-      log(`✓ FireOps upload OK
-  url: ${imageURL}`);
-
-      try{
-        const listing = await listAll(stRef(storage, scenarioPath));
-        log(`listAll(${scenarioPath}) → ${listing.items.length} file(s)`);
-      }catch(e){
-        log(`listAll error: ${e?.code||''} ${e?.message||e}`);
-      }
+      log('✓ FireOps upload OK');
 
       return {
-        backend: 'fireops',
+        backend:'fireops',
         imageURL, thumbURL,
         storagePath: fullRef.fullPath,
         gsUri:`gs://${fullRef.bucket}/${fullRef.fullPath}`
       };
     }
-
-    /* ---------- Legacy function fallback (OLD LOGIC) ---------- */
     async function uploadViaLegacy(ts, fullDataURL){
-      const u = authDB.currentUser || (await ensureAuthed()).dbUser;
-      const token = u ? await u.getIdToken() : null;
-      const resp = await fetch('https://us-central1-dailyquiz-d5279.cloudfunctions.net/uploadScenarioImage', {
-        method:'POST',
-        headers:{ 'Content-Type':'application/json', ...(token?{Authorization:`Bearer ${token}`}:{}) },
-        body: JSON.stringify({ scenarioId, fileName: `${ts}.jpg`, dataURL: fullDataURL })
-      });
-      if(!resp.ok) throw new Error('Function HTTP '+resp.status);
-      const j = await resp.json(); if(!j.ok) throw new Error(j.error||'Function error');
-
-      log(`✓ Legacy function used
-  url: ${j.url}
-  gs:  ${j.gsUri || '(n/a)'}`);
-
-      return { backend:'legacy-fn', imageURL:j.url, thumbURL:j.url, storagePath:j.path, gsUri:j.gsUri||'' };
+      // Kept for completeness; you can remove if not needed
+      try{
+        const u = authDB.currentUser;
+        const token = u ? await u.getIdToken() : null;
+        const resp = await fetch('https://us-central1-dailyquiz-d5279.cloudfunctions.net/uploadScenarioImage', {
+          method:'POST',
+          headers:{ 'Content-Type':'application/json', ...(token?{Authorization:`Bearer ${token}`}:{}) },
+          body: JSON.stringify({ scenarioId, fileName: `${ts}.jpg`, dataURL: fullDataURL })
+        });
+        if(!resp.ok) throw new Error('Function HTTP '+resp.status);
+        const j = await resp.json(); if(!j.ok) throw new Error(j.error||'Function error');
+        log('✓ Legacy function used');
+        return { backend:'legacy-fn', imageURL:j.url, thumbURL:j.url, storagePath:j.path, gsUri:j.gsUri||'' };
+      }catch(e){ log('Legacy fallback failed: '+(e.message||e)); throw e; }
     }
-
-    /* ---------- Final inline fallback ---------- */
     function uploadInlineFallback(fullDataURL, thumbDataURL){
-      log('⚠ Using inline base64 fallback (no cloud write succeeded).');
-      return {
-        backend: 'inline-base64',
-        imageURL: fullDataURL,
-        thumbURL: thumbDataURL,
-        storagePath: '',
-        gsUri: ''
-      };
+      log('⚠ Inline base64 fallback.');
+      return { backend:'inline-base64', imageURL: fullDataURL, thumbURL: thumbDataURL, storagePath:'', gsUri:'' };
     }
-
-    /* ---------- Master dispatcher ---------- */
     async function uploadBlobs(ts, fullDataURL, thumbDataURL){
-      await ensureAuthed();
-      try {
-        return await uploadToFireOps(ts, fullDataURL, thumbDataURL);
-      } catch (e1) {
-        log(`FireOps upload failed: ${e1?.code||''} ${e1?.message||e1}`);
-        try {
-          return await uploadViaLegacy(ts, fullDataURL);
-        } catch (e2) {
-          log(`Legacy fallback failed: ${e2?.code||''} ${e2?.message||e2}`);
-          return uploadInlineFallback(fullDataURL, thumbDataURL);
-        }
-      }
+      try { return await uploadToFireOps(ts, fullDataURL, thumbDataURL); }
+      catch(e1){ log('FireOps upload failed: '+(e1.message||e1)); try{ return await uploadViaLegacy(ts, fullDataURL); } catch(e2){ return uploadInlineFallback(fullDataURL, thumbDataURL);} }
     }
 
     async function appendStopToDB(stop){
@@ -449,28 +413,13 @@
       renderGallery();
     }
 
-    async function verifyListFromFireOps(){
-      if(!scenarioId) return;
-      try{
-        const folderRef = stRef(storage, `scenarios/${scenarioId}`);
-        const listing = await listAll(folderRef);
-        log(`VERIFY listAll(${folderRef.fullPath}) → ${listing.items.length} files in FireOps bucket`);
-      }catch(e){
-        log(`VERIFY list error: ${e?.message||e}`);
-      }
-    }
-
-    /* ---------- Save Photo ---------- */
-    $('saveBtn').onclick = async ()=>{
+    async function onSavePhoto(){
       if(!(scenarioId && pendingFullDataURL)) return;
       try{
-        busy(true);
-        $('saveStatus').textContent='uploading…'; show('afterSave',false);
-
+        document.getElementById('saveStatus').textContent='uploading…'; document.getElementById('afterSave').classList.add('hidden');
         const ts = Date.now();
         const cloud = await uploadBlobs(ts, pendingFullDataURL, pendingThumbDataURL);
-
-        const r = Math.max(1, Math.min(1000, parseInt(($('radius').value||'5'),10) || 5));
+        const r = Math.max(1, Math.min(1000, parseInt((document.getElementById('radius').value||'5'),10) || 5));
         const stop = {
           type:'photo', title:'', caption:'',
           imageURL: cloud.imageURL || '',
@@ -481,41 +430,28 @@
           lat: pendingGeo?.lat ?? null, lng: pendingGeo?.lng ?? null, accuracy: pendingGeo?.accuracy ?? null,
           radiusMeters:r, overlays:[], at: ts
         };
-
-        log(`Stop saved with backend=${stop.backend} gsUri=${stop.gsUri||'(n/a)'}`);
-
+        log(`Stop saved (backend=${stop.backend}) ${stop.gsUri||''}`);
         await appendStopToDB(stop);
-
-        $('saveStatus').textContent='saved ✓';
-        show('afterSave', true);
-
-        await verifyListFromFireOps();
+        document.getElementById('saveStatus').textContent='saved ✓';
+        document.getElementById('afterSave').classList.remove('hidden');
       }catch(e){
-        $('saveStatus').textContent='error';
+        document.getElementById('saveStatus').textContent='error';
         sayErr(e.message||String(e));
         log('Save error: ' + (e?.message||e));
-      }finally{
-        busy(false);
       }
-    };
+    }
 
-    /* ---------- Add another ---------- */
-    $('addAnotherBtn').onclick = ()=>{
-      pendingFile=pendingImg=pendingFullDataURL=pendingThumbDataURL=null;
-      $('previewImg').src=''; show('workArea',false); show('afterSave',false);
-      $('pctFull').textContent='0%'; $('barFull').style.width='0%';
-      $('pctThumb').textContent='0%'; $('barThumb').style.width='0%';
-      $('radius').value='5';
-    };
-
-    // Picker bindings
-    const openInput = id => $(id).click();
-    document.getElementById('btnCamera').addEventListener('click', ()=>openInput('inCamera'));
-    document.getElementById('btnLibrary').addEventListener('click',()=>openInput('inLibrary'));
-    document.getElementById('btnUpload').addEventListener('click', ()=>openInput('inUpload'));
-    document.getElementById('inCamera').addEventListener('change', e=> onPick(e.target.files?.[0]));
-    document.getElementById('inLibrary').addEventListener('change',e=> onPick(e.target.files?.[0]));
-    document.getElementById('inUpload').addEventListener('change', e=> onPick(e.target.files?.[0]));
+    // ---- Bind everything AFTER DOM is ready ----
+    document.addEventListener('DOMContentLoaded', async ()=>{
+      log('DOM ready.');
+      initFirebase();
+      // Bind click handlers
+      document.getElementById('createBtn').addEventListener('click', onCreateScenario);
+      bindPickers();
+      // Non-blocking auth warmup
+      ensureAuthedNonBlocking();
+      log('Handlers bound. Click "Create Scenario".');
+    });
   </script>
 </body>
 </html>
