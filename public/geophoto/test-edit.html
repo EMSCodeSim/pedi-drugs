@@ -53,6 +53,14 @@
     <div class="muted">Uploads to <span class="mono">{bucket}/scenarios/&lt;scenarioId&gt;/&lt;timestamp&gt;_filename</span>.</div>
   </div>
 
+  <div class="card" style="margin-top:12px">
+    <div class="bar">
+      <label class="muted">Or paste a Signed/Public URL</label>
+      <input id="urlDirect" class="mono grow" placeholder="https://...signed-or-public-url" />
+      <button id="btnAddUrl">Add to Gallery</button>
+    </div>
+  </div>
+
   <div id="gallery" style="margin-top:12px"></div>
 
   <template id="thumbTpl">
@@ -81,6 +89,8 @@
     const elUpload = document.getElementById('btnUpload');
     const elRefresh = document.getElementById('btnRefresh');
     const elGallery = document.getElementById('gallery');
+    const elUrlDirect = document.getElementById('urlDirect');
+    const elAddUrl = document.getElementById('btnAddUrl');
     const tpl = document.getElementById('thumbTpl').content;
 
     // ---- Defaults (your provided URL & key prefilled) ----
@@ -193,13 +203,28 @@
       }
     }
 
+    function addDirectUrl(u) {
+      const url = (u || '').trim();
+      if (!url) { alert('Paste a URL first'); return; }
+      const node = document.importNode(tpl, true);
+      node.querySelector('img').src = url;
+      node.querySelector('.full').href = url;
+      node.querySelector('.path').textContent = `(direct) ${url}`;
+      elGallery.prepend(node);
+    }
+
     elUpload.addEventListener('click', uploadPhoto);
     elRefresh.addEventListener('click', loadGallery);
+    elAddUrl.addEventListener('click', () => addDirectUrl(elUrlDirect.value));
 
     // URL params support: ?sid=…&bucket=…
     const params = new URLSearchParams(location.search);
     if (params.get('sid')) elScenarioId.value = params.get('sid');
     if (params.get('bucket')) elBucket.value = params.get('bucket');
+    if (params.get('url')) addDirectUrl(params.get('url'));
+    // Boot with your provided example URL so you can immediately verify rendering
+    const BOOT_URL = `https://qwhuciodtyotgrbeakdu.supabase.co/storage/v1/object/sign/geophoto/scenarios/ChatGPT%20Image%20Sep%2011,%202025,%2002_39_14%20PM.png?token=eyJraWQiOiJzdG9yYWdlLXVybC1zaWduaW5nLWtleV8zMmI0ZjJjMC1hNzE1LTQyM2EtYTBmYi0wOWYzYjBhNjNkNGUiLCJhbGciOiJIUzI1NiJ9.eyJ1cmwiOiJnZW9waG90by9zY2VuYXJpb3MvQ2hhdEdQVCBJbWFnZSBTZXAgMTEsIDIwMjUsIDAyXzM5XzE0IFBNLnBuZyIsImlhdCI6MTc1ODMyOTM0NSwiZXhwIjoxNzU4OTM0MTQ1fQ.mgBk5JMfkW4UYBcIa5czBYhNagIQfGTvxFgeKZSFgZc`;
+    try { if (BOOT_URL) addDirectUrl(BOOT_URL); } catch(_) {}
   </script>
 </body>
 </html>
