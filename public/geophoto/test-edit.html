@@ -1,30 +1,31 @@
 <!doctype html>
 <html lang="en">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>FireOpsSim — Firebase Uploader (Minimal)</title>
-  <style>
-    :root { --bg:#0b1220; --card:#111a2e; --muted:#b8c4e2; --line:#1b2b50; --ink:#e8eefc; --accent:#2c5cff; }
-    body{margin:0;padding:16px;background:var(--bg);color:var(--ink);font:14px/1.4 system-ui,Arial}
-    h1{margin:0 0 12px;font-size:20px}
-    .row{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:8px 0}
-    input,button{background:#091125;color:var(--ink);border:1px solid #20407a;border-radius:10px;padding:8px 10px}
-    input.mono{font-family:ui-monospace,Menlo,Consolas,monospace}
-    button{cursor:pointer}
-    button.primary{background:#1a3fbb;border-color:var(--accent)}
-    .card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:12px;margin:12px 0}
-    .muted{color:var(--muted);opacity:.95}
-    #grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:12px}
-    .thumb{background:#0b1429;border:1px solid #1a2b50;border-radius:12px;overflow:hidden}
-    .thumb img{width:100%;height:160px;object-fit:cover;display:block}
-    .thumb .meta{padding:8px;font-size:12px}
-    pre{white-space:pre-wrap;background:#0c1530;border:1px solid #1b2b50;border-radius:10px;padding:8px;overflow:auto;max-height:240px}
-    a{color:#9ec5ff}
-  </style>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>FireOpsSim — Uploader + Deep Diagnostics (Compat SDK)</title>
+<style>
+  :root{--bg:#0b1220;--card:#111a2e;--muted:#b8c4e2;--line:#1b2b50;--ink:#e8eefc;--accent:#2c5cff;--ok:#7CFF7C;--bad:#FF7C7C;--warn:#FFD37C}
+  body{margin:0;padding:16px;background:var(--bg);color:var(--ink);font:14px/1.45 system-ui,Arial}
+  h1{margin:0 0 12px;font-size:20px}
+  .row{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:8px 0}
+  input,button,select{background:#091125;color:var(--ink);border:1px solid #20407a;border-radius:10px;padding:8px 10px}
+  input.mono{font-family:ui-monospace,Menlo,Consolas,monospace}
+  button{cursor:pointer}
+  button.primary{background:#1a3fbb;border-color:var(--accent)}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:12px;margin:12px 0}
+  .muted{color:var(--muted);opacity:.95}
+  #status{white-space:pre-wrap;background:#0c1530;border:1px solid #1b2b50;border-radius:10px;padding:10px;max-height:260px;overflow:auto}
+  #grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:12px}
+  .thumb{background:#0b1429;border:1px solid #1a2b50;border-radius:12px;overflow:hidden}
+  .thumb img{width:100%;height:160px;object-fit:cover;display:block}
+  .thumb .meta{padding:8px;font-size:12px}
+  .ok{color:var(--ok)} .bad{color:var(--bad)} .warn{color:var(--warn)}
+  a{color:#9ec5ff}
+</style>
 </head>
 <body>
-  <h1>FireOpsSim — Firebase Uploader (Minimal)</h1>
+  <h1>FireOpsSim — Uploader + Deep Diagnostics</h1>
 
   <div class="card">
     <div class="row">
@@ -35,17 +36,20 @@
     </div>
     <div class="row">
       <input id="fileInput" type="file" accept="image/*" capture="environment" />
+      <button id="btnInit" class="primary">Init</button>
       <button id="btnUpload" class="primary">Upload Photo</button>
       <button id="btnRefresh">Refresh Gallery</button>
+      <button id="btnDiag">Run Diag</button>
     </div>
     <div class="muted">
-      Files go to <span class="mono">scenarios/&lt;scenarioId&gt;/</span> in <span class="mono">gs://fireopssim.appspot.com</span>.
+      Must use <span class="mono">gs://fireopssim.appspot.com</span> (not <span class="mono">fireopssim.firebasestorage.app</span>).
+      Serve this page over <strong>HTTPS</strong> for camera access.
     </div>
   </div>
 
   <div class="card">
     <strong>Status</strong>
-    <pre id="log">Booting…</pre>
+    <div id="status">Booting…</div>
   </div>
 
   <div id="grid" class="card">
@@ -63,123 +67,192 @@
     </div>
   </template>
 
-  <script type="module">
-    import { initializeApp, getApps } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-    import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
-    import {
-      getStorage, ref, uploadBytes, getDownloadURL, listAll,
-      setMaxOperationRetryTime, setMaxUploadRetryTime
-    } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-storage.js";
+  <!-- Compat SDKs (no modules/top-level await) -->
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-storage-compat.js"></script>
 
-    // ---- DOM helpers ----
-    const $ = (id)=>document.getElementById(id);
-    const elScenarioId = $('scenarioId');
-    const elFile = $('fileInput');
-    const elUpload = $('btnUpload');
-    const elRefresh = $('btnRefresh');
-    const elLog = $('log');
-    const elGrid = $('grid');
-    const tpl = document.getElementById('thumbTpl').content;
-
-    function log(msg){
-      const t = `[${new Date().toLocaleTimeString()}] ${msg}`;
-      elLog.textContent += (elLog.textContent ? '\n' : '') + t;
-      elLog.scrollTop = elLog.scrollHeight;
+  <script>
+  (function(){
+    const $ = id => document.getElementById(id);
+    const logBox = $('status');
+    const log = (m, cls) => {
+      const t = `[${new Date().toLocaleTimeString()}] ${m}`;
+      const line = document.createElement('div');
+      if (cls) line.className = cls;
+      line.textContent = t;
+      logBox.appendChild(line);
+      logBox.scrollTop = logBox.scrollHeight;
       console.debug(t);
-    }
-    const safeName = s => (s||'photo').replace(/[^\w.\-]+/g,'_');
+    };
+    const warn = m => log(m, 'warn');
+    const bad  = m => log(m, 'bad');
+    const ok   = m => log(m, 'ok');
 
-    // ---- Firebase (client-safe config) ----
+    // Global error surface
+    window.addEventListener('error', e => bad('Window error: ' + (e.message||e)));
+    window.addEventListener('unhandledrejection', e => bad('Unhandled promise: ' + (e.reason && (e.reason.message||e.reason))));
+
+    // Firebase client-safe config
     const firebaseConfig = {
       apiKey: "AIzaSyBzwc75u8pG73OKcHN8ti2ADbucjKMHme8",
       authDomain: "fireopssim.firebaseapp.com",
       projectId: "fireopssim",
-      storageBucket: "fireopssim.firebasestorage.app" // HTTPS domain; gs:// set below
+      storageBucket: "fireopssim.firebasestorage.app" // HTTPS domain; gs:// is chosen when creating storage()
     };
 
-    // ---- Init once ----
-    let app = null, auth = null, storage = null;
-    function ensureInit(){
-      if (app && auth && storage) return;
-      if (!getApps().length) app = initializeApp(firebaseConfig);
-      else app = getApps()[0];
+    let app = null, auth = null, storage = null, user = null;
 
-      auth = getAuth(app);
-      signInAnonymously(auth).then(()=>{
-        log('Auth OK (anonymous).');
-      }).catch(e=>{
-        log('Auth error: '+(e?.message||e));
-      });
-
-      // Pin to the correct gs:// bucket
-      storage = getStorage(app, "gs://fireopssim.appspot.com");
-      setMaxOperationRetryTime(storage, 60_000);
-      setMaxUploadRetryTime(storage, 120_000);
-      log('Storage bound to gs://fireopssim.appspot.com');
+    function ensureHttps(){
+      if (location.protocol !== 'https:' && location.hostname !== 'localhost') {
+        warn('Not HTTPS — camera capture may be blocked.');
+      } else {
+        ok('HTTPS OK.');
+      }
     }
-    ensureInit();
 
-    function prefix(){
-      const sid = (elScenarioId.value || '').trim();
+    function getPrefix(){
+      const sid = ($('scenarioId').value || '').trim();
       if (!sid) throw new Error('Enter a scenarioId first.');
       return `scenarios/${sid}`;
     }
 
-    async function refreshGallery(){
+    function safeName(s){ return (s||'photo').replace(/[^\w.\-]+/g,'_'); }
+
+    function renderGrid(items, urls){
+      const grid = $('grid');
+      grid.innerHTML = '';
+      if (!items.length){
+        grid.innerHTML = '<div class="muted">No photos found.</div>';
+        return;
+      }
+      const tpl = $('thumbTpl').content;
+      items.forEach((ref, i) => {
+        const node = document.importNode(tpl, true);
+        node.querySelector('.path').textContent = ref.fullPath || ref.name;
+        if (urls[i]) {
+          node.querySelector('img').src = urls[i];
+          node.querySelector('.full').href = urls[i];
+        }
+        grid.appendChild(node);
+      });
+    }
+
+    // INIT
+    async function init(){
       try{
-        ensureInit();
-        const pfx = prefix();
-        log(`Listing ${pfx}…`);
-        const folder = ref(storage, pfx);
-        const res = await listAll(folder);
-        const items = res.items || [];
-        elGrid.innerHTML = '';
-        if (!items.length){
-          elGrid.innerHTML = '<div class="muted">No photos found.</div>';
-          log('No photos found.');
-          return;
-        }
-        for (const it of items){
-          let url = null;
-          try { url = await getDownloadURL(it); }
-          catch(e){ log(`getDownloadURL failed for ${it.fullPath}: ${e?.message||e}`); }
-          const node = document.importNode(tpl, true);
-          if (url){ node.querySelector('img').src = url; node.querySelector('.full').href = url; }
-          node.querySelector('.path').textContent = it.fullPath || it.name;
-          elGrid.appendChild(node);
-        }
-        log(`Listed ${items.length} item(s).`);
+        ensureHttps();
+        const gs = 'gs://fireopssim.appspot.com';
+        log('Initializing Firebase app…');
+        if (!firebase.apps.length) app = firebase.initializeApp(firebaseConfig);
+        else app = firebase.app();
+        ok('App initialized.');
+
+        log('Signing in anonymously…');
+        auth = firebase.auth();
+        user = (await auth.signInAnonymously()).user;
+        ok('Auth OK (anon uid='+(user && user.uid || 'unknown')+')');
+
+        log('Binding Storage to '+gs+' …');
+        storage = firebase.storage(app, gs); // compat allows passing gs://
+        storage.setMaxOperationRetryTime(60000);
+        storage.setMaxUploadRetryTime(120000);
+        ok('Storage OK.');
       }catch(e){
-        log('Refresh error: '+(e?.message||e));
-        alert(e?.message||e);
+        bad('Init error: '+ (e.code ? e.code + ' ' : '') + (e.message||e));
+        throw e;
       }
     }
 
-    async function handleUpload(){
+    async function refresh(){
       try{
-        ensureInit();
-        const f = elFile.files && elFile.files[0];
-        if (!f){ alert('Pick or take a photo first'); return; }
+        if (!storage) await init();
+        const pfx = getPrefix();
+        log('Listing '+pfx+' …');
+        const folderRef = storage.ref().child(pfx);
+        const { items } = await folderRef.listAll();
+        const urls = await Promise.all(items.map(async it=>{
+          try { return await it.getDownloadURL(); }
+          catch(e){ warn(`URL error for ${it.fullPath}: ${e.message||e}`); return null; }
+        }));
+        renderGrid(items, urls);
+        ok(`Listed ${items.length} item(s).`);
+      }catch(e){
+        bad('Refresh error: '+ (e.code ? e.code + ' ' : '') + (e.message||e));
+        alert('Refresh error: ' + (e.message||e));
+      }
+    }
+
+    async function upload(){
+      try{
+        if (!storage) await init();
+        const f = $('fileInput').files && $('fileInput').files[0];
+        if (!f) { alert('Pick or take a photo first'); log('No file selected.'); return; }
         if (f.size > 10*1024*1024) { alert('Max 10 MB'); return; }
-
-        const pfx = prefix();
-        const path = `${pfx}/${Date.now()}_${safeName(f.name)}`;
-        log(`Uploading to ${path}…`);
-        await uploadBytes(ref(storage, path), f, { contentType: f.type || 'image/jpeg' });
-        log('Upload OK.');
-        alert('Upload successful!');
-        await refreshGallery();
+        const path = `${getPrefix()}/${Date.now()}_${safeName(f.name)}`;
+        log('Uploading → '+path);
+        const r = storage.ref().child(path);
+        await r.put(f, { contentType: f.type || 'image/jpeg' });
+        ok('Upload OK.');
+        await refresh();
       }catch(e){
-        log('Upload error: '+(e?.message||e));
-        alert('Upload failed: '+(e?.message||e));
+        bad('Upload error: '+ (e.code ? e.code + ' ' : '') + (e.message||e));
+        alert('Upload failed: ' + (e.message||e));
       }
     }
 
-    // ---- Bind UI ----
-    elUpload.addEventListener('click', handleUpload);
-    elRefresh.addEventListener('click', ()=>{ refreshGallery(); });
+    async function runDiag(){
+      log('=== Diagnostics start ===');
+      log('Origin: '+location.origin);
+      log('UA: '+navigator.userAgent);
+      log('SDK: compat 10.12.0 (app/auth/storage)');
 
-    log('UI ready. Enter a scenarioId, pick a photo, click Upload.');
+      if (!storage || !auth) {
+        try { await init(); } catch { /* init logs already */ }
+      }
+
+      // Rules/permissions quick test: try a tiny 1x1 upload
+      try{
+        const pfx = getPrefix();
+        const path = `${pfx}/diag_${Date.now()}.png`;
+        const bytes = new Uint8Array([137,80,78,71,13,10,26,10,0,0,0,13,73,72,68,82,0,0,0,1,0,0,0,1,8,2,0,0,0,144,119,83,222,0,0,0,12,73,68,65,84,8,215,99,248,15,4,0,9,251,3,253,167,6,227,151,0,0,0,0,73,69,78,68,174,66,96,130]);
+        log('Diag: tiny upload → '+path);
+        await storage.ref().child(path).put(new Blob([bytes], {type:'image/png'}), {contentType:'image/png'});
+        ok('Diag upload OK.');
+      }catch(e){
+        bad('Diag upload failed: '+ (e.code ? e.code + ' ' : '') + (e.message||e));
+        if ((e.code||'').includes('unauthorized')) {
+          warn('Likely Storage Rules blocking writes. Ensure Anonymous Auth is enabled and rules allow write to /scenarios/**.');
+        }
+        if ((e.code||'').includes('retry')) {
+          warn('Network/CORS/App Check hiccup. Ensure App Check not enforced (or properly configured) and no VPN/ad-block is blocking Google endpoints.');
+        }
+      }
+
+      // List test
+      try{
+        const pfx = getPrefix();
+        log('Diag: listAll → '+pfx);
+        await storage.ref().child(pfx).listAll();
+        ok('Diag list OK.');
+      }catch(e){
+        bad('Diag list failed: '+ (e.code ? e.code + ' ' : '') + (e.message||e));
+      }
+      log('=== Diagnostics end ===');
+    }
+
+    // Wire buttons
+    $('btnInit').addEventListener('click', init);
+    $('btnRefresh').addEventListener('click', refresh);
+    $('btnUpload').addEventListener('click', upload);
+    $('btnDiag').addEventListener('click', runDiag);
+
+    // Initial notes
+    log('Boot complete. Click Init first, then Upload/Refresh/Diag.');
+    if (location.hostname.includes('fireopssim') === false) {
+      warn('FYI: Running on a non-production origin. That is fine for testing.');
+    }
+  })();
   </script>
 </body>
 </html>
