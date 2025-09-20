@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Test Edit — Upload & View (Supabase)</title>
+  <title>Test Edit — Upload & View (Supabase with Camera)</title>
   <style>
     :root { font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif; }
     body { margin: 0; padding: 16px; background: #0b1220; color: #e8eefc; }
@@ -26,39 +26,19 @@
   </style>
 </head>
 <body>
-  <h1>Test Edit — Upload & View (Supabase)</h1>
+  <h1>Test Edit — Upload & View (Supabase with Camera)</h1>
 
-  <div class="card" id="sbCard">
-    <div class="bar">
-      <label class="muted">Supabase URL</label>
-      <input id="sbUrl" class="mono grow" placeholder="https://YOUR-PROJECT.supabase.co" />
-      <label class="muted">Anon/Public Key</label>
-      <input id="sbKey" class="mono grow" placeholder="Paste SUPABASE_ANON_KEY" />
-      <button id="btnSaveSb" class="primary">Save & Init</button>
-      <div class="muted" id="sbState">Not initialized</div>
-    </div>
-    <div class="muted">Keys are stored locally (localStorage) only in your browser.</div>
-  </div>
-
-  <div class="card" style="margin-top:12px">
+  <div class="card">
     <div class="bar">
       <label class="muted">Bucket</label>
-      <input id="bucket" class="mono" placeholder="e.g. scenarios" />
+      <input id="bucket" class="mono" placeholder="e.g. geophoto" />
       <label class="muted">Scenario ID</label>
       <input id="scenarioId" class="mono" placeholder="e.g. -OZKwtRwHXxsM7tLQcnV" />
-      <input id="fileInput" type="file" accept="image/*" />
+      <input id="fileInput" type="file" accept="image/*" capture="environment" />
       <button id="btnUpload" class="primary">Upload Photo</button>
       <button id="btnRefresh">Refresh Gallery</button>
     </div>
-    <div class="muted">Uploads to <span class="mono">{bucket}/scenarios/&lt;scenarioId&gt;/&lt;timestamp&gt;_filename</span>.</div>
-  </div>
-
-  <div class="card" style="margin-top:12px">
-    <div class="bar">
-      <label class="muted">Or paste a Signed/Public URL</label>
-      <input id="urlDirect" class="mono grow" placeholder="https://...signed-or-public-url" />
-      <button id="btnAddUrl">Add to Gallery</button>
-    </div>
+    <div class="muted">Take a photo using your phone camera or select an existing image. Uploaded to <span class="mono">{bucket}/scenarios/&lt;scenarioId&gt;/&lt;timestamp&gt;_filename</span>.</div>
   </div>
 
   <div id="gallery" style="margin-top:12px"></div>
@@ -77,11 +57,9 @@
   <script type="module">
     import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.4";
 
-    // ---- Elements ----
-    const elSbUrl = document.getElementById('sbUrl');
-    const elSbKey = document.getElementById('sbKey');
-    const elSaveSb = document.getElementById('btnSaveSb');
-    const elSbState = document.getElementById('sbState');
+    const SUPABASE_URL = "https://qwhuciodtyotgrbeakdu.supabase.co";
+    const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InF3aHVjaW9kdHlvdGdyYmVha2R1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTgzMTcwNTcsImV4cCI6MjA3Mzg5MzA1N30.4TOChR01-9s0o7zus140ImUF6slesCLuEpa6JY-LSBQ";
+    const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 
     const elBucket = document.getElementById('bucket');
     const elScenarioId = document.getElementById('scenarioId');
@@ -89,106 +67,67 @@
     const elUpload = document.getElementById('btnUpload');
     const elRefresh = document.getElementById('btnRefresh');
     const elGallery = document.getElementById('gallery');
-    const elUrlDirect = document.getElementById('urlDirect');
-    const elAddUrl = document.getElementById('btnAddUrl');
     const tpl = document.getElementById('thumbTpl').content;
 
-    // ---- Defaults (your provided URL & key prefilled) ----
-    const DEFAULT_URL = "https://qwhuciodtyotgrbeakdu.supabase.co";
-    const DEFAULT_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InF3aHVjaW9kdHlvdGdyYmVha2R1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTgzMTcwNTcsImV4cCI6MjA3Mzg5MzA1N30.4TOChR01-9s0o7zus140ImUF6slesCLuEpa6JY-LSBQ";
-    elSbUrl.value  = localStorage.getItem('SB_URL')    || DEFAULT_URL;
-    elSbKey.value  = localStorage.getItem('SB_KEY')    || DEFAULT_KEY;
-    elBucket.value = localStorage.getItem('SB_BUCKET') || 'scenarios';
-
-    // ---- Supabase client ----
-    let supabase = null;
-    function setSbState(txt) { elSbState.textContent = txt; }
-    function initSupabase() {
-      const url = (elSbUrl.value || '').trim();
-      const key = (elSbKey.value || '').trim();
-      if (!url || !key) { setSbState('Missing URL or Key'); return null; }
-      supabase = createClient(url, key, { auth: { persistSession: false } });
-      setSbState('Initialized');
-      return supabase;
-    }
-    if (elSbUrl.value && elSbKey.value) initSupabase();
-
-    elSaveSb.addEventListener('click', () => {
-      localStorage.setItem('SB_URL', (elSbUrl.value || '').trim());
-      localStorage.setItem('SB_KEY', (elSbKey.value || '').trim());
-      localStorage.setItem('SB_BUCKET', (elBucket.value || '').trim());
-      initSupabase();
-      alert('Supabase settings saved.');
-    });
-
-    // ---- Helpers ----
-    function requireReady() {
-      if (!supabase) throw new Error('Supabase not initialized');
-      const bucket = (elBucket.value || '').trim();
-      if (!bucket) throw new Error('Enter a bucket name');
-      const sid = (elScenarioId.value || '').trim();
-      if (!sid) throw new Error('Enter a Scenario ID');
-      return { bucket, sid };
-    }
+    elBucket.value = 'geophoto'; // default bucket
 
     async function uploadPhoto() {
       try {
-        const { bucket, sid } = requireReady();
-        const f = elFile.files?.[0];
-        if (!f) throw new Error('Choose a file to upload');
-        const safeName = f.name.replace(/\s+/g, '_');
+        const bucket = (elBucket.value || '').trim();
+        const sid = (elScenarioId.value || '').trim();
+        if (!bucket || !sid) throw new Error('Bucket and Scenario ID are required');
+
+        const file = elFile.files?.[0];
+        if (!file) throw new Error('Please take or select a photo first');
+
+        const safeName = file.name.replace(/\s+/g, '_');
         const path = `scenarios/${sid}/${Date.now()}_${safeName}`;
-        const { error } = await supabase.storage.from(bucket).upload(path, f, {
-          contentType: f.type || 'application/octet-stream',
-          upsert: true,
+        const { error } = await supabase.storage.from(bucket).upload(path, file, {
+          contentType: file.type || 'application/octet-stream',
+          upsert: true
         });
         if (error) throw error;
-        alert('Uploaded! Refreshing gallery…');
+
+        alert('Upload successful!');
         await loadGallery();
-      } catch (e) {
-        console.error(e);
-        alert('Upload failed: ' + (e.message || e));
+      } catch (err) {
+        alert('Upload failed: ' + err.message);
+        console.error(err);
       }
     }
 
     async function getSignedUrl(bucket, path) {
-      // Works for both public & private buckets
-      const { data, error } = await supabase.storage.from(bucket).createSignedUrl(path, 60 * 60 * 6); // 6h
+      const { data, error } = await supabase.storage.from(bucket).createSignedUrl(path, 60 * 60 * 6);
       if (error) throw error;
       return data.signedUrl;
     }
 
-    async function listFilesOneLevel(bucket, prefix) {
-      // Lists only one level (no recursion). Good for scenarios/<sid>/ files.
-      // If the folder doesn't exist yet (new bucket), we gracefully return [].
+    async function listFiles(bucket, prefix) {
       const { data, error } = await supabase.storage.from(bucket).list(prefix, {
         limit: 100,
         sortBy: { column: 'name', order: 'desc' }
       });
       if (error) {
-        // Supabase returns an error if the prefix path hasn't been created yet.
-        // Treat that as an empty folder so first upload can create the path.
-        const msg = (error.message || '').toLowerCase();
-        if (msg.includes('not found') || msg.includes('does not exist')) return [];
+        if ((error.message || '').toLowerCase().includes('not found')) return [];
         throw error;
       }
-      // Keep only entries that look like files (have metadata)
-      return (data || [])
-        .filter(e => e && e.metadata)
-        .map(e => ({ path: prefix ? `${prefix}/${e.name}` : e.name }));
+      return (data || []).filter(e => e && e.metadata).map(e => ({ path: `${prefix}/${e.name}` }));
     }
 
     async function loadGallery() {
       try {
-        const { bucket, sid } = requireReady();
-        const prefix = `scenarios/${sid}`;
+        const bucket = (elBucket.value || '').trim();
+        const sid = (elScenarioId.value || '').trim();
+        if (!bucket || !sid) throw new Error('Bucket and Scenario ID are required');
+
         elGallery.innerHTML = '<div class="muted">Loading…</div>';
-        const files = await listFilesOneLevel(bucket, prefix);
+        const files = await listFiles(bucket, `scenarios/${sid}`);
         elGallery.innerHTML = '';
         if (!files.length) {
-          elGallery.innerHTML = '<div class="muted">No files yet. Upload above.</div>';
+          elGallery.innerHTML = '<div class="muted">No photos uploaded yet.</div>';
           return;
         }
+
         for (const f of files) {
           const url = await getSignedUrl(bucket, f.path);
           const node = document.importNode(tpl, true);
@@ -197,34 +136,14 @@
           node.querySelector('.path').textContent = f.path;
           elGallery.appendChild(node);
         }
-      } catch (e) {
-        console.error(e);
-        elGallery.innerHTML = `<div class=muted>Error: ${e.message || e}</div>`;
+      } catch (err) {
+        elGallery.innerHTML = `<div class=muted>Error: ${err.message}</div>`;
+        console.error(err);
       }
-    }
-
-    function addDirectUrl(u) {
-      const url = (u || '').trim();
-      if (!url) { alert('Paste a URL first'); return; }
-      const node = document.importNode(tpl, true);
-      node.querySelector('img').src = url;
-      node.querySelector('.full').href = url;
-      node.querySelector('.path').textContent = `(direct) ${url}`;
-      elGallery.prepend(node);
     }
 
     elUpload.addEventListener('click', uploadPhoto);
     elRefresh.addEventListener('click', loadGallery);
-    elAddUrl.addEventListener('click', () => addDirectUrl(elUrlDirect.value));
-
-    // URL params support: ?sid=…&bucket=…
-    const params = new URLSearchParams(location.search);
-    if (params.get('sid')) elScenarioId.value = params.get('sid');
-    if (params.get('bucket')) elBucket.value = params.get('bucket');
-    if (params.get('url')) addDirectUrl(params.get('url'));
-    // Boot with your provided example URL so you can immediately verify rendering
-    const BOOT_URL = `https://qwhuciodtyotgrbeakdu.supabase.co/storage/v1/object/sign/geophoto/scenarios/ChatGPT%20Image%20Sep%2011,%202025,%2002_39_14%20PM.png?token=eyJraWQiOiJzdG9yYWdlLXVybC1zaWduaW5nLWtleV8zMmI0ZjJjMC1hNzE1LTQyM2EtYTBmYi0wOWYzYjBhNjNkNGUiLCJhbGciOiJIUzI1NiJ9.eyJ1cmwiOiJnZW9waG90by9zY2VuYXJpb3MvQ2hhdEdQVCBJbWFnZSBTZXAgMTEsIDIwMjUsIDAyXzM5XzE0IFBNLnBuZyIsImlhdCI6MTc1ODMyOTM0NSwiZXhwIjoxNzU4OTM0MTQ1fQ.mgBk5JMfkW4UYBcIa5czBYhNagIQfGTvxFgeKZSFgZc`;
-    try { if (BOOT_URL) addDirectUrl(BOOT_URL); } catch(_) {}
   </script>
 </body>
 </html>
