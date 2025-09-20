@@ -150,11 +150,18 @@
 
     async function listFilesOneLevel(bucket, prefix) {
       // Lists only one level (no recursion). Good for scenarios/<sid>/ files.
+      // If the folder doesn't exist yet (new bucket), we gracefully return [].
       const { data, error } = await supabase.storage.from(bucket).list(prefix, {
         limit: 100,
         sortBy: { column: 'name', order: 'desc' }
       });
-      if (error) throw error;
+      if (error) {
+        // Supabase returns an error if the prefix path hasn't been created yet.
+        // Treat that as an empty folder so first upload can create the path.
+        const msg = (error.message || '').toLowerCase();
+        if (msg.includes('not found') || msg.includes('does not exist')) return [];
+        throw error;
+      }
       // Keep only entries that look like files (have metadata)
       return (data || [])
         .filter(e => e && e.metadata)
