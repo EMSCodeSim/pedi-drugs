@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>FireOpsSim — Uploader + Diagnostics (Firebase Storage)</title>
+  <title>FireOpsSim — Failsafe Uploader</title>
   <style>
     :root { --bg:#0b1220; --card:#111a2e; --muted:#b8c4e2; --line:#1b2b50; --ink:#e8eefc; --accent:#2c5cff; }
     body{margin:0;padding:16px;background:var(--bg);color:var(--ink);font:14px/1.4 system-ui,Arial}
@@ -13,23 +13,18 @@
     input.mono{font-family:ui-monospace,Menlo,Consolas,monospace}
     button{cursor:pointer}
     button.primary{background:#1a3fbb;border-color:var(--accent)}
-    .card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:12px;margin:12px 0}
+    .card{background:var(--card);border:1px solid #1b2b50;border-radius:14px;padding:12px;margin:12px 0}
     .muted{color:var(--muted);opacity:.95}
     #grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:12px}
     .thumb{background:#0b1429;border:1px solid #1a2b50;border-radius:12px;overflow:hidden}
     .thumb img{width:100%;height:160px;object-fit:cover;display:block}
     .thumb .meta{padding:8px;font-size:12px}
-    .ok{color:#7CFF7C}
-    .warn{color:#FFD37C}
-    .bad{color:#FF8E8E}
-    pre{white-space:pre-wrap;background:#0c1530;border:1px solid #1b2b50;border-radius:10px;padding:8px;overflow:auto}
-    .kv{display:grid;grid-template-columns:180px 1fr;gap:6px}
-    .kv div{padding:2px 0}
+    pre{white-space:pre-wrap;background:#0c1530;border:1px solid #1b2b50;border-radius:10px;padding:8px;overflow:auto;max-height:240px}
     a{color:#9ec5ff}
   </style>
 </head>
 <body>
-  <h1>FireOpsSim — Scenario Uploader & Diagnostics</h1>
+  <h1>FireOpsSim — Failsafe Uploader</h1>
 
   <div class="card">
     <div class="row">
@@ -45,17 +40,19 @@
     </div>
     <div class="row">
       <input id="fileInput" type="file" accept="image/*" capture="environment" />
-      <button id="btnUpload" class="primary">Upload Photo</button>
+      <!-- inline onclick (fallback) -->
+      <button id="btnUpload" class="primary" onclick="window.handleUpload && window.handleUpload()">Upload Photo</button>
       <button id="btnRefresh">Refresh Gallery</button>
-      <button id="btnDiag">Run Diagnostics</button>
+      <button id="btnDiag">Diag</button>
     </div>
     <div class="muted">
-      Tip: Make sure you’re using the <span class="mono">gs://</span> bucket name (e.g., <span class="mono">gs://fireopssim.appspot.com</span>), not the HTTPS domain (<span class="mono">firebasestorage.app</span>).
+      Use the <span class="mono">gs://</span> bucket name (e.g., <span class="mono">gs://fireopssim.appspot.com</span>), not the HTTPS domain.
     </div>
   </div>
 
-  <div id="diag" class="card">
-    <div class="muted">Diagnostics output will appear here.</div>
+  <div class="card">
+    <strong>Status</strong>
+    <pre id="log">Booting…</pre>
   </div>
 
   <div id="grid" class="card">
@@ -74,77 +71,43 @@
   </template>
 
   <script type="module">
-    import { initializeApp, deleteApp, getApps } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-    import { getAuth, onAuthStateChanged, signInAnonymously } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+    import { initializeApp, getApps } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+    import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
     import {
       getStorage, ref, uploadBytes, getDownloadURL, listAll,
       setMaxOperationRetryTime, setMaxUploadRetryTime
     } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-storage.js";
 
-    // ---- Project config (client-safe) ----
+    // ---- DOM ----
+    const $ = (id)=>document.getElementById(id);
+    const elBucket = $('bucket');
+    const elScenarioId = $('scenarioId');
+    const elFolderMode = $('folderMode');
+    const elFile = $('fileInput');
+    const elUpload = $('btnUpload');
+    const elRefresh = $('btnRefresh');
+    const elDiag = $('btnDiag');
+    const elLog = $('log');
+    const elGrid = $('grid');
+    const tpl = document.getElementById('thumbTpl').content;
+
+    function log(msg){
+      const t = `[${new Date().toLocaleTimeString()}] ${msg}`;
+      elLog.textContent += (elLog.textContent ? '\n' : '') + t;
+      elLog.scrollTop = elLog.scrollHeight;
+      console.debug(t);
+    }
+
+    // ---- Config (client-safe) ----
     const firebaseConfig = {
       apiKey: "AIzaSyBzwc75u8pG73OKcHN8ti2ADbucjKMHme8",
       authDomain: "fireopssim.firebaseapp.com",
       projectId: "fireopssim",
-      storageBucket: "fireopssim.firebasestorage.app" // HTTPS domain; the gs:// will be chosen below
+      storageBucket: "fireopssim.firebasestorage.app"
     };
 
-    // ---- UI refs ----
-    const elBucket = document.getElementById('bucket');
-    const elScenarioId = document.getElementById('scenarioId');
-    const elFolderMode = document.getElementById('folderMode');
-    const elFile = document.getElementById('fileInput');
-    const elUpload = document.getElementById('btnUpload');
-    const elRefresh = document.getElementById('btnRefresh');
-    const elDiag = document.getElementById('diag');
-    const elGrid = document.getElementById('grid');
-    const elDiagBtn = document.getElementById('btnDiag');
-    const tpl = document.getElementById('thumbTpl').content;
-
-    // Defaults
-    elBucket.value = 'gs://fireopssim.appspot.com';
-
-    // ---- Firebase init (with re-init safety) ----
-    let app, auth, storage, currentUid = null;
-
-    async function initFirebase() {
-      // If hot-reloading this page, ensure only one app
-      if (getApps().length) {
-        try { await deleteApp(getApps()[0]); } catch {}
-      }
-      app = initializeApp(firebaseConfig);
-      auth = getAuth(app);
-      // Sign in anonymously so rules with request.auth != null pass
-      await signInAnonymously(auth);
-      onAuthStateChanged(auth, u => { currentUid = u?.uid || null; });
-      // Pin to user-provided gs:// bucket
-      const gs = (elBucket.value || '').trim();
-      storage = getStorage(app, gs);
-      // Tweak retry windows (increase tolerance)
-      setMaxOperationRetryTime(storage, 60_000); // list/get retries up to 60s
-      setMaxUploadRetryTime(storage, 120_000);   // upload retries up to 120s
-    }
-
-    // ---- Helpers ----
-    const sleep = (ms) => new Promise(r => setTimeout(r, ms));
-    async function withBackoff(fn, {label, attempts=4, baseDelay=500}) {
-      let lastErr;
-      for (let i=0;i<attempts;i++){
-        try { return await fn(); }
-        catch (err) {
-          lastErr = err;
-          // Retry only on transient/network
-          const c = err?.code || "";
-          if (!/unavailable|deadline-exceeded|network-request-failed|retry-limit-exceeded/.test(c) && err?.message?.includes('retry')===false) {
-            throw err; // non-transient
-          }
-          await sleep(baseDelay * Math.pow(2,i));
-        }
-      }
-      lastErr.retried = true;
-      lastErr.contextLabel = label;
-      throw lastErr;
-    }
+    // ---- State ----
+    let app = null, auth = null, storage = null, uid = null;
 
     function getPrefix(){
       const mode = elFolderMode.value || 'scenari';
@@ -153,202 +116,109 @@
       if (!sid) throw new Error('Scenario ID is required for scenarios/<id>');
       return `scenarios/${sid}`;
     }
+    const safeName = s => (s||'photo').replace(/[^\w.\-]+/g,'_');
 
-    function safeName(name){ return (name || 'photo').replace(/[^\w.\-]+/g,'_'); }
+    async function ensureInit(){
+      if (app && auth && storage) return;
+      log('Initializing Firebase…');
 
-    function renderGrid(urls, paths){
-      elGrid.innerHTML = '';
-      if (!urls.length) {
-        elGrid.innerHTML = '<div class="muted">No photos found in this prefix.</div>';
-        return;
-      }
-      urls.forEach((url, i) => {
-        const node = document.importNode(tpl, true);
-        node.querySelector('img').src = url;
-        node.querySelector('.full').href = url;
-        node.querySelector('.path').textContent = paths?.[i] || '(unknown)';
-        elGrid.appendChild(node);
-      });
-    }
+      // If a previous app exists (hot reload), reuse it
+      if (!getApps().length) app = initializeApp(firebaseConfig);
+      else app = getApps()[0];
 
-    function printDiag(html){
-      const box = document.createElement('div');
-      box.innerHTML = html;
-      elDiag.appendChild(box);
-    }
-
-    function resetDiag(){
-      elDiag.innerHTML = '';
-    }
-
-    function summarizeError(err, extra={}) {
-      return `
-<div class="card">
-  <div><strong>Error:</strong> <span class="bad">${err?.code || '(no code)'} – ${err?.message || err}</span></div>
-  ${err?.contextLabel ? `<div>During: <span class="mono">${err.contextLabel}</span></div>` : ''}
-  ${extra?.path ? `<div>Path: <span class="mono">${extra.path}</span></div>` : ''}
-  ${extra?.note ? `<div>Note: ${extra.note}</div>` : ''}
-  ${err?.retried ? `<div class="warn">Tried multiple times with backoff, still failing.</div>` : ''}
-  ${err?.stack ? `<details><summary>Stack</summary><pre>${err.stack}</pre></details>` : ''}
-</div>`;
-    }
-
-    async function runDiagnostics(){
-      resetDiag();
-      // Header
-      printDiag(`<div class="kv">
-        <div>Time</div><div>${new Date().toLocaleString()}</div>
-        <div>Origin</div><div>${location.origin}</div>
-        <div>User Agent</div><div>${navigator.userAgent}</div>
-        <div>SDK</div><div>firebase-app/storage/auth 10.12.0</div>
-        <div>Project ID</div><div class="mono">${firebaseConfig.projectId}</div>
-        <div>Config storageBucket</div><div class="mono">${firebaseConfig.storageBucket}</div>
-        <div>Chosen gs://</div><div class="mono">${(elBucket.value||'').trim()}</div>
-      </div>`);
-
-      // Basic checks
-      const gs = (elBucket.value||'').trim();
-      if (!gs.startsWith('gs://')) {
-        printDiag(`<div class="bad">Bucket must start with gs:// (e.g., <span class="mono">gs://fireopssim.appspot.com</span>)</div>`);
-        return;
-      }
-      if (/firebasestorage\.app/i.test(gs)) {
-        printDiag(`<div class="bad">You entered the HTTPS domain in gs://. Use <span class="mono">gs://fireopssim.appspot.com</span> instead.</div>`);
-        return;
-      }
-
-      // Init firebase (fresh)
+      auth = getAuth(app);
       try {
-        await initFirebase();
-        printDiag(`<div class="ok">Initialized Firebase, set retry windows (op=60s, upload=120s).</div>`);
-      } catch (err) {
-        printDiag(summarizeError(err, {note: 'Failed during initialize/sign-in.'}));
-        return;
+        await signInAnonymously(auth);
+        uid = (auth.currentUser && auth.currentUser.uid) || null;
+        log(`Auth OK (anon uid=${uid||'unknown'})`);
+      } catch (e) {
+        log(`Auth error: ${e?.message||e}`);
+        throw e;
       }
 
-      // Auth state
-      if (currentUid) {
-        printDiag(`<div class="ok">Auth: Anonymous signed in (<span class="mono">${currentUid}</span>)</div>`);
-      } else {
-        printDiag(`<div class="bad">Auth: Not signed in — storage writes requiring request.auth will fail.</div>`);
-      }
-
-      // List test (prefix root)
-      const prefix = getPrefix();
-      try {
-        const folder = ref(storage, prefix);
-        const res = await withBackoff(() => listAll(folder), {label:'listAll()', attempts:3});
-        printDiag(`<div class="ok">List test OK: <span class="mono">${prefix}</span> (${res.items.length} file(s))</div>`);
-      } catch (err) {
-        printDiag(summarizeError(err, {note: 'List test failed. If this oscillates, likely network/CORS/App Check or wrong bucket/region.'}));
-      }
-
-      // Small upload test (1x1 PNG)
-      const png1x1 = Uint8Array.from([137,80,78,71,13,10,26,10,0,0,0,13,73,72,68,82,0,0,0,1,0,0,0,1,8,2,0,0,0,144,119,83,222,0,0,0,12,73,68,65,84,8,215,99,248,15,4,0,9,251,3,253,167,6,227,151,0,0,0,0,73,69,78,68,174,66,96,130]);
-      const blob = new Blob([png1x1], {type:'image/png'});
-      const testPath = `${prefix}/diag_${Date.now()}.png`;
-
-      try {
-        const r = ref(storage, testPath);
-        await withBackoff(() => uploadBytes(r, blob, {contentType:'image/png'}), {label:'uploadBytes(diag)', attempts:3});
-        printDiag(`<div class="ok">Upload test OK → <span class="mono">${testPath}</span></div>`);
-        // Try fetching URL (read path + CORS)
-        const url = await withBackoff(() => getDownloadURL(r), {label:'getDownloadURL(diag)', attempts:2});
-        printDiag(`<div>Download URL acquired.</div><div><a href="${url}" target="_blank">${url}</a></div>`);
-      } catch (err) {
-        const hints = [];
-        const msg = (err?.message||'').toLowerCase();
-        const code = (err?.code||'').toLowerCase();
-        if (code.includes('retry') || msg.includes('retry')) {
-          hints.push('This is typically a transient network/CORS/App Check issue. Check ad-blockers, VPN, captive portals.');
-        }
-        if (code.includes('unauthorized') || code.includes('permission')) {
-          hints.push('Storage Rules may be blocking writes. Ensure request.auth != null is allowed for your prefix and Anonymous auth is enabled.');
-        }
-        if (code.includes('unauthenticated') || code.includes('auth')) {
-          hints.push('Anonymous Auth may be disabled or App Check enforcement is on without a valid token.');
-        }
-        if (hints.length) {
-          printDiag(`<div class="warn">${hints.map(h=>`• ${h}`).join('<br>')}</div>`);
-        }
-        printDiag(summarizeError(err, {path:testPath, note:'Upload test failed.'}));
-      }
-
-      // Final quick guidance
-      printDiag(`
-        <div class="card">
-          <div><strong>Common fixes for <span class="mono">storage/retry-limit-exceeded</span>:</strong></div>
-          <ul>
-            <li>Use the correct <span class="mono">gs://</span> bucket (e.g., <span class="mono">gs://fireopssim.appspot.com</span>), not the HTTPS domain.</li>
-            <li>Enable <strong>Authentication → Anonymous</strong> and allow writes in Storage Rules for your prefix.</li>
-            <li>If <strong>App Check</strong> is enforced, register your domain and include the web provider (or disable enforcement temporarily).</li>
-            <li>Extend retry windows (done in this file) and avoid very large files/slow networks.</li>
-            <li>Check browser extensions, VPNs, or restrictive firewalls blocking <span class="mono">*.googleapis.com</span>/<span class="mono">*.firebasestorage.googleapis.com</span>.</li>
-            <li>Keep your bucket region aligned with other Firebase services; mismatches can introduce latency.</li>
-          </ul>
-        </div>
-      `);
+      const gs = (elBucket.value || '').trim();
+      if (!gs.startsWith('gs://')) throw new Error('Bucket must start with gs:// (e.g., gs://fireopssim.appspot.com)');
+      storage = getStorage(app, gs);
+      setMaxOperationRetryTime(storage, 60_000);
+      setMaxUploadRetryTime(storage, 120_000);
+      log(`Storage bound to ${gs}`);
     }
-
-    // ---- Upload + List UI actions ----
-    elUpload.addEventListener('click', async () => {
-      try{
-        if (!app) await initFirebase();
-        const mode = elFolderMode.value || 'scenari';
-        const sid = (elScenarioId.value || '').trim();
-        if (mode === 'scenarios' && !sid) throw new Error('Scenario ID is required');
-
-        const f = elFile.files?.[0];
-        if (!f) throw new Error('Pick or take a photo first');
-        if (f.size > 10*1024*1024) throw new Error(`File too large (${(f.size/1048576).toFixed(1)} MB). Max 10 MB.`);
-
-        const path = `${getPrefix()}/${Date.now()}_${safeName(f.name)}`;
-        const r = ref(storage, path);
-
-        await withBackoff(() => uploadBytes(r, f, {contentType: f.type || 'image/jpeg'}), {label:'uploadBytes(userfile)', attempts:3});
-        alert('Upload successful!');
-        await refreshGallery();
-      }catch(err){
-        console.error(err);
-        resetDiag();
-        printDiag(summarizeError(err, {note:'Upload failed'}));
-      }
-    });
-
-    elRefresh.addEventListener('click', async () => {
-      try { await refreshGallery(); }
-      catch (err) {
-        console.error(err);
-        resetDiag();
-        printDiag(summarizeError(err, {note:'Refresh failed'}));
-      }
-    });
 
     async function refreshGallery(){
-      if (!app) await initFirebase();
+      await ensureInit();
       const prefix = getPrefix();
-      const folderRef = ref(storage, prefix);
-      const res = await withBackoff(() => listAll(folderRef), {label:'listAll(gallery)', attempts:3});
+      log(`Listing ${prefix}…`);
+      const folder = ref(storage, prefix);
+      const res = await listAll(folder);
       const items = res.items || [];
-      const urls = [];
-      const paths = [];
-      for (const it of items) {
-        try {
-          const u = await withBackoff(() => getDownloadURL(it), {label:'getDownloadURL(gallery)', attempts:2});
-          urls.push(u); paths.push(it.fullPath || it.name);
-        } catch (e) {
-          // include placeholder with error notice
-          paths.push((it.fullPath||it.name) + ' (URL error)');
-        }
+      elGrid.innerHTML = '';
+      if (!items.length){
+        elGrid.innerHTML = '<div class="muted">No photos found.</div>';
+        log('No photos found.');
+        return;
       }
-      renderGrid(urls, paths);
+      const urls = [];
+      for (const it of items){
+        try { urls.push(await getDownloadURL(it)); }
+        catch(e){ urls.push(null); log(`getDownloadURL failed for ${it.fullPath}: ${e?.message||e}`); }
+      }
+      urls.forEach((u,i)=>{
+        const it = items[i];
+        const node = document.importNode(tpl, true);
+        if (u){ node.querySelector('img').src = u; node.querySelector('.full').href = u; }
+        node.querySelector('.path').textContent = it.fullPath || it.name;
+        elGrid.appendChild(node);
+      });
+      log(`Listed ${items.length} item(s).`);
     }
 
-    // ---- Diagnostics trigger ----
-    elDiagBtn.addEventListener('click', runDiagnostics);
+    // Expose handleUpload globally for inline onclick fallback
+    window.handleUpload = async function(){
+      try{
+        log('Upload button clicked.');
+        await ensureInit();
 
-    // Auto-init + soft load
-    initFirebase().catch(()=>{});
+        const f = elFile.files && elFile.files[0];
+        if (!f){ alert('Pick or take a photo first'); log('No file selected.'); return; }
+
+        const prefix = getPrefix();
+        const path = `${prefix}/${Date.now()}_${safeName(f.name)}`;
+        log(`Uploading to ${path} (${(f.size/1048576).toFixed(2)} MB)…`);
+
+        const r = ref(storage, path);
+        await uploadBytes(r, f, { contentType: f.type || 'image/jpeg' });
+        log('Upload OK.');
+        alert('Upload successful!');
+        await refreshGallery();
+      }catch(e){
+        console.error(e);
+        log(`Upload error: ${e?.code||''} ${e?.message||e}`);
+        alert('Upload failed: ' + (e?.message || e));
+      }
+    };
+
+    // Also bind via addEventListener (primary path)
+    elUpload.addEventListener('click', ()=>window.handleUpload());
+    elRefresh.addEventListener('click', ()=>{ refreshGallery().catch(e=>{ log('Refresh error: '+(e?.message||e)); alert(e?.message||e); }); });
+    elDiag.addEventListener('click', async ()=>{
+      try {
+        await ensureInit();
+        log('Diag: small test upload…');
+        const blob = new Blob([Uint8Array.from([137,80,78,71,13,10,26,10,0,0,0,13,73,72,68,82,0,0,0,1,0,0,0,1,8,2,0,0,0,144,119,83,222,0,0,0,12,73,68,65,84,8,215,99,248,15,4,0,9,251,3,253,167,6,227,151,0,0,0,0,73,69,78,68,174,66,96,130])], {type:'image/png'});
+        const path = `${getPrefix()}/diag_${Date.now()}.png`;
+        await uploadBytes(ref(storage, path), blob, {contentType:'image/png'});
+        log('Diag upload OK: '+path);
+        alert('Diag upload OK: ' + path);
+      } catch (e) {
+        log('Diag error: ' + (e?.message||e));
+        alert('Diag error: ' + (e?.message||e));
+      }
+    });
+
+    // Defaults
+    elBucket.value = 'gs://fireopssim.appspot.com';
+    elFolderMode.value = 'scenari';
+    log('UI ready. Click Upload to test.');
   </script>
 </body>
 </html>
