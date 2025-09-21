@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>FireOpsSim — Build Scenario (Past Realtime Logic)</title>
+<title>FireOpsSim — Build Scenario (DB + Storage Inline)</title>
 <style>
   :root{--bg:#0b1220;--card:#111a2e;--muted:#b8c4e2;--line:#1b2b50;--ink:#e8eefc;--accent:#2c5cff;--ok:#7CFF7C;--bad:#FF7C7C}
   *{box-sizing:border-box}
@@ -32,10 +32,10 @@
   <div class="card">
     <div class="row">
       <div class="muted">DB:</div><div class="mono">dailyquiz-d5279 (Realtime DB)</div>
-      <div class="muted">Photos:</div><div class="mono">gs://fireopssim.appspot.com (via build-storage.js)</div>
+      <div class="muted">Photos:</div><div class="mono">gs://fireopssim.appspot.com</div>
     </div>
 
-    <!-- Step 1: Create Scenario (PAST LOGIC: auto-ID via push().key) -->
+    <!-- Step 1: Create Scenario (auto-ID like old logic) -->
     <div>
       <strong>Step 1 — Create Scenario</strong>
       <div class="row">
@@ -52,8 +52,7 @@
         <button id="btnCopyId">Copy ID</button>
       </div>
       <div class="muted">
-        Writes to <span class="mono">/scenarios/&lt;autoId&gt;</span> and <span class="mono">/geophoto/scenarios/&lt;autoId&gt;</span> (Realtime DB).
-        Photos go to <span class="mono">scenarios/&lt;autoId&gt;/</span> in FireOpsSim Storage.
+        Writes to <span class="mono">/scenarios/&lt;autoId&gt;</span> and <span class="mono">/geophoto/scenarios/&lt;autoId&gt;</span> (Realtime DB). Photos go under <span class="mono">scenarios/&lt;autoId&gt;/</span> in FO Storage.
       </div>
     </div>
   </div>
@@ -100,11 +99,75 @@
   <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-storage-compat.js"></script>
 
-  <!-- Include your working Storage module -->
-  <!-- EITHER link it as an external file, or paste its <script> content right here -->
-  <!-- <script src="/build-storage.js"></script> -->
-  <!-- (If pasting inline, put it here) -->
+  <!-- INLINE FireOps Storage module (was build-storage.js) -->
+  <script>
+  (function(){
+    const cfgFO = {
+      apiKey: "AIzaSyBzwc75u8pG73OKcHN8ti2ADbucjKMHme8",
+      authDomain: "fireopssim.firebaseapp.com",
+      projectId: "fireopssim",
+      storageBucket: "fireopssim.appspot.com"
+    };
+    let appFO=null, authFO=null, storage=null, userFO=null;
 
+    function ensureApp(){
+      appFO = firebase.apps?.find(a => a.name === "fireops") || firebase.initializeApp(cfgFO, "fireops");
+      authFO = firebase.auth(appFO);
+      storage = firebase.storage(appFO, "gs://fireopssim.appspot.com"); // pin bucket
+      storage.setMaxOperationRetryTime(15000);
+      storage.setMaxUploadRetryTime(30000);
+    }
+    async function init(){
+      ensureApp();
+      if (!authFO.currentUser){
+        const cred = await authFO.signInAnonymously();
+        userFO = cred && cred.user;
+        console.log("[FO AUTH] uid=", userFO && userFO.uid);
+      } else {
+        userFO = authFO.currentUser;
+      }
+    }
+    function safeName(s){ return (s||'file').replace(/[^\w.\-]+/g,'_'); }
+
+    async function preflight(sid){
+      if (!sid) throw new Error("preflight: scenarioId required");
+      const ref = storage.ref().child(`scenarios/${sid}/_ping_${Date.now()}.txt`);
+      const put = ref.putString("ok","raw",{contentType:"text/plain",cacheControl:"public,max-age=60"});
+      const timeout = new Promise((_,rej)=> setTimeout(()=>rej(new Error("storage-preflight-timeout")), 12000));
+      await Promise.race([put, timeout]);
+    }
+    async function upload(sid, file){
+      if (!sid) throw new Error("upload: scenarioId required");
+      if (!file) throw new Error("upload: file required");
+      if (!authFO.currentUser) await init();
+      await preflight(sid); // fail fast if blocked
+      const path = `scenarios/${sid}/${Date.now()}_${safeName(file.name)}`;
+      const ref  = storage.ref().child(path);
+      const meta = { contentType: file.type || "image/jpeg", cacheControl: "public,max-age=31536000,immutable" };
+      await ref.put(file, meta);
+      const url = await ref.getDownloadURL();
+      return { url, fullPath: ref.fullPath, gsUri: `gs://fireopssim.appspot.com/${ref.fullPath}` };
+    }
+    async function list(sid){
+      if (!sid) throw new Error("list: scenarioId required");
+      if (!authFO.currentUser) await init();
+      const folder = storage.ref().child(`scenarios/${sid}`);
+      const { items } = await folder.listAll();
+      const urls = await Promise.all(items.map(it => it.getDownloadURL().catch(()=>null)));
+      return items.map((it,i)=>({ ref: it, url: urls[i] }));
+    }
+    async function latest(sid){
+      const entries = await list(sid);
+      if (!entries.length) throw new Error("No files in this scenario");
+      const newest = entries.sort((a,b)=>(b.ref.name||'').localeCompare(a.ref.name||''))[0];
+      return newest.url || newest.ref.getDownloadURL();
+    }
+
+    window.FireOpsStorage = { init, preflight, upload, list, latest };
+  })();
+  </script>
+
+  <!-- Page logic (DB + UI + calls into FireOpsStorage) -->
   <script>
   (function(){
     const $ = id => document.getElementById(id);
@@ -112,7 +175,7 @@
     const log = (m, color) => { const d=document.createElement('div'); if(color)d.style.color=color; d.textContent='['+new Date().toLocaleTimeString()+'] '+m; statusEl.appendChild(d); statusEl.scrollTop=statusEl.scrollHeight; console.log(m); };
     const ok = m=>log(m,'#7CFF7C'), bad = m=>log(m,'#FF7C7C');
 
-    // === Old Realtime DB app (metadata) — EXACTLY like before ===
+    // Realtime DB app (old project)
     const cfgDB = {
       apiKey:"AIzaSyDM6DpRSeZueVKRpbyJyDmhf8WY66KyCDk",
       authDomain:"dailyquiz-d5279.firebaseapp.com",
@@ -126,7 +189,6 @@
     const db     = firebase.database(appDB);
     const authDB = firebase.auth(appDB);
 
-    // (Optional) log DB auth state
     authDB.onAuthStateChanged(u=>{
       log('[DB AUTH] ' + (u ? ('signed-in uid=' + u.uid) : 'no user'));
     });
@@ -137,28 +199,23 @@
       if (!authDB.currentUser){
         const cred = await authDB.signInAnonymously();
         ok('DB auth OK (uid='+(cred.user && cred.user.uid || 'unknown')+')');
-      } else {
-        ok('DB auth already active.');
       }
     }
-
     function openUploaderGate(on){
       $('photoGate').classList.toggle('hidden', on);
       $('uploader').classList.toggle('hidden', !on);
     }
 
-    // ===== PAST LOGIC: auto-ID via push().key =====
+    // Create scenario (auto ID via push().key)
     async function createScenario(){
       try{
-        await signInDB();                  // ensure DB auth
+        await signInDB();
         $('createStatus').textContent='creating…';
 
         const title = ($('title').value||'').trim();
         const dispatch = ($('dispatch').value||'').trim();
 
-        // auto ID (push key) — this is the “old logic” you were using
-        const id = db.ref('scenarios').push().key;
-
+        const id = db.ref('scenarios').push().key; // old logic
         const base = {
           id,
           title: title || id,
@@ -175,7 +232,7 @@
         await db.ref().update(multi);
 
         scenarioId = id;
-        $('scenarioId').value = id;        // show the auto ID
+        $('scenarioId').value = id;
         $('createStatus').textContent='created ✓';
         ok('Scenario created: ' + id);
         openUploaderGate(true);
@@ -185,21 +242,22 @@
       }
     }
 
-    // ===== Storage actions via your build-storage.js module =====
+    // Upload via inline FireOpsStorage
     async function upload(){
       try{
         if (!scenarioId){ alert('Create a scenario first.'); return; }
-        if (!window.FireOpsStorage){ alert('Storage module not loaded.'); return; }
+        if (!window.FireOpsStorage){ alert('Storage module missing'); return; }
 
         const f = $('fileInput').files && $('fileInput').files[0];
         if (!f){ alert('Pick a photo first.'); return; }
         if (f.size > 12*1024*1024){ alert('Max 12 MB'); return; }
 
         $('upStatus').textContent='uploading…';
+        await FireOpsStorage.init();
         const { url, fullPath, gsUri } = await FireOpsStorage.upload(scenarioId, f);
         ok('Upload OK.');
 
-        // Save stop to DB under the same autoId scenario
+        // Save stop in DB
         await signInDB();
         const snap = await db.ref(`scenarios/${scenarioId}/stops`).get();
         const arr  = snap.exists()? (snap.val()||[]) : [];
@@ -221,7 +279,7 @@
     async function refresh(){
       try{
         if (!scenarioId) return;
-        if (!window.FireOpsStorage){ alert('Storage module not loaded.'); return; }
+        await FireOpsStorage.init();
         const entries = await FireOpsStorage.list(scenarioId);
         const sorted  = entries.sort((a,b)=>(b.ref.name||'').localeCompare(a.ref.name||''));
         renderGrid(sorted.map(x=>({path: x.ref.fullPath || x.ref.name, url: x.url})));
@@ -248,8 +306,7 @@
     // Diagnostics
     async function diagStorage(){
       try{
-        if (!window.FireOpsStorage){ alert('Storage module not loaded.'); return; }
-        if (!scenarioId){ alert('Create a scenario first (used for preflight path).'); return; }
+        if (!scenarioId){ alert('Create a scenario first (diag uses its folder)'); return; }
         await FireOpsStorage.init();
         await FireOpsStorage.preflight(scenarioId);
         ok('Storage diag OK (preflight write passed).');
@@ -260,11 +317,10 @@
     async function diagDB(){
       try{
         await signInDB();
-        const sid = scenarioId;
-        if (!sid){ alert('Create a scenario first'); return; }
-        const key = db.ref(`scenarios/${sid}/diag`).push().key; // uses allowed path
-        await db.ref(`scenarios/${sid}/diag/${key}`).set({ ok:true, at: Date.now() });
-        ok('DB diag OK → /scenarios/'+sid+'/diag/'+key);
+        if (!scenarioId){ alert('Create a scenario first'); return; }
+        const key = db.ref(`scenarios/${scenarioId}/diag`).push().key;
+        await db.ref(`scenarios/${scenarioId}/diag/${key}`).set({ ok:true, at: Date.now() });
+        ok('DB diag OK → /scenarios/'+scenarioId+'/diag/'+key);
       }catch(e){
         bad('DB diag FAILED: ' + (e.code||'') + ' ' + (e.message||e));
       }
@@ -281,7 +337,7 @@
     $('btnLatest').addEventListener('click', async ()=>{
       try{
         if (!scenarioId) return;
-        if (!window.FireOpsStorage){ alert('Storage module not loaded.'); return; }
+        await FireOpsStorage.init();
         const url = await FireOpsStorage.latest(scenarioId);
         window.open(url, '_blank');
       }catch(e){ bad('View latest error: ' + (e.message||e)); }
@@ -293,8 +349,8 @@
     (async function(){
       log('Booting…');
       try{ await signInDB(); }catch(e){ bad('DB auth failed: '+(e.message||e)); }
-      // Storage auth is handled inside build-storage.js on first use
-      log('Ready. Create Scenario (auto-ID) → upload.');
+      try{ await FireOpsStorage.init(); }catch(e){ bad('FO auth failed: '+(e.message||e)); }
+      log('Ready. Create Scenario → upload.');
     })();
   })();
   </script>
