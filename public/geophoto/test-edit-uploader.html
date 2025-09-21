@@ -1,86 +1,199 @@
-<script>
-// --- Minimal RPC server in the uploader (child) ---
-(function(){
-  const TRUSTED_ORIGIN = location.origin; // same-origin recommended
-  let currentScenarioId = "";             // gets set by parent
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>FireOpsSim — Camera Uploader</title>
+<style>
+  :root{--bg:#0b1220;--card:#111a2e;--muted:#b8c4e2;--line:#1b2b50;--ink:#e8eefc;--accent:#2c5cff;--ok:#7CFF7C;--bad:#FF7C7C}
+  body{margin:0;padding:16px;background:var(--bg);color:var(--ink);font:14px/1.45 system-ui,Arial}
+  .row{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:8px 0}
+  input,button{background:#091125;color:var(--ink);border:1px solid #20407a;border-radius:10px;padding:8px 10px}
+  button{cursor:pointer}
+  button.primary{background:#1a3fbb;border-color:var(--accent)}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:12px;margin:12px 0}
+  .muted{color:var(--muted)}
+  #status{white-space:pre-wrap;background:#0c1530;border:1px solid #1b2b50;border-radius:10px;padding:10px;max-height:240px;overflow:auto}
+  #preview img{max-width:100%;height:auto;border-radius:10px;border:1px solid #1a2b50}
+  .mono{font-family:ui-monospace,Menlo,Consolas,monospace}
+</style>
+</head>
+<body>
+  <h2>Camera Uploader</h2>
 
-  // Handshake: tell parent we're ready
-  window.addEventListener("load", ()=>{
-    window.parent?.postMessage({ type:"fo-ready" }, TRUSTED_ORIGIN);
-  });
+  <div class="card">
+    <div class="row">
+      <label class="muted">Bucket</label>
+      <input class="mono" value="gs://fireopssim.appspot.com" readonly/>
+    </div>
+    <div class="row">
+      <label class="muted">Scenario</label>
+      <input id="scenarioId" class="mono" placeholder="(set by parent / #hash)" readonly/>
+    </div>
+    <div class="row">
+      <input id="fileInput" type="file" accept="image/*" capture="environment"/>
+      <button id="btnInit" class="primary">Init</button>
+      <button id="btnUpload" class="primary">Upload Photo</button>
+    </div>
+    <div class="muted">Allow camera + location permissions for best results.</div>
+  </div>
 
-  // Implement the method the parent wants to call
-  async function captureAndUpload({ scenarioId }){
-    // 1) Make sure your current code selects/reads the file input or camera
-    //    If you already have a visible "Choose/Take Photo" button, you can:
-    //    - programmatically click it (if UX allows), OR
-    //    - show instructions/modal to the user and wait for selection
-    // Here we'll expect the user already picked a file:
-    const input = document.getElementById('fileInput');
-    const file  = input?.files?.[0];
-    if (!file) throw new Error("No file selected");
+  <div id="preview" class="card" style="display:none">
+    <strong>Preview</strong>
+    <div id="previewImg"></div>
+    <div class="muted">Uploaded URL opens in a new tab.</div>
+  </div>
 
-    // 2) Call your existing working Storage upload code (FireOpsSim)
-    //    Return: { url, fullPath, gsUri }
-    const { url, fullPath, gsUri } = await yourWorkingStorageUpload(scenarioId, file);
+  <div class="card">
+    <strong>Status</strong>
+    <div id="status">Booting…</div>
+  </div>
 
-    // 3) Optional GPS collection (your existing helper)
-    const gps = await maybeGetGPS();
+  <!-- Firebase compat (App/Auth/Storage only) -->
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-storage-compat.js"></script>
 
-    return { url, fullPath, gsUri, gps, scenarioId };
-  }
+  <script>
+  (function(){
+    const $ = id => document.getElementById(id);
+    const logEl = $('status');
+    const log = (m,c)=>{const d=document.createElement('div'); if(c)d.style.color=c; d.textContent='['+new Date().toLocaleTimeString()+'] '+m; logEl.appendChild(d); logEl.scrollTop=logEl.scrollHeight; console.log(m);};
+    const ok = m=>log(m,'#7CFF7C'), bad = m=>log(m,'#FF7C7C');
 
-  // RPC dispatcher
-  window.addEventListener("message", async (ev)=>{
-    if (ev.origin !== TRUSTED_ORIGIN) return; // security check
-    const msg = ev.data || {};
-    if (msg.type === "fo-set-scenario"){
-      currentScenarioId = msg.scenarioId || "";
-      // display it if you like
-      const sidEl = document.getElementById('scenarioId');
-      if (sidEl) sidEl.value = currentScenarioId;
-      return;
+    // ---- FireOpsSim Storage (same as working test-edit) ----
+    const cfgFO = {
+      apiKey:"AIzaSyBzwc75u8pG73OKcHN8ti2ADbucjKMHme8",
+      authDomain:"fireopssim.firebaseapp.com",
+      projectId:"fireopssim",
+      storageBucket:"fireopssim.appspot.com" /* display name; real bind via gs:// below */
+    };
+    let app=null, auth=null, storage=null, user=null;
+
+    function safeName(s){ return (s||'photo').replace(/[^\w.\-]+/g,'_'); }
+    function scenarioFromHash(){
+      const h=(location.hash||'').replace(/^#/, ''); return decodeURIComponent(h||'');
     }
-    if (msg.type === "fo-rpc"){
-      const { method, params, correlationId } = msg;
-      try{
-        if (method === "captureAndUpload"){
-          const result = await captureAndUpload({ ...(params||{}), scenarioId: currentScenarioId || params?.scenarioId });
-          window.parent?.postMessage({ type:"fo-rpc-res", correlationId, result }, TRUSTED_ORIGIN);
-        }else{
-          throw new Error("unknown method: "+method);
-        }
-      }catch(err){
-        window.parent?.postMessage({ type:"fo-rpc-err", correlationId, error: (err && err.message) || String(err) }, TRUSTED_ORIGIN);
-      }
+
+    async function init(){
+      if (!firebase.apps.length) app=firebase.initializeApp(cfgFO);
+      else app=firebase.app();
+      auth=firebase.auth(app);
+      user=(await auth.signInAnonymously()).user;
+      ok('Auth OK (anon uid='+ (user&&user.uid||'unknown') +')');
+      storage=firebase.storage(app, "gs://fireopssim.appspot.com"); // CRITICAL bind
+      storage.setMaxOperationRetryTime(60000);
+      storage.setMaxUploadRetryTime(120000);
+      ok('Storage ready.');
     }
-  });
 
-  // ---- Plug your existing functions below ----
-  async function yourWorkingStorageUpload(sid, file){
-    // This should be exactly the upload logic that works in test-edit:
-    // - Same named Firebase app (FireOpsSim)
-    // - Explicit gs://fireopssim.appspot.com binding
-    // - Direct put(file, meta)
-    const app = /* your existing storage app init */;
-    const storage = /* firebase.storage(app, "gs://fireopssim.appspot.com") */;
-    const safe = (s)=> (s||"file").replace(/[^\w.\-]+/g,"_");
-    const path = `scenarios/${sid}/${Date.now()}_${safe(file.name)}`;
-    const ref  = storage.ref().child(path);
-    await ref.put(file, { contentType: file.type || "image/jpeg" });
-    const url = await ref.getDownloadURL();
-    return { url, fullPath: ref.fullPath, gsUri: `gs://fireopssim.appspot.com/${ref.fullPath}` };
-  }
+    function getGPS(){
+      return new Promise((resolve)=>{
+        if (!navigator.geolocation) return resolve(null);
+        navigator.geolocation.getCurrentPosition(
+          p=>resolve({
+            lat:p.coords.latitude, lng:p.coords.longitude,
+            acc:p.coords.accuracy, heading:p.coords.heading, speed:p.coords.speed
+          }),
+          _=>resolve(null),
+          { enableHighAccuracy:true, timeout:7000, maximumAge:0 }
+        );
+      });
+    }
 
-  async function maybeGetGPS(){
-    return new Promise(res=>{
-      if (!navigator.geolocation) return res(null);
-      navigator.geolocation.getCurrentPosition(
-        p=>res({ lat:p.coords.latitude, lng:p.coords.longitude, acc:p.coords.accuracy }),
-        _=>res(null),
-        { enableHighAccuracy:true, timeout:7000, maximumAge:0 }
-      );
+    async function uploadOnce(sid, file){
+      if (!storage) await init();
+      if (!sid) throw new Error('No scenario ID');
+      if (!file) throw new Error('No file selected');
+
+      const path = `scenarios/${sid}/${Date.now()}_${safeName(file.name)}`;
+      log('Uploading → '+path);
+      const ref = storage.ref().child(path);
+      await ref.put(file, { contentType:file.type||'image/jpeg' });
+      ok('Upload OK.');
+      const url = await ref.getDownloadURL();
+      return { url, fullPath: ref.fullPath, gsUri: `gs://fireopssim.appspot.com/${ref.fullPath}` };
+    }
+
+    // ---- RPC server + handshake (for embedded iframe use) ----
+    const TRUSTED_ORIGIN = location.origin; // same-origin recommended
+    let currentScenarioId = "";
+
+    function postToParent(payload){
+      if (window.opener) window.opener.postMessage(payload, TRUSTED_ORIGIN);
+      if (window.parent) window.parent.postMessage(payload, TRUSTED_ORIGIN);
+    }
+
+    // Handshake
+    window.addEventListener('load', ()=>{
+      $('scenarioId').value = scenarioFromHash();
+      currentScenarioId = $('scenarioId').value;
+      postToParent({ type:'fo-ready' });
+      ok('Ready. Init → choose photo → Upload.');
     });
-  }
-})();
-</script>
+
+    // RPC dispatcher
+    window.addEventListener('message', async (ev)=>{
+      if (ev.origin !== TRUSTED_ORIGIN) return;
+      const msg = ev.data || {};
+      if (msg.type === 'fo-set-scenario'){
+        currentScenarioId = msg.scenarioId || "";
+        $('scenarioId').value = currentScenarioId;
+        return;
+      }
+      if (msg.type === 'fo-rpc'){
+        const { method, params, correlationId } = msg;
+        try{
+          if (method === 'captureAndUpload'){
+            // prompt user to pick if empty
+            const sid = (params && params.scenarioId) || currentScenarioId || $('scenarioId').value;
+            if (!$('#fileInput').files.length){
+              $('#fileInput').click();
+              // wait for user to pick
+              await new Promise((res,rej)=>{
+                const t=setTimeout(()=>rej(new Error('no-file-selected-timeout')), 20000);
+                $('#fileInput').addEventListener('change', ()=>{clearTimeout(t); res();},{once:true});
+              });
+            }
+            const f = $('#fileInput').files[0];
+            await init();
+            const up  = await uploadOnce(sid, f);
+            const gps = await getGPS();
+            postToParent({ type:'fo-rpc-res', correlationId, result: { ...up, gps, scenarioId: sid } });
+          } else {
+            throw new Error('unknown method: '+method);
+          }
+        }catch(err){
+          postToParent({ type:'fo-rpc-err', correlationId, error: (err && err.message) || String(err) });
+        }
+      }
+    });
+
+    // ---- Buttons for standalone/manual use ----
+    $('btnInit').addEventListener('click', init);
+    $('btnUpload').addEventListener('click', async ()=>{
+      try{
+        const sid = $('scenarioId').value.trim();
+        const f = $('fileInput').files && $('fileInput').files[0];
+        if (!f) { alert('Pick/take a photo first'); return; }
+        const up  = await uploadOnce(sid, f);
+        const gps = await getGPS();
+        $('preview').style.display='';
+        $('previewImg').innerHTML = `<a href="${up.url}" target="_blank" rel="noopener"><img src="${up.url}"></a>`;
+        postToParent({ type:'fo-upload-complete', ...up, gps, scenarioId: sid });
+        ok('Posted upload to parent.');
+      }catch(e){
+        bad('Upload error: '+(e.code||'')+' '+(e.message||e));
+        alert('Upload failed:\n'+(e && e.message || e));
+      }
+    });
+
+    // small $ helper
+    function $(q){ return document.querySelector(q); }
+
+    // Boot log
+    log('Booting…');
+  })();
+  </script>
+</body>
+</html>
