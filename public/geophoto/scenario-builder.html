@@ -1,0 +1,299 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>FireOpsSim — Build Scenario</title>
+<style>
+  :root{--bg:#0b1220;--card:#111a2e;--muted:#b8c4e2;--line:#1b2b50;--ink:#e8eefc;--accent:#2c5cff;--ok:#7CFF7C;--bad:#FF7C7C}
+  *{box-sizing:border-box}
+  body{margin:0;padding:16px;background:var(--bg);color:var(--ink);font:14px/1.45 system-ui,Arial}
+  h1{margin:0 0 12px;font-size:20px}
+  .row{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:8px 0}
+  input,button,textarea{background:#091125;color:var(--ink);border:1px solid #20407a;border-radius:10px;padding:8px 10px}
+  input.mono,.mono{font-family:ui-monospace,Menlo,Consolas,monospace}
+  textarea{min-height:72px;width:100%}
+  button{cursor:pointer}
+  button.primary{background:#1a3fbb;border-color:var(--accent)}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:12px;margin:12px 0}
+  .muted{color:var(--muted);opacity:.95}
+  #status{white-space:pre-wrap;background:#0c1530;border:1px solid #1b2b50;border-radius:10px;padding:10px;max-height:280px;overflow:auto}
+  #grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:12px}
+  .thumb{background:#0b1429;border:1px solid #1a2b50;border-radius:12px;overflow:hidden}
+  .thumb img{width:100%;height:160px;object-fit:cover;display:block}
+  .thumb .meta{padding:8px;font-size:12px}
+  .hidden{display:none!important}
+  a{color:#9ec5ff}
+</style>
+</head>
+<body>
+  <h1>FireOpsSim — Build Scenario</h1>
+
+  <div class="card">
+    <div class="row">
+      <div class="muted">DB:</div><div class="mono">dailyquiz-d5279 (Realtime DB)</div>
+      <div class="muted">Photos:</div><div class="mono">gs://fireopssim.appspot.com (via build-storage.js)</div>
+    </div>
+
+    <!-- Step 1: Create Scenario (ID = Name) -->
+    <div>
+      <strong>Step 1 — Create Scenario</strong>
+      <div class="row">
+        <label class="muted">Scenario Name (becomes Scenario ID)</label>
+        <input id="scenarioName" placeholder="e.g., House_Fire_Elm_St" style="min-width:280px">
+        <label class="muted">Dispatch (optional)</label>
+        <input id="dispatch" placeholder="Engine 1, Engine 2…" style="min-width:280px">
+        <button id="btnCreate" class="primary">Create Scenario</button>
+        <span id="createStatus" class="muted">idle</span>
+      </div>
+      <div class="row">
+        <label class="muted">Scenario ID</label>
+        <input id="scenarioId" class="mono" placeholder="(created above)" style="min-width:360px" readonly>
+        <button id="btnCopyId">Copy ID</button>
+      </div>
+      <div class="muted">Writes to <span class="mono">/scenarios/&lt;ID&gt;</span> (old DB). Photos go under <span class="mono">scenarios/&lt;ID&gt;/</span> in FO Storage.</div>
+    </div>
+  </div>
+
+  <!-- Step 2: Add Photos -->
+  <div class="card">
+    <strong>Step 2 — Add Photos</strong>
+    <div id="photoGate" class="muted">Create a scenario first.</div>
+
+    <div id="uploader" class="hidden">
+      <div class="row">
+        <input id="fileInput" type="file" accept="image/*" capture="environment" />
+        <button id="btnUpload" class="primary">Upload Photo</button>
+        <button id="btnRefresh">Refresh Gallery</button>
+        <button id="btnLatest">View Latest</button>
+        <button id="btnDiag">Storage Diag</button>
+        <button id="btnDBDiag">DB Diag</button>
+        <span id="upStatus" class="muted">waiting</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <strong>Status</strong>
+    <div id="status">Booting…</div>
+  </div>
+
+  <div id="grid" class="card">
+    <div class="muted">No photos yet. Click “Refresh Gallery”.</div>
+  </div>
+
+  <template id="thumbTpl">
+    <div class="thumb">
+      <a class="full" href="#" target="_blank" rel="noopener">
+        <img />
+      </a>
+      <div class="meta mono"><div class="path"></div></div>
+    </div>
+  </template>
+
+  <!-- Firebase Compat SDKs -->
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-storage-compat.js"></script>
+
+  <!-- Storage module (must load after Firebase) -->
+  <!-- paste the build-storage.js <script> block here OR include as external file -->
+  <!-- BEGIN build-storage.js inline include -->
+  <script>
+    // (Paste the entire build-storage.js <script> block here if you prefer a single file deploy)
+  </script>
+  <!-- END build-storage.js inline include -->
+
+  <script>
+  (function(){
+    const $ = id => document.getElementById(id);
+    const statusEl = $('status');
+    const log = (m, color) => { const d=document.createElement('div'); if(color)d.style.color=color; d.textContent='['+new Date().toLocaleTimeString()+'] '+m; statusEl.appendChild(d); statusEl.scrollTop=statusEl.scrollHeight; console.log(m); };
+    const ok = m=>log(m,'#7CFF7C'), bad = m=>log(m,'#FF7C7C');
+
+    function sanitizeId(raw){
+      return (raw||'').trim().replace(/\s+/g,'_').replace(/[^\w\-\.]/g,'').replace(/_+/g,'_').replace(/^_+|_+$/g,'');
+    }
+    const safeName = s => (s||'photo').replace(/[^\w.\-]+/g,'_');
+
+    // === Old Realtime DB app (metadata) ===
+    const cfgDB = {
+      apiKey:"AIzaSyDM6DpRSeZueVKRpbyJyDmhf8WY66KyCDk",
+      authDomain:"dailyquiz-d5279.firebaseapp.com",
+      databaseURL:"https://dailyquiz-d5279-default-rtdb.firebaseio.com",
+      projectId:"dailyquiz-d5279",
+      storageBucket:"dailyquiz-d5279.appspot.com",
+      appId:"1:94577748034:web:c032d3a1d72db1313de5db",
+      measurementId:"G-19DVN7NNH7"
+    };
+    const appDB = firebase.initializeApp(cfgDB); // default app
+    const db     = firebase.database(appDB);
+    const authDB = firebase.auth(appDB);
+
+    // Log DB auth state (helps diagnose PERMISSION_DENIED)
+    authDB.onAuthStateChanged(u=>{
+      console.log('[DB AUTH]', u ? ('signed-in uid=' + u.uid) : 'no user');
+      log('[DB AUTH] ' + (u ? ('signed-in uid=' + u.uid) : 'no user'));
+    });
+
+    let scenarioId = null;
+    let userDB = null;
+
+    async function signInDB(){
+      if (!authDB.currentUser){
+        const cred = await authDB.signInAnonymously();
+        userDB = cred && cred.user;
+        ok('DB auth OK (uid='+ (userDB && userDB.uid || 'unknown') +')');
+      } else {
+        userDB = authDB.currentUser;
+      }
+    }
+
+    function openUploaderGate(on){
+      $('photoGate').classList.toggle('hidden', on);
+      $('uploader').classList.toggle('hidden', !on);
+    }
+
+    // Step 1 — Create scenario (ID = Name) in old DB
+    async function createScenario(){
+      try{
+        await signInDB();
+        await FireOpsStorage.init(); // also warm Storage auth early
+        const id = sanitizeId($('scenarioName').value);
+        if (!id){ $('createStatus').textContent='enter a name'; bad('No scenario name.'); return; }
+        $('createStatus').textContent='creating…';
+
+        const dispatch = ($('dispatch').value||'').trim();
+        const base = { id, title:id, dispatch, description:dispatch, createdAt: Date.now(), active:true, stops:[] };
+
+        const multi={};
+        multi[`scenarios/${id}`]=base;
+        multi[`geophoto/scenarios/${id}`]=base;
+
+        await db.ref().update(multi);
+
+        scenarioId = id;
+        $('scenarioId').value = id;
+        $('scenarioId').readOnly = true;
+        $('scenarioName').readOnly = true;
+        $('btnCreate').disabled = true;
+        $('createStatus').textContent='created ✓';
+        ok('Scenario created: '+id);
+        openUploaderGate(true);
+      }catch(e){
+        $('createStatus').textContent='error';
+        bad('Create scenario error: '+(e.message||e));
+      }
+    }
+
+    // Step 2 — Upload photo via storage module
+    async function upload(){
+      try{
+        if (!scenarioId){ alert('Create a scenario first.'); return; }
+        const f = $('fileInput').files && $('fileInput').files[0];
+        if (!f){ alert('Pick a photo first.'); return; }
+        if (f.size > 12*1024*1024){ alert('Max 12 MB'); return; }
+
+        $('upStatus').textContent='uploading…';
+        const { url, fullPath, gsUri } = await FireOpsStorage.upload(scenarioId, f);
+        ok('Upload OK.');
+
+        // Save stop metadata to old DB
+        await signInDB();
+        const snap = await db.ref(`scenarios/${scenarioId}/stops`).get();
+        const arr  = snap.exists()? (snap.val()||[]) : [];
+        arr.push({ type:'photo', imageURL:url, thumbURL:url, storagePath:fullPath, gsUri, backend:'fireops', at: Date.now(), radiusMeters:5, overlays:[] });
+        const multi={};
+        multi[`scenarios/${scenarioId}/stops`] = arr;
+        multi[`geophoto/scenarios/${scenarioId}/stops`] = arr;
+        await db.ref().update(multi);
+
+        $('upStatus').textContent='saved ✓';
+        await refresh();
+      }catch(e){
+        $('upStatus').textContent='error';
+        bad('Upload failed: '+(e.code||'')+' '+(e.message||e));
+        alert('Upload failed:\n' + (e.code||'') + '\n' + (e.message||e));
+      }
+    }
+
+    async function refresh(){
+      try{
+        if (!scenarioId) return;
+        const entries = await FireOpsStorage.list(scenarioId);
+        const sorted  = entries.sort((a,b)=>(b.ref.name||'').localeCompare(a.ref.name||''));
+        renderGrid(sorted.map(x=>({path: x.ref.fullPath || x.ref.name, url: x.url})));
+        ok(`Listed ${sorted.length} file(s).`);
+      }catch(e){
+        bad('Refresh error: '+(e.code||'')+' '+(e.message||e));
+      }
+    }
+
+    function renderGrid(entries){
+      const grid = $('grid');
+      grid.innerHTML = '';
+      if (!entries.length){ grid.innerHTML = '<div class="muted">No photos found.</div>'; return; }
+      const tpl = $('thumbTpl').content;
+      entries.forEach(({path,url})=>{
+        const node = document.importNode(tpl, true);
+        node.querySelector('.path').textContent = path;
+        node.querySelector('img').src = url || '';
+        node.querySelector('a.full').href = url || '#';
+        grid.appendChild(node);
+      });
+    }
+
+    // Diagnostics
+    async function diagStorage(){
+      try{
+        await FireOpsStorage.init();
+        if (!scenarioId){ alert('Create a scenario first (used for diag path)'); return; }
+        await FireOpsStorage.preflight(scenarioId);
+        ok('Storage diag OK (preflight write passed).');
+      }catch(e){
+        bad('Storage diag FAILED: '+(e.code||'')+' '+(e.message||e));
+      }
+    }
+    async function diagDB(){
+      try{
+        await signInDB();
+        const sid = ($('scenarioId').value||'').trim();
+        if (!sid) throw new Error('Create/Select a scenario first');
+        const key = db.ref(`scenarios/${sid}/diag`).push().key; // write under allowed path
+        await db.ref(`scenarios/${sid}/diag/${key}`).set({ ok:true, at: Date.now() });
+        ok('DB diag OK → /scenarios/'+sid+'/diag/'+key);
+      }catch(e){
+        bad('DB diag FAILED: '+(e.code||'')+' '+(e.message||e));
+      }
+    }
+
+    // Wire up
+    $('btnCreate').addEventListener('click', createScenario);
+    $('btnCopyId').addEventListener('click', async ()=>{
+      if(!$('scenarioId').value) return;
+      try{ await navigator.clipboard.writeText($('scenarioId').value); ok('Scenario ID copied.'); }catch{}
+    });
+    $('btnUpload').addEventListener('click', upload);
+    $('btnRefresh').addEventListener('click', refresh);
+    $('btnLatest').addEventListener('click', async ()=>{
+      try{
+        if (!scenarioId) return;
+        const url = await FireOpsStorage.latest(scenarioId);
+        window.open(url, '_blank');
+      }catch(e){ bad('View latest error: '+(e.message||e)); }
+    });
+    $('btnDiag').addEventListener('click', diagStorage);
+    $('btnDBDiag').addEventListener('click', diagDB);
+
+    // Boot
+    (async function(){
+      log('Booting…');
+      try{ await signInDB(); }catch(e){ bad('DB auth failed: '+(e.message||e)); }
+      try{ await FireOpsStorage.init(); }catch(e){ bad('FO auth failed: '+(e.message||e)); }
+      log('Ready. Create scenario → upload.');
+    })();
+  })();
+  </script>
+</body>
+</html>
