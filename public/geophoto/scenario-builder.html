@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>FireOpsSim — Build Scenario</title>
+<title>FireOpsSim — Build Scenario (Past Realtime Logic)</title>
 <style>
   :root{--bg:#0b1220;--card:#111a2e;--muted:#b8c4e2;--line:#1b2b50;--ink:#e8eefc;--accent:#2c5cff;--ok:#7CFF7C;--bad:#FF7C7C}
   *{box-sizing:border-box}
@@ -35,12 +35,12 @@
       <div class="muted">Photos:</div><div class="mono">gs://fireopssim.appspot.com (via build-storage.js)</div>
     </div>
 
-    <!-- Step 1: Create Scenario (ID = Name) -->
+    <!-- Step 1: Create Scenario (PAST LOGIC: auto-ID via push().key) -->
     <div>
       <strong>Step 1 — Create Scenario</strong>
       <div class="row">
-        <label class="muted">Scenario Name (becomes Scenario ID)</label>
-        <input id="scenarioName" placeholder="e.g., House_Fire_Elm_St" style="min-width:280px">
+        <label class="muted">Scenario Title</label>
+        <input id="title" placeholder="e.g., House Fire — Elm St." style="min-width:280px">
         <label class="muted">Dispatch (optional)</label>
         <input id="dispatch" placeholder="Engine 1, Engine 2…" style="min-width:280px">
         <button id="btnCreate" class="primary">Create Scenario</button>
@@ -48,10 +48,13 @@
       </div>
       <div class="row">
         <label class="muted">Scenario ID</label>
-        <input id="scenarioId" class="mono" placeholder="(created above)" style="min-width:360px" readonly>
+        <input id="scenarioId" class="mono" placeholder="(auto-generated)" style="min-width:360px" readonly>
         <button id="btnCopyId">Copy ID</button>
       </div>
-      <div class="muted">Writes to <span class="mono">/scenarios/&lt;ID&gt;</span> (old DB). Photos go under <span class="mono">scenarios/&lt;ID&gt;/</span> in FO Storage.</div>
+      <div class="muted">
+        Writes to <span class="mono">/scenarios/&lt;autoId&gt;</span> and <span class="mono">/geophoto/scenarios/&lt;autoId&gt;</span> (Realtime DB).
+        Photos go to <span class="mono">scenarios/&lt;autoId&gt;/</span> in FireOpsSim Storage.
+      </div>
     </div>
   </div>
 
@@ -97,13 +100,10 @@
   <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-storage-compat.js"></script>
 
-  <!-- Storage module (must load after Firebase) -->
-  <!-- paste the build-storage.js <script> block here OR include as external file -->
-  <!-- BEGIN build-storage.js inline include -->
-  <script>
-    // (Paste the entire build-storage.js <script> block here if you prefer a single file deploy)
-  </script>
-  <!-- END build-storage.js inline include -->
+  <!-- Include your working Storage module -->
+  <!-- EITHER link it as an external file, or paste its <script> content right here -->
+  <!-- <script src="/build-storage.js"></script> -->
+  <!-- (If pasting inline, put it here) -->
 
   <script>
   (function(){
@@ -112,12 +112,7 @@
     const log = (m, color) => { const d=document.createElement('div'); if(color)d.style.color=color; d.textContent='['+new Date().toLocaleTimeString()+'] '+m; statusEl.appendChild(d); statusEl.scrollTop=statusEl.scrollHeight; console.log(m); };
     const ok = m=>log(m,'#7CFF7C'), bad = m=>log(m,'#FF7C7C');
 
-    function sanitizeId(raw){
-      return (raw||'').trim().replace(/\s+/g,'_').replace(/[^\w\-\.]/g,'').replace(/_+/g,'_').replace(/^_+|_+$/g,'');
-    }
-    const safeName = s => (s||'photo').replace(/[^\w.\-]+/g,'_');
-
-    // === Old Realtime DB app (metadata) ===
+    // === Old Realtime DB app (metadata) — EXACTLY like before ===
     const cfgDB = {
       apiKey:"AIzaSyDM6DpRSeZueVKRpbyJyDmhf8WY66KyCDk",
       authDomain:"dailyquiz-d5279.firebaseapp.com",
@@ -131,22 +126,19 @@
     const db     = firebase.database(appDB);
     const authDB = firebase.auth(appDB);
 
-    // Log DB auth state (helps diagnose PERMISSION_DENIED)
+    // (Optional) log DB auth state
     authDB.onAuthStateChanged(u=>{
-      console.log('[DB AUTH]', u ? ('signed-in uid=' + u.uid) : 'no user');
       log('[DB AUTH] ' + (u ? ('signed-in uid=' + u.uid) : 'no user'));
     });
 
     let scenarioId = null;
-    let userDB = null;
 
     async function signInDB(){
       if (!authDB.currentUser){
         const cred = await authDB.signInAnonymously();
-        userDB = cred && cred.user;
-        ok('DB auth OK (uid='+ (userDB && userDB.uid || 'unknown') +')');
+        ok('DB auth OK (uid='+(cred.user && cred.user.uid || 'unknown')+')');
       } else {
-        userDB = authDB.currentUser;
+        ok('DB auth already active.');
       }
     }
 
@@ -155,42 +147,50 @@
       $('uploader').classList.toggle('hidden', !on);
     }
 
-    // Step 1 — Create scenario (ID = Name) in old DB
+    // ===== PAST LOGIC: auto-ID via push().key =====
     async function createScenario(){
       try{
-        await signInDB();
-        await FireOpsStorage.init(); // also warm Storage auth early
-        const id = sanitizeId($('scenarioName').value);
-        if (!id){ $('createStatus').textContent='enter a name'; bad('No scenario name.'); return; }
+        await signInDB();                  // ensure DB auth
         $('createStatus').textContent='creating…';
 
+        const title = ($('title').value||'').trim();
         const dispatch = ($('dispatch').value||'').trim();
-        const base = { id, title:id, dispatch, description:dispatch, createdAt: Date.now(), active:true, stops:[] };
 
-        const multi={};
-        multi[`scenarios/${id}`]=base;
-        multi[`geophoto/scenarios/${id}`]=base;
+        // auto ID (push key) — this is the “old logic” you were using
+        const id = db.ref('scenarios').push().key;
+
+        const base = {
+          id,
+          title: title || id,
+          dispatch,
+          description: dispatch,
+          createdAt: Date.now(),
+          active: true,
+          stops: []
+        };
+        const multi = {};
+        multi[`scenarios/${id}`] = base;
+        multi[`geophoto/scenarios/${id}`] = base;
 
         await db.ref().update(multi);
 
         scenarioId = id;
-        $('scenarioId').value = id;
-        $('scenarioId').readOnly = true;
-        $('scenarioName').readOnly = true;
-        $('btnCreate').disabled = true;
+        $('scenarioId').value = id;        // show the auto ID
         $('createStatus').textContent='created ✓';
-        ok('Scenario created: '+id);
+        ok('Scenario created: ' + id);
         openUploaderGate(true);
       }catch(e){
         $('createStatus').textContent='error';
-        bad('Create scenario error: '+(e.message||e));
+        bad('Create scenario error: ' + (e.code||'') + ' ' + (e.message||e));
       }
     }
 
-    // Step 2 — Upload photo via storage module
+    // ===== Storage actions via your build-storage.js module =====
     async function upload(){
       try{
         if (!scenarioId){ alert('Create a scenario first.'); return; }
+        if (!window.FireOpsStorage){ alert('Storage module not loaded.'); return; }
+
         const f = $('fileInput').files && $('fileInput').files[0];
         if (!f){ alert('Pick a photo first.'); return; }
         if (f.size > 12*1024*1024){ alert('Max 12 MB'); return; }
@@ -199,7 +199,7 @@
         const { url, fullPath, gsUri } = await FireOpsStorage.upload(scenarioId, f);
         ok('Upload OK.');
 
-        // Save stop metadata to old DB
+        // Save stop to DB under the same autoId scenario
         await signInDB();
         const snap = await db.ref(`scenarios/${scenarioId}/stops`).get();
         const arr  = snap.exists()? (snap.val()||[]) : [];
@@ -213,7 +213,7 @@
         await refresh();
       }catch(e){
         $('upStatus').textContent='error';
-        bad('Upload failed: '+(e.code||'')+' '+(e.message||e));
+        bad('Upload failed: ' + (e.code||'') + ' ' + (e.message||e));
         alert('Upload failed:\n' + (e.code||'') + '\n' + (e.message||e));
       }
     }
@@ -221,12 +221,13 @@
     async function refresh(){
       try{
         if (!scenarioId) return;
+        if (!window.FireOpsStorage){ alert('Storage module not loaded.'); return; }
         const entries = await FireOpsStorage.list(scenarioId);
         const sorted  = entries.sort((a,b)=>(b.ref.name||'').localeCompare(a.ref.name||''));
         renderGrid(sorted.map(x=>({path: x.ref.fullPath || x.ref.name, url: x.url})));
         ok(`Listed ${sorted.length} file(s).`);
       }catch(e){
-        bad('Refresh error: '+(e.code||'')+' '+(e.message||e));
+        bad('Refresh error: ' + (e.code||'') + ' ' + (e.message||e));
       }
     }
 
@@ -247,24 +248,25 @@
     // Diagnostics
     async function diagStorage(){
       try{
+        if (!window.FireOpsStorage){ alert('Storage module not loaded.'); return; }
+        if (!scenarioId){ alert('Create a scenario first (used for preflight path).'); return; }
         await FireOpsStorage.init();
-        if (!scenarioId){ alert('Create a scenario first (used for diag path)'); return; }
         await FireOpsStorage.preflight(scenarioId);
         ok('Storage diag OK (preflight write passed).');
       }catch(e){
-        bad('Storage diag FAILED: '+(e.code||'')+' '+(e.message||e));
+        bad('Storage diag FAILED: ' + (e.code||'') + ' ' + (e.message||e));
       }
     }
     async function diagDB(){
       try{
         await signInDB();
-        const sid = ($('scenarioId').value||'').trim();
-        if (!sid) throw new Error('Create/Select a scenario first');
-        const key = db.ref(`scenarios/${sid}/diag`).push().key; // write under allowed path
+        const sid = scenarioId;
+        if (!sid){ alert('Create a scenario first'); return; }
+        const key = db.ref(`scenarios/${sid}/diag`).push().key; // uses allowed path
         await db.ref(`scenarios/${sid}/diag/${key}`).set({ ok:true, at: Date.now() });
         ok('DB diag OK → /scenarios/'+sid+'/diag/'+key);
       }catch(e){
-        bad('DB diag FAILED: '+(e.code||'')+' '+(e.message||e));
+        bad('DB diag FAILED: ' + (e.code||'') + ' ' + (e.message||e));
       }
     }
 
@@ -279,9 +281,10 @@
     $('btnLatest').addEventListener('click', async ()=>{
       try{
         if (!scenarioId) return;
+        if (!window.FireOpsStorage){ alert('Storage module not loaded.'); return; }
         const url = await FireOpsStorage.latest(scenarioId);
         window.open(url, '_blank');
-      }catch(e){ bad('View latest error: '+(e.message||e)); }
+      }catch(e){ bad('View latest error: ' + (e.message||e)); }
     });
     $('btnDiag').addEventListener('click', diagStorage);
     $('btnDBDiag').addEventListener('click', diagDB);
@@ -290,8 +293,8 @@
     (async function(){
       log('Booting…');
       try{ await signInDB(); }catch(e){ bad('DB auth failed: '+(e.message||e)); }
-      try{ await FireOpsStorage.init(); }catch(e){ bad('FO auth failed: '+(e.message||e)); }
-      log('Ready. Create scenario → upload.');
+      // Storage auth is handled inside build-storage.js on first use
+      log('Ready. Create Scenario (auto-ID) → upload.');
     })();
   })();
   </script>
