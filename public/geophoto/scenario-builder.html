@@ -1,210 +1,129 @@
-<!doctype html>
-<html lang="en">
-<head>
-<meta charset="utf-8"/>
-<meta name="viewport" content="width=device-width,initial-scale=1"/>
-<title>FireOpsSim — Scenario Builder (Realtime DB)</title>
-<style>
-  :root{--bg:#0b1220;--card:#111a2e;--muted:#b8c4e2;--line:#1b2b50;--ink:#e8eefc;--accent:#2c5cff;--ok:#7CFF7C;--bad:#FF7C7C}
-  *{box-sizing:border-box}
-  body{margin:0;padding:16px;background:var(--bg);color:var(--ink);font:14px/1.45 system-ui,Arial}
-  h1{margin:0 0 12px;font-size:20px}
-  .row{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:8px 0}
-  input,button{background:#091125;color:var(--ink);border:1px solid #20407a;border-radius:10px;padding:8px 10px}
-  input.mono,.mono{font-family:ui-monospace,Menlo,Consolas,monospace}
-  button{cursor:pointer}
-  button.primary{background:#1a3fbb;border-color:var(--accent)}
-  .card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:12px;margin:12px 0}
-  .muted{color:var(--muted);opacity:.95}
-  #status{white-space:pre-wrap;background:#0c1530;border:1px solid #1b2b50;border-radius:10px;padding:10px;max-height:300px;overflow:auto}
-  #stops{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px}
-  .stop{background:#0b1429;border:1px solid #1a2b50;border-radius:12px;overflow:hidden}
-  .stop img{width:100%;height:160px;object-fit:cover;display:block}
-  .stop .meta{padding:8px;font-size:12px}
-  a{color:#9ec5ff}
-</style>
-</head>
-<body>
-  <h1>FireOpsSim — Scenario Builder</h1>
+<!-- Place where you want the embedded uploader to appear -->
+<div id="uploaderHost" style="border:1px solid #1b2b50;border-radius:12px;overflow:hidden">
+  <iframe id="uploaderFrame" src="" title="Camera Uploader"
+          style="width:100%;height:520px;border:0;background:#0b1220"></iframe>
+</div>
 
-  <div class="card">
-    <div class="row">
-      <div class="muted">DB:</div><div class="mono">dailyquiz-d5279 (Realtime DB)</div>
-      <div class="muted">Uploader:</div><div class="mono">test-edit-uploader.html (Storage)</div>
-    </div>
+<script>
+(function(){
+  // ==== CONFIG ====
+  const TRUSTED_ORIGIN = location.origin;             // same origin recommended
+  const UPLOADER_URL   = "/test-edit-uploader.html";  // path to your working uploader
 
-    <div class="row">
-      <label class="muted">Title</label>
-      <input id="title" placeholder="e.g., House Fire — Elm St." style="min-width:280px">
-      <label class="muted">Dispatch</label>
-      <input id="dispatch" placeholder="Engine 1, Engine 2…" style="min-width:280px">
-      <button id="btnCreate" class="primary">Create Scenario</button>
-      <span id="createStatus" class="muted">idle</span>
-    </div>
+  // ==== Simple message bus with correlation IDs ====
+  const reqs = new Map(); // correlationId -> {resolve, reject, timeout}
+  let uploaderReady = false;
+  const frame = document.getElementById('uploaderFrame');
 
-    <div class="row">
-      <label class="muted">Scenario ID</label>
-      <input id="scenarioId" class="mono" placeholder="(auto-generated)" style="min-width:360px" readonly>
-      <button id="btnCopyId">Copy ID</button>
-      <button id="btnOpenUploader" class="primary">Open Camera Uploader</button>
-    </div>
-    <div class="muted">Photos will be saved by the uploader; this page will record the path + GPS in Realtime DB.</div>
-  </div>
+  function uuid(){ return Math.random().toString(36).slice(2)+Date.now().toString(36); }
 
-  <div class="card">
-    <strong>Status</strong>
-    <div id="status">Booting…</div>
-  </div>
+  function postToUploader(payload){
+    if (!frame.contentWindow) throw new Error("uploader frame not available");
+    frame.contentWindow.postMessage(payload, TRUSTED_ORIGIN);
+  }
 
-  <div class="card">
-    <strong>Stops (from Realtime DB)</strong>
-    <div id="stops"><div class="muted">None yet.</div></div>
-  </div>
-
-  <!-- Firebase compat SDKs -->
-  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js"></script>
-
-  <script>
-  (function(){
-    const $ = id => document.getElementById(id);
-    const logEl = $('status');
-    const log = (m,c)=>{const d=document.createElement('div'); if(c)d.style.color=c; d.textContent='['+new Date().toLocaleTimeString()+'] '+m; logEl.appendChild(d); logEl.scrollTop=logEl.scrollHeight; console.log(m);};
-    const ok = m=>log(m,'#7CFF7C'), bad = m=>log(m,'#FF7C7C');
-
-    // ---- Realtime DB (dailyquiz) ----
-    const cfgDB = {
-      apiKey:"AIzaSyDM6DpRSeZueVKRpbyJyDmhf8WY66KyCDk",
-      authDomain:"dailyquiz-d5279.firebaseapp.com",
-      databaseURL:"https://dailyquiz-d5279-default-rtdb.firebaseio.com",
-      projectId:"dailyquiz-d5279",
-      storageBucket:"dailyquiz-d5279.appspot.com",
-      appId:"1:94577748034:web:c032d3a1d72db1313de5db",
-      measurementId:"G-19DVN7NNH7"
-    };
-    const app = firebase.initializeApp(cfgDB);
-    const db  = firebase.database(app);
-    const auth= firebase.auth(app);
-    auth.onAuthStateChanged(u=>log('[DB AUTH] '+(u?('uid='+u.uid):'no user')));
-
-    let scenarioId = null;
-    let popup = null;
-
-    async function signInDB(){
-      if (!auth.currentUser){
-        const cred = await auth.signInAnonymously();
-        ok('DB auth OK (uid='+(cred.user && cred.user.uid || 'unknown')+')');
-      }
+  // Listen for messages from uploader
+  window.addEventListener("message", async (ev)=>{
+    if (ev.origin !== TRUSTED_ORIGIN) return; // security check
+    const msg = ev.data || {};
+    if (msg.type === "fo-ready"){
+      uploaderReady = true;
+      // Optionally, pass current scenarioId to uploader to display
+      const sid = document.getElementById('scenarioId').value.trim();
+      if (sid) postToUploader({ type:"fo-set-scenario", scenarioId: sid });
+      return;
     }
-
-    async function createScenario(){
-      try{
-        await signInDB();
-        $('createStatus').textContent='creating…';
-        const title = ($('title').value||'').trim();
-        const dispatch = ($('dispatch').value||'').trim();
-        const id = db.ref('scenarios').push().key; // old working flow
-        const base = { id, title: title||id, dispatch, description:dispatch, createdAt: Date.now(), active:true, stops:[] };
-        const multi={};
-        multi[`scenarios/${id}`]=base;
-        multi[`geophoto/scenarios/${id}`]=base;
-        await db.ref().update(multi);
-        scenarioId=id; $('scenarioId').value=id;
-        $('createStatus').textContent='created ✓'; ok('Scenario created: '+id);
-        subscribeStops();
-      }catch(e){
-        $('createStatus').textContent='error';
-        bad('Create scenario error: '+(e.code||'')+' '+(e.message||e));
-      }
+    if (msg.type === "fo-upload-complete"){
+      // Passive event (legacy). You can still handle it here if you want.
+      await recordStop(msg); // writes to Realtime DB
+      return;
     }
-
-    function subscribeStops(){
-      if (!scenarioId) return;
-      db.ref(`scenarios/${scenarioId}/stops`).on('value', snap=>{
-        const stops = snap.val() || [];
-        renderStops(stops);
-      });
+    if (msg.type === "fo-rpc-res" || msg.type === "fo-rpc-err"){
+      const { correlationId } = msg;
+      const entry = reqs.get(correlationId);
+      if (!entry) return;
+      clearTimeout(entry.timeout);
+      reqs.delete(correlationId);
+      if (msg.type === "fo-rpc-res") entry.resolve(msg.result);
+      else entry.reject(new Error(msg.error || "uploader error"));
     }
+  });
 
-    function renderStops(stops){
-      const box = $('stops');
-      box.innerHTML='';
-      if (!stops.length){ box.innerHTML='<div class="muted">None yet.</div>'; return; }
-      stops.forEach(s=>{
-        const div=document.createElement('div'); div.className='stop';
-        if (s.imageURL){ const img=new Image(); img.src=s.imageURL; div.appendChild(img); }
-        const meta=document.createElement('div'); meta.className='meta mono';
-        meta.innerHTML = `
-          <div>${s.storagePath || '(no path)'} </div>
-          ${s.gps? `<div>GPS: ${s.gps.lat.toFixed(5)}, ${s.gps.lng.toFixed(5)} (±${s.gps.acc||'?'}m)</div>`:''}
-          <div>${new Date(s.at||Date.now()).toLocaleString()}</div>`;
-        div.appendChild(meta);
-        box.appendChild(div);
-      });
-    }
-
-    // --- Open uploader (popup or iframe) ---
-    function openUploader(){
-      if (!scenarioId){ alert('Create a scenario first.'); return; }
-      const url = `test-edit-uploader.html#${encodeURIComponent(scenarioId)}`;
-      // popup (simplest); ensure your origin allows popups
-      popup = window.open(url, 'fo_uploader', 'width=480,height=720');
-      if (!popup || popup.closed) alert('Popup blocked. Allow popups for this site.');
-      ok('Opened uploader: '+url);
-    }
-
-    // --- Receive upload complete from uploader via postMessage ---
-    window.addEventListener('message', async (ev)=>{
-      try{
-        // Optionally check origin: if (ev.origin !== location.origin) return;
-        const msg = ev.data || {};
-        if (msg.type !== 'fo-upload-complete') return;
-
-        if (!scenarioId || msg.scenarioId !== scenarioId){
-          bad('Upload arrived for a different scenario: '+msg.scenarioId); return;
-        }
-
-        // Persist stop to DB
-        await signInDB();
-        const snap = await db.ref(`scenarios/${scenarioId}/stops`).get();
-        const arr = snap.exists()? (snap.val()||[]) : [];
-        arr.push({
-          type:'photo',
-          imageURL: msg.url,
-          thumbURL: msg.url,
-          storagePath: msg.fullPath,
-          gsUri: msg.gsUri,
-          gps: msg.gps || null,
-          backend:'fireops',
-          at: Date.now(),
-          radiusMeters: 5,
-          overlays:[]
-        });
-        const multi={};
-        multi[`scenarios/${scenarioId}/stops`] = arr;
-        multi[`geophoto/scenarios/${scenarioId}/stops`] = arr;
-        await db.ref().update(multi);
-        ok('Saved photo stop to DB.');
-      }catch(e){
-        bad('Save error: '+(e.code||'')+' '+(e.message||e));
-      }
+  // RPC-like helper to “call” the uploader from the builder
+  function callUploader(method, params, { timeoutMs=30000 }={}){
+    return new Promise((resolve, reject)=>{
+      const correlationId = uuid();
+      const timeout = setTimeout(()=>{
+        reqs.delete(correlationId);
+        reject(new Error(`uploader-timeout: ${method}`));
+      }, timeoutMs);
+      reqs.set(correlationId, {resolve, reject, timeout});
+      postToUploader({ type:"fo-rpc", method, params, correlationId });
     });
+  }
 
-    // Wire up
-    $('btnCreate').addEventListener('click', createScenario);
-    $('btnOpenUploader').addEventListener('click', openUploader);
-    $('btnCopyId').addEventListener('click', async ()=>{
-      if(!$('scenarioId').value) return;
-      try{ await navigator.clipboard.writeText($('scenarioId').value); ok('Scenario ID copied.'); }catch{}
+  // ==== Boot the iframe as soon as builder loads ====
+  frame.src = UPLOADER_URL;  // load after DOM ready in case of CSP
+
+  // ==== Public function: start one upload roundtrip ====
+  async function startUploadRoundtrip(){
+    if (!uploaderReady) throw new Error("uploader not ready yet");
+    const sid = document.getElementById('scenarioId').value.trim();
+    if (!sid) throw new Error("Create a scenario first");
+
+    // ensure uploader shows current scenario (idempotent)
+    postToUploader({ type:"fo-set-scenario", scenarioId: sid });
+
+    // Ask uploader to capture+upload. It returns {url, fullPath, gsUri, gps}
+    const result = await callUploader("captureAndUpload", { scenarioId: sid }, { timeoutMs: 120000 });
+
+    // Persist in Realtime DB (your existing working logic)
+    await recordStop(result);
+
+    // Done — you can update UI, gallery, etc.
+    return result;
+  }
+
+  // ==== Your existing DB write (minimal example; re-use your functions) ====
+  async function recordStop(msg){
+    // assumes db/auth already initialized elsewhere in the page
+    // msg: {url, fullPath, gsUri, gps, scenarioId}
+    const sid = msg.scenarioId;
+    const snap = await firebase.database().ref(`scenarios/${sid}/stops`).get();
+    const arr  = snap.exists()? (snap.val()||[]) : [];
+    arr.push({
+      type:'photo',
+      imageURL: msg.url,
+      thumbURL: msg.url,
+      storagePath: msg.fullPath,
+      gsUri: msg.gsUri,
+      gps: msg.gps || null,
+      backend:'fireops',
+      at: Date.now(),
     });
+    const multi = {};
+    multi[`scenarios/${sid}/stops`] = arr;
+    multi[`geophoto/scenarios/${sid}/stops`] = arr;
+    await firebase.database().ref().update(multi);
+  }
 
-    (async function boot(){
-      log('Booting…');
-      try{ await signInDB(); }catch(e){ bad('DB auth failed: '+(e.message||e)); }
-      ok('Ready. Create scenario, then click “Open Camera Uploader”.');
-    })();
-  })();
-  </script>
-</body>
-</html>
+  // ==== Hook your existing Upload button to the new flow ====
+  document.getElementById('btnUpload')?.addEventListener('click', async ()=>{
+    try{
+      const r = await startUploadRoundtrip();
+      console.log("Upload+DB OK:", r);
+      alert("Upload saved.");
+      // refresh your gallery if desired
+    }catch(e){
+      console.error(e);
+      alert(e.message || e);
+    }
+  });
+
+  // Keep scenarioId in sync with uploader when user creates/changes scenario
+  document.getElementById('btnCreate')?.addEventListener('click', ()=>{
+    const sid = document.getElementById('scenarioId').value.trim();
+    if (sid && uploaderReady) postToUploader({ type:"fo-set-scenario", scenarioId: sid });
+  });
+})();
+</script>
