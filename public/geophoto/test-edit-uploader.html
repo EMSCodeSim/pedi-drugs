@@ -3,16 +3,15 @@
 <head>
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1"/>
-<title>FireOpsSim — Photo Uploader (Storage-only)</title>
+<title>Photo Uploader — Storage Only (with progress & timeout)</title>
 
-<!-- If you already define window.firebaseConfig in the parent page, you can remove this sample.
+<!-- If your site already injects window.firebaseConfig, you can omit this sample.
 <script>
   window.firebaseConfig = {
     apiKey: "AIzaSyBzwc75u8pG73OKcHN8ti2ADbucjKMHme8",
     authDomain: "fireopssim.firebaseapp.com",
     projectId: "fireopssim",
     storageBucket: "fireopssim.appspot.com",
-    // databaseURL not needed here
     appId: "1:396140888722:web:demo"
   };
 </script>
@@ -24,18 +23,21 @@
   body{margin:0;padding:16px;background:var(--bg);color:var(--ink);font:14px/1.45 system-ui,Arial}
   h2{margin:0 0 12px}
   .row{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:8px 0}
-  input,button{background:#091125;color:var(--ink);border:1px solid #20407a;border-radius:10px;padding:10px 12px}
+  input,button,progress{background:#091125;color:var(--ink);border:1px solid #20407a;border-radius:10px;padding:10px 12px}
   input[readonly]{opacity:.85}
   button{cursor:pointer}
   button.primary{background:#1a3fbb;border-color:var(--accent)}
   .card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:12px;margin:12px 0}
   .muted{color:var(--muted)}
   .mono{font-family:ui-monospace,Menlo,Consolas,monospace}
-  #status{white-space:pre-wrap;background:#0c1530;border:1px solid #1b2b50;border-radius:10px;padding:10px;max-height:260px;overflow:auto}
+  #status{white-space:pre-wrap;background:#0c1530;border:1px solid #1b2b50;border-radius:10px;padding:10px;max-height:280px;overflow:auto}
   #preview img{max-width:100%;height:auto;border-radius:10px;border:1px solid #1a2b50}
   #thumbs{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px}
   #thumbs a{display:block}
   #thumbs img{width:96px;height:96px;object-fit:cover;border-radius:10px;border:1px solid #1a2b50}
+  progress{width:100%;height:12px;padding:0;border-radius:999px;overflow:hidden}
+  progress::-webkit-progress-bar{background:#0b1530;border-radius:999px}
+  progress::-webkit-progress-value{background:#2c5cff}
   @media (max-width:560px){ .row{flex-direction:column;align-items:stretch} input,button{width:100%} }
 </style>
 </head>
@@ -56,7 +58,11 @@
       <button id="btnPick" class="primary" type="button">Pick / Take Photo</button>
       <button id="btnUpload" class="primary" type="button" disabled>Upload Photo</button>
     </div>
-    <div class="muted">This page uploads to Cloud Storage only (no Realtime DB). Open from Scenario Builder so <b>?scenarioId=...</b> is present.</div>
+    <div class="row" id="progressRow" style="display:none">
+      <progress id="prog" max="100" value="0"></progress>
+      <span id="progLabel" class="muted mono">0%</span>
+    </div>
+    <div class="muted">Uploads to Cloud Storage only (no Realtime DB). Open this from Scenario Builder so <b>?scenarioId=...</b> is set.</div>
   </div>
 
   <div id="preview" class="card" style="display:none">
@@ -74,7 +80,7 @@
     <div id="status">Booting…</div>
   </div>
 
-  <!-- Firebase compat SDKs (Storage-only flow) -->
+  <!-- Firebase compat SDKs -->
   <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-storage-compat.js"></script>
@@ -94,7 +100,7 @@
       const hash = (location.hash||'').replace(/^#/, ''); return decodeURIComponent(hash||'');
     }
 
-    // ---------- Firebase config (Storage-only) ----------
+    // ---------- Firebase config ----------
     const fallback = {
       apiKey:"AIzaSyBzwc75u8pG73OKcHN8ti2ADbucjKMHme8",
       authDomain:"fireopssim.firebaseapp.com",
@@ -107,7 +113,11 @@
 
     const app = firebase.initializeApp(cfg);
     const auth = firebase.auth(app);
-    const storage = firebase.storage(app); // compat uses cfg.storageBucket
+    const storage = firebase.storage(app); // compat (uses cfg.storageBucket)
+    // Boost retries so poor networks don't stall forever:
+    storage.setMaxUploadRetryTime(60_000);      // 60s retry time for uploads
+    storage.setMaxOperationRetryTime(30_000);   // 30s for non-upload ops
+
     const bucketStr = cfg.storageBucket ? `gs://${cfg.storageBucket}` : '(missing storageBucket)';
     $('#bucketName').value = bucketStr;
 
@@ -117,15 +127,84 @@
 
     // ---------- Helpers ----------
     function safeName(s){ return (s||'photo.jpg').replace(/[^\w.\-]+/g,'_'); }
-    async function uploadToStorage(sid, file){
+
+    // Resumable upload with progress + timeout + explicit error surfacing
+    function uploadWithProgress(path, file, metadata){
+      return new Promise((resolve, reject)=>{
+        const ref = storage.ref().child(path);
+        const task = ref.put(file, metadata);
+        const start = Date.now();
+
+        const watchdogMs = 90_000; // cancel after 90s to avoid hanging forever
+        const watchdog = setTimeout(()=>{
+          try { task.cancel(); } catch(_) {}
+          reject(new Error('Upload timed out after ' + Math.round((Date.now()-start)/1000) + 's'));
+        }, watchdogMs);
+
+        $('#progressRow').style.display = '';
+        $('#prog').value = 0; $('#progLabel').textContent = '0%';
+
+        task.on('state_changed',
+          (snap)=>{
+            const pct = Math.round((snap.bytesTransferred / snap.totalBytes) * 100);
+            $('#prog').value = pct; $('#progLabel').textContent = pct + '%';
+            log(`Uploading… ${pct}% (${snap.bytesTransferred}/${snap.totalBytes} bytes)`);
+          },
+          (err)=>{
+            clearTimeout(watchdog);
+            reject(err);
+          },
+          async ()=>{
+            clearTimeout(watchdog);
+            try {
+              const url = await task.snapshot.ref.getDownloadURL();
+              resolve({ url, fullPath: ref.fullPath });
+            } catch (e) {
+              reject(e);
+            }
+          }
+        );
+      });
+    }
+
+    async function doUpload(){
+      if (!lastFile){ alert('Pick/take a photo first.'); return; }
       // organize by scenario if provided; else put under /uploads/
       const base = sid ? `scenarios/${sid}` : 'uploads';
-      const path = `${base}/${Date.now()}_${safeName(file.name)}`;
-      const ref  = storage.ref().child(path);
+      const path = `${base}/${Date.now()}_${safeName(lastFile.name)}`;
       log(`Uploading to ${bucketStr}/${path}`);
-      const snap = await ref.put(file, { contentType: file.type || 'image/jpeg' });
-      const url  = await snap.ref.getDownloadURL();
-      return { url, fullPath: ref.fullPath };
+
+      try{
+        const { url, fullPath } = await uploadWithProgress(path, lastFile, { contentType: lastFile.type || 'image/jpeg' });
+        ok('Upload OK');
+        $('#progressRow').style.display = 'none';
+
+        // Add thumbnail
+        const a = document.createElement('a');
+        a.href = url; a.target = '_blank'; a.rel='noopener';
+        a.innerHTML = `<img src="${url}" alt="thumb">`;
+        $('#thumbs').prepend(a);
+
+        // Reset for next shot
+        $('#fileInput').value = "";
+        lastFile = null;
+        $('#btnUpload').disabled = true;
+
+        // Notify parent/opener if present
+        const msg = { type:'fo-upload-complete', scenarioId: sid, url, path: fullPath };
+        if (window.opener) window.opener.postMessage(msg, "*");
+        else if (window.parent) window.parent.postMessage(msg, "*");
+      }catch(e){
+        $('#progressRow').style.display = 'none';
+        bad(`Upload FAILED: ${e.code||''} ${e.message||e}`);
+        if (String(e).includes('auth/invalid-api-key')) {
+          bad('Invalid API key — ensure window.firebaseConfig.apiKey (or fallback) is correct.');
+        }
+        if (String(e).includes('storage/unauthorized')) {
+          bad('Storage rules blocked the upload (storage/unauthorized). Allow anonymous writes to this path while testing.');
+        }
+        alert('Upload failed:\n' + (e && e.message || e));
+      }
     }
 
     // ---------- UI wiring ----------
@@ -140,40 +219,7 @@
       $('#btnUpload').disabled = false;
       ok('Photo selected — ready to upload');
     });
-
-    $('#btnUpload').addEventListener('click', async ()=>{
-      if (!lastFile){ alert('Pick/take a photo first.'); return; }
-      try{
-        if (!auth.currentUser) await auth.signInAnonymously();
-        const { url } = await uploadToStorage(sid, lastFile);
-        ok('Upload OK');
-
-        // Add thumbnail
-        const a = document.createElement('a');
-        a.href = url; a.target = '_blank'; a.rel='noopener';
-        a.innerHTML = `<img src="${url}" alt="thumb">`;
-        $('#thumbs').prepend(a);
-
-        // Reset for next photo
-        $('#fileInput').value = "";
-        lastFile = null;
-        $('#btnUpload').disabled = true;
-
-        // Optional: inform opener/parent that one upload finished
-        const msg = { type:'fo-upload-complete', scenarioId: sid, url };
-        if (window.opener) window.opener.postMessage(msg, "*");
-        else if (window.parent) window.parent.postMessage(msg, "*");
-      }catch(e){
-        bad(`Upload FAILED: ${e.code||''} ${e.message||e}`);
-        if (String(e).includes('auth/invalid-api-key')) {
-          bad('Invalid API key — ensure window.firebaseConfig.apiKey matches your project’s Web API key.');
-        }
-        if (String(e).includes('storage/unauthorized')) {
-          bad('Storage rules blocked the upload (storage/unauthorized). Make sure anonymous writes are allowed while testing.');
-        }
-        alert('Upload failed:\n'+(e && e.message || e));
-      }
-    });
+    $('#btnUpload').addEventListener('click', doUpload);
 
     // ---------- Boot ----------
     (async function boot(){
