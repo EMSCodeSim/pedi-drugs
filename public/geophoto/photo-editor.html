@@ -1,0 +1,313 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1"/>
+<title>FireOpsSim — Photo Editor (Viewer)</title>
+<style>
+  :root{--bg:#0b1220;--card:#111a2e;--muted:#b8c4e2;--line:#1b2b50;--ink:#e8eefc;--accent:#2c5cff;--ok:#7CFF7C;--bad:#FF7C7C}
+  *{box-sizing:border-box}
+  body{margin:0;padding:16px;background:var(--bg);color:var(--ink);font:14px/1.45 system-ui,Arial}
+  h1{margin:0 0 10px;font-size:20px}
+  h2{margin:8px 0 10px;font-size:16px}
+  .row{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:8px 0}
+  input,button,select{background:#091125;color:var(--ink);border:1px solid #20407a;border-radius:10px;padding:10px 12px}
+  button{cursor:pointer}
+  button.primary{background:#1a3fbb;border-color:var(--accent)}
+  .card{background:var(--card);border:1px solid #1b2b50;border-radius:14px;padding:12px;margin:12px 0}
+  .muted{color:var(--muted)}
+  .mono{font-family:ui-monospace,Menlo,Consolas,monospace}
+  #status{white-space:pre-wrap;background:#0c1530;border:1px solid #1b2b50;border-radius:10px;padding:10px;max-height:300px;overflow:auto}
+  #scenarios{max-height:260px;overflow:auto;border:1px solid #1b2b50;border-radius:10px}
+  .scenario{padding:10px;border-bottom:1px solid #1b2b50;display:flex;gap:10px;align-items:center;justify-content:space-between}
+  .scenario:last-child{border-bottom:none}
+  .scenario .meta{display:flex;flex-direction:column}
+  .scenario .meta .name{font-weight:600}
+  .scenario .meta .small{font-size:12px;color:#99a8d8}
+  #thumbs{display:grid;grid-template-columns:repeat(auto-fill,minmax(110px,1fr));gap:10px}
+  #thumbs a{display:block}
+  #thumbs img{width:100%;height:110px;object-fit:cover;border-radius:10px;border:1px solid #1a2b50}
+  #empty{color:#9ab0e6}
+  @media (max-width:560px){ .row{flex-direction:column;align-items:stretch} input,button,select{width:100%} }
+</style>
+</head>
+<body>
+  <h1>FireOpsSim — Photo Editor (Viewer)</h1>
+
+  <div class="card">
+    <div class="row">
+      <div class="muted">Realtime DB app:</div><div class="mono">dailyquiz-d5279</div>
+      <div class="muted">Storage app:</div><div class="mono">fireopssim (gs://fireopssim.appspot.com)</div>
+    </div>
+    <div class="row">
+      <button id="btnRefreshScenarios" class="primary">Refresh Scenarios</button>
+      <input id="filter" placeholder="Filter scenarios by name/id…"/>
+      <button id="btnListStorageTop">List Storage /scenarios (folders)</button>
+    </div>
+    <div id="scenarios"></div>
+  </div>
+
+  <div class="card">
+    <h2>Selected Scenario</h2>
+    <div class="row">
+      <label class="muted">Scenario ID</label>
+      <input id="selectedId" class="mono" readonly placeholder="(none)"/>
+      <button id="btnOpenUploader">Open Uploader</button>
+      <button id="btnListPhotos" class="primary">List Photos in Storage</button>
+    </div>
+    <div class="row">
+      <div class="muted">Folder:</div>
+      <div class="mono" id="folderPath">scenarios/(none)</div>
+    </div>
+    <div id="thumbs"></div>
+    <div id="empty" class="muted" style="display:none">No photos found in this folder.</div>
+  </div>
+
+  <div class="card">
+    <strong>Status</strong>
+    <div id="status">Booting…</div>
+  </div>
+
+  <!-- Firebase compat SDKs -->
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-storage-compat.js"></script>
+
+  <script>
+  (function(){
+    // ---------- UI helpers ----------
+    const $ = sel => document.querySelector(sel);
+    const logEl = $('#status');
+    const scenariosEl = $('#scenarios');
+    const thumbsEl = $('#thumbs');
+    const emptyEl = $('#empty');
+    const folderPathEl = $('#folderPath');
+
+    function log(m,c){ const d=document.createElement('div'); if(c)d.style.color=c; d.textContent='['+new Date().toLocaleTimeString()+'] '+m; logEl.appendChild(d); logEl.scrollTop=logEl.scrollHeight; console.log(m); }
+    const ok=m=>log(m,'#7CFF7C'), bad=m=>log(m,'#FF7C7C');
+
+    function fmtDate(ts){ try{ return new Date(ts).toLocaleString(); }catch(_){ return String(ts||''); } }
+
+    // ---------- Firebase apps ----------
+    // 1) Realtime Database app (dailyquiz-d5279)
+    const dbCfg = {
+      apiKey:"AIzaSyDM6DpRSeZueVKRpbyJyDmhf8WY66KyCDk",
+      authDomain:"dailyquiz-d5279.firebaseapp.com",
+      databaseURL:"https://dailyquiz-d5279-default-rtdb.firebaseio.com",
+      projectId:"dailyquiz-d5279",
+      storageBucket:"dailyquiz-d5279.appspot.com",
+      appId:"1:94577748034:web:c032d3a1d72db1313de5db",
+      measurementId:"G-19DVN7NNH7"
+    };
+    // 2) Storage app (fireopssim) — explicit gs:// binding later
+    const stCfg = {
+      apiKey:"AIzaSyBzwc75u8pG73OKcHN8ti2ADbucjKMHme8",
+      authDomain:"fireopssim.firebaseapp.com",
+      projectId:"fireopssim",
+      storageBucket:"fireopssim.appspot.com",
+      appId:"1:396140888722:web:demo"
+    };
+
+    // Initialize as two separate named apps (compat)
+    const dbApp = firebase.initializeApp(dbCfg, 'dbApp');
+    const stApp = firebase.initializeApp(stCfg, 'stApp');
+
+    const dbAuth = firebase.auth(dbApp);
+    const rtdb   = firebase.database(dbApp);
+
+    // Explicit GS binding as we’ve used elsewhere
+    const storage = firebase.storage(stApp, "gs://fireopssim.appspot.com");
+
+    async function ensureAuthBoth(){
+      if (!dbAuth.currentUser){
+        const cred = await dbAuth.signInAnonymously();
+        ok('DB auth OK (uid='+ (cred.user?.uid||'unknown') +')');
+      }
+      // Storage uses its own app; we must sign that app in too
+      const stAuth = firebase.auth(stApp);
+      if (!stAuth.currentUser){
+        const cred2 = await stAuth.signInAnonymously();
+        ok('Storage auth OK (uid='+ (cred2.user?.uid||'unknown') +')');
+      }
+    }
+
+    // ---------- List scenarios from DB ----------
+    async function listScenarios(){
+      try{
+        await ensureAuthBoth();
+        scenariosEl.innerHTML = '<div class="muted" style="padding:10px">Loading scenarios…</div>';
+
+        // Pull latest ~100 scenarios
+        const snap = await rtdb.ref('scenarios').limitToLast(100).once('value');
+        const val = snap.val() || {};
+        const rows = Object.values(val)
+          .map(v => ({
+            id: v.id || v.key || '',
+            title: v.title || '(untitled)',
+            createdAt: v.createdAt || v.created || v.time || 0,
+            dispatch: v.dispatch || v.description || ''
+          }))
+          .sort((a,b)=>(b.createdAt||0)-(a.createdAt||0));
+
+        renderScenarioList(rows);
+        ok(`Loaded ${rows.length} scenario(s) from DB.`);
+      }catch(e){
+        scenariosEl.innerHTML = '<div class="muted" style="padding:10px">Failed to load scenarios.</div>';
+        bad('List scenarios error: '+(e.message||e));
+      }
+    }
+
+    function renderScenarioList(rows){
+      const filter = ($('#filter').value||'').toLowerCase().trim();
+      const filtered = rows.filter(r => {
+        if (!filter) return true;
+        return (r.id||'').toLowerCase().includes(filter) || (r.title||'').toLowerCase().includes(filter);
+      });
+
+      scenariosEl.innerHTML = '';
+      if (!filtered.length){
+        scenariosEl.innerHTML = '<div class="muted" style="padding:10px">No scenarios match.</div>';
+        return;
+      }
+
+      filtered.forEach(r=>{
+        const div = document.createElement('div');
+        div.className = 'scenario';
+        div.innerHTML = `
+          <div class="meta">
+            <div class="name">${escapeHtml(r.title)}</div>
+            <div class="small mono">${escapeHtml(r.id)} • ${escapeHtml(fmtDate(r.createdAt))}</div>
+            ${r.dispatch ? `<div class="small">${escapeHtml(r.dispatch)}</div>` : ''}
+          </div>
+          <div>
+            <button data-id="${escapeAttr(r.id)}" class="primary btnView">View Photos</button>
+          </div>
+        `;
+        scenariosEl.appendChild(div);
+      });
+
+      scenariosEl.querySelectorAll('.btnView').forEach(btn=>{
+        btn.addEventListener('click', ()=>{
+          const id = btn.getAttribute('data-id');
+          selectScenario(id);
+        });
+      });
+    }
+
+    function escapeHtml(s){ return String(s||'').replace(/[&<>"']/g, m=>({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[m])); }
+    function escapeAttr(s){ return escapeHtml(s).replace(/"/g,'&quot;'); }
+
+    // ---------- Select scenario & list photos from Storage ----------
+    async function selectScenario(id){
+      $('#selectedId').value = id || '';
+      folderPathEl.textContent = id ? `scenarios/${id}` : 'scenarios/(none)';
+      thumbsEl.innerHTML = '';
+      emptyEl.style.display = 'none';
+      if (!id) return;
+      await listPhotosFor(id);
+    }
+
+    async function listPhotosFor(id){
+      try{
+        await ensureAuthBoth();
+        thumbsEl.innerHTML = '<div class="muted">Listing photos…</div>';
+        const folderRef = storage.ref().child(`scenarios/${id}`);
+        const { items } = await folderRef.listAll();
+        if (!items.length){
+          thumbsEl.innerHTML = '';
+          emptyEl.style.display = '';
+          return;
+        }
+        // newest first by name (timestamp prefix)
+        items.sort((a,b)=> (b.name||'').localeCompare(a.name||''));
+        const urls = await Promise.all(items.map(it => it.getDownloadURL().catch(()=>null)));
+        thumbsEl.innerHTML = '';
+        urls.forEach((url)=>{
+          if (!url) return;
+          const a = document.createElement('a');
+          a.href = url; a.target = '_blank'; a.rel = 'noopener';
+          a.innerHTML = `<img src="${url}" alt="photo">`;
+          thumbsEl.appendChild(a);
+        });
+        ok(`Listed ${items.length} photo(s) for ${id}.`);
+      }catch(e){
+        thumbsEl.innerHTML = '';
+        emptyEl.style.display = '';
+        bad('List photos error: '+(e.message||e));
+      }
+    }
+
+    // ---------- (Optional) List top-level Storage folders under /scenarios ----------
+    async function listStorageTop(){
+      try{
+        await ensureAuthBoth();
+        scenariosEl.innerHTML = '<div class="muted" style="padding:10px">Listing Storage folders…</div>';
+        const top = storage.ref().child('scenarios');
+        const { prefixes } = await top.listAll(); // "folders" within /scenarios
+        if (!prefixes.length){
+          scenariosEl.innerHTML = '<div class="muted" style="padding:10px">No folders in Storage /scenarios yet.</div>';
+          return;
+        }
+        scenariosEl.innerHTML = '';
+        prefixes.sort((a,b)=> (a.name||'').localeCompare(b.name||''));
+        prefixes.forEach(pref=>{
+          const id = pref.name;
+          const div = document.createElement('div');
+          div.className = 'scenario';
+          div.innerHTML = `
+            <div class="meta">
+              <div class="name">${escapeHtml(id)}</div>
+              <div class="small mono">/scenarios/${escapeHtml(id)}</div>
+            </div>
+            <div>
+              <button data-id="${escapeAttr(id)}" class="primary btnView">View Photos</button>
+            </div>
+          `;
+          scenariosEl.appendChild(div);
+        });
+        scenariosEl.querySelectorAll('.btnView').forEach(btn=>{
+          btn.addEventListener('click', ()=>{
+            const id = btn.getAttribute('data-id');
+            selectScenario(id);
+          });
+        });
+        ok(`Listed ${prefixes.length} folder(s) from Storage /scenarios.`);
+      }catch(e){
+        scenariosEl.innerHTML = '<div class="muted" style="padding:10px">Failed to list Storage folders.</div>';
+        bad('List storage top error: '+(e.message||e));
+      }
+    }
+
+    // ---------- Open uploader ----------
+    const UPLOADER_URL = 'https://fireopssim.com/geophoto/test-edit-uploader';
+    function openUploader(){
+      const id = $('#selectedId').value.trim();
+      if (!id){ alert('Select a scenario first.'); return; }
+      const url = new URL(UPLOADER_URL);
+      url.searchParams.set('scenarioId', id);
+      window.open(url.toString(), 'fireops_uploader');
+      ok('Opened uploader for scenario '+id);
+    }
+
+    // ---------- Events ----------
+    $('#btnRefreshScenarios').addEventListener('click', listScenarios);
+    $('#btnListStorageTop').addEventListener('click', listStorageTop);
+    $('#btnListPhotos').addEventListener('click', ()=> selectScenario($('#selectedId').value));
+    $('#btnOpenUploader').addEventListener('click', openUploader);
+    $('#filter').addEventListener('input', listScenarios); // simple client-side filter refresh
+
+    // ---------- Boot ----------
+    (async function boot(){
+      try{
+        await ensureAuthBoth();
+      }catch(e){
+        bad('Auth error: ' + (e.message||e));
+      }
+      ok('Ready. Loading scenarios from Realtime DB…');
+      await listScenarios();
+    })();
+  })();
+  </script>
+</body>
+</html>
