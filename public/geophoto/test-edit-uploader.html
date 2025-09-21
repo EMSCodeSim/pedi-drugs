@@ -14,7 +14,7 @@
   input[readonly]{opacity:.85}
   button{cursor:pointer}
   button.primary{background:#1a3fbb;border-color:var(--accent)}
-  .card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:12px;margin:12px 0}
+  .card{background:var(--card);border:1px solid #1b2b50;border-radius:14px;padding:12px;margin:12px 0}
   .muted{color:var(--muted)}
   .mono{font-family:ui-monospace,Menlo,Consolas,monospace}
   #status{white-space:pre-wrap;background:#0c1530;border:1px solid #1b2b50;border-radius:10px;padding:10px;max-height:260px;overflow:auto}
@@ -42,16 +42,12 @@
       <button id="btnUpload" class="primary" type="button">Upload Photo</button>
       <button id="btnRefresh" type="button">Refresh Gallery</button>
     </div>
-    <div class="muted">Uploads to Cloud Storage only. Open from Scenario Builder so <b>?scenarioId=...</b> is set.</div>
+    <div class="muted">Uploads to Cloud Storage only. This page will send URL + GPS back to Scenario Builder.</div>
   </div>
 
   <div id="preview" class="card" style="display:none">
     <strong>Uploaded Preview</strong>
     <div id="previewImg"></div>
-    <div class="row">
-      <a id="openUrl" target="_blank" rel="noopener">Open in new tab</a>
-      <button id="copyUrl" type="button">Copy URL</button>
-    </div>
   </div>
 
   <div class="card">
@@ -74,12 +70,7 @@
     // ---------- Logger ----------
     const $ = s=>document.querySelector(s);
     const logEl = $('#status');
-    const log = (m,c)=>{
-      const d=document.createElement('div');
-      if(c)d.style.color=c==='ok'?'#7CFF7C':c==='bad'?'#FF7C7C':'#FFD37C';
-      d.textContent='['+new Date().toLocaleTimeString()+'] '+m;
-      logEl.appendChild(d); logEl.scrollTop=logEl.scrollHeight; console.debug(m);
-    };
+    const log = (m,c)=>{const d=document.createElement('div'); if(c)d.style.color=c==='ok'?'#7CFF7C':c==='bad'?'#FF7C7C':'#FFD37C'; d.textContent='['+new Date().toLocaleTimeString()+'] '+m; logEl.appendChild(d); logEl.scrollTop=logEl.scrollHeight; console.debug(m);};
     const ok=m=>log(m,'ok'), bad=m=>log(m,'bad');
 
     // ---------- Scenario from URL ----------
@@ -89,82 +80,99 @@
       const hash = (location.hash||'').replace(/^#/, ''); return decodeURIComponent(hash||'');
     }
 
-    // ---------- Config & Firebase (compat) ----------
-    // Prefer any window.firebaseConfig already on the page; otherwise fall back to your older working config.
+    // ---------- Firebase (Storage-only) ----------
     const fallbackCfg = {
       apiKey: "AIzaSyBzwc75u8pG73OKcHN8ti2ADbucjKMHme8",
       authDomain: "fireopssim.firebaseapp.com",
       projectId: "fireopssim",
-      // NOTE: the console may show firebasestorage.app for HTTPS downloads — we bind gs:// explicitly below.
-      storageBucket: "fireopssim.firebasestorage.app",
+      storageBucket: "fireopssim.firebasestorage.app", /* console label only */
       appId: "1:396140888722:web:demo"
     };
     const cfg = Object.assign({}, fallbackCfg, (window.firebaseConfig||{}));
-
-    // Initialize app/auth
     const app = firebase.initializeApp(cfg);
     const auth = firebase.auth(app);
-
-    // Bind Storage to gs:// as in your older file (working pattern)
-    const storage = firebase.storage(app, "gs://fireopssim.appspot.com");
-    storage.setMaxOperationRetryTime(60000);
-    storage.setMaxUploadRetryTime(120000);
+    const storage = firebase.storage(app, "gs://fireopssim.appspot.com"); // explicit gs:// bind
     ok('Storage bound to gs://fireopssim.appspot.com');
 
     // ---------- Helpers ----------
     function safeName(s){ return (s||'photo').replace(/[^\w.\-]+/g,'_'); }
     function basePath(sid){ return sid ? `scenarios/${sid}` : 'uploads'; }
+    async function ensureAuth(){ if (!auth.currentUser){ const cred = await auth.signInAnonymously(); ok('Auth OK (anon uid='+(cred.user?.uid||'unknown')+')'); } }
 
-    async function ensureAuth(){
-      if (!auth.currentUser){
-        const cred = await auth.signInAnonymously();
-        ok('Auth OK (anon uid='+(cred.user?.uid||'unknown')+')');
-      }
+    async function getGPS(){
+      return new Promise((resolve)=>{
+        if (!navigator.geolocation) return resolve(null);
+        navigator.geolocation.getCurrentPosition(
+          p=>resolve({ lat:p.coords.latitude, lng:p.coords.longitude, acc:p.coords.accuracy, ts:Date.now() }),
+          _=>resolve(null),
+          { enableHighAccuracy:true, timeout:8000, maximumAge:0 }
+        );
+      });
+    }
+    async function reverseGeocode(lat,lng){
+      try{
+        const r = await fetch(`https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${encodeURIComponent(lat)}&lon=${encodeURIComponent(lng)}`, { headers: { 'Accept':'application/json' }});
+        if (r.ok){ const j = await r.json(); return j.display_name || null; }
+      }catch(_){}
+      return null;
     }
 
     async function upload(){
       try{
         await ensureAuth();
-
         const sid = ($('#scenarioId').value||'').trim();
         if (!sid){ alert('No scenarioId. Open this page from Scenario Builder.'); return; }
 
         const f = $('#fileInput').files && $('#fileInput').files[0];
         if (!f){ alert('Pick or take a photo first.'); log('No file selected.'); return; }
-        if (f.size > 20*1024*1024){ alert('Max 20 MB'); return; }
+        if (f.size > 25*1024*1024){ alert('Max 25 MB'); return; }
 
         const path = `${basePath(sid)}/${Date.now()}_${safeName(f.name)}`;
         log('Uploading → '+path);
 
-        // === Core logic from your older working file ===
+        // === Older upload pattern (compat) ===
         const ref = storage.ref().child(path);
         await ref.put(f, { contentType: f.type || 'image/jpeg' });
         const url = await ref.getDownloadURL();
-        // ===============================================
+        // =====================================
 
         ok('Upload OK');
         showPreview(url);
-        addThumb(url);
+
+        // GPS + address (best effort), then message back to builder
+        const gps = await getGPS();
+        let address = null;
+        if (gps && gps.lat && gps.lng){ try{ address = await reverseGeocode(gps.lat, gps.lng); }catch(_){} }
+
+        const payload = {
+          type: 'fo-upload-complete',
+          scenarioId: sid,
+          url,
+          path: ref.fullPath,
+          gsUri: `gs://fireopssim.appspot.com/${ref.fullPath}`,
+          contentType: f.type || 'image/jpeg',
+          gps, address
+        };
+        // Post to opener OR parent (builder opened us in new tab)
+        if (window.opener) window.opener.postMessage(payload, "*");
+        else if (window.parent) window.parent.postMessage(payload, "*");
+        ok('Sent photo URL + GPS back to Scenario Builder.');
       }catch(e){
         bad('Upload error: '+(e.code?e.code+' ':'')+(e.message||e));
-        if (String(e).includes('auth/invalid-api-key')) {
-          bad('Invalid API key — verify your Web API key / referrer restrictions.');
-        }
-        if (String(e).includes('storage/unauthorized')) {
-          bad('Storage rules blocked the upload. Allow anonymous writes to this path while testing.');
-        }
+        if (String(e).includes('storage/unauthorized')) bad('Storage rules blocked the upload.');
         alert('Upload failed: ' + (e && e.message || e));
       }
     }
 
     function showPreview(url){
       $('#preview').style.display='';
-      $('#previewImg').innerHTML = `<img src="${url}" alt="preview">`;
-      $('#openUrl').href = url;
-      $('#copyUrl').onclick = async ()=>{
-        try{ await navigator.clipboard.writeText(url); ok('URL copied.'); }
-        catch(err){ bad('Copy failed: '+(err.message||err)); }
-      };
+      $('#previewImg').innerHTML = `<a href="${url}" target="_blank" rel="noopener"><img src="${url}" alt="preview"></a>`;
+      const a = document.createElement('a');
+      a.href = url; a.target = '_blank'; a.rel='noopener';
+      a.innerHTML = `<img src="${url}" alt="thumb">`;
+      const wrap = $('#thumbs');
+      if (wrap.firstElementChild && wrap.firstElementChild.classList.contains('muted')) wrap.innerHTML='';
+      wrap.prepend(a);
     }
 
     async function refresh(){
@@ -174,15 +182,12 @@
         if (!sid){ alert('No scenarioId.'); return; }
         const folderRef = storage.ref().child(basePath(sid));
         const { items } = await folderRef.listAll();
-        if (!items.length){
-          $('#thumbs').innerHTML = '<span class="muted">No photos yet.</span>';
-          return;
-        }
+        if (!items.length){ $('#thumbs').innerHTML = '<span class="muted">No photos yet.</span>'; return; }
         const urls = await Promise.all(items.map(it=>it.getDownloadURL().catch(()=>null)));
         const entries = items.map((it,i)=>({it,url:urls[i]}))
                              .sort((a,b)=>(b.it.name||'').localeCompare(a.it.name||''));
         const wrap = $('#thumbs'); wrap.innerHTML='';
-        entries.forEach(({it,url})=>{
+        entries.forEach(({url})=>{
           if (!url) return;
           const a = document.createElement('a');
           a.href = url; a.target = '_blank'; a.rel='noopener';
@@ -195,18 +200,7 @@
       }
     }
 
-    function addThumb(url){
-      const wrap = $('#thumbs');
-      if (wrap.firstElementChild && wrap.firstElementChild.classList.contains('muted')){
-        wrap.innerHTML='';
-      }
-      const a = document.createElement('a');
-      a.href = url; a.target='_blank'; a.rel='noopener';
-      a.innerHTML = `<img src="${url}" alt="thumb">`;
-      wrap.prepend(a);
-    }
-
-    // ---------- Wire up ----------
+    // --- Wire up ---
     $('#btnUpload').addEventListener('click', upload);
     $('#btnRefresh').addEventListener('click', refresh);
     $('#fileInput').addEventListener('change', ()=>{
@@ -217,13 +211,9 @@
       r.readAsDataURL(f);
     });
 
-    // ---------- Boot ----------
+    // --- Boot ---
     (async function boot(){
-      try{
-        await ensureAuth();
-      }catch(e){
-        bad('Auth failed: '+(e.message||e));
-      }
+      try{ const cred = await auth.signInAnonymously(); ok('Auth OK (uid='+(cred.user?.uid||'unknown')+')'); }catch(e){ bad('Auth failed: '+(e.message||e)); }
       const sid = scenarioFromUrl();
       $('#scenarioId').value = sid || '';
       ok('Ready. Pick or take a photo, then Upload.');
