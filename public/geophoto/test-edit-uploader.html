@@ -2,42 +2,26 @@
 <html lang="en">
 <head>
 <meta charset="utf-8"/>
-<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1"/>
-<title>Photo Uploader — Storage Only (with progress & timeout)</title>
-
-<!-- If your site already injects window.firebaseConfig, you can omit this sample.
-<script>
-  window.firebaseConfig = {
-    apiKey: "AIzaSyBzwc75u8pG73OKcHN8ti2ADbucjKMHme8",
-    authDomain: "fireopssim.firebaseapp.com",
-    projectId: "fireopssim",
-    storageBucket: "fireopssim.appspot.com",
-    appId: "1:396140888722:web:demo"
-  };
-</script>
--->
-
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>FireOpsSim — Uploader (Storage-only)</title>
 <style>
   :root{--bg:#0b1220;--card:#111a2e;--muted:#b8c4e2;--line:#1b2b50;--ink:#e8eefc;--accent:#2c5cff;--ok:#7CFF7C;--bad:#FF7C7C}
   *{box-sizing:border-box}
   body{margin:0;padding:16px;background:var(--bg);color:var(--ink);font:14px/1.45 system-ui,Arial}
   h2{margin:0 0 12px}
   .row{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:8px 0}
-  input,button,progress{background:#091125;color:var(--ink);border:1px solid #20407a;border-radius:10px;padding:10px 12px}
+  input,button{background:#091125;color:var(--ink);border:1px solid #20407a;border-radius:10px;padding:10px 12px}
   input[readonly]{opacity:.85}
   button{cursor:pointer}
   button.primary{background:#1a3fbb;border-color:var(--accent)}
   .card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:12px;margin:12px 0}
   .muted{color:var(--muted)}
   .mono{font-family:ui-monospace,Menlo,Consolas,monospace}
-  #status{white-space:pre-wrap;background:#0c1530;border:1px solid #1b2b50;border-radius:10px;padding:10px;max-height:280px;overflow:auto}
+  #status{white-space:pre-wrap;background:#0c1530;border:1px solid #1b2b50;border-radius:10px;padding:10px;max-height:260px;overflow:auto}
   #preview img{max-width:100%;height:auto;border-radius:10px;border:1px solid #1a2b50}
   #thumbs{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px}
   #thumbs a{display:block}
   #thumbs img{width:96px;height:96px;object-fit:cover;border-radius:10px;border:1px solid #1a2b50}
-  progress{width:100%;height:12px;padding:0;border-radius:999px;overflow:hidden}
-  progress::-webkit-progress-bar{background:#0b1530;border-radius:999px}
-  progress::-webkit-progress-value{background:#2c5cff}
   @media (max-width:560px){ .row{flex-direction:column;align-items:stretch} input,button{width:100%} }
 </style>
 </head>
@@ -47,7 +31,7 @@
   <div class="card">
     <div class="row">
       <label class="muted">Bucket</label>
-      <input id="bucketName" class="mono" value="(detecting…)" readonly/>
+      <input id="bucketField" class="mono" value="gs://fireopssim.appspot.com" readonly/>
     </div>
     <div class="row">
       <label class="muted">Scenario</label>
@@ -55,24 +39,24 @@
     </div>
     <div class="row">
       <input id="fileInput" type="file" accept="image/*" capture="environment"/>
-      <button id="btnPick" class="primary" type="button">Pick / Take Photo</button>
-      <button id="btnUpload" class="primary" type="button" disabled>Upload Photo</button>
+      <button id="btnUpload" class="primary" type="button">Upload Photo</button>
+      <button id="btnRefresh" type="button">Refresh Gallery</button>
     </div>
-    <div class="row" id="progressRow" style="display:none">
-      <progress id="prog" max="100" value="0"></progress>
-      <span id="progLabel" class="muted mono">0%</span>
-    </div>
-    <div class="muted">Uploads to Cloud Storage only (no Realtime DB). Open this from Scenario Builder so <b>?scenarioId=...</b> is set.</div>
+    <div class="muted">Uploads to Cloud Storage only. Open from Scenario Builder so <b>?scenarioId=...</b> is set.</div>
   </div>
 
   <div id="preview" class="card" style="display:none">
-    <strong>Preview (last selected)</strong>
+    <strong>Uploaded Preview</strong>
     <div id="previewImg"></div>
+    <div class="row">
+      <a id="openUrl" target="_blank" rel="noopener">Open in new tab</a>
+      <button id="copyUrl" type="button">Copy URL</button>
+    </div>
   </div>
 
   <div class="card">
     <strong>Uploaded Photos</strong>
-    <div id="thumbs"></div>
+    <div id="thumbs"><span class="muted">No photos yet.</span></div>
   </div>
 
   <div class="card">
@@ -90,8 +74,13 @@
     // ---------- Logger ----------
     const $ = s=>document.querySelector(s);
     const logEl = $('#status');
-    const log = (m,c)=>{const d=document.createElement('div'); if(c)d.style.color=c; d.textContent='['+new Date().toLocaleTimeString()+'] '+m; logEl.appendChild(d); logEl.scrollTop=logEl.scrollHeight; console.log(m);};
-    const ok  = m=>log(m,'#7CFF7C'), bad = m=>log(m,'#FF7C7C');
+    const log = (m,c)=>{
+      const d=document.createElement('div');
+      if(c)d.style.color=c==='ok'?'#7CFF7C':c==='bad'?'#FF7C7C':'#FFD37C';
+      d.textContent='['+new Date().toLocaleTimeString()+'] '+m;
+      logEl.appendChild(d); logEl.scrollTop=logEl.scrollHeight; console.debug(m);
+    };
+    const ok=m=>log(m,'ok'), bad=m=>log(m,'bad');
 
     // ---------- Scenario from URL ----------
     const qsp = new URLSearchParams(location.search);
@@ -100,137 +89,143 @@
       const hash = (location.hash||'').replace(/^#/, ''); return decodeURIComponent(hash||'');
     }
 
-    // ---------- Firebase config ----------
-    const fallback = {
-      apiKey:"AIzaSyBzwc75u8pG73OKcHN8ti2ADbucjKMHme8",
-      authDomain:"fireopssim.firebaseapp.com",
-      projectId:"fireopssim",
-      storageBucket:"fireopssim.appspot.com",
-      appId:"1:396140888722:web:demo"
+    // ---------- Config & Firebase (compat) ----------
+    // Prefer any window.firebaseConfig already on the page; otherwise fall back to your older working config.
+    const fallbackCfg = {
+      apiKey: "AIzaSyBzwc75u8pG73OKcHN8ti2ADbucjKMHme8",
+      authDomain: "fireopssim.firebaseapp.com",
+      projectId: "fireopssim",
+      // NOTE: the console may show firebasestorage.app for HTTPS downloads — we bind gs:// explicitly below.
+      storageBucket: "fireopssim.firebasestorage.app",
+      appId: "1:396140888722:web:demo"
     };
-    const cfg = Object.assign({}, fallback, (window.firebaseConfig||{}));
-    if (!cfg.storageBucket && cfg.projectId){ cfg.storageBucket = `${cfg.projectId}.appspot.com`; }
+    const cfg = Object.assign({}, fallbackCfg, (window.firebaseConfig||{}));
 
+    // Initialize app/auth
     const app = firebase.initializeApp(cfg);
     const auth = firebase.auth(app);
-    const storage = firebase.storage(app); // compat (uses cfg.storageBucket)
-    // Boost retries so poor networks don't stall forever:
-    storage.setMaxUploadRetryTime(60_000);      // 60s retry time for uploads
-    storage.setMaxOperationRetryTime(30_000);   // 30s for non-upload ops
 
-    const bucketStr = cfg.storageBucket ? `gs://${cfg.storageBucket}` : '(missing storageBucket)';
-    $('#bucketName').value = bucketStr;
-
-    // ---------- State ----------
-    let sid = "";
-    let lastFile = null;
+    // Bind Storage to gs:// as in your older file (working pattern)
+    const storage = firebase.storage(app, "gs://fireopssim.appspot.com");
+    storage.setMaxOperationRetryTime(60000);
+    storage.setMaxUploadRetryTime(120000);
+    ok('Storage bound to gs://fireopssim.appspot.com');
 
     // ---------- Helpers ----------
-    function safeName(s){ return (s||'photo.jpg').replace(/[^\w.\-]+/g,'_'); }
+    function safeName(s){ return (s||'photo').replace(/[^\w.\-]+/g,'_'); }
+    function basePath(sid){ return sid ? `scenarios/${sid}` : 'uploads'; }
 
-    // Resumable upload with progress + timeout + explicit error surfacing
-    function uploadWithProgress(path, file, metadata){
-      return new Promise((resolve, reject)=>{
-        const ref = storage.ref().child(path);
-        const task = ref.put(file, metadata);
-        const start = Date.now();
-
-        const watchdogMs = 90_000; // cancel after 90s to avoid hanging forever
-        const watchdog = setTimeout(()=>{
-          try { task.cancel(); } catch(_) {}
-          reject(new Error('Upload timed out after ' + Math.round((Date.now()-start)/1000) + 's'));
-        }, watchdogMs);
-
-        $('#progressRow').style.display = '';
-        $('#prog').value = 0; $('#progLabel').textContent = '0%';
-
-        task.on('state_changed',
-          (snap)=>{
-            const pct = Math.round((snap.bytesTransferred / snap.totalBytes) * 100);
-            $('#prog').value = pct; $('#progLabel').textContent = pct + '%';
-            log(`Uploading… ${pct}% (${snap.bytesTransferred}/${snap.totalBytes} bytes)`);
-          },
-          (err)=>{
-            clearTimeout(watchdog);
-            reject(err);
-          },
-          async ()=>{
-            clearTimeout(watchdog);
-            try {
-              const url = await task.snapshot.ref.getDownloadURL();
-              resolve({ url, fullPath: ref.fullPath });
-            } catch (e) {
-              reject(e);
-            }
-          }
-        );
-      });
-    }
-
-    async function doUpload(){
-      if (!lastFile){ alert('Pick/take a photo first.'); return; }
-      // organize by scenario if provided; else put under /uploads/
-      const base = sid ? `scenarios/${sid}` : 'uploads';
-      const path = `${base}/${Date.now()}_${safeName(lastFile.name)}`;
-      log(`Uploading to ${bucketStr}/${path}`);
-
-      try{
-        const { url, fullPath } = await uploadWithProgress(path, lastFile, { contentType: lastFile.type || 'image/jpeg' });
-        ok('Upload OK');
-        $('#progressRow').style.display = 'none';
-
-        // Add thumbnail
-        const a = document.createElement('a');
-        a.href = url; a.target = '_blank'; a.rel='noopener';
-        a.innerHTML = `<img src="${url}" alt="thumb">`;
-        $('#thumbs').prepend(a);
-
-        // Reset for next shot
-        $('#fileInput').value = "";
-        lastFile = null;
-        $('#btnUpload').disabled = true;
-
-        // Notify parent/opener if present
-        const msg = { type:'fo-upload-complete', scenarioId: sid, url, path: fullPath };
-        if (window.opener) window.opener.postMessage(msg, "*");
-        else if (window.parent) window.parent.postMessage(msg, "*");
-      }catch(e){
-        $('#progressRow').style.display = 'none';
-        bad(`Upload FAILED: ${e.code||''} ${e.message||e}`);
-        if (String(e).includes('auth/invalid-api-key')) {
-          bad('Invalid API key — ensure window.firebaseConfig.apiKey (or fallback) is correct.');
-        }
-        if (String(e).includes('storage/unauthorized')) {
-          bad('Storage rules blocked the upload (storage/unauthorized). Allow anonymous writes to this path while testing.');
-        }
-        alert('Upload failed:\n' + (e && e.message || e));
+    async function ensureAuth(){
+      if (!auth.currentUser){
+        const cred = await auth.signInAnonymously();
+        ok('Auth OK (anon uid='+(cred.user?.uid||'unknown')+')');
       }
     }
 
-    // ---------- UI wiring ----------
-    $('#btnPick').addEventListener('click', ()=> $('#fileInput').click());
+    async function upload(){
+      try{
+        await ensureAuth();
+
+        const sid = ($('#scenarioId').value||'').trim();
+        if (!sid){ alert('No scenarioId. Open this page from Scenario Builder.'); return; }
+
+        const f = $('#fileInput').files && $('#fileInput').files[0];
+        if (!f){ alert('Pick or take a photo first.'); log('No file selected.'); return; }
+        if (f.size > 20*1024*1024){ alert('Max 20 MB'); return; }
+
+        const path = `${basePath(sid)}/${Date.now()}_${safeName(f.name)}`;
+        log('Uploading → '+path);
+
+        // === Core logic from your older working file ===
+        const ref = storage.ref().child(path);
+        await ref.put(f, { contentType: f.type || 'image/jpeg' });
+        const url = await ref.getDownloadURL();
+        // ===============================================
+
+        ok('Upload OK');
+        showPreview(url);
+        addThumb(url);
+      }catch(e){
+        bad('Upload error: '+(e.code?e.code+' ':'')+(e.message||e));
+        if (String(e).includes('auth/invalid-api-key')) {
+          bad('Invalid API key — verify your Web API key / referrer restrictions.');
+        }
+        if (String(e).includes('storage/unauthorized')) {
+          bad('Storage rules blocked the upload. Allow anonymous writes to this path while testing.');
+        }
+        alert('Upload failed: ' + (e && e.message || e));
+      }
+    }
+
+    function showPreview(url){
+      $('#preview').style.display='';
+      $('#previewImg').innerHTML = `<img src="${url}" alt="preview">`;
+      $('#openUrl').href = url;
+      $('#copyUrl').onclick = async ()=>{
+        try{ await navigator.clipboard.writeText(url); ok('URL copied.'); }
+        catch(err){ bad('Copy failed: '+(err.message||err)); }
+      };
+    }
+
+    async function refresh(){
+      try{
+        await ensureAuth();
+        const sid = ($('#scenarioId').value||'').trim();
+        if (!sid){ alert('No scenarioId.'); return; }
+        const folderRef = storage.ref().child(basePath(sid));
+        const { items } = await folderRef.listAll();
+        if (!items.length){
+          $('#thumbs').innerHTML = '<span class="muted">No photos yet.</span>';
+          return;
+        }
+        const urls = await Promise.all(items.map(it=>it.getDownloadURL().catch(()=>null)));
+        const entries = items.map((it,i)=>({it,url:urls[i]}))
+                             .sort((a,b)=>(b.it.name||'').localeCompare(a.it.name||''));
+        const wrap = $('#thumbs'); wrap.innerHTML='';
+        entries.forEach(({it,url})=>{
+          if (!url) return;
+          const a = document.createElement('a');
+          a.href = url; a.target = '_blank'; a.rel='noopener';
+          a.innerHTML = `<img src="${url}" alt="thumb">`;
+          wrap.appendChild(a);
+        });
+        ok(`Listed ${entries.length} item(s).`);
+      }catch(e){
+        bad('Refresh error: '+(e.code?e.code+' ':'')+(e.message||e));
+      }
+    }
+
+    function addThumb(url){
+      const wrap = $('#thumbs');
+      if (wrap.firstElementChild && wrap.firstElementChild.classList.contains('muted')){
+        wrap.innerHTML='';
+      }
+      const a = document.createElement('a');
+      a.href = url; a.target='_blank'; a.rel='noopener';
+      a.innerHTML = `<img src="${url}" alt="thumb">`;
+      wrap.prepend(a);
+    }
+
+    // ---------- Wire up ----------
+    $('#btnUpload').addEventListener('click', upload);
+    $('#btnRefresh').addEventListener('click', refresh);
     $('#fileInput').addEventListener('change', ()=>{
       const f = $('#fileInput').files && $('#fileInput').files[0];
       if (!f) return;
-      lastFile = f;
       const r = new FileReader();
       r.onload = (e)=>{ $('#preview').style.display=''; $('#previewImg').innerHTML = `<img src="${e.target.result}" alt="preview">`; };
       r.readAsDataURL(f);
-      $('#btnUpload').disabled = false;
-      ok('Photo selected — ready to upload');
     });
-    $('#btnUpload').addEventListener('click', doUpload);
 
     // ---------- Boot ----------
     (async function boot(){
       try{
-        const cred = await auth.signInAnonymously();
-        ok('Auth OK (uid='+(cred.user?.uid||'unknown')+')');
+        await ensureAuth();
       }catch(e){
         bad('Auth failed: '+(e.message||e));
       }
-      sid = scenarioFromUrl();
-      $('#scenarioId').value = sid || '(none)';
+      const sid = scenarioFromUrl();
+      $('#scenarioId').value = sid || '';
       ok('Ready. Pick or take a photo, then Upload.');
     })();
   })();
