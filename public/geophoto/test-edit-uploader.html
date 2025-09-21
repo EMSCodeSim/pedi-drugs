@@ -66,7 +66,7 @@
 
   <script>
   (function(){
-    // ========== small logger ==========
+    // ========== logger ==========
     const $ = sel => document.querySelector(sel);
     const logEl = $('#status');
     const log = (m,c)=>{const d=document.createElement('div'); if(c)d.style.color=c; d.textContent='['+new Date().toLocaleTimeString()+'] '+m; logEl.appendChild(d); logEl.scrollTop=logEl.scrollHeight; console.log(m);};
@@ -109,70 +109,67 @@
       return null;
     }
 
-    // ========== Firebase init (compat) ==========
-    const defaultCfg = {
-      // Provide your defaults here or rely on window.firebaseConfig
-      apiKey:"AIzaSyBzwc75u8pG73OKcHN8ti2ADbucjKMHme8",
-      authDomain:"fireopssim.firebaseapp.com",
-      projectId:"fireopssim",
-      storageBucket:"fireopssim.appspot.com",
-      databaseURL:"https://fireopssim-default-rtdb.firebaseio.com",
-      appId:"1:396140888722:web:demo"
+    // ========== Firebase init (compat only) ==========
+    // IMPORTANT: Don't hardcode buckets; use the page's config first.
+    const defaults = {
+      apiKey:"", authDomain:"", projectId:"", storageBucket:"", databaseURL:"", appId:""
     };
-    const raw = Object.assign({}, defaultCfg, (window.firebaseConfig||{}));
+    const cfg = Object.assign({}, defaults, (window.firebaseConfig || {}));
 
-    // normalize DB URL if a Storage URL was accidentally set
-    (function normalizeDbUrl(cfg){
-      const pid = cfg && cfg.projectId;
-      const url = (cfg && cfg.databaseURL) || "";
+    // If someone pasted a Storage URL into databaseURL by mistake, fix it:
+    (function normalizeDbUrl(c){
+      const pid = c && c.projectId;
+      const url = (c && c.databaseURL) || "";
       const okHost = /^(https:\/\/)[-a-z0-9]+(-default-rtdb)?\.(firebaseio|firebasedatabase)\.com\/?$/i;
       const looksStorage = /(firebasestorage|storage\.googleapis)\./i.test(url);
-      if (!okHost.test(url) || looksStorage) {
-        if (pid) cfg.databaseURL = `https://${pid}-default-rtdb.firebaseio.com`;
+      if ((!okHost.test(url) || looksStorage) && pid){
+        c.databaseURL = `https://${pid}-default-rtdb.firebaseio.com`;
       }
-    })(raw);
+    })(cfg);
 
-    const app = firebase.initializeApp(raw);
+    // If storageBucket missing, try to infer from projectId
+    if (!cfg.storageBucket && cfg.projectId){
+      cfg.storageBucket = `${cfg.projectId}.appspot.com`;
+    }
+
+    const app = firebase.initializeApp(cfg);
     const auth = firebase.auth(app);
     const db   = firebase.database(app);
+    const storage = firebase.storage(app); // ✅ compat default (uses cfg.storageBucket)
 
-    // IMPORTANT: compat storage — explicit GS bucket binding
-    const storage = firebase.app().storage(`gs://${raw.storageBucket}`);
-    $('#bucketName').value = `gs://${raw.storageBucket}`;
+    // Show bucket in UI (defensive)
+    const bucketStr = cfg.storageBucket ? `gs://${cfg.storageBucket}` : '(missing storageBucket in config)';
+    $('#bucketName').value = bucketStr;
 
     // ========== State ==========
     let currentScenarioId = "";
     let lastFile = null;
 
-    // ========== “logic from reference file”: working upload core ==========
-    // This function is *called by your existing flow* to do the actual upload.
-    async function yourWorkingStorageUpload(sid, file){
-      const safe = s => (s||"file").replace(/[^\w.\-]+/g,"_");
-      const path = `scenarios/${sid}/${Date.now()}_${safe(file.name)}`;
+    // ========== Core upload logic (compat, bucket from config) ==========
+    async function uploadToStorageCompat(sid, file){
+      // Use default bucket set by cfg.storageBucket.
+      const path = `scenarios/${sid}/${Date.now()}_${safeName(file.name)}`;
       const ref  = storage.ref().child(path);
-      await ref.put(file, { contentType: file.type || "image/jpeg" });
-      const url = await ref.getDownloadURL();
-      return { url, fullPath: ref.fullPath, gsUri: `gs://${raw.storageBucket}/${ref.fullPath}` };
+      log(`Uploading to ${bucketStr}/${path}`);
+      const snap = await ref.put(file, { contentType: file.type || 'image/jpeg' });
+      const url  = await snap.ref.getDownloadURL();
+      return { url, fullPath: ref.fullPath, gsUri: `${bucketStr}/${ref.fullPath}` };
     }
 
-    // ========== Your existing upload function uses the working logic above ==========
     async function uploadCurrentFile(){
       if (!currentScenarioId) { alert('No scenarioId. Open this page via the builder redirect.'); return; }
       if (!lastFile) { alert('Take or pick a photo first.'); return; }
 
       try {
-        // 1) Upload to Storage (working logic)
-        const { url, fullPath, gsUri } = await yourWorkingStorageUpload(currentScenarioId, lastFile);
+        const { url, fullPath, gsUri } = await uploadToStorageCompat(currentScenarioId, lastFile);
         ok('Upload OK');
 
-        // 2) GPS + address
         const gps = await getGPS();
         let address = null;
         if (gps && gps.lat && gps.lng) {
           try { address = await reverseGeocode(gps.lat, gps.lng); } catch(_){}
         }
 
-        // 3) Write photo record in Realtime Database (two paths for compatibility)
         const photoKey = db.ref('photos').push().key;
         const photoRec = {
           id: photoKey,
@@ -191,7 +188,7 @@
         await db.ref().update(updates);
         ok('DB updated with photo record');
 
-        // 4) UI: show preview + thumb
+        // Preview + thumb
         $('#preview').style.display = '';
         $('#previewImg').innerHTML = `<a href="${url}" target="_blank" rel="noopener"><img src="${url}" alt="preview"></a>`;
         const a = document.createElement('a');
@@ -199,19 +196,19 @@
         a.innerHTML = `<img src="${url}" alt="thumb">`;
         $('#thumbs').prepend(a);
 
-        // reset input for next shot
+        // Reset input for next shot
         $('#fileInput').value = "";
         lastFile = null;
       } catch(e){
-        bad('Upload error: '+(e.code||'')+' '+(e.message||e));
+        bad(`Upload FAILED: ${e.code||''} ${e.message||e}`);
         if (String(e).includes('storage/unauthorized')) {
-          bad('Storage rules blocked the upload (storage/unauthorized). Are anonymous writes allowed?');
+          bad('Storage rules blocked the upload (storage/unauthorized). Ensure anonymous writes are allowed during testing.');
         }
         alert('Upload failed:\n'+(e && e.message || e));
       }
     }
 
-    // ========== Wire up (keeps your current buttons/flow) ==========
+    // ========== Events ==========
     $('#btnTake').addEventListener('click', ()=> $('#fileInput').click());
     $('#fileInput').addEventListener('change', ()=>{
       const f = $('#fileInput').files && $('#fileInput').files[0];
@@ -238,9 +235,14 @@
       $('#scenarioId').value = currentScenarioId || '(missing)';
       if (!currentScenarioId) bad('No scenarioId provided; add ?scenarioId=...');
 
+      // Final sanity log
+      if (!cfg.storageBucket){
+        bad('storageBucket missing from config; uploads cannot proceed until it is set.');
+      } else {
+        ok('Using bucket ' + bucketStr);
+      }
       ok('Ready. Tap “Take / Pick Photo”, then “Upload Photo”. Keep adding more.');
     })();
-
   })();
   </script>
 </body>
