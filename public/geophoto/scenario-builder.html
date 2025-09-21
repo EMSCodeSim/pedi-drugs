@@ -1,280 +1,285 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="utf-8"/>
-<meta name="viewport" content="width=device-width,initial-scale=1"/>
-<title>FireOpsSim — Scenario Builder</title>
-<style>
-  :root{--bg:#0b1220;--card:#111a2e;--muted:#b8c4e2;--line:#1b2b50;--ink:#e8eefc;--accent:#2c5cff;--ok:#7CFF7C;--bad:#FF7C7C}
-  *{box-sizing:border-box}
-  body{margin:0;padding:16px;background:var(--bg);color:var(--ink);font:14px/1.45 system-ui,Arial}
-  h1{margin:0 0 12px;font-size:20px}
-  .row{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:8px 0}
-  input,button{background:#091125;color:var(--ink);border:1px solid #20407a;border-radius:10px;padding:8px 10px}
-  input.mono,.mono{font-family:ui-monospace,Menlo,Consolas,monospace}
-  button{cursor:pointer}
-  button.primary{background:#1a3fbb;border-color:var(--accent)}
-  .card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:12px;margin:12px 0}
-  .muted{color:var(--muted);opacity:.95}
-  #status{white-space:pre-wrap;background:#0c1530;border:1px solid #1b2b50;border-radius:10px;padding:10px;max-height:320px;overflow:auto}
-  #stops{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px}
-  .stop{background:#0b1429;border:1px solid #1a2b50;border-radius:12px;overflow:hidden}
-  .stop img{width:100%;height:160px;object-fit:cover;display:block}
-  .stop .meta{padding:8px;font-size:12px}
-  a{color:#9ec5ff}
-  iframe#uploaderFrame{width:100%;height:520px;border:0;background:#0b1220;border-radius:12px}
-</style>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Scenario Builder — Step 1 (Create & Dispatch)</title>
+  <style>
+    :root{--bg:#0f172a;--card:#111827;--muted:#94a3b8;--text:#e5e7eb;--accent:#22c55e;--accent-2:#60a5fa;--danger:#ef4444}
+    *{box-sizing:border-box}
+    body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,Cantarell,Noto Sans,sans-serif;background:linear-gradient(180deg,#0b1220,#0f172a 30%,#0b1220);color:var(--text)}
+    .wrap{max-width:880px;margin:24px auto;padding:20px}
+    .header{display:flex;align-items:center;gap:14px;margin-bottom:16px}
+    .badge{font-size:12px;padding:3px 8px;border-radius:999px;background:#1f2937;color:#cbd5e1;border:1px solid #334155}
+    h1{font-size:28px;margin:0}
+    p.lead{color:var(--muted);margin:6px 0 18px}
+    .card{background:rgba(17,24,39,.78);backdrop-filter:blur(6px);border:1px solid #233047;border-radius:18px;padding:18px;margin:14px 0}
+    .grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+    @media (max-width:780px){.grid{grid-template-columns:1fr}}
+    label{display:block;font-size:13px;color:#cbd5e1;margin-bottom:6px}
+    input[type="text"], textarea, select{width:100%;background:#0b1220;border:1px solid #243142;color:var(--text);padding:12px 12px;border-radius:12px;outline:none}
+    textarea{min-height:120px;resize:vertical}
+    .row{margin:10px 0}
+    .actions{display:flex;flex-wrap:wrap;gap:10px;margin-top:10px}
+    .btn{appearance:none;border:none;border-radius:12px;padding:12px 16px;font-weight:600;cursor:pointer;transition:.2s transform ease,.2s opacity ease;display:inline-flex;align-items:center;gap:8px}
+    .btn:active{transform:translateY(1px)}
+    .btn-primary{background:var(--accent);color:#052e16}
+    .btn-secondary{background:#1f2937;color:#e5e7eb;border:1px solid #334155}
+    .btn-link{background:transparent;color:var(--accent-2);text-decoration:underline;padding:0}
+    .btn-danger{background:var(--danger);color:white}
+    .hint{font-size:12px;color:#94a3b8;margin-top:6px}
+    .hr{height:1px;background:linear-gradient(90deg,transparent,#243142,transparent);margin:18px 0}
+    .step{display:flex;align-items:center;gap:10px;color:#93c5fd;font-size:13px}
+    .step .dot{width:8px;height:8px;border-radius:999px;background:#93c5fd}
+    .success{border-color:#1f5132;background:rgba(34,197,94,.08)}
+    .key-val{display:grid;grid-template-columns:140px 1fr;gap:10px}
+    .kbd{font-family:ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;background:#0b1220;border:1px solid #243142;border-radius:8px;padding:4px 8px;color:#cbd5e1}
+    .toast{position:fixed;right:16px;bottom:16px;background:#111827;color:#e5e7eb;border:1px solid #334155;padding:12px 14px;border-radius:12px;box-shadow:0 10px 30px rgba(0,0,0,.35);opacity:0;transform:translateY(8px);transition:.25s}
+    .toast.show{opacity:1;transform:translateY(0)}
+    .visually-hidden{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
+  </style>
 </head>
 <body>
-  <h1>FireOpsSim — Scenario Builder</h1>
+  <div class="wrap">
+    <div class="header">
+      <span class="badge">EMS/Fire Scenario Tools</span>
+      <h1>Scenario Builder — Step 1</h1>
+    </div>
+    <p class="lead">Create the scenario shell with a name and dispatch information. You'll add all photos in the next step.</p>
 
-  <div class="card">
-    <div class="row">
-      <div class="muted">DB:</div><div class="mono">dailyquiz-d5279 (Realtime DB)</div>
-      <div class="muted">Uploader:</div>
-      <div class="mono">https://fireopssim.com/geophoto/test-edit-uploader</div>
+    <!-- Step indicator -->
+    <div class="card">
+      <div class="step"><span class="dot"></span> Step 1: Create scenario (name + dispatch)</div>
+      <div class="step" style="opacity:.6;margin-top:6px"><span class="dot" style="opacity:.4"></span> Step 2: Upload photos in <strong>test‑edit‑uploader</strong></div>
     </div>
 
-    <div class="row">
-      <label class="muted">Title</label>
-      <input id="title" placeholder="e.g., House Fire — Elm St." style="min-width:280px">
-      <label class="muted">Dispatch</label>
-      <input id="dispatch" placeholder="Engine 1, Engine 2…" style="min-width:280px">
-      <button id="btnCreate" class="primary">Create Scenario</button>
-      <span id="createStatus" class="muted">idle</span>
+    <!-- Existing scenario banner (if opened via ?scenarioId=...) -->
+    <div id="existingScenarioCard" class="card success" style="display:none">
+      <h2 style="margin:4px 0 8px; font-size:20px">Scenario loaded</h2>
+      <div class="key-val">
+        <div><label>Scenario ID</label></div>
+        <div><code class="kbd" id="loadedScenarioId"></code></div>
+        <div><label>Name</label></div>
+        <div id="loadedScenarioName">—</div>
+      </div>
+      <div class="actions" style="margin-top:10px">
+        <a id="openUploaderExisting" class="btn btn-primary" target="_blank" rel="noopener">Open Photo Uploader</a>
+        <button class="btn btn-secondary" id="copyUploaderLinkExisting">Copy uploader link</button>
+      </div>
+      <div class="hint">Use this to add or manage photos for this scenario. You can keep this tab open for editing dispatch details later.</div>
     </div>
 
-    <div class="row">
-      <label class="muted">Scenario ID</label>
-      <input id="scenarioId" class="mono" placeholder="(auto-generated)" style="min-width:360px" readonly>
-      <button id="btnCopyId">Copy ID</button>
-      <button id="btnUpload" class="primary">Upload Photo</button>
+    <!-- Create form -->
+    <form id="createForm" class="card" autocomplete="off">
+      <h2 style="margin:4px 0 12px; font-size:20px">Create a new scenario</h2>
+      <div class="row">
+        <label for="scenarioName">Scenario Name <span class="hint">(e.g., "Abdominal pain — 33F at grocery store")</span></label>
+        <input type="text" id="scenarioName" name="scenarioName" placeholder="Enter a clear, searchable name" required />
+      </div>
+
+      <div class="row">
+        <label for="dispatchText">Dispatch Notes</label>
+        <textarea id="dispatchText" name="dispatchText" placeholder="Unit(s) dispatched, chief complaint, age/sex if known, location, pertinent caller info. Keep it neutral (no diagnosis)." ></textarea>
+        <div class="hint">Example: "Medic 181 respond Priority 2 to 123 Main St. 33‑year‑old female, abdominal pain with vomiting since this morning."</div>
+      </div>
+
+      <div class="row grid">
+        <div>
+          <label for="address">Address (optional)</label>
+          <input type="text" id="address" name="address" placeholder="Street / venue or GPS hint" />
+        </div>
+        <div>
+          <label for="priority">Priority (optional)</label>
+          <select id="priority" name="priority">
+            <option value="">—</option>
+            <option>Priority 1</option>
+            <option>Priority 2</option>
+            <option>Priority 3</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="actions">
+        <button type="submit" class="btn btn-primary" id="createBtn">Create Scenario</button>
+        <button type="button" class="btn btn-secondary" id="resetBtn">Reset</button>
+      </div>
+      <div class="hint">No photos here. After creation you'll get a button to open the dedicated photo uploader.</div>
+    </form>
+
+    <!-- Post-create panel (hidden until created) -->
+    <div id="postCreate" class="card success" style="display:none">
+      <h2 style="margin:4px 0 8px; font-size:20px">Scenario created</h2>
+      <div class="key-val">
+        <div><label>Scenario ID</label></div>
+        <div><code id="scenarioIdOut" class="kbd"></code></div>
+        <div><label>Name</label></div>
+        <div id="scenarioNameOut">—</div>
+      </div>
+      <div class="hr"></div>
+      <div class="actions">
+        <a id="openUploader" class="btn btn-primary" target="_blank" rel="noopener">Open Photo Uploader</a>
+        <button class="btn btn-secondary" id="copyUploaderLink">Copy uploader link</button>
+      </div>
+      <div class="hint">Uploads & camera live in <strong>test‑edit‑uploader</strong>. This page stays focused on name and dispatch only.</div>
     </div>
 
-    <div class="muted">
-      After the uploader saves a photo to <span class="mono">gs://fireopssim.appspot.com</span>, this page records
-      the <span class="mono">storagePath</span>, URL, and GPS in Realtime DB under
-      <span class="mono">/scenarios/&lt;id&gt;/stops</span> and <span class="mono">/geophoto/scenarios/&lt;id&gt;/stops</span>.
-    </div>
+    <div id="toast" class="toast" role="status" aria-live="polite"></div>
   </div>
 
-  <div class="card">
-    <strong>Camera Uploader</strong>
-    <iframe id="uploaderFrame" src="https://fireopssim.com/geophoto/test-edit-uploader"></iframe>
-  </div>
-
-  <div class="card">
-    <strong>Status</strong>
-    <div id="status">Booting…</div>
-  </div>
-
-  <div class="card">
-    <strong>Stops (live from Realtime DB)</strong>
-    <div id="stops"><div class="muted">None yet.</div></div>
-  </div>
-
-  <!-- Firebase compat (Realtime DB only) -->
-  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js"></script>
-
-  <script>
-  (function(){
-    const $ = id => document.getElementById(id);
-    const logEl = $('status');
-    const log = (m,c)=>{const d=document.createElement('div'); if(c)d.style.color=c; d.textContent='['+new Date().toLocaleTimeString()+'] '+m; logEl.appendChild(d); logEl.scrollTop=logEl.scrollHeight; console.log(m);};
-    const ok  = m=>log(m,'#7CFF7C');
-    const bad = m=>log(m,'#FF7C7C');
-
-    // --- Realtime DB (dailyquiz-d5279) ---
-    const cfgDB = {
-      apiKey:"AIzaSyDM6DpRSeZueVKRpbyJyDmhf8WY66KyCDk",
-      authDomain:"dailyquiz-d5279.firebaseapp.com",
-      databaseURL:"https://dailyquiz-d5279-default-rtdb.firebaseio.com",
-      projectId:"dailyquiz-d5279",
-      storageBucket:"dailyquiz-d5279.appspot.com",
-      appId:"1:94577748034:web:c032d3a1d72db1313de5db",
-      measurementId:"G-19DVN7NNH7"
+  <!-- Firebase SDKs (modular) -->
+  <script type="module">
+    // ---- Fill in your Firebase config or import from an existing config file ----
+    // If you already have a global window.firebaseConfig defined elsewhere, we'll use it.
+    const fallbackConfig = {
+      apiKey: "YOUR_API_KEY",
+      authDomain: "YOUR_AUTH_DOMAIN",
+      databaseURL: "YOUR_DATABASE_URL",
+      projectId: "YOUR_PROJECT_ID",
+      storageBucket: "YOUR_STORAGE_BUCKET",
+      appId: "YOUR_APP_ID"
     };
-    const app = firebase.initializeApp(cfgDB);
-    const db  = firebase.database(app);
-    const auth= firebase.auth(app);
 
-    auth.onAuthStateChanged(u=>log('[DB AUTH] '+(u?('uid='+u.uid):'no user')));
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+    import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+    import { getDatabase, ref, push, set, get, serverTimestamp, child } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
 
-    async function signInDB(){
-      if (!auth.currentUser){
-        const cred = await auth.signInAnonymously();
-        ok('DB auth OK (uid='+(cred.user && cred.user.uid || 'unknown')+')');
-      }
+    const firebaseConfig = window.firebaseConfig || fallbackConfig;
+    const app = initializeApp(firebaseConfig);
+    const auth = getAuth(app);
+    const db = getDatabase(app);
+
+    const qs = new URLSearchParams(location.search);
+    const existingScenarioId = qs.get('scenarioId') || '';
+
+    const ui = {
+      form: document.getElementById('createForm'),
+      name: document.getElementById('scenarioName'),
+      dispatch: document.getElementById('dispatchText'),
+      address: document.getElementById('address'),
+      priority: document.getElementById('priority'),
+      createBtn: document.getElementById('createBtn'),
+      resetBtn: document.getElementById('resetBtn'),
+      postCreate: document.getElementById('postCreate'),
+      scenarioIdOut: document.getElementById('scenarioIdOut'),
+      scenarioNameOut: document.getElementById('scenarioNameOut'),
+      openUploader: document.getElementById('openUploader'),
+      copyUploaderLink: document.getElementById('copyUploaderLink'),
+      existingCard: document.getElementById('existingScenarioCard'),
+      loadedScenarioId: document.getElementById('loadedScenarioId'),
+      loadedScenarioName: document.getElementById('loadedScenarioName'),
+      openUploaderExisting: document.getElementById('openUploaderExisting'),
+      copyUploaderLinkExisting: document.getElementById('copyUploaderLinkExisting'),
+      toast: document.getElementById('toast')
+    };
+
+    const uploaderURL = 'https://fireopssim.com/geophoto/test-edit-uploader';
+
+    function toast(msg){
+      ui.toast.textContent = msg;
+      ui.toast.classList.add('show');
+      setTimeout(() => ui.toast.classList.remove('show'), 2400);
     }
 
-    let scenarioId = null;
+    function buildUploaderLink(sid){
+      const url = new URL(uploaderURL);
+      url.searchParams.set('scenarioId', sid);
+      return url.toString();
+    }
 
-    async function createScenario(){
+    async function ensureAuth(){
+      try{await signInAnonymously(auth);}catch(e){/* ignore if already authed */}
+      return new Promise((resolve)=>{
+        onAuthStateChanged(auth, (user)=>{
+          if(user) resolve(user); // anon ok
+        });
+      });
+    }
+
+    async function loadExisting(sid){
+      if(!sid) return;
       try{
-        await signInDB();
-        $('createStatus').textContent='creating…';
-        const title = ($('title').value||'').trim();
-        const dispatch = ($('dispatch').value||'').trim();
-
-        const id = db.ref('scenarios').push().key; // old working flow
-        const base = { id, title: title||id, dispatch, description:dispatch, createdAt: Date.now(), active:true, stops:[] };
-
-        const multi = {};
-        multi[`scenarios/${id}`] = base;
-        multi[`geophoto/scenarios/${id}`] = base;
-        await db.ref().update(multi);
-
-        scenarioId = id;
-        $('scenarioId').value = id;
-        $('createStatus').textContent='created ✓';
-        ok('Scenario created: ' + id);
-
-        if (uploaderReady) postToUploader({ type:"fo-set-scenario", scenarioId: id });
-        subscribeStops();
-      }catch(e){
-        $('createStatus').textContent='error';
-        bad('Create scenario error: ' + (e.code||'') + ' ' + (e.message||e));
-      }
-    }
-
-    function subscribeStops(){
-      if (!scenarioId) return;
-      db.ref(`scenarios/${scenarioId}/stops`).on('value', snap=>{
-        const stops = snap.val() || [];
-        renderStops(stops);
-      });
-    }
-
-    function renderStops(stops){
-      const box = $('stops');
-      box.innerHTML='';
-      if (!stops.length){ box.innerHTML='<div class="muted">None yet.</div>'; return; }
-      stops.forEach(s=>{
-        const div=document.createElement('div'); div.className='stop';
-        if (s.imageURL){ const img=new Image(); img.src=s.imageURL; div.appendChild(img); }
-        const meta=document.createElement('div'); meta.className='meta mono';
-        const gps = s.gps ? `GPS: ${Number(s.gps.lat).toFixed(5)}, ${Number(s.gps.lng).toFixed(5)}${s.gps.acc?` (±${s.gps.acc}m)`:''}` : 'GPS: n/a';
-        meta.innerHTML = `
-          <div>${s.storagePath || '(no storagePath)'} </div>
-          <div>${gps}</div>
-          <div>${new Date(s.at||Date.now()).toLocaleString()}</div>`;
-        div.appendChild(meta);
-        box.appendChild(div);
-      });
-    }
-
-    // --- Embedded uploader messaging/RPC ---
-    const TRUSTED_ORIGIN = "https://fireopssim.com"; // iframe origin
-    const frame = $('uploaderFrame');
-    let uploaderReady = false;
-    const reqs = new Map();
-    const uuid = () => Math.random().toString(36).slice(2)+Date.now().toString(36);
-
-    function postToUploader(payload){
-      if (!frame.contentWindow) throw new Error("uploader not available");
-      frame.contentWindow.postMessage(payload, TRUSTED_ORIGIN);
-    }
-
-    window.addEventListener('message', async (ev)=>{
-      if (ev.origin !== TRUSTED_ORIGIN) return;
-      const msg = ev.data || {};
-
-      if (msg.type === 'fo-ready'){
-        uploaderReady = true;
-        ok('Uploader ready.');
-        if (scenarioId) postToUploader({ type:'fo-set-scenario', scenarioId });
-        return;
-      }
-
-      if (msg.type === 'fo-upload-complete'){
-        try{
-          if (!scenarioId || msg.scenarioId !== scenarioId){
-            bad('Upload for different scenario ('+msg.scenarioId+')'); return;
-          }
-          await saveStopToDB(msg);
-          ok('Photo recorded in DB.');
-        }catch(e){
-          bad('Save error: ' + (e.code||'') + ' ' + (e.message||e));
+        await ensureAuth();
+        const snap = await get(ref(db, `scenarios/${sid}`));
+        if(snap.exists()){
+          const data = snap.val();
+          // Show existing card & uploader link; keep form visible for edits if desired
+          ui.existingCard.style.display = '';
+          ui.loadedScenarioId.textContent = sid;
+          ui.loadedScenarioName.textContent = data.name || '—';
+          const link = buildUploaderLink(sid);
+          ui.openUploaderExisting.href = link;
+          ui.copyUploaderLinkExisting.onclick = async ()=>{
+            await navigator.clipboard.writeText(link);
+            toast('Uploader link copied');
+          };
         }
+      }catch(err){
+        console.error(err);
+      }
+    }
+
+    ui.form.addEventListener('submit', async (e)=>{
+      e.preventDefault();
+      const name = ui.name.value.trim();
+      const dispatch = ui.dispatch.value.trim();
+      const address = ui.address.value.trim();
+      const priority = ui.priority.value;
+
+      if(!name){
+        toast('Please enter a scenario name.');
+        ui.name.focus();
         return;
       }
 
-      if (msg.type === 'fo-rpc-res' || msg.type === 'fo-rpc-err'){
-        const entry = reqs.get(msg.correlationId);
-        if (!entry) return;
-        clearTimeout(entry.timeout);
-        reqs.delete(msg.correlationId);
-        if (msg.type === 'fo-rpc-res') entry.resolve(msg.result);
-        else entry.reject(new Error(msg.error || 'uploader error'));
-      }
-    });
-
-    function callUploader(method, params, { timeoutMs=120000 }={}){
-      return new Promise((resolve, reject)=>{
-        const correlationId = uuid();
-        const timeout = setTimeout(()=>{
-          reqs.delete(correlationId);
-          reject(new Error('uploader-timeout: '+method));
-        }, timeoutMs);
-        reqs.set(correlationId, {resolve, reject, timeout});
-        postToUploader({ type:'fo-rpc', method, params, correlationId });
-      });
-    }
-
-    async function saveStopToDB(payload){
-      const sid = payload.scenarioId;
-      const snap = await db.ref(`scenarios/${sid}/stops`).get();
-      const arr  = snap.exists()? (snap.val()||[]) : [];
-      arr.push({
-        type:'photo',
-        imageURL: payload.url,
-        thumbURL: payload.url,
-        storagePath: payload.fullPath,
-        gsUri: payload.gsUri,
-        gps: payload.gps || null,
-        backend:'fireops',
-        at: Date.now(),
-        radiusMeters:5,
-        overlays:[]
-      });
-      const multi={};
-      multi[`scenarios/${sid}/stops`] = arr;
-      multi[`geophoto/scenarios/${sid}/stops`] = arr;
-      await db.ref().update(multi);
-    }
-
-    async function startUpload(){
+      ui.createBtn.disabled = true;
+      ui.createBtn.textContent = 'Creating…';
       try{
-        if (!uploaderReady) throw new Error('Uploader not ready yet');
-        if (!scenarioId) throw new Error('Create a scenario first');
+        const user = await ensureAuth();
+        const listRef = ref(db, 'scenarios');
+        const newRef = push(listRef);
+        const sid = newRef.key;
+        const payload = {
+          name,
+          dispatch: {
+            notes: dispatch || '',
+            address: address || '',
+            priority: priority || ''
+          },
+          status: 'draft',
+          createdAt: Date.now(),
+          createdBy: user?.uid || 'anon',
+          photos: {}
+        };
+        await set(newRef, payload);
 
-        postToUploader({ type:'fo-set-scenario', scenarioId });
+        // Reveal post-create panel, prep uploader link
+        ui.postCreate.style.display = '';
+        ui.scenarioIdOut.textContent = sid;
+        ui.scenarioNameOut.textContent = name;
+        const link = buildUploaderLink(sid);
+        ui.openUploader.href = link;
+        ui.copyUploaderLink.onclick = async ()=>{
+          await navigator.clipboard.writeText(link);
+          toast('Uploader link copied');
+        };
 
-        const res = await callUploader('captureAndUpload', { scenarioId });
-        await saveStopToDB(res);
-        ok('Upload saved.');
-      }catch(e){
-        bad('Upload sequence failed: ' + (e.message||e));
-        alert((e && e.message) || String(e));
+        toast('Scenario created. Proceed to photo uploader.');
+      }catch(err){
+        console.error(err);
+        alert('Failed to create scenario. Check network/auth and try again.');
+      }finally{
+        ui.createBtn.disabled = false;
+        ui.createBtn.textContent = 'Create Scenario';
       }
-    }
-
-    // --- Wire up ---
-    $('btnCreate').addEventListener('click', createScenario);
-    $('btnCopyId').addEventListener('click', async ()=>{
-      if(!$('scenarioId').value) return;
-      try{ await navigator.clipboard.writeText($('scenarioId').value); ok('Scenario ID copied.'); }catch{}
     });
-    $('btnUpload').addEventListener('click', startUpload);
 
-    (async function(){
-      log('Booting…');
-      try{ await signInDB(); }catch(e){ bad('DB auth failed: '+(e.message||e)); }
-      ok('Ready. Create a scenario, then click “Upload Photo”.');
-    })();
-  })();
+    ui.resetBtn.addEventListener('click', ()=>{
+      ui.form.reset();
+      ui.postCreate.style.display = 'none';
+    });
+
+    // If arriving with an existing scenarioId, load it & surface the uploader button
+    loadExisting(existingScenarioId);
   </script>
 </body>
 </html>
