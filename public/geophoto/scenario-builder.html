@@ -2,67 +2,113 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
   <title>Scenario Builder — Step 1 (Create & Dispatch)</title>
   <style>
     :root{--bg:#0f172a;--card:#111827;--muted:#94a3b8;--text:#e5e7eb;--accent:#22c55e;--accent-2:#60a5fa;--danger:#ef4444}
     *{box-sizing:border-box}
-    body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,Cantarell,Noto Sans,sans-serif;background:linear-gradient(180deg,#0b1220,#0f172a 30%,#0b1220);color:var(--text)}
-    .wrap{max-width:500px;margin:0 auto;padding:16px}
-    h1{font-size:24px;margin-bottom:8px;text-align:center}
-    p.lead{text-align:center;color:var(--muted);margin-bottom:20px;font-size:14px}
-    .card{background:rgba(17,24,39,.78);backdrop-filter:blur(6px);border:1px solid #233047;border-radius:12px;padding:16px;margin-bottom:16px}
-    label{display:block;font-size:14px;color:#cbd5e1;margin-bottom:4px}
-    input[type="text"], textarea{width:100%;background:#0b1220;border:1px solid #243142;color:var(--text);padding:10px;border-radius:10px;outline:none;font-size:16px}
-    textarea{min-height:100px;resize:vertical}
-    .btn{width:100%;padding:12px;border:none;border-radius:10px;background:var(--accent);color:#052e16;font-weight:bold;font-size:16px;margin-top:12px;cursor:pointer}
-    .btn:disabled{background:#1f2937;color:#666;cursor:not-allowed}
-    .hint{font-size:12px;color:#94a3b8;margin-top:4px}
-    .toast{position:fixed;right:16px;bottom:16px;background:#111827;color:#e5e7eb;border:1px solid #334155;padding:12px 14px;border-radius:12px;box-shadow:0 10px 30px rgba(0,0,0,.35);opacity:0;transform:translateY(8px);transition:.25s}
+    html,body{height:100%}
+    body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,Cantarell,Noto Sans,sans-serif;background:#0b1220;color:var(--text)}
+    .wrap{max-width:720px;margin:0 auto;padding:16px}
+    .header{display:flex;align-items:center;gap:10px;margin:4px 0 10px}
+    .badge{font-size:12px;padding:3px 8px;border-radius:999px;background:#1f2937;color:#cbd5e1;border:1px solid #334155}
+    h1{font-size:22px;margin:0}
+    p.lead{color:var(--muted);margin:6px 0 14px;font-size:14px}
+    .card{background:#0e1624;border:1px solid #233047;border-radius:16px;padding:14px;margin:12px 0;box-shadow:0 6px 24px rgba(0,0,0,.25)}
+    label{display:block;font-size:13px;color:#cbd5e1;margin:6px 0}
+    input[type="text"], textarea{width:100%;background:#0b1220;border:1px solid #243142;color:var(--text);padding:12px;border-radius:12px;outline:none}
+    textarea{min-height:120px;resize:vertical}
+    .actions{display:grid;grid-template-columns:1fr;gap:10px;margin-top:10px}
+    .btn{appearance:none;border:none;border-radius:12px;padding:14px 16px;font-weight:700;cursor:pointer;transition:.2s transform ease,.2s opacity ease;display:inline-flex;align-items:center;justify-content:center}
+    .btn:active{transform:translateY(1px)}
+    .btn-primary{background:var(--accent);color:#052e16}
+    .btn-secondary{background:#1f2937;color:#e5e7eb;border:1px solid #334155}
+    .hint{font-size:12px;color:#94a3b8;margin-top:6px}
+    .step{display:flex;align-items:center;gap:8px;color:#93c5fd;font-size:12px}
+    .step .dot{width:8px;height:8px;border-radius:999px;background:#93c5fd}
+    .toast{position:fixed;left:12px;right:12px;bottom:12px;background:#111827;color:#e5e7eb;border:1px solid #334155;padding:12px 14px;border-radius:12px;box-shadow:0 10px 30px rgba(0,0,0,.35);opacity:0;transform:translateY(8px);transition:.25s;z-index:50}
     .toast.show{opacity:1;transform:translateY(0)}
+    .kv{display:grid;grid-template-columns:120px 1fr;gap:10px;font-size:13px}
+    @media (min-width:800px){h1{font-size:26px}.wrap{padding:20px}}
   </style>
 </head>
 <body>
   <div class="wrap">
-    <h1>Create Scenario</h1>
-    <p class="lead">Step 1: Enter the scenario name and dispatch information. Photos will be added next.</p>
+    <div class="header">
+      <span class="badge">EMS/Fire Scenario Tools</span>
+      <h1>Scenario Builder — Step 1</h1>
+    </div>
+    <p class="lead">Create the scenario shell with a name and dispatch notes. Photos happen in the next step automatically.</p>
 
-    <form id="createForm" class="card" autocomplete="off">
-      <h2 style="margin:4px 0 12px; font-size:20px">Create a new scenario</h2>
-      <div class="row">
-        <label for="scenarioName">Scenario Name <span class="hint">(e.g., "Abdominal pain — 33F at grocery store")</span></label>
-        <input type="text" id="scenarioName" name="scenarioName" placeholder="Enter a clear, searchable name" required />
-      </div>
-
-      <div class="row">
-        <label for="dispatchText">Dispatch Notes</label>
-        <textarea id="dispatchText" name="dispatchText" placeholder="Unit(s) dispatched, chief complaint, age/sex if known, location, pertinent caller info. Keep it neutral (no diagnosis)." ></textarea>
-        <div class="hint">Example: "Medic 181 respond Priority 2 to 123 Main St. 33‑year‑old female, abdominal pain with vomiting since this morning."</div>
-      </div>
-
-      <div class="actions">
-        <button type="submit" class="btn btn-primary" id="createBtn" style="width:100%">Create & Continue to Photos</button>
-        <button type="button" class="btn btn-secondary" id="resetBtn" style="width:100%">Reset</button>
-      </div>
-      <div class="hint">Photos are handled in the next step automatically.</div>
-    </form>
-
-    <div id="postCreate" class="card" style="display:none;text-align:center">
-      <h2>Scenario Created!</h2>
-      <p id="scenarioIdOut" style="font-size:14px;color:var(--muted)"></p>
-      <button id="goToUploader" class="btn">Go to Photo Uploader</button>
-      <p class="hint">You will now add photos using the uploader page.</p>
+    <div class="card">
+      <div class="step"><span class="dot"></span> Step 1: Create scenario (name + dispatch)</div>
+      <div class="step" style="opacity:.6;margin-top:6px"><span class="dot" style="opacity:.4"></span> Step 2: Add photos in <strong>test‑edit‑uploader</strong></div>
     </div>
 
-    <div id="toast" class="toast"></div>
+    <!-- Existing scenario banner (if opened via ?scenarioId=...) -->
+    <div id="existingScenarioCard" class="card" style="display:none">
+      <h2 style="margin:0 0 8px;font-size:18px">Scenario loaded</h2>
+      <div class="kv">
+        <div>Scenario ID</div>
+        <div><code id="loadedScenarioId"></code></div>
+        <div>Name</div>
+        <div id="loadedScenarioName">—</div>
+      </div>
+      <div class="actions" style="margin-top:10px">
+        <a id="openUploaderExisting" class="btn btn-primary" target="_blank" rel="noopener">Open Photo Uploader</a>
+        <button class="btn btn-secondary" id="copyUploaderLinkExisting">Copy uploader link</button>
+      </div>
+      <div class="hint">Use this to add/manage photos for this scenario.</div>
+    </div>
+
+    <!-- Create form (single column, phone-first) -->
+    <form id="createForm" class="card" autocomplete="off" action="#" novalidate>
+      <h2 style="margin:0 0 12px;font-size:18px">Create a new scenario</h2>
+      <label for="scenarioName">Scenario Name</label>
+      <input type="text" id="scenarioName" name="scenarioName" placeholder="e.g., Abdominal pain — 33F at grocery store" required />
+
+      <label for="dispatchText" style="margin-top:10px">Dispatch Notes</label>
+      <textarea id="dispatchText" name="dispatchText" placeholder="Units dispatched, chief complaint, age/sex if known, location hint. Keep it neutral (no diagnosis)."></textarea>
+      <div class="hint">Example: "Medic 181 respond P2 to 123 Main St. 33‑year‑old female, abdominal pain with vomiting since this morning."</div>
+
+      <div class="actions">
+        <button type="submit" class="btn btn-primary" id="createBtn">Create & Continue to Photos</button>
+        <button type="button" class="btn btn-secondary" id="resetBtn">Reset</button>
+      </div>
+    </form>
+
+    <!-- Light diagnostics to prevent silent failures on phones -->
+    <div id="diag" class="card" style="display:none"></div>
+
+    <div id="toast" class="toast" role="status" aria-live="polite"></div>
   </div>
 
   <script type="module">
-    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
-    import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
-    import { getDatabase, ref, push, set } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
+    // --------------- Helpers & Diagnostics ---------------
+    const uploaderURL = 'https://fireopssim.com/geophoto/test-edit-uploader';
+    const qs = new URLSearchParams(location.search);
+    function toast(msg){
+      const el = document.getElementById('toast');
+      el.textContent = msg; el.classList.add('show');
+      setTimeout(()=> el.classList.remove('show'), 2600);
+    }
+    function buildUploaderLink(sid){
+      const url = new URL(uploaderURL);
+      url.searchParams.set('scenarioId', sid);
+      return url.toString();
+    }
 
-    const firebaseConfig = window.firebaseConfig || {
+    // Surface JS errors so the form doesn't fall back to page refresh silently
+    window.addEventListener('error', (e)=>{
+      console.error(e?.error || e?.message);
+      const d = document.getElementById('diag');
+      d.style.display='';
+      d.innerHTML = '<strong>Script error:</strong> ' + (e?.message||'Unknown') + '<div class="hint">Check Firebase config and network. The form will not submit until this is resolved.</div>';
+      toast('Script error — see diagnostics card');
+    });
+
+    // --------------- Firebase (modular) ---------------
+    const fallbackConfig = {
       apiKey: "YOUR_API_KEY",
       authDomain: "YOUR_AUTH_DOMAIN",
       databaseURL: "YOUR_DATABASE_URL",
@@ -71,57 +117,56 @@
       appId: "YOUR_APP_ID"
     };
 
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+    import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+    import { getDatabase, ref, push, set, get } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
+
+    const firebaseConfig = window.firebaseConfig || fallbackConfig;
+
+    // Validate config early to avoid silent fallback form submit
+    const hasConfig = firebaseConfig && firebaseConfig.projectId && firebaseConfig.apiKey;
+    if(!hasConfig){
+      const d = document.getElementById('diag');
+      d.style.display='';
+      d.innerHTML = '<strong>Missing Firebase config.</strong> Populate <code>window.firebaseConfig</code> or edit this file.';
+    }
+
     const app = initializeApp(firebaseConfig);
     const auth = getAuth(app);
     const db = getDatabase(app);
 
+    async function ensureAuth(){
+      try{ await signInAnonymously(auth); } catch(e) { /* ignore if already authed */ }
+      return new Promise((resolve)=>{
+        onAuthStateChanged(auth, (user)=>{ if(user) resolve(user); });
+      });
+    }
+
+    // --------------- UI wiring ---------------
     const ui = {
       form: document.getElementById('createForm'),
       name: document.getElementById('scenarioName'),
       dispatch: document.getElementById('dispatchText'),
       createBtn: document.getElementById('createBtn'),
       resetBtn: document.getElementById('resetBtn'),
-      postCreate: document.getElementById('postCreate'),
-      scenarioIdOut: document.getElementById('scenarioIdOut'),
-      scenarioNameOut: document.getElementById('scenarioNameOut'),
-      openUploader: document.getElementById('openUploader'),
-      copyUploaderLink: document.getElementById('copyUploaderLink'),
       existingCard: document.getElementById('existingScenarioCard'),
       loadedScenarioId: document.getElementById('loadedScenarioId'),
       loadedScenarioName: document.getElementById('loadedScenarioName'),
       openUploaderExisting: document.getElementById('openUploaderExisting'),
       copyUploaderLinkExisting: document.getElementById('copyUploaderLinkExisting'),
-      toast: document.getElementById('toast')
     };
 
-    const uploaderURL = 'https://fireopssim.com/geophoto/test-edit-uploader';
+    // Prevent any default navigation even if JS later errors
+    ui.form.addEventListener('submit', (ev)=> ev.preventDefault());
 
-    function toast(msg){
-      ui.toast.textContent = msg;
-      ui.toast.classList.add('show');
-      setTimeout(() => ui.toast.classList.remove('show'), 2400);
-    }
-
-    async function ensureAuth(){
-      try{await signInAnonymously(auth);}catch(e){/* already authed */}
-      return new Promise((resolve)=>{
-        onAuthStateChanged(auth, (user)=>{ if(user) resolve(user); });
-      });
-    }
-
+    // Replace the no-op handler with the real async creator
     ui.form.addEventListener('submit', async (e)=>{
       e.preventDefault();
-      const name = ui.name.value.trim();
-      const dispatch = ui.dispatch.value.trim();
+      const name = (ui.name.value||'').trim();
+      const dispatch = (ui.dispatch.value||'').trim();
+      if(!name){ toast('Please enter a scenario name.'); ui.name.focus(); return; }
 
-      if(!name){
-        toast('Please enter a scenario name.');
-        ui.name.focus();
-        return;
-      }
-
-      ui.createBtn.disabled = true;
-      ui.createBtn.textContent = 'Creating…';
+      ui.createBtn.disabled = true; ui.createBtn.textContent = 'Creating…';
       try{
         const user = await ensureAuth();
         const listRef = ref(db, 'scenarios');
@@ -129,7 +174,7 @@
         const sid = newRef.key;
         const payload = {
           name,
-          dispatch: { notes: dispatch || '' },
+          dispatch: { notes: dispatch },
           status: 'draft',
           createdAt: Date.now(),
           createdBy: user?.uid || 'anon',
@@ -137,57 +182,36 @@
         };
         await set(newRef, payload);
 
-        // Immediately pass control to uploader in the same tab
+        // Immediately pass control to uploader (same tab)
         const link = buildUploaderLink(sid);
         toast('Scenario created — opening uploader…');
-        setTimeout(()=>{ window.location.href = link; }, 200);
+        window.location.assign(link);
       }catch(err){
         console.error(err);
-        alert('Failed to create scenario. Check network/auth and try again.');
-      }finally{
-        ui.createBtn.disabled = false;
-        ui.createBtn.textContent = 'Create & Continue to Photos';
+        toast('Failed to create scenario — see console.');
+        ui.createBtn.disabled = false; ui.createBtn.textContent = 'Create & Continue to Photos';
       }
-    });
-      const name = ui.name.value.trim();
-      const dispatch = ui.dispatch.value.trim();
-      if(!name){ toast('Please enter a scenario name.'); return; }
+    }, { once:false });
 
-      ui.createBtn.disabled = true;
-      ui.createBtn.textContent = 'Creating…';
+    ui.resetBtn.addEventListener('click', ()=> ui.form.reset());
 
-      try {
-        const user = await ensureAuth();
-        const newRef = push(ref(db, 'scenarios'));
-        const sid = newRef.key;
-        const payload = {
-          name,
-          dispatch: dispatch,
-          status: 'draft',
-          createdAt: Date.now(),
-          createdBy: user?.uid || 'anon',
-          photos: {}
-        };
-        await set(newRef, payload);
-
-        ui.form.style.display = 'none';
-        ui.postCreate.style.display = 'block';
-        ui.scenarioIdOut.textContent = `ID: ${sid}`;
-
-        ui.goToUploader.onclick = () => {
-          const link = `${uploaderURL}?scenarioId=${sid}`;
-          window.location.href = link;
-        };
-
-        toast('Scenario created successfully!');
-      } catch (err) {
-        console.error(err);
-        alert('Failed to create scenario. Please try again.');
-      } finally {
-        ui.createBtn.disabled = false;
-        ui.createBtn.textContent = 'Create Scenario';
-      }
-    });
+    // If arriving with an existing scenarioId, show quick-open uploader panel
+    const existingScenarioId = qs.get('scenarioId') || '';
+    if(existingScenarioId){
+      try{
+        await ensureAuth();
+        const snap = await get(ref(db, `scenarios/${existingScenarioId}`));
+        if(snap.exists()){
+          const data = snap.val();
+          document.getElementById('existingScenarioCard').style.display='';
+          document.getElementById('loadedScenarioId').textContent = existingScenarioId;
+          document.getElementById('loadedScenarioName').textContent = data?.name||'—';
+          const link = buildUploaderLink(existingScenarioId);
+          ui.openUploaderExisting.href = link;
+          ui.copyUploaderLinkExisting.onclick = async ()=>{ await navigator.clipboard.writeText(link); toast('Uploader link copied'); };
+        }
+      }catch(e){ console.warn('Unable to load existing scenario', e); }
+    }
   </script>
 </body>
 </html>
