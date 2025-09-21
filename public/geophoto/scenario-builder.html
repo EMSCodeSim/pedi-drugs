@@ -3,7 +3,6 @@
 <head>
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
-<base href="/" />
 <title>FireOpsSim — Scenario Builder</title>
 <style>
   :root{--bg:#0b1220;--card:#111a2e;--muted:#b8c4e2;--line:#1b2b50;--ink:#e8eefc;--accent:#2c5cff;--ok:#7CFF7C;--bad:#FF7C7C}
@@ -32,10 +31,10 @@
   <div class="card">
     <div class="row">
       <div class="muted">DB:</div><div class="mono">dailyquiz-d5279 (Realtime DB)</div>
-      <div class="muted">Uploader:</div><div class="mono">test-edit-uploader.html (FireOpsSim Storage)</div>
+      <div class="muted">Uploader:</div>
+      <div class="mono">https://fireopssim.com/geophoto/test-edit-uploader</div>
     </div>
 
-    <!-- Create a Scenario -->
     <div class="row">
       <label class="muted">Title</label>
       <input id="title" placeholder="e.g., House Fire — Elm St." style="min-width:280px">
@@ -53,17 +52,15 @@
     </div>
 
     <div class="muted">
-      After the uploader saves a photo to <span class="mono">gs://fireopssim.appspot.com</span>, this page records the
-      <span class="mono">storagePath</span>, URL, and GPS in Realtime DB under
+      After the uploader saves a photo to <span class="mono">gs://fireopssim.appspot.com</span>, this page records
+      the <span class="mono">storagePath</span>, URL, and GPS in Realtime DB under
       <span class="mono">/scenarios/&lt;id&gt;/stops</span> and <span class="mono">/geophoto/scenarios/&lt;id&gt;/stops</span>.
     </div>
   </div>
 
-  <!-- Embedded uploader iframe -->
   <div class="card">
     <strong>Camera Uploader</strong>
-    <div class="muted">This iframe hosts your working <span class="mono">test-edit-uploader.html</span>.</div>
-    <iframe id="uploaderFrame" src="test-edit-uploader.html"></iframe>
+    <iframe id="uploaderFrame" src="https://fireopssim.com/geophoto/test-edit-uploader"></iframe>
   </div>
 
   <div class="card">
@@ -76,7 +73,7 @@
     <div id="stops"><div class="muted">None yet.</div></div>
   </div>
 
-  <!-- Firebase compat (Realtime DB only here) -->
+  <!-- Firebase compat (Realtime DB only) -->
   <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js"></script>
@@ -89,7 +86,7 @@
     const ok  = m=>log(m,'#7CFF7C');
     const bad = m=>log(m,'#FF7C7C');
 
-    // ---------- Realtime DB Config ----------
+    // --- Realtime DB (dailyquiz-d5279) ---
     const cfgDB = {
       apiKey:"AIzaSyDM6DpRSeZueVKRpbyJyDmhf8WY66KyCDk",
       authDomain:"dailyquiz-d5279.firebaseapp.com",
@@ -99,7 +96,7 @@
       appId:"1:94577748034:web:c032d3a1d72db1313de5db",
       measurementId:"G-19DVN7NNH7"
     };
-    const app = firebase.initializeApp(cfgDB);            
+    const app = firebase.initializeApp(cfgDB);
     const db  = firebase.database(app);
     const auth= firebase.auth(app);
 
@@ -121,7 +118,7 @@
         const title = ($('title').value||'').trim();
         const dispatch = ($('dispatch').value||'').trim();
 
-        const id = db.ref('scenarios').push().key;
+        const id = db.ref('scenarios').push().key; // old working flow
         const base = { id, title: title||id, dispatch, description:dispatch, createdAt: Date.now(), active:true, stops:[] };
 
         const multi = {};
@@ -168,8 +165,8 @@
       });
     }
 
-    // ---------- Embedded uploader logic ----------
-    const TRUSTED_ORIGIN = location.origin;            
+    // --- Embedded uploader messaging/RPC ---
+    const TRUSTED_ORIGIN = "https://fireopssim.com"; // iframe origin
     const frame = $('uploaderFrame');
     let uploaderReady = false;
     const reqs = new Map();
@@ -264,7 +261,7 @@
       }
     }
 
-    // ---------- Wire up ----------
+    // --- Wire up ---
     $('btnCreate').addEventListener('click', createScenario);
     $('btnCopyId').addEventListener('click', async ()=>{
       if(!$('scenarioId').value) return;
