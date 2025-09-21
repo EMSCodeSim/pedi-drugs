@@ -11,25 +11,28 @@
   h1{margin:0 0 10px;font-size:20px}
   h2{margin:8px 0 10px;font-size:16px}
   .row{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:8px 0}
-  input,button,select{background:#091125;color:var(--ink);border:1px solid #20407a;border-radius:10px;padding:10px 12px}
+  input,button{background:#091125;color:var(--ink);border:1px solid #20407a;border-radius:10px;padding:10px 12px}
   button{cursor:pointer}
   button.primary{background:#1a3fbb;border-color:var(--accent)}
   .card{background:var(--card);border:1px solid #1b2b50;border-radius:14px;padding:12px;margin:12px 0}
   .muted{color:var(--muted)}
   .mono{font-family:ui-monospace,Menlo,Consolas,monospace}
   #status{white-space:pre-wrap;background:#0c1530;border:1px solid #1b2b50;border-radius:10px;padding:10px;max-height:300px;overflow:auto}
+
   #scenarios{max-height:260px;overflow:auto;border:1px solid #1b2b50;border-radius:10px}
   .scenario{padding:10px;border-bottom:1px solid #1b2b50;display:flex;gap:10px;align-items:center;justify-content:space-between}
   .scenario:last-child{border-bottom:none}
   .scenario .meta{display:flex;flex-direction:column}
-  .scenario .meta .name{font-weight:600}
-  .scenario .meta .small{font-size:12px;color:#99a8d8}
+  .scenario .name{font-weight:600}
+  .scenario .small{font-size:12px;color:#99a8d8}
+
   #thumbs{display:grid;grid-template-columns:repeat(auto-fill,minmax(110px,1fr));gap:10px}
   #thumbs a{display:block}
   #thumbs img{width:100%;height:110px;object-fit:cover;border-radius:10px;border:1px solid #1a2b50}
   #empty{color:#9ab0e6}
   .pill{font-size:12px;padding:4px 8px;border:1px solid #2b3d70;border-radius:999px}
-  @media (max-width:560px){ .row{flex-direction:column;align-items:stretch} input,button,select{width:100%} }
+
+  @media (max-width:560px){ .row{flex-direction:column;align-items:stretch} input,button{width:100%} }
 </style>
 </head>
 <body>
@@ -37,15 +40,15 @@
 
   <div class="card">
     <div class="row">
-      <div class="muted">Realtime DB app:</div><div class="mono">dailyquiz-d5279</div>
-      <div class="muted">Storage app:</div><div class="mono">fireopssim (gs://fireopssim.appspot.com)</div>
+      <div class="muted">Realtime DB:</div><div class="mono">dailyquiz-d5279</div>
+      <div class="muted">Storage:</div><div class="mono">gs://fireopssim.appspot.com</div>
+      <span class="pill">DB-first, Storage optional</span>
     </div>
     <div class="row">
       <button id="btnRefreshScenarios" class="primary">Refresh Scenarios</button>
-      <input id="filter" placeholder="Filter scenarios by name/id…"/>
-      <span class="pill">Read mode: DB-first, Storage optional</span>
+      <input id="filter" placeholder="Filter by name or ID…"/>
     </div>
-    <div id="scenarios"></div>
+    <div id="scenarios"><div class="muted" style="padding:10px">Loading…</div></div>
   </div>
 
   <div class="card">
@@ -56,7 +59,7 @@
     </div>
     <div class="row">
       <button id="btnLoadFromDB" class="primary">Load Photos from DB</button>
-      <button id="btnListFromStorage">List Photos from Storage</button>
+      <button id="btnListFromStorage">List from Storage</button>
       <button id="btnOpenUploader">Open Uploader</button>
     </div>
     <div class="row">
@@ -80,22 +83,18 @@
 
   <script>
   (function(){
-    // ---------- UI helpers ----------
-    const $ = sel => document.querySelector(sel);
-    const logEl = $('#status');
-    const scenariosEl = $('#scenarios');
-    const thumbsEl = $('#thumbs');
-    const emptyEl = $('#empty');
-    const folderPathEl = $('#folderPath');
+    // ===== helpers =====
+    const $ = s=>document.querySelector(s);
+    const logEl = $('#status'); const scenariosEl = $('#scenarios');
+    const thumbsEl = $('#thumbs'); const emptyEl = $('#empty'); const folderPathEl = $('#folderPath');
 
-    function log(m,c){ const d=document.createElement('div'); if(c)d.style.color=c; d.textContent='['+new Date().toLocaleTimeString()+'] '+m; logEl.appendChild(d); logEl.scrollTop=logEl.scrollHeight; console.log(m); }
-    const ok=m=>log(m,'#7CFF7C'), bad=m=>log(m,'#FF7C7C');
-    const esc = s => String(s||'').replace(/[&<>"']/g, m=>({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[m]));
+    const log = (m,c)=>{const d=document.createElement('div'); if(c)d.style.color=c; d.textContent='['+new Date().toLocaleTimeString()+'] '+m; logEl.appendChild(d); logEl.scrollTop=logEl.scrollHeight; console.log(m);};
+    const ok = m=>log(m,'#7CFF7C'); const bad = m=>log(m,'#FF7C7C');
+    const esc = s=>String(s||'').replace(/[&<>"']/g, m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+    const fmtDate = ts=>{try{return new Date(ts).toLocaleString();}catch(_){return String(ts||'');}};
 
-    function fmtDate(ts){ try{ return new Date(ts).toLocaleString(); }catch(_){ return String(ts||''); } }
-
-    // ---------- Firebase apps ----------
-    // Realtime Database app (dailyquiz-d5279)
+    // ===== Firebase apps =====
+    // DB app (dailyquiz)
     const dbCfg = {
       apiKey:"AIzaSyDM6DpRSeZueVKRpbyJyDmhf8WY66KyCDk",
       authDomain:"dailyquiz-d5279.firebaseapp.com",
@@ -119,44 +118,37 @@
     const rtdb = firebase.database(dbApp);
     const dbAuth = firebase.auth(dbApp);
     const stAuth = firebase.auth(stApp);
-
-    // Explicit gs:// binding makes it consistent with your uploader
     const storage = firebase.storage(stApp, "gs://fireopssim.appspot.com");
 
     async function ensureAuth(){
-      if (!dbAuth.currentUser){
-        const cred = await dbAuth.signInAnonymously();
-        ok('DB auth OK (uid='+ (cred.user?.uid||'unknown') +')');
-      }
-      if (!stAuth.currentUser){
-        const cred2 = await stAuth.signInAnonymously();
-        ok('Storage auth OK (uid='+ (cred2.user?.uid||'unknown') +')');
-      }
+      if (!dbAuth.currentUser){ const a=await dbAuth.signInAnonymously(); ok('DB auth OK (uid='+ (a.user?.uid||'unknown') +')'); }
+      if (!stAuth.currentUser){ const b=await stAuth.signInAnonymously(); ok('Storage auth OK (uid='+ (b.user?.uid||'unknown') +')'); }
     }
 
-    // ---------- Load scenarios from DB ----------
-    async function listScenarios(){
-      try{
-        await ensureAuth();
-        scenariosEl.innerHTML = '<div class="muted" style="padding:10px">Loading scenarios…</div>';
-
-        const snap = await rtdb.ref('scenarios').limitToLast(100).once('value');
-        const val = snap.val() || {};
-        const rows = Object.values(val)
-          .map(v => ({
-            id: v.id || v.key || '',
-            title: v.title || '(untitled)',
-            createdAt: v.createdAt || v.created || v.time || 0,
-            dispatch: v.dispatch || v.description || ''
-          }))
-          .sort((a,b)=>(b.createdAt||0)-(a.createdAt||0));
-
-        renderScenarioList(rows);
-        ok(`Loaded ${rows.length} scenario(s).`);
-      }catch(e){
-        scenariosEl.innerHTML = '<div class="muted" style="padding:10px">Failed to load scenarios.</div>';
-        bad('List scenarios error: '+(e.message||e));
+    // ===== robust scenario fetch (with fallback path) =====
+    async function fetchScenarios(){
+      // primary path
+      let snap = await rtdb.ref('scenarios').limitToLast(200).once('value');
+      let val = snap.val() || {};
+      // fallback if empty or not an object
+      if (!val || (typeof val !== 'object') || !Object.keys(val).length){
+        ok('Primary /scenarios empty, trying /geophoto/scenarios…');
+        snap = await rtdb.ref('geophoto/scenarios').limitToLast(200).once('value');
+        val = snap.val() || {};
       }
+      // normalize to array with id from key if missing
+      const rows = Object.keys(val).map(k=>{
+        const v = val[k] || {};
+        return {
+          id: v.id || k,
+          title: v.title || '(untitled)',
+          createdAt: v.createdAt || v.created || v.time || 0,
+          dispatch: v.dispatch || v.description || ''
+        };
+      });
+      // newest first
+      rows.sort((a,b)=>(b.createdAt||0)-(a.createdAt||0) || String(b.id).localeCompare(String(a.id)));
+      return rows;
     }
 
     function renderScenarioList(rows){
@@ -168,7 +160,7 @@
 
       scenariosEl.innerHTML = '';
       if (!filtered.length){
-        scenariosEl.innerHTML = '<div class="muted" style="padding:10px">No scenarios match.</div>';
+        scenariosEl.innerHTML = '<div class="muted" style="padding:10px">No scenarios found.</div>';
         return;
       }
 
@@ -181,40 +173,52 @@
             <div class="small mono">${esc(r.id)} • ${esc(fmtDate(r.createdAt))}</div>
             ${r.dispatch ? `<div class="small">${esc(r.dispatch)}</div>` : ''}
           </div>
-          <div>
-            <button data-id="${esc(r.id)}" class="primary btnView">View</button>
-          </div>
+          <div><button class="primary btnView" data-id="${esc(r.id)}">View</button></div>
         `;
         scenariosEl.appendChild(div);
       });
 
       scenariosEl.querySelectorAll('.btnView').forEach(btn=>{
-        btn.addEventListener('click', ()=>{
-          const id = btn.getAttribute('data-id');
-          selectScenario(id);
-        });
+        btn.addEventListener('click', ()=> selectScenario(btn.getAttribute('data-id')));
       });
     }
 
-    // ---------- Select scenario ----------
+    async function listScenarios(){
+      try{
+        await ensureAuth();
+        scenariosEl.innerHTML = '<div class="muted" style="padding:10px">Loading scenarios…</div>';
+        const rows = await fetchScenarios();
+        renderScenarioList(rows);
+        ok(`Loaded ${rows.length} scenario(s).`);
+      }catch(e){
+        scenariosEl.innerHTML = '<div class="muted" style="padding:10px">Failed to load scenarios.</div>';
+        bad('List scenarios error: '+(e.message||e));
+      }
+    }
+
+    // ===== selection & photo loading =====
     async function selectScenario(id){
       $('#selectedId').value = id || '';
       folderPathEl.textContent = id ? `scenarios/${id}` : 'scenarios/(none)';
       thumbsEl.innerHTML = '';
       emptyEl.style.display = 'none';
-      if (!id) return;
-      // Default: DB-first load (fast + works with your current flow)
-      await loadPhotosFromDB(id);
+      if (id) await loadPhotosFromDB(id);
     }
 
-    // ---------- Load photos from DB (primary path) ----------
     async function loadPhotosFromDB(id){
       try{
         await ensureAuth();
         thumbsEl.innerHTML = '<div class="muted">Loading photos from DB…</div>';
         const snap = await rtdb.ref(`scenarios/${id}/photos`).once('value');
-        const photos = snap.val() || {};
-        const arr = Object.values(photos);
+        let photos = snap.val();
+
+        // fallback to geophoto path if primary empty
+        if (!photos){
+          const snap2 = await rtdb.ref(`geophoto/scenarios/${id}/photos`).once('value');
+          photos = snap2.val();
+        }
+
+        const arr = photos ? Object.values(photos) : [];
         if (!arr.length){
           thumbsEl.innerHTML = '';
           emptyEl.style.display = '';
@@ -231,9 +235,72 @@
       }
     }
 
-    // ---------- List photos from Storage (optional/manual) ----------
-    async function listFromStorage(id){
+    async function listFromStorage(){
+      const id = $('#selectedId').value;
+      if (!id){ alert('Select a scenario first.'); return; }
       try{
         await ensureAuth();
         thumbsEl.innerHTML = '<div class="muted">Listing photos from Storage…</div>';
-        const folderRef =
+        const folderRef = storage.ref().child(`scenarios/${id}`);
+        const { items } = await folderRef.listAll();
+        if (!items.length){
+          thumbsEl.innerHTML = '';
+          emptyEl.style.display = '';
+          ok('No objects found in Storage folder.');
+          return;
+        }
+        items.sort((a,b)=> (b.name||'').localeCompare(a.name||''));
+        const urls = await Promise.all(items.map(it => it.getDownloadURL().catch(()=>null)));
+        renderThumbs(urls.filter(Boolean));
+        ok(`Listed ${items.length} photo(s) from Storage.`);
+      }catch(e){
+        thumbsEl.innerHTML = '';
+        emptyEl.style.display = '';
+        if (String(e).includes('storage/unauthorized')){
+          bad('Storage denied read. Use "Load Photos from DB" or relax read rules for testing.');
+        } else {
+          bad('List-from-Storage error: '+(e.code||'')+' '+(e.message||e));
+        }
+      }
+    }
+
+    function renderThumbs(urls){
+      thumbsEl.innerHTML = '';
+      if (!urls.length){ emptyEl.style.display = ''; return; }
+      emptyEl.style.display = 'none';
+      urls.forEach(url=>{
+        const a = document.createElement('a');
+        a.href = url; a.target = '_blank'; a.rel='noopener';
+        a.innerHTML = `<img src="${url}" alt="photo">`;
+        thumbsEl.appendChild(a);
+      });
+    }
+
+    // ===== open uploader tab =====
+    const UPLOADER_URL = 'https://fireopssim.com/geophoto/test-edit-uploader';
+    function openUploader(){
+      const id = $('#selectedId').value.trim();
+      if (!id){ alert('Select a scenario first.'); return; }
+      const url = new URL(UPLOADER_URL);
+      url.searchParams.set('scenarioId', id);
+      window.open(url.toString(), 'fireops_uploader');
+      ok('Opened uploader for '+id);
+    }
+
+    // ===== events =====
+    $('#btnRefreshScenarios').addEventListener('click', listScenarios);
+    $('#filter').addEventListener('input', listScenarios);
+    $('#btnLoadFromDB').addEventListener('click', ()=> { const id=$('#selectedId').value; if(id) loadPhotosFromDB(id); });
+    $('#btnListFromStorage').addEventListener('click', listFromStorage);
+    $('#btnOpenUploader').addEventListener('click', openUploader);
+
+    // ===== boot =====
+    (async function boot(){
+      try{ await ensureAuth(); }catch(e){ bad('Auth error: '+(e.message||e)); }
+      ok('Ready. Loading scenarios…');
+      await listScenarios();
+    })();
+  })();
+  </script>
+</body>
+</html>
