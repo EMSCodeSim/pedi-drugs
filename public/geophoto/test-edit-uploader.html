@@ -20,6 +20,9 @@
   #thumbs a{display:block}
   #thumbs img{width:96px;height:96px;object-fit:cover;border-radius:10px;border:1px solid #1a2b50}
   #preview img{max-width:100%;height:auto;border-radius:10px;border:1px solid #1a2b50}
+  .hidden{display:none}
+  video{max-width:100%;border-radius:10px;border:1px solid #1a2b50}
+  canvas{display:none}
   @media (max-width:560px){ .row{flex-direction:column;align-items:stretch} input,button{width:100%} }
 </style>
 </head>
@@ -36,15 +39,26 @@
       <input id="scenarioId" class="mono" placeholder="(from ?scenarioId or #hash)" readonly/>
     </div>
     <div class="row">
-      <input id="fileInput" type="file" accept="image/*" capture="environment"/>
-      <button id="btnTake" class="primary">Take / Pick Photo</button>
-      <button id="btnUpload" class="primary">Upload Photo</button>
+      <!-- System picker: many devices will show Camera when capture is present -->
+      <input id="fileInput" type="file" accept="image/*" capture="environment" multiple/>
+      <button id="btnPick" class="primary">Pick / Take (System)</button>
+
+      <!-- Direct camera: fallback when the picker won't open camera -->
+      <button id="btnCamera" class="primary">Use Camera (Beta)</button>
+      <button id="btnSnap" class="" disabled>Snap Frame</button>
+      <button id="btnUpload" class="primary" disabled>Upload Photo</button>
     </div>
-    <div class="muted">Allow camera + location permissions. Upload each photo; thumbnails appear below. Keep adding more.</div>
+    <div class="muted">Tip: If the system picker won’t open your camera, tap <b>Use Camera (Beta)</b>, then <b>Snap Frame</b>, then <b>Upload</b>.</div>
   </div>
 
-  <div id="preview" class="card" style="display:none">
-    <strong>Preview (last taken)</strong>
+  <div id="live" class="card hidden">
+    <strong>Live Camera</strong>
+    <video id="video" playsinline autoplay muted></video>
+    <canvas id="canvas"></canvas>
+  </div>
+
+  <div id="preview" class="card hidden">
+    <strong>Preview (last selected)</strong>
     <div id="previewImg"></div>
   </div>
 
@@ -66,14 +80,14 @@
 
   <script>
   (function(){
-    // ========== logger ==========
+    // ===== Logger =====
     const $ = sel => document.querySelector(sel);
     const logEl = $('#status');
     const log = (m,c)=>{const d=document.createElement('div'); if(c)d.style.color=c; d.textContent='['+new Date().toLocaleTimeString()+'] '+m; logEl.appendChild(d); logEl.scrollTop=logEl.scrollHeight; console.log(m);};
     const ok  = m=>log(m,'#7CFF7C');
     const bad = m=>log(m,'#FF7C7C');
 
-    // ========== URL helpers ==========
+    // ===== URL & helpers =====
     const qsp = new URLSearchParams(location.search);
     function scenarioFromUrl(){
       const fromQ = qsp.get('scenarioId');
@@ -83,7 +97,6 @@
     }
     function safeName(s){ return (s||'photo.jpg').replace(/[^\w.\-]+/g,'_'); }
 
-    // ========== GPS + address ==========
     async function getGPS(){
       return new Promise((resolve)=>{
         if (!navigator.geolocation) return resolve(null);
@@ -109,14 +122,9 @@
       return null;
     }
 
-    // ========== Firebase init (compat only) ==========
-    // IMPORTANT: Don't hardcode buckets; use the page's config first.
-    const defaults = {
-      apiKey:"", authDomain:"", projectId:"", storageBucket:"", databaseURL:"", appId:""
-    };
+    // ===== Firebase (compat) =====
+    const defaults = { apiKey:"", authDomain:"", projectId:"", storageBucket:"", databaseURL:"", appId:"" };
     const cfg = Object.assign({}, defaults, (window.firebaseConfig || {}));
-
-    // If someone pasted a Storage URL into databaseURL by mistake, fix it:
     (function normalizeDbUrl(c){
       const pid = c && c.projectId;
       const url = (c && c.databaseURL) || "";
@@ -126,8 +134,6 @@
         c.databaseURL = `https://${pid}-default-rtdb.firebaseio.com`;
       }
     })(cfg);
-
-    // If storageBucket missing, try to infer from projectId
     if (!cfg.storageBucket && cfg.projectId){
       cfg.storageBucket = `${cfg.projectId}.appspot.com`;
     }
@@ -135,95 +141,23 @@
     const app = firebase.initializeApp(cfg);
     const auth = firebase.auth(app);
     const db   = firebase.database(app);
-    const storage = firebase.storage(app); // ✅ compat default (uses cfg.storageBucket)
-
-    // Show bucket in UI (defensive)
-    const bucketStr = cfg.storageBucket ? `gs://${cfg.storageBucket}` : '(missing storageBucket in config)';
+    const storage = firebase.storage(app); // uses cfg.storageBucket
+    const bucketStr = cfg.storageBucket ? `gs://${cfg.storageBucket}` : '(missing storageBucket)';
     $('#bucketName').value = bucketStr;
 
-    // ========== State ==========
+    // ===== State =====
     let currentScenarioId = "";
     let lastFile = null;
+    let stream = null;
 
-    // ========== Core upload logic (compat, bucket from config) ==========
-    async function uploadToStorageCompat(sid, file){
-      // Use default bucket set by cfg.storageBucket.
-      const path = `scenarios/${sid}/${Date.now()}_${safeName(file.name)}`;
-      const ref  = storage.ref().child(path);
-      log(`Uploading to ${bucketStr}/${path}`);
-      const snap = await ref.put(file, { contentType: file.type || 'image/jpeg' });
-      const url  = await snap.ref.getDownloadURL();
-      return { url, fullPath: ref.fullPath, gsUri: `${bucketStr}/${ref.fullPath}` };
-    }
-
-    async function uploadCurrentFile(){
-      if (!currentScenarioId) { alert('No scenarioId. Open this page via the builder redirect.'); return; }
-      if (!lastFile) { alert('Take or pick a photo first.'); return; }
-
-      try {
-        const { url, fullPath, gsUri } = await uploadToStorageCompat(currentScenarioId, lastFile);
-        ok('Upload OK');
-
-        const gps = await getGPS();
-        let address = null;
-        if (gps && gps.lat && gps.lng) {
-          try { address = await reverseGeocode(gps.lat, gps.lng); } catch(_){}
-        }
-
-        const photoKey = db.ref('photos').push().key;
-        const photoRec = {
-          id: photoKey,
-          url,
-          storagePath: fullPath,
-          gsUri,
-          contentType: lastFile.type || 'image/jpeg',
-          scenarioId: currentScenarioId,
-          createdAt: Date.now(),
-          gps: gps || null,
-          address: address || null
-        };
-        const updates = {};
-        updates[`/scenarios/${currentScenarioId}/photos/${photoKey}`] = photoRec;
-        updates[`/geophoto/scenarios/${currentScenarioId}/photos/${photoKey}`] = photoRec;
-        await db.ref().update(updates);
-        ok('DB updated with photo record');
-
-        // Preview + thumb
-        $('#preview').style.display = '';
-        $('#previewImg').innerHTML = `<a href="${url}" target="_blank" rel="noopener"><img src="${url}" alt="preview"></a>`;
-        const a = document.createElement('a');
-        a.href = url; a.target = '_blank'; a.rel='noopener';
-        a.innerHTML = `<img src="${url}" alt="thumb">`;
-        $('#thumbs').prepend(a);
-
-        // Reset input for next shot
-        $('#fileInput').value = "";
-        lastFile = null;
-      } catch(e){
-        bad(`Upload FAILED: ${e.code||''} ${e.message||e}`);
-        if (String(e).includes('storage/unauthorized')) {
-          bad('Storage rules blocked the upload (storage/unauthorized). Ensure anonymous writes are allowed during testing.');
-        }
-        alert('Upload failed:\n'+(e && e.message || e));
-      }
-    }
-
-    // ========== Events ==========
-    $('#btnTake').addEventListener('click', ()=> $('#fileInput').click());
-    $('#fileInput').addEventListener('change', ()=>{
-      const f = $('#fileInput').files && $('#fileInput').files[0];
-      if (!f) return;
-      lastFile = f;
-      const reader = new FileReader();
-      reader.onload = (e)=>{
-        $('#preview').style.display = '';
-        $('#previewImg').innerHTML = `<img src="${e.target.result}" alt="preview">`;
-      };
-      reader.readAsDataURL(f);
-    });
+    // ===== UI wiring =====
+    $('#btnPick').addEventListener('click', ()=> $('#fileInput').click());
+    $('#fileInput').addEventListener('change', onFilesChosen);
     $('#btnUpload').addEventListener('click', uploadCurrentFile);
+    $('#btnCamera').addEventListener('click', startCamera);
+    $('#btnSnap').addEventListener('click', snapFrame);
 
-    // ========== Boot ==========
+    // ===== Boot =====
     (async function boot(){
       try{
         const cred = await auth.signInAnonymously();
@@ -235,14 +169,135 @@
       $('#scenarioId').value = currentScenarioId || '(missing)';
       if (!currentScenarioId) bad('No scenarioId provided; add ?scenarioId=...');
 
-      // Final sanity log
-      if (!cfg.storageBucket){
-        bad('storageBucket missing from config; uploads cannot proceed until it is set.');
-      } else {
-        ok('Using bucket ' + bucketStr);
-      }
-      ok('Ready. Tap “Take / Pick Photo”, then “Upload Photo”. Keep adding more.');
+      ok('Ready. Use system picker, or try camera mode if the picker won’t open camera.');
     })();
+
+    // ===== System picker path =====
+    function onFilesChosen(evt){
+      const files = Array.from(evt.target.files||[]);
+      if (!files.length) return;
+      // We queue the first one for Upload button; you can change to auto-upload if you prefer.
+      lastFile = files[0];
+      showPreviewFromFile(lastFile);
+      $('#btnUpload').disabled = false;
+    }
+
+    function showPreviewFromFile(file){
+      const reader = new FileReader();
+      reader.onload = (e)=>{
+        $('#preview').classList.remove('hidden');
+        $('#previewImg').innerHTML = `<img src="${e.target.result}" alt="preview">`;
+      };
+      reader.readAsDataURL(file);
+    }
+
+    // ===== Direct camera path (getUserMedia) =====
+    async function startCamera(){
+      try{
+        if (stream) stopCamera();
+        const constraints = {
+          video: {
+            facingMode: { ideal: "environment" },
+            width: { ideal: 1920 }, height: { ideal: 1080 }
+          },
+          audio: false
+        };
+        stream = await navigator.mediaDevices.getUserMedia(constraints);
+        const video = $('#video');
+        video.srcObject = stream;
+        $('#live').classList.remove('hidden');
+        $('#btnSnap').disabled = false;
+        ok('Camera started');
+      }catch(e){
+        bad('Camera error: '+(e.message||e));
+        alert('Camera could not be started. Try the system picker instead.');
+      }
+    }
+    function stopCamera(){
+      try{ stream.getTracks().forEach(t=>t.stop()); }catch(_){}
+      stream = null;
+      $('#btnSnap').disabled = true;
+      $('#live').classList.add('hidden');
+    }
+    function snapFrame(){
+      if (!stream){ bad('No live stream'); return; }
+      const video = $('#video');
+      const canvas = $('#canvas');
+      const w = video.videoWidth || 1280;
+      const h = video.videoHeight || 720;
+      canvas.width = w; canvas.height = h;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(video, 0, 0, w, h);
+      canvas.toBlob((blob)=>{
+        if (!blob){ bad('Failed to capture frame'); return; }
+        // Make a File-like object for upload
+        const fname = `camera_${Date.now()}.jpg`;
+        const f = new File([blob], fname, { type: 'image/jpeg' });
+        lastFile = f;
+        showPreviewFromFile(f);
+        $('#btnUpload').disabled = false;
+        ok('Frame captured — ready to upload');
+      }, 'image/jpeg', 0.92);
+    }
+
+    // ===== Upload =====
+    async function uploadToStorageCompat(sid, file){
+      const path = `scenarios/${sid}/${Date.now()}_${safeName(file.name)}`;
+      const ref  = storage.ref().child(path);
+      log(`Uploading to ${bucketStr}/${path}`);
+      const snap = await ref.put(file, { contentType: file.type || 'image/jpeg' });
+      const url  = await snap.ref.getDownloadURL();
+      return { url, fullPath: ref.fullPath, gsUri: `${bucketStr}/${ref.fullPath}` };
+    }
+
+    async function uploadCurrentFile(){
+      if (!currentScenarioId) { alert('No scenarioId. Open this page via the builder redirect.'); return; }
+      if (!lastFile)          { alert('No photo selected.'); return; }
+
+      try{
+        const { url, fullPath, gsUri } = await uploadToStorageCompat(currentScenarioId, lastFile);
+        ok('Upload OK');
+
+        const gps = await getGPS();
+        let address = null;
+        if (gps && gps.lat && gps.lng) { try { address = await reverseGeocode(gps.lat, gps.lng); } catch(_){} }
+
+        const photoKey = db.ref('photos').push().key;
+        const photoRec = {
+          id: photoKey,
+          url, storagePath: fullPath, gsUri,
+          contentType: lastFile.type || 'image/jpeg',
+          scenarioId: currentScenarioId, createdAt: Date.now(),
+          gps: gps || null, address: address || null
+        };
+        const updates = {};
+        updates[`/scenarios/${currentScenarioId}/photos/${photoKey}`] = photoRec;
+        updates[`/geophoto/scenarios/${currentScenarioId}/photos/${photoKey}`] = photoRec;
+        await db.ref().update(updates);
+        ok('DB updated with photo record');
+
+        // Add thumb & reset selection (keep camera live if it was on)
+        addThumb(url);
+        $('#fileInput').value = "";
+        lastFile = null;
+        $('#btnUpload').disabled = true;
+      }catch(e){
+        bad(`Upload FAILED: ${e.code||''} ${e.message||e}`);
+        if (String(e).includes('storage/unauthorized')) {
+          bad('Storage rules blocked the upload (storage/unauthorized). Ensure anonymous writes are allowed during testing.');
+        }
+        alert('Upload failed:\n'+(e && e.message || e));
+      }
+    }
+
+    function addThumb(url){
+      const a = document.createElement('a');
+      a.href = url; a.target = '_blank'; a.rel = 'noopener';
+      a.innerHTML = `<img src="${url}" alt="thumb">`;
+      $('#thumbs').prepend(a);
+      $('#preview').classList.add('hidden'); // optional: hide large preview after upload
+    }
+
   })();
   </script>
 </body>
