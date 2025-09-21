@@ -14,7 +14,7 @@
   button.primary{background:#1a3fbb;border-color:var(--accent)}
   .card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:12px;margin:12px 0}
   .muted{color:var(--muted)}
-  #status{white-space:pre-wrap;background:#0c1530;border:1px solid #1b2b50;border-radius:10px;padding:10px;max-height:240px;overflow:auto}
+  #status{white-space:pre-wrap;background:#0c1530;border:1px solid #1b2b50;border-radius:10px;padding:10px;max-height:260px;overflow:auto}
   .mono{font-family:ui-monospace,Menlo,Consolas,monospace}
   #thumbs{display:flex;flex-wrap:wrap;gap:8px}
   #thumbs a{display:block}
@@ -29,7 +29,7 @@
   <div class="card">
     <div class="row">
       <label class="muted">Bucket</label>
-      <input class="mono" value="gs://fireopssim.appspot.com" readonly/>
+      <input id="bucketName" class="mono" value="(detecting…)" readonly/>
     </div>
     <div class="row">
       <label class="muted">Scenario</label>
@@ -40,7 +40,7 @@
       <button id="btnTake" class="primary">Take / Pick Photo</button>
       <button id="btnUpload" class="primary">Upload Photo</button>
     </div>
-    <div class="muted">Allow camera + location permissions. Photos save as you upload; keep adding more and they’ll appear below.</div>
+    <div class="muted">Allow camera + location permissions. Upload each photo; thumbnails appear below. Keep adding more.</div>
   </div>
 
   <div id="preview" class="card" style="display:none">
@@ -66,8 +66,7 @@
 
   <script>
   (function(){
-    // ---------- UI helpers ----------
-    const $ = (sel) => document.querySelector(sel);
+    const $ = sel => document.querySelector(sel);
     const logEl = $('#status');
     const log = (m,c)=>{const d=document.createElement('div'); if(c)d.style.color=c; d.textContent='['+new Date().toLocaleTimeString()+'] '+m; logEl.appendChild(d); logEl.scrollTop=logEl.scrollHeight; console.log(m);};
     const ok  = m=>log(m,'#7CFF7C');
@@ -87,10 +86,7 @@
       return new Promise((resolve)=>{
         if (!navigator.geolocation) return resolve(null);
         navigator.geolocation.getCurrentPosition(
-          p=>resolve({
-            lat:p.coords.latitude, lng:p.coords.longitude,
-            acc:p.coords.accuracy, heading:p.coords.heading, speed:p.coords.speed, ts:Date.now()
-          }),
+          p=>resolve({lat:p.coords.latitude, lng:p.coords.longitude, acc:p.coords.accuracy, heading:p.coords.heading, speed:p.coords.speed, ts:Date.now()}),
           _=>resolve(null),
           { enableHighAccuracy:true, timeout:8000, maximumAge:0 }
         );
@@ -99,29 +95,23 @@
 
     async function reverseGeocode(lat,lng){
       try{
-        // Try OSM first (no key). Note: subject to CORS/usage limits.
         const url = `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${encodeURIComponent(lat)}&lon=${encodeURIComponent(lng)}`;
         const res = await fetch(url, { headers: { 'Accept':'application/json' }});
-        if (res.ok){
-          const j = await res.json();
-          return j.display_name || null;
-        }
+        if (res.ok){ const j = await res.json(); return j.display_name || null; }
       }catch(_){}
       try{
-        // Optional: Google Maps if you provide a key on window (safer quota & reliability)
         const key = window.GMAPS_API_KEY;
         if (key){
           const g = await fetch(`https://maps.googleapis.com/maps/api/geocode/json?latlng=${lat},${lng}&key=${key}`);
           const jj = await g.json();
-          const addr = jj?.results?.[0]?.formatted_address || null;
-          return addr;
+          return jj?.results?.[0]?.formatted_address || null;
         }
       }catch(_){}
       return null;
     }
 
     // ---------- Firebase config ----------
-    // Prefer global config if provided, otherwise use FireOpsSim project; fix DB URL if missing/wrong.
+    // Prefer global config, else default to your FireOpsSim project. Fix DB URL if wrong.
     const defaultCfg = {
       apiKey:"AIzaSyBzwc75u8pG73OKcHN8ti2ADbucjKMHme8",
       authDomain:"fireopssim.firebaseapp.com",
@@ -144,7 +134,13 @@
     const app = firebase.initializeApp(raw);
     const auth = firebase.auth(app);
     const db   = firebase.database(app);
-    const st   = firebase.storage(app, "gs://fireopssim.appspot.com"); // explicit bucket
+
+    // IMPORTANT: compat style — use default bucket from config OR explicitly bind to GS URL.
+    // const st = firebase.storage(app); // uses storageBucket from config
+    const st = firebase.app().storage(`gs://${raw.storageBucket}`); // explicit bucket binding
+
+    // Show bucket name in UI
+    $('#bucketName').value = `gs://${raw.storageBucket}`;
 
     // ---------- State ----------
     let currentScenarioId = "";
@@ -159,10 +155,10 @@
         bad('Auth failed: '+(e.message||e)); return;
       }
       currentScenarioId = scenarioFromUrl();
-      $('#scenarioId').value = currentScenarioId;
+      $('#scenarioId').value = currentScenarioId || '(missing)';
       if (!currentScenarioId) bad('No scenarioId provided; add ?scenarioId=...');
 
-      ok('Ready. Tap “Take / Pick Photo”, then “Upload Photo”. Keep adding more—thumbnails show below.');
+      ok('Ready. Tap “Take / Pick Photo”, then “Upload Photo”.');
     })();
 
     // ---------- Upload logic ----------
@@ -178,22 +174,20 @@
         log('Uploading → '+fullPath);
         await ref.put(lastFile, { contentType: lastFile.type || 'image/jpeg' });
         const url = await ref.getDownloadURL();
-        ok('Upload OK');
+        ok('Upload OK: ' + url);
 
         const gps = await getGPS();
         let address = null;
         if (gps && gps.lat && gps.lng) {
-          // Best-effort reverse geocode (may be null if blocked)
           try { address = await reverseGeocode(gps.lat, gps.lng); } catch(_){}
         }
 
-        // Write to Realtime DB (two locations for compatibility)
         const photoKey = db.ref('photos').push().key;
         const photoRec = {
           id: photoKey,
           url,
           storagePath: fullPath,
-          gsUri: `gs://fireopssim.appspot.com/${fullPath}`,
+          gsUri: `gs://${raw.storageBucket}/${fullPath}`,
           contentType: lastFile.type || 'image/jpeg',
           scenarioId: currentScenarioId,
           createdAt: Date.now(),
@@ -219,6 +213,10 @@
         lastFile = null;
       } catch(e){
         bad('Upload error: '+(e.code||'')+' '+(e.message||e));
+        // Surface common rule error clearly
+        if (String(e).includes('storage/unauthorized')) {
+          bad('Storage rules blocked the upload (storage/unauthorized). Are anonymous writes allowed or are you signed in?');
+        }
         alert('Upload failed:\n'+(e && e.message || e));
       }
     }
@@ -229,7 +227,6 @@
       const f = $('#fileInput').files && $('#fileInput').files[0];
       if (!f) return;
       lastFile = f;
-      // Show a tiny local preview before upload
       const reader = new FileReader();
       reader.onload = (e)=>{
         $('#preview').style.display = '';
@@ -237,9 +234,7 @@
       };
       reader.readAsDataURL(f);
     });
-
     $('#btnUpload').addEventListener('click', uploadCurrentFile);
-
   })();
   </script>
 </body>
