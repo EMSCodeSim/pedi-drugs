@@ -66,12 +66,14 @@
 
   <script>
   (function(){
+    // ========== small logger ==========
     const $ = sel => document.querySelector(sel);
     const logEl = $('#status');
     const log = (m,c)=>{const d=document.createElement('div'); if(c)d.style.color=c; d.textContent='['+new Date().toLocaleTimeString()+'] '+m; logEl.appendChild(d); logEl.scrollTop=logEl.scrollHeight; console.log(m);};
     const ok  = m=>log(m,'#7CFF7C');
     const bad = m=>log(m,'#FF7C7C');
 
+    // ========== URL helpers ==========
     const qsp = new URLSearchParams(location.search);
     function scenarioFromUrl(){
       const fromQ = qsp.get('scenarioId');
@@ -79,40 +81,37 @@
       const fromHash = (location.hash||'').replace(/^#/, '');
       return decodeURIComponent(fromHash||'');
     }
-
     function safeName(s){ return (s||'photo.jpg').replace(/[^\w.\-]+/g,'_'); }
 
+    // ========== GPS + address ==========
     async function getGPS(){
       return new Promise((resolve)=>{
         if (!navigator.geolocation) return resolve(null);
         navigator.geolocation.getCurrentPosition(
-          p=>resolve({lat:p.coords.latitude, lng:p.coords.longitude, acc:p.coords.accuracy, heading:p.coords.heading, speed:p.coords.speed, ts:Date.now()}),
+          p=>resolve({lat:p.coords.latitude, lng:p.coords.longitude, acc:p.coords.accuracy, ts:Date.now()}),
           _=>resolve(null),
           { enableHighAccuracy:true, timeout:8000, maximumAge:0 }
         );
       });
     }
-
     async function reverseGeocode(lat,lng){
       try{
-        const url = `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${encodeURIComponent(lat)}&lon=${encodeURIComponent(lng)}`;
-        const res = await fetch(url, { headers: { 'Accept':'application/json' }});
-        if (res.ok){ const j = await res.json(); return j.display_name || null; }
+        const r = await fetch(`https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${encodeURIComponent(lat)}&lon=${encodeURIComponent(lng)}`, { headers: { 'Accept':'application/json' }});
+        if (r.ok){ const j = await r.json(); return j.display_name || null; }
       }catch(_){}
-      try{
-        const key = window.GMAPS_API_KEY;
-        if (key){
-          const g = await fetch(`https://maps.googleapis.com/maps/api/geocode/json?latlng=${lat},${lng}&key=${key}`);
+      if (window.GMAPS_API_KEY){
+        try{
+          const g = await fetch(`https://maps.googleapis.com/maps/api/geocode/json?latlng=${lat},${lng}&key=${window.GMAPS_API_KEY}`);
           const jj = await g.json();
           return jj?.results?.[0]?.formatted_address || null;
-        }
-      }catch(_){}
+        }catch(_){}
+      }
       return null;
     }
 
-    // ---------- Firebase config ----------
-    // Prefer global config, else default to your FireOpsSim project. Fix DB URL if wrong.
+    // ========== Firebase init (compat) ==========
     const defaultCfg = {
+      // Provide your defaults here or rely on window.firebaseConfig
       apiKey:"AIzaSyBzwc75u8pG73OKcHN8ti2ADbucjKMHme8",
       authDomain:"fireopssim.firebaseapp.com",
       projectId:"fireopssim",
@@ -121,6 +120,8 @@
       appId:"1:396140888722:web:demo"
     };
     const raw = Object.assign({}, defaultCfg, (window.firebaseConfig||{}));
+
+    // normalize DB URL if a Storage URL was accidentally set
     (function normalizeDbUrl(cfg){
       const pid = cfg && cfg.projectId;
       const url = (cfg && cfg.databaseURL) || "";
@@ -135,59 +136,49 @@
     const auth = firebase.auth(app);
     const db   = firebase.database(app);
 
-    // IMPORTANT: compat style — use default bucket from config OR explicitly bind to GS URL.
-    // const st = firebase.storage(app); // uses storageBucket from config
-    const st = firebase.app().storage(`gs://${raw.storageBucket}`); // explicit bucket binding
-
-    // Show bucket name in UI
+    // IMPORTANT: compat storage — explicit GS bucket binding
+    const storage = firebase.app().storage(`gs://${raw.storageBucket}`);
     $('#bucketName').value = `gs://${raw.storageBucket}`;
 
-    // ---------- State ----------
+    // ========== State ==========
     let currentScenarioId = "";
     let lastFile = null;
 
-    // ---------- Boot ----------
-    (async function boot(){
-      try {
-        const cred = await auth.signInAnonymously();
-        ok('Auth OK (uid='+(cred.user?.uid||'unknown')+')');
-      } catch(e){
-        bad('Auth failed: '+(e.message||e)); return;
-      }
-      currentScenarioId = scenarioFromUrl();
-      $('#scenarioId').value = currentScenarioId || '(missing)';
-      if (!currentScenarioId) bad('No scenarioId provided; add ?scenarioId=...');
+    // ========== “logic from reference file”: working upload core ==========
+    // This function is *called by your existing flow* to do the actual upload.
+    async function yourWorkingStorageUpload(sid, file){
+      const safe = s => (s||"file").replace(/[^\w.\-]+/g,"_");
+      const path = `scenarios/${sid}/${Date.now()}_${safe(file.name)}`;
+      const ref  = storage.ref().child(path);
+      await ref.put(file, { contentType: file.type || "image/jpeg" });
+      const url = await ref.getDownloadURL();
+      return { url, fullPath: ref.fullPath, gsUri: `gs://${raw.storageBucket}/${ref.fullPath}` };
+    }
 
-      ok('Ready. Tap “Take / Pick Photo”, then “Upload Photo”.');
-    })();
-
-    // ---------- Upload logic ----------
+    // ========== Your existing upload function uses the working logic above ==========
     async function uploadCurrentFile(){
       if (!currentScenarioId) { alert('No scenarioId. Open this page via the builder redirect.'); return; }
       if (!lastFile) { alert('Take or pick a photo first.'); return; }
 
       try {
-        const name = `${Date.now()}_${safeName(lastFile.name||'photo.jpg')}`;
-        const fullPath = `scenarios/${currentScenarioId}/${name}`;
-        const ref = st.ref().child(fullPath);
+        // 1) Upload to Storage (working logic)
+        const { url, fullPath, gsUri } = await yourWorkingStorageUpload(currentScenarioId, lastFile);
+        ok('Upload OK');
 
-        log('Uploading → '+fullPath);
-        await ref.put(lastFile, { contentType: lastFile.type || 'image/jpeg' });
-        const url = await ref.getDownloadURL();
-        ok('Upload OK: ' + url);
-
+        // 2) GPS + address
         const gps = await getGPS();
         let address = null;
         if (gps && gps.lat && gps.lng) {
           try { address = await reverseGeocode(gps.lat, gps.lng); } catch(_){}
         }
 
+        // 3) Write photo record in Realtime Database (two paths for compatibility)
         const photoKey = db.ref('photos').push().key;
         const photoRec = {
           id: photoKey,
           url,
           storagePath: fullPath,
-          gsUri: `gs://${raw.storageBucket}/${fullPath}`,
+          gsUri,
           contentType: lastFile.type || 'image/jpeg',
           scenarioId: currentScenarioId,
           createdAt: Date.now(),
@@ -200,7 +191,7 @@
         await db.ref().update(updates);
         ok('DB updated with photo record');
 
-        // UI: show preview & add thumb
+        // 4) UI: show preview + thumb
         $('#preview').style.display = '';
         $('#previewImg').innerHTML = `<a href="${url}" target="_blank" rel="noopener"><img src="${url}" alt="preview"></a>`;
         const a = document.createElement('a');
@@ -208,20 +199,19 @@
         a.innerHTML = `<img src="${url}" alt="thumb">`;
         $('#thumbs').prepend(a);
 
-        // Reset file input so user can take another
+        // reset input for next shot
         $('#fileInput').value = "";
         lastFile = null;
       } catch(e){
         bad('Upload error: '+(e.code||'')+' '+(e.message||e));
-        // Surface common rule error clearly
         if (String(e).includes('storage/unauthorized')) {
-          bad('Storage rules blocked the upload (storage/unauthorized). Are anonymous writes allowed or are you signed in?');
+          bad('Storage rules blocked the upload (storage/unauthorized). Are anonymous writes allowed?');
         }
         alert('Upload failed:\n'+(e && e.message || e));
       }
     }
 
-    // ---------- Events ----------
+    // ========== Wire up (keeps your current buttons/flow) ==========
     $('#btnTake').addEventListener('click', ()=> $('#fileInput').click());
     $('#fileInput').addEventListener('change', ()=>{
       const f = $('#fileInput').files && $('#fileInput').files[0];
@@ -235,6 +225,22 @@
       reader.readAsDataURL(f);
     });
     $('#btnUpload').addEventListener('click', uploadCurrentFile);
+
+    // ========== Boot ==========
+    (async function boot(){
+      try{
+        const cred = await auth.signInAnonymously();
+        ok('Auth OK (uid='+(cred.user?.uid||'unknown')+')');
+      }catch(e){
+        bad('Auth failed: '+(e.message||e)); return;
+      }
+      currentScenarioId = scenarioFromUrl();
+      $('#scenarioId').value = currentScenarioId || '(missing)';
+      if (!currentScenarioId) bad('No scenarioId provided; add ?scenarioId=...');
+
+      ok('Ready. Tap “Take / Pick Photo”, then “Upload Photo”. Keep adding more.');
+    })();
+
   })();
   </script>
 </body>
