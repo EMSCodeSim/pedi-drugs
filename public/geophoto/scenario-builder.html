@@ -42,7 +42,7 @@
 
     <div class="card">
       <div class="step"><span class="dot"></span> Step 1: Create scenario (name + dispatch)</div>
-      <div class="step" style="opacity:.6;margin-top:6px"><span class="dot" style="opacity:.4"></span> Step 2: Add photos in <strong>test‑edit‑uploader</strong></div>
+      <div class="step" style="opacity:.6;margin-top:6px"><span class="dot" style="opacity:.4"></span> Step 2: Add photos in <strong>test-edit-uploader</strong></div>
     </div>
 
     <!-- Existing scenario banner (if opened via ?scenarioId=...) -->
@@ -69,7 +69,7 @@
 
       <label for="dispatchText" style="margin-top:10px">Dispatch Notes</label>
       <textarea id="dispatchText" name="dispatchText" placeholder="Units dispatched, chief complaint, age/sex if known, location hint. Keep it neutral (no diagnosis)."></textarea>
-      <div class="hint">Example: "Medic 181 respond P2 to 123 Main St. 33‑year‑old female, abdominal pain with vomiting since this morning."</div>
+      <div class="hint">Example: "Medic 181 respond P2 to 123 Main St. 33-year-old female, abdominal pain with vomiting since this morning."</div>
 
       <div class="actions">
         <button type="submit" class="btn btn-primary" id="createBtn">Create & Continue to Photos</button>
@@ -77,7 +77,7 @@
       </div>
     </form>
 
-    <!-- Light diagnostics to prevent silent failures on phones -->
+    <!-- Diagnostics (only shown if something breaks) -->
     <div id="diag" class="card" style="display:none"></div>
 
     <div id="toast" class="toast" role="status" aria-live="polite"></div>
@@ -103,7 +103,8 @@
       console.error(e?.error || e?.message);
       const d = document.getElementById('diag');
       d.style.display='';
-      d.innerHTML = '<strong>Script error:</strong> ' + (e?.message||'Unknown') + '<div class="hint">Check Firebase config and network. The form will not submit until this is resolved.</div>';
+      d.innerHTML = '<strong>Script error:</strong> ' + (e?.message||'Unknown') +
+        '<div class="hint">Check Firebase config and network. The form will not submit until this is resolved.</div>';
       toast('Script error — see diagnostics card');
     });
 
@@ -121,14 +122,29 @@
     import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
     import { getDatabase, ref, push, set, get } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
 
-    const firebaseConfig = window.firebaseConfig || fallbackConfig;
+    // Build + normalize Firebase config (auto-heal bad databaseURL)
+    const rawCfg = window.firebaseConfig || fallbackConfig;
+
+    function normalizeDbUrl(cfg){
+      const pid = cfg?.projectId?.trim();
+      let url = (cfg?.databaseURL||'').trim();
+      const ok = /^(https:\/\/)[-a-z0-9]+(-default-rtdb)?\.(firebaseio|firebasedatabase)\.com\/?$/i;
+      const looksStorage = /(firebasestorage|storage\.googleapis)\./i.test(url);
+      // If missing, storage-looking, or not matching expected host, synthesize default
+      if(!url || looksStorage || !ok.test(url)){
+        if(pid){ url = `https://${pid}-default-rtdb.firebaseio.com`; }
+      }
+      return { ...cfg, databaseURL: url };
+    }
+
+    const firebaseConfig = normalizeDbUrl(rawCfg);
 
     // Validate config early to avoid silent fallback form submit
-    const hasConfig = firebaseConfig && firebaseConfig.projectId && firebaseConfig.apiKey;
+    const hasConfig = firebaseConfig && firebaseConfig.projectId && firebaseConfig.apiKey && firebaseConfig.databaseURL;
     if(!hasConfig){
       const d = document.getElementById('diag');
       d.style.display='';
-      d.innerHTML = '<strong>Missing Firebase config.</strong> Populate <code>window.firebaseConfig</code> or edit this file.';
+      d.innerHTML = '<strong>Missing/invalid Firebase config.</strong> Ensure <code>apiKey</code>, <code>projectId</code>, and a valid <code>databaseURL</code> like <code>https://' + (firebaseConfig.projectId||'your-project') + '-default-rtdb.firebaseio.com</code>.';
     }
 
     const app = initializeApp(firebaseConfig);
@@ -159,7 +175,7 @@
     // Prevent any default navigation even if JS later errors
     ui.form.addEventListener('submit', (ev)=> ev.preventDefault());
 
-    // Replace the no-op handler with the real async creator
+    // Real async creator
     ui.form.addEventListener('submit', async (e)=>{
       e.preventDefault();
       const name = (ui.name.value||'').trim();
