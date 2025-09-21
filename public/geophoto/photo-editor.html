@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1"/>
-<title>FireOpsSim — Photo Editor (Viewer)</title>
+<title>FireOpsSim — Photo Viewer</title>
 <style>
   :root{--bg:#0b1220;--card:#111a2e;--muted:#b8c4e2;--line:#1b2b50;--ink:#e8eefc;--accent:#2c5cff;--ok:#7CFF7C;--bad:#FF7C7C}
   *{box-sizing:border-box}
@@ -28,11 +28,12 @@
   #thumbs a{display:block}
   #thumbs img{width:100%;height:110px;object-fit:cover;border-radius:10px;border:1px solid #1a2b50}
   #empty{color:#9ab0e6}
+  .pill{font-size:12px;padding:4px 8px;border:1px solid #2b3d70;border-radius:999px}
   @media (max-width:560px){ .row{flex-direction:column;align-items:stretch} input,button,select{width:100%} }
 </style>
 </head>
 <body>
-  <h1>FireOpsSim — Photo Editor (Viewer)</h1>
+  <h1>FireOpsSim — Photo Viewer</h1>
 
   <div class="card">
     <div class="row">
@@ -42,7 +43,7 @@
     <div class="row">
       <button id="btnRefreshScenarios" class="primary">Refresh Scenarios</button>
       <input id="filter" placeholder="Filter scenarios by name/id…"/>
-      <button id="btnListStorageTop">List Storage /scenarios (folders)</button>
+      <span class="pill">Read mode: DB-first, Storage optional</span>
     </div>
     <div id="scenarios"></div>
   </div>
@@ -52,15 +53,18 @@
     <div class="row">
       <label class="muted">Scenario ID</label>
       <input id="selectedId" class="mono" readonly placeholder="(none)"/>
-      <button id="btnOpenUploader">Open Uploader</button>
-      <button id="btnListPhotos" class="primary">List Photos in Storage</button>
     </div>
     <div class="row">
-      <div class="muted">Folder:</div>
+      <button id="btnLoadFromDB" class="primary">Load Photos from DB</button>
+      <button id="btnListFromStorage">List Photos from Storage</button>
+      <button id="btnOpenUploader">Open Uploader</button>
+    </div>
+    <div class="row">
+      <div class="muted">Storage folder:</div>
       <div class="mono" id="folderPath">scenarios/(none)</div>
     </div>
     <div id="thumbs"></div>
-    <div id="empty" class="muted" style="display:none">No photos found in this folder.</div>
+    <div id="empty" class="muted" style="display:none">No photos found.</div>
   </div>
 
   <div class="card">
@@ -86,21 +90,21 @@
 
     function log(m,c){ const d=document.createElement('div'); if(c)d.style.color=c; d.textContent='['+new Date().toLocaleTimeString()+'] '+m; logEl.appendChild(d); logEl.scrollTop=logEl.scrollHeight; console.log(m); }
     const ok=m=>log(m,'#7CFF7C'), bad=m=>log(m,'#FF7C7C');
+    const esc = s => String(s||'').replace(/[&<>"']/g, m=>({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[m]));
 
     function fmtDate(ts){ try{ return new Date(ts).toLocaleString(); }catch(_){ return String(ts||''); } }
 
     // ---------- Firebase apps ----------
-    // 1) Realtime Database app (dailyquiz-d5279)
+    // Realtime Database app (dailyquiz-d5279)
     const dbCfg = {
       apiKey:"AIzaSyDM6DpRSeZueVKRpbyJyDmhf8WY66KyCDk",
       authDomain:"dailyquiz-d5279.firebaseapp.com",
       databaseURL:"https://dailyquiz-d5279-default-rtdb.firebaseio.com",
       projectId:"dailyquiz-d5279",
       storageBucket:"dailyquiz-d5279.appspot.com",
-      appId:"1:94577748034:web:c032d3a1d72db1313de5db",
-      measurementId:"G-19DVN7NNH7"
+      appId:"1:94577748034:web:c032d3a1d72db1313de5db"
     };
-    // 2) Storage app (fireopssim) — explicit gs:// binding later
+    // Storage app (fireopssim)
     const stCfg = {
       apiKey:"AIzaSyBzwc75u8pG73OKcHN8ti2ADbucjKMHme8",
       authDomain:"fireopssim.firebaseapp.com",
@@ -109,36 +113,33 @@
       appId:"1:396140888722:web:demo"
     };
 
-    // Initialize as two separate named apps (compat)
     const dbApp = firebase.initializeApp(dbCfg, 'dbApp');
     const stApp = firebase.initializeApp(stCfg, 'stApp');
 
+    const rtdb = firebase.database(dbApp);
     const dbAuth = firebase.auth(dbApp);
-    const rtdb   = firebase.database(dbApp);
+    const stAuth = firebase.auth(stApp);
 
-    // Explicit GS binding as we’ve used elsewhere
+    // Explicit gs:// binding makes it consistent with your uploader
     const storage = firebase.storage(stApp, "gs://fireopssim.appspot.com");
 
-    async function ensureAuthBoth(){
+    async function ensureAuth(){
       if (!dbAuth.currentUser){
         const cred = await dbAuth.signInAnonymously();
         ok('DB auth OK (uid='+ (cred.user?.uid||'unknown') +')');
       }
-      // Storage uses its own app; we must sign that app in too
-      const stAuth = firebase.auth(stApp);
       if (!stAuth.currentUser){
         const cred2 = await stAuth.signInAnonymously();
         ok('Storage auth OK (uid='+ (cred2.user?.uid||'unknown') +')');
       }
     }
 
-    // ---------- List scenarios from DB ----------
+    // ---------- Load scenarios from DB ----------
     async function listScenarios(){
       try{
-        await ensureAuthBoth();
+        await ensureAuth();
         scenariosEl.innerHTML = '<div class="muted" style="padding:10px">Loading scenarios…</div>';
 
-        // Pull latest ~100 scenarios
         const snap = await rtdb.ref('scenarios').limitToLast(100).once('value');
         const val = snap.val() || {};
         const rows = Object.values(val)
@@ -151,7 +152,7 @@
           .sort((a,b)=>(b.createdAt||0)-(a.createdAt||0));
 
         renderScenarioList(rows);
-        ok(`Loaded ${rows.length} scenario(s) from DB.`);
+        ok(`Loaded ${rows.length} scenario(s).`);
       }catch(e){
         scenariosEl.innerHTML = '<div class="muted" style="padding:10px">Failed to load scenarios.</div>';
         bad('List scenarios error: '+(e.message||e));
@@ -176,12 +177,12 @@
         div.className = 'scenario';
         div.innerHTML = `
           <div class="meta">
-            <div class="name">${escapeHtml(r.title)}</div>
-            <div class="small mono">${escapeHtml(r.id)} • ${escapeHtml(fmtDate(r.createdAt))}</div>
-            ${r.dispatch ? `<div class="small">${escapeHtml(r.dispatch)}</div>` : ''}
+            <div class="name">${esc(r.title)}</div>
+            <div class="small mono">${esc(r.id)} • ${esc(fmtDate(r.createdAt))}</div>
+            ${r.dispatch ? `<div class="small">${esc(r.dispatch)}</div>` : ''}
           </div>
           <div>
-            <button data-id="${escapeAttr(r.id)}" class="primary btnView">View Photos</button>
+            <button data-id="${esc(r.id)}" class="primary btnView">View</button>
           </div>
         `;
         scenariosEl.appendChild(div);
@@ -195,119 +196,44 @@
       });
     }
 
-    function escapeHtml(s){ return String(s||'').replace(/[&<>"']/g, m=>({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[m])); }
-    function escapeAttr(s){ return escapeHtml(s).replace(/"/g,'&quot;'); }
-
-    // ---------- Select scenario & list photos from Storage ----------
+    // ---------- Select scenario ----------
     async function selectScenario(id){
       $('#selectedId').value = id || '';
       folderPathEl.textContent = id ? `scenarios/${id}` : 'scenarios/(none)';
       thumbsEl.innerHTML = '';
       emptyEl.style.display = 'none';
       if (!id) return;
-      await listPhotosFor(id);
+      // Default: DB-first load (fast + works with your current flow)
+      await loadPhotosFromDB(id);
     }
 
-    async function listPhotosFor(id){
+    // ---------- Load photos from DB (primary path) ----------
+    async function loadPhotosFromDB(id){
       try{
-        await ensureAuthBoth();
-        thumbsEl.innerHTML = '<div class="muted">Listing photos…</div>';
-        const folderRef = storage.ref().child(`scenarios/${id}`);
-        const { items } = await folderRef.listAll();
-        if (!items.length){
+        await ensureAuth();
+        thumbsEl.innerHTML = '<div class="muted">Loading photos from DB…</div>';
+        const snap = await rtdb.ref(`scenarios/${id}/photos`).once('value');
+        const photos = snap.val() || {};
+        const arr = Object.values(photos);
+        if (!arr.length){
           thumbsEl.innerHTML = '';
           emptyEl.style.display = '';
+          ok('No DB-recorded photos for this scenario.');
           return;
         }
-        // newest first by name (timestamp prefix)
-        items.sort((a,b)=> (b.name||'').localeCompare(a.name||''));
-        const urls = await Promise.all(items.map(it => it.getDownloadURL().catch(()=>null)));
-        thumbsEl.innerHTML = '';
-        urls.forEach((url)=>{
-          if (!url) return;
-          const a = document.createElement('a');
-          a.href = url; a.target = '_blank'; a.rel = 'noopener';
-          a.innerHTML = `<img src="${url}" alt="photo">`;
-          thumbsEl.appendChild(a);
-        });
-        ok(`Listed ${items.length} photo(s) for ${id}.`);
+        arr.sort((a,b)=> (b.createdAt||0) - (a.createdAt||0));
+        renderThumbs(arr.map(p=>p.url).filter(Boolean));
+        ok(`Loaded ${arr.length} photo(s) from DB.`);
       }catch(e){
         thumbsEl.innerHTML = '';
         emptyEl.style.display = '';
-        bad('List photos error: '+(e.message||e));
+        bad('Load-from-DB error: '+(e.message||e));
       }
     }
 
-    // ---------- (Optional) List top-level Storage folders under /scenarios ----------
-    async function listStorageTop(){
+    // ---------- List photos from Storage (optional/manual) ----------
+    async function listFromStorage(id){
       try{
-        await ensureAuthBoth();
-        scenariosEl.innerHTML = '<div class="muted" style="padding:10px">Listing Storage folders…</div>';
-        const top = storage.ref().child('scenarios');
-        const { prefixes } = await top.listAll(); // "folders" within /scenarios
-        if (!prefixes.length){
-          scenariosEl.innerHTML = '<div class="muted" style="padding:10px">No folders in Storage /scenarios yet.</div>';
-          return;
-        }
-        scenariosEl.innerHTML = '';
-        prefixes.sort((a,b)=> (a.name||'').localeCompare(b.name||''));
-        prefixes.forEach(pref=>{
-          const id = pref.name;
-          const div = document.createElement('div');
-          div.className = 'scenario';
-          div.innerHTML = `
-            <div class="meta">
-              <div class="name">${escapeHtml(id)}</div>
-              <div class="small mono">/scenarios/${escapeHtml(id)}</div>
-            </div>
-            <div>
-              <button data-id="${escapeAttr(id)}" class="primary btnView">View Photos</button>
-            </div>
-          `;
-          scenariosEl.appendChild(div);
-        });
-        scenariosEl.querySelectorAll('.btnView').forEach(btn=>{
-          btn.addEventListener('click', ()=>{
-            const id = btn.getAttribute('data-id');
-            selectScenario(id);
-          });
-        });
-        ok(`Listed ${prefixes.length} folder(s) from Storage /scenarios.`);
-      }catch(e){
-        scenariosEl.innerHTML = '<div class="muted" style="padding:10px">Failed to list Storage folders.</div>';
-        bad('List storage top error: '+(e.message||e));
-      }
-    }
-
-    // ---------- Open uploader ----------
-    const UPLOADER_URL = 'https://fireopssim.com/geophoto/test-edit-uploader';
-    function openUploader(){
-      const id = $('#selectedId').value.trim();
-      if (!id){ alert('Select a scenario first.'); return; }
-      const url = new URL(UPLOADER_URL);
-      url.searchParams.set('scenarioId', id);
-      window.open(url.toString(), 'fireops_uploader');
-      ok('Opened uploader for scenario '+id);
-    }
-
-    // ---------- Events ----------
-    $('#btnRefreshScenarios').addEventListener('click', listScenarios);
-    $('#btnListStorageTop').addEventListener('click', listStorageTop);
-    $('#btnListPhotos').addEventListener('click', ()=> selectScenario($('#selectedId').value));
-    $('#btnOpenUploader').addEventListener('click', openUploader);
-    $('#filter').addEventListener('input', listScenarios); // simple client-side filter refresh
-
-    // ---------- Boot ----------
-    (async function boot(){
-      try{
-        await ensureAuthBoth();
-      }catch(e){
-        bad('Auth error: ' + (e.message||e));
-      }
-      ok('Ready. Loading scenarios from Realtime DB…');
-      await listScenarios();
-    })();
-  })();
-  </script>
-</body>
-</html>
+        await ensureAuth();
+        thumbsEl.innerHTML = '<div class="muted">Listing photos from Storage…</div>';
+        const folderRef =
