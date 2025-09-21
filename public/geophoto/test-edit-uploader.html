@@ -3,19 +3,17 @@
 <head>
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1"/>
-<title>FireOpsSim — Camera Uploader</title>
+<title>FireOpsSim — Photo Uploader (Storage-only)</title>
 
-<!-- IMPORTANT: put your exact config ABOVE the Firebase scripts on this page.
-Example (uncomment and fill with your real values if not injected elsewhere):
-
+<!-- If you already define window.firebaseConfig in the parent page, you can remove this sample.
 <script>
   window.firebaseConfig = {
-    apiKey: "AIza...me8",
+    apiKey: "AIzaSyBzwc75u8pG73OKcHN8ti2ADbucjKMHme8",
     authDomain: "fireopssim.firebaseapp.com",
     projectId: "fireopssim",
     storageBucket: "fireopssim.appspot.com",
-    databaseURL: "https://fireopssim-default-rtdb.firebaseio.com",
-    appId: "1:xxxxxxxxxxxx:web:xxxxxxxxxxxxxxxx"
+    // databaseURL not needed here
+    appId: "1:396140888722:web:demo"
   };
 </script>
 -->
@@ -32,17 +30,17 @@ Example (uncomment and fill with your real values if not injected elsewhere):
   button.primary{background:#1a3fbb;border-color:var(--accent)}
   .card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:12px;margin:12px 0}
   .muted{color:var(--muted)}
-  #status{white-space:pre-wrap;background:#0c1530;border:1px solid #1b2b50;border-radius:10px;padding:10px;max-height:260px;overflow:auto}
   .mono{font-family:ui-monospace,Menlo,Consolas,monospace}
-  #thumbs{display:flex;flex-wrap:wrap;gap:8px}
+  #status{white-space:pre-wrap;background:#0c1530;border:1px solid #1b2b50;border-radius:10px;padding:10px;max-height:260px;overflow:auto}
+  #preview img{max-width:100%;height:auto;border-radius:10px;border:1px solid #1a2b50}
+  #thumbs{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px}
   #thumbs a{display:block}
   #thumbs img{width:96px;height:96px;object-fit:cover;border-radius:10px;border:1px solid #1a2b50}
-  #preview img{max-width:100%;height:auto;border-radius:10px;border:1px solid #1a2b50}
   @media (max-width:560px){ .row{flex-direction:column;align-items:stretch} input,button{width:100%} }
 </style>
 </head>
 <body>
-  <h2>Camera Uploader</h2>
+  <h2>Photo Uploader</h2>
 
   <div class="card">
     <div class="row">
@@ -58,7 +56,7 @@ Example (uncomment and fill with your real values if not injected elsewhere):
       <button id="btnPick" class="primary" type="button">Pick / Take Photo</button>
       <button id="btnUpload" class="primary" type="button" disabled>Upload Photo</button>
     </div>
-    <div class="muted">Open from Scenario Builder so <b>?scenarioId=...</b> is present. Allow camera + location.</div>
+    <div class="muted">This page uploads to Cloud Storage only (no Realtime DB). Open from Scenario Builder so <b>?scenarioId=...</b> is present.</div>
   </div>
 
   <div id="preview" class="card" style="display:none">
@@ -76,93 +74,59 @@ Example (uncomment and fill with your real values if not injected elsewhere):
     <div id="status">Booting…</div>
   </div>
 
-  <!-- Firebase compat SDKs (must match compat usage) -->
+  <!-- Firebase compat SDKs (Storage-only flow) -->
   <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-storage-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js"></script>
 
   <script>
   (function(){
     // ---------- Logger ----------
-    const $ = sel => document.querySelector(sel);
+    const $ = s=>document.querySelector(s);
     const logEl = $('#status');
     const log = (m,c)=>{const d=document.createElement('div'); if(c)d.style.color=c; d.textContent='['+new Date().toLocaleTimeString()+'] '+m; logEl.appendChild(d); logEl.scrollTop=logEl.scrollHeight; console.log(m);};
-    const ok  = m=>log(m,'#7CFF7C');
-    const bad = m=>log(m,'#FF7C7C');
+    const ok  = m=>log(m,'#7CFF7C'), bad = m=>log(m,'#FF7C7C');
 
     // ---------- Scenario from URL ----------
     const qsp = new URLSearchParams(location.search);
     function scenarioFromUrl(){
-      const q = qsp.get('scenarioId');
-      if (q) return decodeURIComponent(q);
-      const hash = (location.hash||'').replace(/^#/, '');
-      return decodeURIComponent(hash||'');
+      const q = qsp.get('scenarioId'); if (q) return decodeURIComponent(q);
+      const hash = (location.hash||'').replace(/^#/, ''); return decodeURIComponent(hash||'');
     }
 
-    // ---------- Helpers ----------
-    function safeName(s){ return (s||'photo.jpg').replace(/[^\w.\-]+/g,'_'); }
-    async function getGPS(){
-      return new Promise((resolve)=>{
-        if (!navigator.geolocation) return resolve(null);
-        navigator.geolocation.getCurrentPosition(
-          p=>resolve({lat:p.coords.latitude, lng:p.coords.longitude, acc:p.coords.accuracy, ts:Date.now()}),
-          _=>resolve(null),
-          { enableHighAccuracy:true, timeout:8000, maximumAge:0 }
-        );
-      });
-    }
-    async function reverseGeocode(lat,lng){
-      try{
-        const r = await fetch(`https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${encodeURIComponent(lat)}&lon=${encodeURIComponent(lng)}`, { headers: { 'Accept':'application/json' }});
-        if (r.ok){ const j = await r.json(); return j.display_name || null; }
-      }catch(_){}
-      if (window.GMAPS_API_KEY){
-        try{
-          const g = await fetch(`https://maps.googleapis.com/maps/api/geocode/json?latlng=${lat},${lng}&key=${window.GMAPS_API_KEY}`);
-          const jj = await g.json();
-          return jj?.results?.[0]?.formatted_address || null;
-        }catch(_){}
-      }
-      return null;
-    }
-
-    // ---------- Firebase init (compat) ----------
-    // Require correct config; fail loudly if missing to avoid "invalid-api-key".
-    const cfg = Object.assign({
-      apiKey:"", authDomain:"", projectId:"", storageBucket:"", databaseURL:"", appId:""
-    }, (window.firebaseConfig || {}));
-
-    if (!cfg.apiKey || !cfg.projectId){
-      bad('Missing Firebase config. Define window.firebaseConfig with apiKey + projectId.');
-      alert('Uploader needs window.firebaseConfig (apiKey, projectId, storageBucket).');
-    }
-    // Heal common DB URL mistakes (people paste a storage URL there)
-    (function normalizeDbUrl(c){
-      const pid = c && c.projectId;
-      const url = (c && c.databaseURL) || "";
-      const okHost = /^(https:\/\/)[-a-z0-9]+(-default-rtdb)?\.(firebaseio|firebasedatabase)\.com\/?$/i;
-      const looksStorage = /(firebasestorage|storage\.googleapis)\./i.test(url);
-      if ((!okHost.test(url) || looksStorage) && pid){
-        c.databaseURL = `https://${pid}-default-rtdb.firebaseio.com`;
-      }
-    })(cfg);
-    // If no bucket, infer Firebase default
-    if (!cfg.storageBucket && cfg.projectId){
-      cfg.storageBucket = `${cfg.projectId}.appspot.com`;
-    }
+    // ---------- Firebase config (Storage-only) ----------
+    const fallback = {
+      apiKey:"AIzaSyBzwc75u8pG73OKcHN8ti2ADbucjKMHme8",
+      authDomain:"fireopssim.firebaseapp.com",
+      projectId:"fireopssim",
+      storageBucket:"fireopssim.appspot.com",
+      appId:"1:396140888722:web:demo"
+    };
+    const cfg = Object.assign({}, fallback, (window.firebaseConfig||{}));
+    if (!cfg.storageBucket && cfg.projectId){ cfg.storageBucket = `${cfg.projectId}.appspot.com`; }
 
     const app = firebase.initializeApp(cfg);
     const auth = firebase.auth(app);
-    const db   = firebase.database(app);
-    const storage = firebase.storage(app); // ✅ compat uses cfg.storageBucket
-
+    const storage = firebase.storage(app); // compat uses cfg.storageBucket
     const bucketStr = cfg.storageBucket ? `gs://${cfg.storageBucket}` : '(missing storageBucket)';
     $('#bucketName').value = bucketStr;
 
     // ---------- State ----------
-    let currentScenarioId = "";
+    let sid = "";
     let lastFile = null;
+
+    // ---------- Helpers ----------
+    function safeName(s){ return (s||'photo.jpg').replace(/[^\w.\-]+/g,'_'); }
+    async function uploadToStorage(sid, file){
+      // organize by scenario if provided; else put under /uploads/
+      const base = sid ? `scenarios/${sid}` : 'uploads';
+      const path = `${base}/${Date.now()}_${safeName(file.name)}`;
+      const ref  = storage.ref().child(path);
+      log(`Uploading to ${bucketStr}/${path}`);
+      const snap = await ref.put(file, { contentType: file.type || 'image/jpeg' });
+      const url  = await snap.ref.getDownloadURL();
+      return { url, fullPath: ref.fullPath };
+    }
 
     // ---------- UI wiring ----------
     $('#btnPick').addEventListener('click', ()=> $('#fileInput').click());
@@ -176,79 +140,40 @@ Example (uncomment and fill with your real values if not injected elsewhere):
       $('#btnUpload').disabled = false;
       ok('Photo selected — ready to upload');
     });
-    $('#btnUpload').addEventListener('click', uploadCurrentFile);
 
-    // ---------- Core upload ----------
-    async function uploadToStorage(sid, file){
-      const path = `scenarios/${sid}/${Date.now()}_${safeName(file.name)}`;
-      const ref  = storage.ref().child(path);
-      log(`Uploading to ${bucketStr}/${path}`);
-      const snap = await ref.put(file, { contentType: file.type || 'image/jpeg' });
-      const url  = await snap.ref.getDownloadURL();
-      return { url, fullPath: ref.fullPath, gsUri: `${bucketStr}/${ref.fullPath}` };
-    }
-
-    async function uploadCurrentFile(){
-      if (!currentScenarioId) { alert('No scenarioId. Open from Scenario Builder.'); return; }
-      if (!lastFile)          { alert('No photo selected.'); return; }
-
+    $('#btnUpload').addEventListener('click', async ()=>{
+      if (!lastFile){ alert('Pick/take a photo first.'); return; }
       try{
-        // ensure auth
         if (!auth.currentUser) await auth.signInAnonymously();
-
-        // 1) upload to Storage
-        const { url, fullPath, gsUri } = await uploadToStorage(currentScenarioId, lastFile);
+        const { url } = await uploadToStorage(sid, lastFile);
         ok('Upload OK');
 
-        // 2) GPS + address
-        const gps = await getGPS();
-        let address = null;
-        if (gps && gps.lat && gps.lng) { try { address = await reverseGeocode(gps.lat, gps.lng); } catch(_){} }
-
-        // 3) write one photo record to two DB locations
-        const photoKey = db.ref('photos').push().key;
-        const rec = {
-          id: photoKey,
-          url,
-          storagePath: fullPath,
-          gsUri,
-          contentType: lastFile.type || 'image/jpeg',
-          scenarioId: currentScenarioId,
-          createdAt: Date.now(),
-          gps: gps || null,
-          address: address || null
-        };
-        const updates = {};
-        updates[`/scenarios/${currentScenarioId}/photos/${photoKey}`] = rec;
-        updates[`/geophoto/scenarios/${currentScenarioId}/photos/${photoKey}`] = rec;
-        await db.ref().update(updates);
-        ok('DB updated with photo record');
-
-        // 4) add thumbnail + reset for next photo
+        // Add thumbnail
         const a = document.createElement('a');
         a.href = url; a.target = '_blank'; a.rel='noopener';
         a.innerHTML = `<img src="${url}" alt="thumb">`;
         $('#thumbs').prepend(a);
 
+        // Reset for next photo
         $('#fileInput').value = "";
         lastFile = null;
         $('#btnUpload').disabled = true;
 
-        // optional: tell opener/parent (keeps compatibility with “old uploader” behavior)
-        const msg = { type:'fo-upload-complete', scenarioId: currentScenarioId, ...rec };
+        // Optional: inform opener/parent that one upload finished
+        const msg = { type:'fo-upload-complete', scenarioId: sid, url };
         if (window.opener) window.opener.postMessage(msg, "*");
         else if (window.parent) window.parent.postMessage(msg, "*");
       }catch(e){
         bad(`Upload FAILED: ${e.code||''} ${e.message||e}`);
         if (String(e).includes('auth/invalid-api-key')) {
-          bad('Invalid API key. Verify window.firebaseConfig.apiKey matches your project Web API key.');
+          bad('Invalid API key — ensure window.firebaseConfig.apiKey matches your project’s Web API key.');
         }
         if (String(e).includes('storage/unauthorized')) {
-          bad('Storage rules blocked the upload. Ensure anonymous writes are allowed while testing.');
+          bad('Storage rules blocked the upload (storage/unauthorized). Make sure anonymous writes are allowed while testing.');
         }
         alert('Upload failed:\n'+(e && e.message || e));
       }
-    }
+    });
 
     // ---------- Boot ----------
     (async function boot(){
@@ -258,16 +183,10 @@ Example (uncomment and fill with your real values if not injected elsewhere):
       }catch(e){
         bad('Auth failed: '+(e.message||e));
       }
-      currentScenarioId = scenarioFromUrl();
-      $('#scenarioId').value = currentScenarioId || '(missing)';
-      if (!currentScenarioId) bad('No scenarioId provided; add ?scenarioId=...');
-
-      if (!cfg.storageBucket){ bad('storageBucket missing from config; uploads will fail until it is set.'); }
-      else { ok('Using bucket ' + bucketStr); }
-
+      sid = scenarioFromUrl();
+      $('#scenarioId').value = sid || '(none)';
       ok('Ready. Pick or take a photo, then Upload.');
     })();
-
   })();
   </script>
 </body>
