@@ -2,20 +2,25 @@
 <html lang="en">
 <head>
 <meta charset="utf-8"/>
-<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1"/>
 <title>FireOpsSim — Camera Uploader</title>
 <style>
   :root{--bg:#0b1220;--card:#111a2e;--muted:#b8c4e2;--line:#1b2b50;--ink:#e8eefc;--accent:#2c5cff;--ok:#7CFF7C;--bad:#FF7C7C}
   body{margin:0;padding:16px;background:var(--bg);color:var(--ink);font:14px/1.45 system-ui,Arial}
+  h2{margin:0 0 10px}
   .row{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:8px 0}
-  input,button{background:#091125;color:var(--ink);border:1px solid #20407a;border-radius:10px;padding:8px 10px}
+  input,button{background:#091125;color:var(--ink);border:1px solid #20407a;border-radius:10px;padding:10px 12px}
   button{cursor:pointer}
   button.primary{background:#1a3fbb;border-color:var(--accent)}
   .card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:12px;margin:12px 0}
   .muted{color:var(--muted)}
   #status{white-space:pre-wrap;background:#0c1530;border:1px solid #1b2b50;border-radius:10px;padding:10px;max-height:240px;overflow:auto}
-  #preview img{max-width:100%;height:auto;border-radius:10px;border:1px solid #1a2b50}
   .mono{font-family:ui-monospace,Menlo,Consolas,monospace}
+  #thumbs{display:flex;flex-wrap:wrap;gap:8px}
+  #thumbs a{display:block}
+  #thumbs img{width:96px;height:96px;object-fit:cover;border-radius:10px;border:1px solid #1a2b50}
+  #preview img{max-width:100%;height:auto;border-radius:10px;border:1px solid #1a2b50}
+  @media (max-width:560px){ .row{flex-direction:column;align-items:stretch} input,button{width:100%} }
 </style>
 </head>
 <body>
@@ -28,20 +33,24 @@
     </div>
     <div class="row">
       <label class="muted">Scenario</label>
-      <input id="scenarioId" class="mono" placeholder="(set by parent / #hash)" readonly/>
+      <input id="scenarioId" class="mono" placeholder="(from ?scenarioId or #hash)" readonly/>
     </div>
     <div class="row">
       <input id="fileInput" type="file" accept="image/*" capture="environment"/>
-      <button id="btnInit" class="primary">Init</button>
+      <button id="btnTake" class="primary">Take / Pick Photo</button>
       <button id="btnUpload" class="primary">Upload Photo</button>
     </div>
-    <div class="muted">Allow camera + location permissions for best results.</div>
+    <div class="muted">Allow camera + location permissions. Photos save as you upload; keep adding more and they’ll appear below.</div>
   </div>
 
   <div id="preview" class="card" style="display:none">
-    <strong>Preview</strong>
+    <strong>Preview (last taken)</strong>
     <div id="previewImg"></div>
-    <div class="muted">Uploaded URL opens in a new tab.</div>
+  </div>
+
+  <div class="card">
+    <strong>Uploaded Photos</strong>
+    <div id="thumbs"></div>
   </div>
 
   <div class="card">
@@ -49,150 +58,188 @@
     <div id="status">Booting…</div>
   </div>
 
-  <!-- Firebase compat (App/Auth/Storage only) -->
+  <!-- Firebase compat SDKs -->
   <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-storage-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js"></script>
 
   <script>
   (function(){
-    const $ = id => document.getElementById(id);
-    const logEl = $('status');
+    // ---------- UI helpers ----------
+    const $ = (sel) => document.querySelector(sel);
+    const logEl = $('#status');
     const log = (m,c)=>{const d=document.createElement('div'); if(c)d.style.color=c; d.textContent='['+new Date().toLocaleTimeString()+'] '+m; logEl.appendChild(d); logEl.scrollTop=logEl.scrollHeight; console.log(m);};
-    const ok = m=>log(m,'#7CFF7C'), bad = m=>log(m,'#FF7C7C');
+    const ok  = m=>log(m,'#7CFF7C');
+    const bad = m=>log(m,'#FF7C7C');
 
-    // ---- FireOpsSim Storage (same as working test-edit) ----
-    const cfgFO = {
-      apiKey:"AIzaSyBzwc75u8pG73OKcHN8ti2ADbucjKMHme8",
-      authDomain:"fireopssim.firebaseapp.com",
-      projectId:"fireopssim",
-      storageBucket:"fireopssim.appspot.com" /* display name; real bind via gs:// below */
-    };
-    let app=null, auth=null, storage=null, user=null;
-
-    function safeName(s){ return (s||'photo').replace(/[^\w.\-]+/g,'_'); }
-    function scenarioFromHash(){
-      const h=(location.hash||'').replace(/^#/, ''); return decodeURIComponent(h||'');
+    const qsp = new URLSearchParams(location.search);
+    function scenarioFromUrl(){
+      const fromQ = qsp.get('scenarioId');
+      if (fromQ) return decodeURIComponent(fromQ);
+      const fromHash = (location.hash||'').replace(/^#/, '');
+      return decodeURIComponent(fromHash||'');
     }
 
-    async function init(){
-      if (!firebase.apps.length) app=firebase.initializeApp(cfgFO);
-      else app=firebase.app();
-      auth=firebase.auth(app);
-      user=(await auth.signInAnonymously()).user;
-      ok('Auth OK (anon uid='+ (user&&user.uid||'unknown') +')');
-      storage=firebase.storage(app, "gs://fireopssim.appspot.com"); // CRITICAL bind
-      storage.setMaxOperationRetryTime(60000);
-      storage.setMaxUploadRetryTime(120000);
-      ok('Storage ready.');
-    }
+    function safeName(s){ return (s||'photo.jpg').replace(/[^\w.\-]+/g,'_'); }
 
-    function getGPS(){
+    async function getGPS(){
       return new Promise((resolve)=>{
         if (!navigator.geolocation) return resolve(null);
         navigator.geolocation.getCurrentPosition(
           p=>resolve({
             lat:p.coords.latitude, lng:p.coords.longitude,
-            acc:p.coords.accuracy, heading:p.coords.heading, speed:p.coords.speed
+            acc:p.coords.accuracy, heading:p.coords.heading, speed:p.coords.speed, ts:Date.now()
           }),
           _=>resolve(null),
-          { enableHighAccuracy:true, timeout:7000, maximumAge:0 }
+          { enableHighAccuracy:true, timeout:8000, maximumAge:0 }
         );
       });
     }
 
-    async function uploadOnce(sid, file){
-      if (!storage) await init();
-      if (!sid) throw new Error('No scenario ID');
-      if (!file) throw new Error('No file selected');
-
-      const path = `scenarios/${sid}/${Date.now()}_${safeName(file.name)}`;
-      log('Uploading → '+path);
-      const ref = storage.ref().child(path);
-      await ref.put(file, { contentType:file.type||'image/jpeg' });
-      ok('Upload OK.');
-      const url = await ref.getDownloadURL();
-      return { url, fullPath: ref.fullPath, gsUri: `gs://fireopssim.appspot.com/${ref.fullPath}` };
-    }
-
-    // ---- RPC server + handshake (for embedded iframe use) ----
-    const TRUSTED_ORIGIN = location.origin; // same-origin recommended
-    let currentScenarioId = "";
-
-    function postToParent(payload){
-      if (window.opener) window.opener.postMessage(payload, TRUSTED_ORIGIN);
-      if (window.parent) window.parent.postMessage(payload, TRUSTED_ORIGIN);
-    }
-
-    // Handshake
-    window.addEventListener('load', ()=>{
-      $('scenarioId').value = scenarioFromHash();
-      currentScenarioId = $('scenarioId').value;
-      postToParent({ type:'fo-ready' });
-      ok('Ready. Init → choose photo → Upload.');
-    });
-
-    // RPC dispatcher
-    window.addEventListener('message', async (ev)=>{
-      if (ev.origin !== TRUSTED_ORIGIN) return;
-      const msg = ev.data || {};
-      if (msg.type === 'fo-set-scenario'){
-        currentScenarioId = msg.scenarioId || "";
-        $('scenarioId').value = currentScenarioId;
-        return;
-      }
-      if (msg.type === 'fo-rpc'){
-        const { method, params, correlationId } = msg;
-        try{
-          if (method === 'captureAndUpload'){
-            // prompt user to pick if empty
-            const sid = (params && params.scenarioId) || currentScenarioId || $('scenarioId').value;
-            if (!$('#fileInput').files.length){
-              $('#fileInput').click();
-              // wait for user to pick
-              await new Promise((res,rej)=>{
-                const t=setTimeout(()=>rej(new Error('no-file-selected-timeout')), 20000);
-                $('#fileInput').addEventListener('change', ()=>{clearTimeout(t); res();},{once:true});
-              });
-            }
-            const f = $('#fileInput').files[0];
-            await init();
-            const up  = await uploadOnce(sid, f);
-            const gps = await getGPS();
-            postToParent({ type:'fo-rpc-res', correlationId, result: { ...up, gps, scenarioId: sid } });
-          } else {
-            throw new Error('unknown method: '+method);
-          }
-        }catch(err){
-          postToParent({ type:'fo-rpc-err', correlationId, error: (err && err.message) || String(err) });
-        }
-      }
-    });
-
-    // ---- Buttons for standalone/manual use ----
-    $('btnInit').addEventListener('click', init);
-    $('btnUpload').addEventListener('click', async ()=>{
+    async function reverseGeocode(lat,lng){
       try{
-        const sid = $('scenarioId').value.trim();
-        const f = $('fileInput').files && $('fileInput').files[0];
-        if (!f) { alert('Pick/take a photo first'); return; }
-        const up  = await uploadOnce(sid, f);
+        // Try OSM first (no key). Note: subject to CORS/usage limits.
+        const url = `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${encodeURIComponent(lat)}&lon=${encodeURIComponent(lng)}`;
+        const res = await fetch(url, { headers: { 'Accept':'application/json' }});
+        if (res.ok){
+          const j = await res.json();
+          return j.display_name || null;
+        }
+      }catch(_){}
+      try{
+        // Optional: Google Maps if you provide a key on window (safer quota & reliability)
+        const key = window.GMAPS_API_KEY;
+        if (key){
+          const g = await fetch(`https://maps.googleapis.com/maps/api/geocode/json?latlng=${lat},${lng}&key=${key}`);
+          const jj = await g.json();
+          const addr = jj?.results?.[0]?.formatted_address || null;
+          return addr;
+        }
+      }catch(_){}
+      return null;
+    }
+
+    // ---------- Firebase config ----------
+    // Prefer global config if provided, otherwise use FireOpsSim project; fix DB URL if missing/wrong.
+    const defaultCfg = {
+      apiKey:"AIzaSyBzwc75u8pG73OKcHN8ti2ADbucjKMHme8",
+      authDomain:"fireopssim.firebaseapp.com",
+      projectId:"fireopssim",
+      storageBucket:"fireopssim.appspot.com",
+      databaseURL:"https://fireopssim-default-rtdb.firebaseio.com",
+      appId:"1:396140888722:web:demo"
+    };
+    const raw = Object.assign({}, defaultCfg, (window.firebaseConfig||{}));
+    (function normalizeDbUrl(cfg){
+      const pid = cfg && cfg.projectId;
+      const url = (cfg && cfg.databaseURL) || "";
+      const okHost = /^(https:\/\/)[-a-z0-9]+(-default-rtdb)?\.(firebaseio|firebasedatabase)\.com\/?$/i;
+      const looksStorage = /(firebasestorage|storage\.googleapis)\./i.test(url);
+      if (!okHost.test(url) || looksStorage) {
+        if (pid) cfg.databaseURL = `https://${pid}-default-rtdb.firebaseio.com`;
+      }
+    })(raw);
+
+    const app = firebase.initializeApp(raw);
+    const auth = firebase.auth(app);
+    const db   = firebase.database(app);
+    const st   = firebase.storage(app, "gs://fireopssim.appspot.com"); // explicit bucket
+
+    // ---------- State ----------
+    let currentScenarioId = "";
+    let lastFile = null;
+
+    // ---------- Boot ----------
+    (async function boot(){
+      try {
+        const cred = await auth.signInAnonymously();
+        ok('Auth OK (uid='+(cred.user?.uid||'unknown')+')');
+      } catch(e){
+        bad('Auth failed: '+(e.message||e)); return;
+      }
+      currentScenarioId = scenarioFromUrl();
+      $('#scenarioId').value = currentScenarioId;
+      if (!currentScenarioId) bad('No scenarioId provided; add ?scenarioId=...');
+
+      ok('Ready. Tap “Take / Pick Photo”, then “Upload Photo”. Keep adding more—thumbnails show below.');
+    })();
+
+    // ---------- Upload logic ----------
+    async function uploadCurrentFile(){
+      if (!currentScenarioId) { alert('No scenarioId. Open this page via the builder redirect.'); return; }
+      if (!lastFile) { alert('Take or pick a photo first.'); return; }
+
+      try {
+        const name = `${Date.now()}_${safeName(lastFile.name||'photo.jpg')}`;
+        const fullPath = `scenarios/${currentScenarioId}/${name}`;
+        const ref = st.ref().child(fullPath);
+
+        log('Uploading → '+fullPath);
+        await ref.put(lastFile, { contentType: lastFile.type || 'image/jpeg' });
+        const url = await ref.getDownloadURL();
+        ok('Upload OK');
+
         const gps = await getGPS();
-        $('preview').style.display='';
-        $('previewImg').innerHTML = `<a href="${up.url}" target="_blank" rel="noopener"><img src="${up.url}"></a>`;
-        postToParent({ type:'fo-upload-complete', ...up, gps, scenarioId: sid });
-        ok('Posted upload to parent.');
-      }catch(e){
+        let address = null;
+        if (gps && gps.lat && gps.lng) {
+          // Best-effort reverse geocode (may be null if blocked)
+          try { address = await reverseGeocode(gps.lat, gps.lng); } catch(_){}
+        }
+
+        // Write to Realtime DB (two locations for compatibility)
+        const photoKey = db.ref('photos').push().key;
+        const photoRec = {
+          id: photoKey,
+          url,
+          storagePath: fullPath,
+          gsUri: `gs://fireopssim.appspot.com/${fullPath}`,
+          contentType: lastFile.type || 'image/jpeg',
+          scenarioId: currentScenarioId,
+          createdAt: Date.now(),
+          gps: gps || null,
+          address: address || null
+        };
+        const updates = {};
+        updates[`/scenarios/${currentScenarioId}/photos/${photoKey}`] = photoRec;
+        updates[`/geophoto/scenarios/${currentScenarioId}/photos/${photoKey}`] = photoRec;
+        await db.ref().update(updates);
+        ok('DB updated with photo record');
+
+        // UI: show preview & add thumb
+        $('#preview').style.display = '';
+        $('#previewImg').innerHTML = `<a href="${url}" target="_blank" rel="noopener"><img src="${url}" alt="preview"></a>`;
+        const a = document.createElement('a');
+        a.href = url; a.target = '_blank'; a.rel='noopener';
+        a.innerHTML = `<img src="${url}" alt="thumb">`;
+        $('#thumbs').prepend(a);
+
+        // Reset file input so user can take another
+        $('#fileInput').value = "";
+        lastFile = null;
+      } catch(e){
         bad('Upload error: '+(e.code||'')+' '+(e.message||e));
         alert('Upload failed:\n'+(e && e.message || e));
       }
+    }
+
+    // ---------- Events ----------
+    $('#btnTake').addEventListener('click', ()=> $('#fileInput').click());
+    $('#fileInput').addEventListener('change', ()=>{
+      const f = $('#fileInput').files && $('#fileInput').files[0];
+      if (!f) return;
+      lastFile = f;
+      // Show a tiny local preview before upload
+      const reader = new FileReader();
+      reader.onload = (e)=>{
+        $('#preview').style.display = '';
+        $('#previewImg').innerHTML = `<img src="${e.target.result}" alt="preview">`;
+      };
+      reader.readAsDataURL(f);
     });
 
-    // small $ helper
-    function $(q){ return document.querySelector(q); }
+    $('#btnUpload').addEventListener('click', uploadCurrentFile);
 
-    // Boot log
-    log('Booting…');
   })();
   </script>
 </body>
