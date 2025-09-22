@@ -18,12 +18,19 @@
   .muted{color:var(--muted)}
   .mono{font-family:ui-monospace,Menlo,Consolas,monospace}
   #status{white-space:pre-wrap;background:#0c1530;border:1px solid #1b2b50;border-radius:10px;padding:10px;max-height:260px;overflow:auto}
-  #progressWrap{display:none;align-items:center;gap:8px}
-  progress{width:240px;height:16px}
   #thumbs{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px}
   #thumbs a{display:block}
   #thumbs img{width:96px;height:96px;object-fit:cover;border-radius:10px;border:1px solid #1a2b50}
-  @media (max-width:560px){ .row{flex-direction:column;align-items:stretch} input,button{width:100%} progress{width:100%} }
+
+  #progressWrap{display:none;align-items:center;gap:8px}
+  progress{width:240px;height:16px}
+  #pct{min-width:40px;text-align:right}
+
+  @media (max-width:560px){
+    .row{flex-direction:column;align-items:stretch}
+    input,button,progress{width:100%}
+    #pct{text-align:left}
+  }
 </style>
 </head>
 <body>
@@ -40,7 +47,7 @@
     </div>
 
     <div class="row">
-      <!-- Two pickers help on iOS/Android -->
+      <!-- Two pickers help across iOS/Android -->
       <input id="fileInputCamera" type="file" accept="image/*" capture="environment"/>
       <input id="fileInput" type="file" accept="image/*"/>
     </div>
@@ -55,7 +62,11 @@
       <button id="btnRefresh" type="button">Refresh Gallery</button>
     </div>
 
-    <div class="muted">Uploads go to Cloud Storage under <span class="mono">scenarios/&lt;scenarioId&gt;/</span>. This page posts **only the storage path** back to Scenario Builder. No DB writes here.</div>
+    <div class="muted">
+      Uploads go to <span class="mono">scenarios/&lt;scenarioId&gt;/</span> in Cloud Storage.
+      This page posts back <strong>only the storage path</strong> (and gs:// URI).
+      <em>No Realtime DB writes here.</em>
+    </div>
   </div>
 
   <div class="card">
@@ -78,10 +89,19 @@
     // ---------- Logger ----------
     const $ = s=>document.querySelector(s);
     const logEl = $('#status');
-    const log = (m,c)=>{const d=document.createElement('div'); if(c)d.style.color=c==='ok'?'#7CFF7C':c==='bad'?'#FF7C7C':'#FFD37C'; d.textContent='['+new Date().toLocaleTimeString()+'] '+m; logEl.appendChild(d); logEl.scrollTop=logEl.scrollHeight; console.debug(m);};
+    function log(m,c){
+      const d=document.createElement('div');
+      if(c)d.style.color=c==='ok'?'#7CFF7C':c==='bad'?'#FF7C7C':'#FFD37C';
+      d.textContent='['+new Date().toLocaleTimeString()+'] '+m;
+      logEl.appendChild(d); logEl.scrollTop=logEl.scrollHeight; console.debug(m);
+    }
     const ok=m=>log(m,'ok'), bad=m=>log(m,'bad');
 
     const progWrap = $('#progressWrap'), prog = $('#progress'), pct = $('#pct');
+    function showProgress(p){ progWrap.style.display='flex'; prog.value = p; pct.textContent = Math.round(p)+'%'; }
+    function resetProgress(){ progWrap.style.display='none'; prog.value = 0; pct.textContent = '0%'; }
+
+    window.addEventListener('error', e => bad('Script error: '+(e.message||e.error||'unknown')));
 
     // ---------- Scenario from URL ----------
     const qsp = new URLSearchParams(location.search);
@@ -91,17 +111,18 @@
     }
 
     // ---------- Firebase (Storage-only) ----------
-    // Use the fireopssim project for Storage. We bind explicitly to gs:// bucket.
+    // Bind explicitly to the fireopssim bucket via gs:// to avoid config mismatch.
     const cfg = {
       apiKey: "AIzaSyBzwc75u8pG73OKcHN8ti2ADbucjKMHme8",
       authDomain: "fireopssim.firebaseapp.com",
       projectId: "fireopssim",
-      storageBucket: "fireopssim.appspot.com", // info-only; we bind with gs:// below
+      storageBucket: "fireopssim.appspot.com",
       appId: "1:396140888722:web:demo"
     };
     const app = firebase.initializeApp(cfg);
     const auth = firebase.auth(app);
-    const storage = firebase.storage(app, "gs://fireopssim.appspot.com"); // explicit gs:// bind
+    const storage = firebase.storage(app, "gs://fireopssim.appspot.com");
+    ok('Storage bound to gs://fireopssim.appspot.com');
 
     async function ensureAuth(){
       if (!auth.currentUser){
@@ -114,30 +135,20 @@
     function safeName(s){ return (s||'photo').replace(/[^\w.\-]+/g,'_'); }
     function basePath(sid){ return sid ? `scenarios/${sid}` : 'uploads'; }
     function pickFile(){
-      // Prefer camera file if present, else library picker
       const cam = $('#fileInputCamera'), lib = $('#fileInput');
       return (cam.files && cam.files[0]) || (lib.files && lib.files[0]) || null;
     }
-    function showProgress(p){ progWrap.style.display='flex'; prog.value = p; pct.textContent = Math.round(p)+'%'; }
-    function resetProgress(){ progWrap.style.display='none'; prog.value = 0; pct.textContent = '0%'; }
 
-    async function getGPS(){
-      return new Promise((resolve)=>{
-        if (!navigator.geolocation) return resolve(null);
-        navigator.geolocation.getCurrentPosition(
-          p=>resolve({ lat:p.coords.latitude, lng:p.coords.longitude, acc:p.coords.accuracy, ts:Date.now() }),
-          _=>resolve(null),
-          { enableHighAccuracy:true, timeout:8000, maximumAge:0 }
-        );
-      });
-    }
-
-    // ---------- Upload (resumable) ----------
+    // ---------- Upload (resumable with progress) ----------
     async function upload(){
       try{
         await ensureAuth();
         const sid = ($('#scenarioId').value||'').trim();
-        if (!sid){ alert('No scenarioId. Open this page from Scenario Builder.'); return; }
+        if (!sid){
+          alert('No scenarioId. Open this page from Scenario Builder.');
+          bad('Missing scenarioId in URL.');
+          return;
+        }
 
         const f = pickFile();
         if (!f){ alert('Pick or take a photo first.'); log('No file selected.'); return; }
@@ -149,15 +160,14 @@
         log('Starting upload → '+path);
         showProgress(0);
 
-        // Resumable upload with progress
         const task = ref.put(f, { contentType: f.type || 'image/jpeg' });
         await new Promise((resolve, reject)=>{
           task.on('state_changed',
-            (snap)=>{
+            snap=>{
               const p = (snap.bytesTransferred / snap.totalBytes) * 100;
               showProgress(p);
             },
-            (err)=>reject(err),
+            err=>reject(err),
             ()=>resolve()
           );
         });
@@ -165,11 +175,11 @@
         ok('Upload complete → '+path);
         resetProgress();
 
-        // Post path back to builder immediately (no URL)
+        // Post only the storage path (plus gs://) to Scenario Builder
         const payload = {
           type: 'fo-upload-complete',
           scenarioId: sid,
-          storagePath: ref.fullPath,                       // canonical path
+          storagePath: ref.fullPath,
           gsUri: `gs://fireopssim.appspot.com/${ref.fullPath}`,
           contentType: f.type || 'image/jpeg',
           createdAt: Date.now()
@@ -178,18 +188,8 @@
         else if (window.parent) window.parent.postMessage(payload, "*");
         ok('Posted storagePath back to Scenario Builder.');
 
-        // Refresh gallery for the operator’s view (uses getDownloadURL internally)
+        // Refresh gallery for operator’s awareness (uses getDownloadURL internally)
         await refresh();
-
-        // GPS (optional & non-blocking): send in a separate message if available
-        getGPS().then(gps=>{
-          if (!gps) return;
-          const msg = { type:'fo-upload-gps', scenarioId:sid, storagePath: ref.fullPath, gps };
-          if (window.opener) window.opener.postMessage(msg, "*");
-          else if (window.parent) window.parent.postMessage(msg, "*");
-          ok('Sent GPS back to Scenario Builder.');
-        });
-
       }catch(e){
         resetProgress();
         bad('Upload error: '+(e.code?e.code+' ':'')+(e.message||e));
