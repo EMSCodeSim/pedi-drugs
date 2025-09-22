@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1"/>
-<title>FireOpsSim — Photo Viewer & Editor (DB path → Storage)</title>
+<title>FireOpsSim — Photo Viewer & Editor (DB path → Storage, Auth Thumbs)</title>
 <style>
   :root{--bg:#0b1220;--card:#111a2e;--muted:#b8c4e2;--line:#1b2b50;--ink:#e8eefc;--accent:#2c5cff;--ok:#7CFF7C;--bad:#FF7C7C}
   *{box-sizing:border-box}
@@ -29,10 +29,11 @@
   .scenario .small{font-size:12px;color:#99a8d8}
 
   #thumbs{display:grid;grid-template-columns:repeat(auto-fill,minmax(110px,1fr));gap:10px}
-  #thumbs a{display:block}
-  #thumbs img{width:100%;height:110px;object-fit:cover;border-radius:10px;border:1px solid #1a2b50}
+  #thumbs a{display:block;position:relative}
+  #thumbs img{width:100%;height:110px;object-fit:cover;border-radius:10px;border:1px solid #1a2b50;background:#000}
   #empty{color:#9ab0e6}
   .pill{font-size:12px;padding:4px 8px;border:1px solid #2b3d70;border-radius:999px}
+  .thumb-err{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:11px;color:#ff9e9e;background:rgba(20,0,0,.35);border-radius:10px;text-align:center;padding:6px}
 
   /* Editor modal */
   #editorOverlay{position:fixed;inset:0;background:rgba(6,10,20,.92);display:none;z-index:9999}
@@ -58,7 +59,7 @@
     <div class="row">
       <div class="muted">Realtime DB:</div><div class="mono">dailyquiz-d5279</div>
       <div class="muted">Storage:</div><div class="mono">gs://fireopssim.appspot.com</div>
-      <span class="pill">Reads paths from DB → loads from Storage</span>
+      <span class="pill">Reads paths from DB → loads from Storage (auth thumbs)</span>
     </div>
     <div class="row">
       <button id="btnRefreshScenarios" class="primary">Refresh Scenarios</button>
@@ -142,7 +143,7 @@
           emptyEl = $('#empty'), folderPathEl = $('#folderPath');
 
     function log(m,c){ const d=document.createElement('div'); if(c)d.style.color=c; d.textContent='['+new Date().toLocaleTimeString()+'] '+m; logEl.appendChild(d); logEl.scrollTop=logEl.scrollHeight; console.log(m); }
-    const ok = m=>log(m,'#7CFF7C'); const bad = m=>log(m,'#FF7C7C');
+    const ok = m=>log(m,'#7CFF7C'); const bad = m=>log(m,'#FF7C7C'); const warn=m=>log(m,'#FFD37C');
     const esc = s=>String(s||'').replace(/[&<>"']/g, m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
     const fmtDate = ts=>{try{return new Date(ts).toLocaleString();}catch(_){return String(ts||'');}};
     window.addEventListener('error', e => bad('Script error: '+(e.message||e.error||'unknown')));
@@ -163,52 +164,35 @@
       if (!stAuth.currentUser){ const b=await stAuth.signInAnonymously(); ok('Storage auth OK (uid='+(b.user?.uid||'unknown')+')'); }
     }
 
-    // ===== scenario listing (explicit orderByKey + fallback) =====
+    // ===== scenario listing =====
     async function fetchScenarios(){
       try{
         const snap = await rtdb.ref('scenarios').orderByKey().limitToLast(200).once('value');
         const val = snap.val() || {};
         if (Object.keys(val).length) return normalizeScenarioRows(val);
-      }catch(e){
-        bad('RTDB /scenarios read error: '+(e.code||'')+' '+(e.message||e));
-      }
+      }catch(e){ bad('RTDB /scenarios read error: '+(e.code||'')+' '+(e.message||e)); }
       try{
         const snap2 = await rtdb.ref('geophoto/scenarios').orderByKey().limitToLast(200).once('value');
         const val2 = snap2.val() || {};
-        if (Object.keys(val2).length){
-          ok('Falling back to /geophoto/scenarios'); 
-          return normalizeScenarioRows(val2);
-        }
-      }catch(e){
-        bad('RTDB /geophoto/scenarios read error: '+(e.code||'')+' '+(e.message||e));
-      }
+        if (Object.keys(val2).length){ ok('Falling back to /geophoto/scenarios'); return normalizeScenarioRows(val2); }
+      }catch(e){ bad('RTDB /geophoto/scenarios read error: '+(e.code||'')+' '+(e.message||e)); }
       return [];
     }
 
     function normalizeScenarioRows(valObj){
       return Object.keys(valObj).map(k=>{
         const v = valObj[k] || {};
-        return {
-          id: v.id || k,
-          title: v.title || v.name || '(untitled)',
-          createdAt: v.createdAt || v.created || v.time || 0,
-          dispatch: v.dispatch || v.description || ''
-        };
+        return { id: v.id || k, title: v.title || v.name || '(untitled)', createdAt: v.createdAt || v.created || v.time || 0, dispatch: v.dispatch || v.description || '' };
       }).sort((a,b)=>(b.createdAt||0)-(a.createdAt||0) || String(b.id).localeCompare(String(a.id)));
     }
 
     function renderScenarioList(rows){
       const filter = ($('#filter').value||'').toLowerCase().trim();
       const filtered = rows.filter(r => !filter || (r.id||'').toLowerCase().includes(filter) || (r.title||'').toLowerCase().includes(filter));
-
       scenariosEl.innerHTML = '';
-      if (!filtered.length){
-        scenariosEl.innerHTML = '<div class="muted" style="padding:10px">No scenarios found.</div>';
-        return;
-      }
+      if (!filtered.length){ scenariosEl.innerHTML = '<div class="muted" style="padding:10px">No scenarios found.</div>'; return; }
       filtered.forEach(r=>{
-        const div = document.createElement('div');
-        div.className = 'scenario';
+        const div = document.createElement('div'); div.className = 'scenario';
         div.innerHTML = `
           <div class="meta">
             <div class="name">${esc(r.title)}</div>
@@ -218,9 +202,7 @@
           <div><button class="primary btnView" data-id="${esc(r.id)}">View</button></div>`;
         scenariosEl.appendChild(div);
       });
-      scenariosEl.querySelectorAll('.btnView').forEach(btn=>{
-        btn.addEventListener('click', ()=> selectScenario(btn.getAttribute('data-id')));
-      });
+      scenariosEl.querySelectorAll('.btnView').forEach(btn=> btn.addEventListener('click', ()=> selectScenario(btn.getAttribute('data-id'))));
     }
 
     async function listScenarios(){
@@ -230,17 +212,18 @@
         const rows = await fetchScenarios();
         renderScenarioList(rows);
         ok(`Loaded ${rows.length} scenario(s).`);
-      }catch(e){
-        scenariosEl.innerHTML = '<div class="muted" style="padding:10px">Failed to load scenarios.</div>';
-        bad('List scenarios error: '+(e.message||e));
-      }
+      }catch(e){ scenariosEl.innerHTML = '<div class="muted" style="padding:10px">Failed to load scenarios.</div>'; bad('List scenarios error: '+(e.message||e)); }
     }
 
     // ===== thumbnails & editor =====
     let currentScenarioId = null;
-    let currentFolderList = []; // [{path, url?}] we derive URL from path for thumbs
+    let currentFolderList = []; // [{path, url?}]
     let currentIndex = -1;
 
+    function normPath(p){
+      if (!p) return p;
+      return p.replace(/^\/+/, ''); // strip leading /
+    }
     function extractStoragePathFromURL(url){
       try{
         const m = /\/o\/([^?]+)/.exec(url);
@@ -278,7 +261,7 @@
 
         arr.sort((a,b)=> (b.createdAt||0)-(a.createdAt||0));
         currentFolderList = arr.map(p=>{
-          const path = p.storagePath || extractStoragePathFromURL(p.downloadURL || p.url || '') || null;
+          const path = normPath(p.storagePath || extractStoragePathFromURL(p.downloadURL || p.url || '') || '');
           return path ? { path } : null;
         }).filter(Boolean);
 
@@ -311,7 +294,7 @@
       }
     }
 
-    // ---- Thumbnails from path (derive fresh URL) ----
+    // ---- Thumbnails: try getBytes (auth) first, then getDownloadURL fallback ----
     async function renderThumbsFromPaths(list){
       thumbsEl.innerHTML = '';
       if (!list.length){ emptyEl.style.display=''; return; }
@@ -321,24 +304,41 @@
         const a = document.createElement('a');
         a.href = 'javascript:void(0)';
         a.dataset.idx = String(idx);
-        a.innerHTML = `<img alt="photo" aria-busy="true">`;
+        a.innerHTML = `<img alt="photo" aria-busy="true"><div class="thumb-err" style="display:none"></div>`;
         a.addEventListener('click', ()=> openEditorByIndex(idx));
         thumbsEl.appendChild(a);
         return a;
       });
 
       await Promise.all(list.map(async (item, i)=>{
+        const ref = storage.ref().child(normPath(item.path));
+        const img = anchors[i].querySelector('img');
+        const errDiv = anchors[i].querySelector('.thumb-err');
         try{
-          const ref = storage.ref().child(item.path);
-          const url = await ref.getDownloadURL(); // just for thumbnail
-          item.url = url;
-          const img = anchors[i].querySelector('img');
+          // 1) Auth route: getBytes (works with private rules)
+          const MAX = 15 * 1024 * 1024; // 15 MB
+          const bytes = await ref.getBytes(MAX);
+          const ext = (item.path.split('.').pop()||'').toLowerCase();
+          const mime = ext==='png'?'image/png':ext==='webp'?'image/webp':'image/jpeg';
+          const blob = new Blob([bytes], {type: mime});
+          const url = URL.createObjectURL(blob);
+          item.url = url; // in-memory ObjectURL
           img.src = url;
           img.removeAttribute('aria-busy');
-        }catch(e){
-          anchors[i].style.opacity = 0.5;
-          anchors[i].title = 'Unable to preview';
-          console.warn('Thumb URL error for', item.path, e);
+        }catch(e1){
+          warn(`Thumb getBytes failed for ${item.path}: ${(e1.code||'')}`);
+          try{
+            // 2) Fallback to downloadURL (if rules allow public token)
+            const url = await ref.getDownloadURL();
+            item.url = url;
+            img.src = url;
+            img.removeAttribute('aria-busy');
+          }catch(e2){
+            anchors[i].style.opacity = 0.6;
+            errDiv.style.display = '';
+            errDiv.textContent = 'Preview failed';
+            bad(`Thumb URL error for ${item.path}: ${(e2.code||'')} ${(e2.message||e2)}`);
+          }
         }
       }));
     }
@@ -371,14 +371,11 @@
 
     async function getBlobForItem(item){
       const MAX = 30 * 1024 * 1024; // 30 MB safety
-      if (item.path){
-        const ref = storage.ref().child(item.path);
-        const bytes = await ref.getBytes(MAX);
-        const ext = (item.path.split('.').pop()||'').toLowerCase();
-        const mime = ext==='png'?'image/png':ext==='webp'?'image/webp':'image/jpeg';
-        return new Blob([bytes], { type: mime });
-      }
-      throw new Error('No storagePath available for this item.');
+      const ref = storage.ref().child(normPath(item.path));
+      const bytes = await ref.getBytes(MAX);
+      const ext = (item.path.split('.').pop()||'').toLowerCase();
+      const mime = ext==='png'?'image/png':ext==='webp'?'image/webp':'image/jpeg';
+      return new Blob([bytes], { type: mime });
     }
 
     async function openEditorByIndex(idx){
@@ -403,7 +400,6 @@
 
         const img = new Image();
         img.onload = ()=>{
-          const fileName = item.path.split('/').pop() || 'image';
           $('#editTitle').textContent = 'Editor';
           $('#editInfo').textContent  = (currentScenarioId ? ('scenarios/'+currentScenarioId) : '') + ' • ' + item.path;
           history.length = 0; drawMode=false; cropMode=false; flipH=false; flipV=false; rotation=0; cropRect.style.display='none';
@@ -412,11 +408,7 @@
           overlay.setAttribute('aria-hidden','false');
           showBusy(false);
         };
-        img.onerror = ()=>{
-          showBusy(false);
-          bad('Failed to render image in editor.');
-          alert('Could not render this image in the editor.');
-        };
+        img.onerror = ()=>{ showBusy(false); bad('Failed to render image in editor.'); alert('Could not render this image in the editor.'); };
         img.src = currentBlobURL;
       }catch(e){
         showBusy(false);
@@ -532,11 +524,13 @@
         if (window.opener) window.opener.postMessage(payload, "*");
         else if (window.parent) window.parent.postMessage(payload, "*");
 
-        // Update local list & UI
+        // Update local list & UI (derive a display URL for thumb)
         currentFolderList.splice(currentIndex+1, 0, { path });
         try{
-          const thumbUrl = await ref.getDownloadURL();
-          const a=document.createElement('a'); a.href='javascript:void(0)'; a.innerHTML=`<img src="${thumbUrl}" alt="photo">`;
+          const MAX = 8*1024*1024; const bytes = await ref.getBytes(MAX);
+          const blob2 = new Blob([bytes], {type:'image/jpeg'});
+          const url2 = URL.createObjectURL(blob2);
+          const a=document.createElement('a'); a.href='javascript:void(0)'; a.innerHTML=`<img src="${url2}" alt="photo">`;
           const newIdx = currentIndex+1;
           a.addEventListener('click', ()=> openEditorByIndex(newIdx));
           thumbsEl.insertBefore(a, thumbsEl.children[newIdx]||null);
