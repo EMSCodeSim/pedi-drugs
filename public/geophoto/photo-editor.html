@@ -163,17 +163,31 @@
       if (!stAuth.currentUser){ const b=await stAuth.signInAnonymously(); ok('Storage auth OK (uid='+(b.user?.uid||'unknown')+')'); }
     }
 
-    // ===== scenario listing (with geophoto fallback) =====
+    // ===== scenario listing (explicit orderByKey + fallback) =====
     async function fetchScenarios(){
-      let snap = await rtdb.ref('scenarios').limitToLast(200).once('value');
-      let val = snap.val() || {};
-      if (!val || !Object.keys(val).length){
-        ok('Falling back to /geophoto/scenarios');
-        snap = await rtdb.ref('geophoto/scenarios').limitToLast(200).once('value');
-        val = snap.val() || {};
+      try{
+        const snap = await rtdb.ref('scenarios').orderByKey().limitToLast(200).once('value');
+        const val = snap.val() || {};
+        if (Object.keys(val).length) return normalizeScenarioRows(val);
+      }catch(e){
+        bad('RTDB /scenarios read error: '+(e.code||'')+' '+(e.message||e));
       }
-      const rows = Object.keys(val).map(k=>{
-        const v = val[k] || {};
+      try{
+        const snap2 = await rtdb.ref('geophoto/scenarios').orderByKey().limitToLast(200).once('value');
+        const val2 = snap2.val() || {};
+        if (Object.keys(val2).length){
+          ok('Falling back to /geophoto/scenarios'); 
+          return normalizeScenarioRows(val2);
+        }
+      }catch(e){
+        bad('RTDB /geophoto/scenarios read error: '+(e.code||'')+' '+(e.message||e));
+      }
+      return [];
+    }
+
+    function normalizeScenarioRows(valObj){
+      return Object.keys(valObj).map(k=>{
+        const v = valObj[k] || {};
         return {
           id: v.id || k,
           title: v.title || v.name || '(untitled)',
@@ -181,7 +195,6 @@
           dispatch: v.dispatch || v.description || ''
         };
       }).sort((a,b)=>(b.createdAt||0)-(a.createdAt||0) || String(b.id).localeCompare(String(a.id)));
-      return rows;
     }
 
     function renderScenarioList(rows){
@@ -253,16 +266,18 @@
         await ensureAuth();
         thumbsEl.innerHTML = '<div class="muted">Loading photos from DB…</div>';
 
-        // Expect { photos: { <photoId>: { storagePath, createdAt, ... } } }
-        let photos = (await rtdb.ref(`scenarios/${id}/photos`).once('value')).val();
-        if (!photos) photos = (await rtdb.ref(`geophoto/scenarios/${id}/photos`).once('value')).val();
+        let photosSnap = await rtdb.ref(`scenarios/${id}/photos`).orderByKey().limitToLast(500).once('value');
+        let photos = photosSnap.val();
+        if (!photos){
+          photosSnap = await rtdb.ref(`geophoto/scenarios/${id}/photos`).orderByKey().limitToLast(500).once('value');
+          photos = photosSnap.val();
+        }
         const arr = photos ? Object.values(photos) : [];
 
         if (!arr.length){ thumbsEl.innerHTML=''; emptyEl.style.display=''; ok('No DB-recorded photos.'); return; }
 
         arr.sort((a,b)=> (b.createdAt||0)-(a.createdAt||0));
         currentFolderList = arr.map(p=>{
-          // Prefer storagePath; fall back to deriving from any legacy URL
           const path = p.storagePath || extractStoragePathFromURL(p.downloadURL || p.url || '') || null;
           return path ? { path } : null;
         }).filter(Boolean);
@@ -270,7 +285,8 @@
         await renderThumbsFromPaths(currentFolderList);
         ok(`Loaded ${currentFolderList.length} photo(s) from DB.`);
       }catch(e){
-        thumbsEl.innerHTML=''; emptyEl.style.display=''; bad('Load-from-DB error: '+(e.message||e));
+        thumbsEl.innerHTML=''; emptyEl.style.display='';
+        bad('Load-from-DB error: '+(e.code||'')+' '+(e.message||e));
       }
     }
 
@@ -358,7 +374,6 @@
       if (item.path){
         const ref = storage.ref().child(item.path);
         const bytes = await ref.getBytes(MAX);
-        // Try to infer content type from extension; default to jpeg for canvas
         const ext = (item.path.split('.').pop()||'').toLowerCase();
         const mime = ext==='png'?'image/png':ext==='webp'?'image/webp':'image/jpeg';
         return new Blob([bytes], { type: mime });
@@ -405,7 +420,7 @@
         img.src = currentBlobURL;
       }catch(e){
         showBusy(false);
-        bad('Open editor failed: '+(e.message||e));
+        bad('Open editor failed: '+(e.code||'')+' '+(e.message||e));
         alert('Could not open this image in the editor.\nCheck storage rules and the recorded storagePath.');
       }
     }
@@ -519,7 +534,6 @@
 
         // Update local list & UI
         currentFolderList.splice(currentIndex+1, 0, { path });
-        // Generate a fresh URL for the just-saved thumb (display only)
         try{
           const thumbUrl = await ref.getDownloadURL();
           const a=document.createElement('a'); a.href='javascript:void(0)'; a.innerHTML=`<img src="${thumbUrl}" alt="photo">`;
@@ -560,4 +574,12 @@
 
     // Boot
     (async function boot(){
-      try{ await ensureAut
+      try{ await ensureAuth(); }catch(e){ bad('Auth error: '+(e.message||e)); }
+      const sid = scenarioFromUrl();
+      if (sid){ await selectScenario(sid); }
+      else { ok('Ready. Loading scenarios…'); await listScenarios(); }
+    })();
+  })();
+  </script>
+</body>
+</html>
