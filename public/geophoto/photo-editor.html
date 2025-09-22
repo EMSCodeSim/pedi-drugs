@@ -137,10 +137,13 @@
     const logEl = $('#status'), scenariosEl = $('#scenarios'), thumbsEl = $('#thumbs'),
           emptyEl = $('#empty'), folderPathEl = $('#folderPath');
 
-    const log = (m,c)=>{const d=document.createElement('div'); if(c)d.style.color=c; d.textContent='['+new Date().toLocaleTimeString()+'] '+m; logEl.appendChild(d); logEl.scrollTop=logEl.scrollHeight; console.log(m);};
+    function log(m,c){ const d=document.createElement('div'); if(c)d.style.color=c; d.textContent='['+new Date().toLocaleTimeString()+'] '+m; logEl.appendChild(d); logEl.scrollTop=logEl.scrollHeight; console.log(m); }
     const ok = m=>log(m,'#7CFF7C'); const bad = m=>log(m,'#FF7C7C');
     const esc = s=>String(s||'').replace(/[&<>"']/g, m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
     const fmtDate = ts=>{try{return new Date(ts).toLocaleString();}catch(_){return String(ts||'');}};
+
+    // Surface any JS error to the Status panel
+    window.addEventListener('error', e => bad('Script error: '+(e.message||e.error||'unknown')));
 
     // ===== Firebase =====
     const dbCfg = { apiKey:"AIzaSyDM6DpRSeZueVKRpbyJyDmhf8WY66KyCDk", authDomain:"dailyquiz-d5279.firebaseapp.com", databaseURL:"https://dailyquiz-d5279-default-rtdb.firebaseio.com", projectId:"dailyquiz-d5279", storageBucket:"dailyquiz-d5279.appspot.com", appId:"1:94577748034:web:c032d3a1d72db1313de5db" };
@@ -158,7 +161,7 @@
       if (!stAuth.currentUser){ const b=await stAuth.signInAnonymously(); ok('Storage auth OK (uid='+(b.user?.uid||'unknown')+')'); }
     }
 
-    // ===== scenarios (with geophoto fallback) =====
+    // ===== scenarios (with /geophoto fallback) =====
     async function fetchScenarios(){
       let snap = await rtdb.ref('scenarios').limitToLast(200).once('value');
       let val = snap.val() || {};
@@ -169,22 +172,14 @@
       }
       const rows = Object.keys(val).map(k=>{
         const v = val[k] || {};
-        return { id: v.id || k, title: v.title || '(untitled)', createdAt: v.createdAt || v.created || v.time || 0, dispatch: v.dispatch || v.description || '' };
+        return {
+          id: v.id || k,
+          title: v.title || v.name || '(untitled)',
+          createdAt: v.createdAt || v.created || v.time || 0,
+          dispatch: v.dispatch || v.description || ''
+        };
       }).sort((a,b)=>(b.createdAt||0)-(a.createdAt||0) || String(b.id).localeCompare(String(a.id)));
       return rows;
-    }
-
-    async function listScenarios(){
-      try{
-        await ensureAuth();
-        scenariosEl.innerHTML = '<div class="muted" style="padding:10px">Loading scenarios…</div>';
-        const rows = await fetchScenarios();
-        renderScenarioList(rows);
-        ok(`Loaded ${rows.length} scenario(s).`);
-      }catch(e){
-        scenariosEl.innerHTML = '<div class="muted" style="padding:10px">Failed to load scenarios.</div>';
-        bad('List scenarios error: '+(e.message||e));
-      }
     }
 
     function renderScenarioList(rows){
@@ -211,6 +206,19 @@
       scenariosEl.querySelectorAll('.btnView').forEach(btn=>{
         btn.addEventListener('click', ()=> selectScenario(btn.getAttribute('data-id')));
       });
+    }
+
+    async function listScenarios(){
+      try{
+        await ensureAuth();
+        scenariosEl.innerHTML = '<div class="muted" style="padding:10px">Loading scenarios…</div>';
+        const rows = await fetchScenarios();
+        renderScenarioList(rows);
+        ok(`Loaded ${rows.length} scenario(s).`);
+      }catch(e){
+        scenariosEl.innerHTML = '<div class="muted" style="padding:10px">Failed to load scenarios.</div>';
+        bad('List scenarios error: '+(e.message||e));
+      }
     }
 
     // ===== DB-first photo load =====
@@ -247,7 +255,7 @@
         if (!arr.length){ thumbsEl.innerHTML=''; emptyEl.style.display=''; ok('No DB-recorded photos.'); return; }
         arr.sort((a,b)=> (b.createdAt||0)-(a.createdAt||0));
         currentFolderList = arr.map(p=>{
-          let path = p.storagePath || extractStoragePathFromURL(p.url) || null;
+          const path = p.storagePath || extractStoragePathFromURL(p.url) || null;
           return { url: p.url, path };
         }).filter(x=>x.url);
         renderThumbs(currentFolderList);
@@ -291,7 +299,7 @@
       });
     }
 
-    // ===== Editor with refFromURL().getBytes() + Prev/Next & same-folder save =====
+    // ===== Editor (CORS-proof via getBytes / refFromURL) =====
     const overlay = $('#editorOverlay');
     const canvas  = $('#editCanvas');
     const ctx = canvas.getContext('2d');
@@ -317,7 +325,7 @@
 
     async function getBlobForItem(item){
       const MAX = 30 * 1024 * 1024; // 30 MB
-      // 1) If we know the path, use it
+      // 1) Known path → getBytes
       if (item.path){
         try{
           const ref = storage.ref().child(item.path);
@@ -327,22 +335,20 @@
           console.warn('getBytes(path) failed, trying refFromURL', e);
         }
       }
-      // 2) Resolve https download URL to a Storage ref (best for your case)
+      // 2) Resolve download URL → ref → getBytes
       try{
         const ref = storage.refFromURL(item.url);
         const bytes = await ref.getBytes(MAX);
-        item.path = ref.fullPath; // cache the path for saves
+        item.path = ref.fullPath; // cache the path
         return new Blob([bytes], { type: 'image/jpeg' });
       }catch(e){
         console.warn('getBytes(refFromURL) failed, falling back to fetch', e);
       }
-      // 3) Final fallback: fetch (may fail due to CORS, but we try)
+      // 3) Fallback fetch (may be CORS-blocked)
       const r = await fetch(item.url, { mode:'cors', credentials:'omit', cache:'no-cache' });
       if (!r.ok) throw new Error('HTTP '+r.status);
       return await r.blob();
     }
-
-    let currentFolderList = []; // (already declared above; keep reference)
 
     async function openEditorByIndex(idx){
       if (!currentFolderList.length) return;
@@ -390,16 +396,15 @@
       const tmp = document.createElement('canvas'); tmp.width=w; tmp.height=h;
       const tctx = tmp.getContext('2d'); tctx.drawImage(canvas,0,0);
       ctx.setTransform(1,0,0,1,0,0); ctx.clearRect(0,0,w,h);
-      ctx.save();
-      ctx.translate(w/2, h/2);
+      ctx.save(); ctx.translate(w/2, h/2);
       if (rotation) ctx.rotate(rotation*Math.PI/180);
       ctx.scale(flipH?-1:1, flipV?-1:1);
       ctx.drawImage(tmp, -w/2, -h/2);
       ctx.restore();
     }
-    const rotateCW = ()=>{ rotation=(rotation+90)%360; redraw(); pushHistory(); };
-    const flipHoriz = ()=>{ flipH=!flipH; redraw(); pushHistory(); };
-    const flipVert  = ()=>{ flipV=!flipV; redraw(); pushHistory(); };
+    $('#btnRotateCW').addEventListener('click', ()=>{ rotation=(rotation+90)%360; redraw(); pushHistory(); });
+    $('#btnFlipH').addEventListener('click', ()=>{ flipH=!flipH; redraw(); pushHistory(); });
+    $('#btnFlipV').addEventListener('click', ()=>{ flipV=!flipV; redraw(); pushHistory(); });
 
     // Draw mode
     canvas.addEventListener('pointerdown', e=>{
@@ -454,7 +459,7 @@
     }
 
     function undo(){ if (history.length<=1) return; history.pop(); const img = new Image(); img.onload = ()=>{ canvas.width=img.width; canvas.height=img.height; ctx.setTransform(1,0,0,1,0,0); ctx.clearRect(0,0,canvas.width,canvas.height); ctx.drawImage(img,0,0); }; img.src = history[history.length-1]; }
-    function reset(){ drawMode=false; cropMode=false; cropRectEl.style.display='none'; if (history.length){ const first=new Image(); first.onload=()=>{ canvas.width=first.width; canvas.height=first.height; ctx.setTransform(1,0,0,1,0,0); ctx.clearRect(0,0,canvas.height,canvas.width); ctx.drawImage(first,0,0); pushHistory(); }; first.src = history[0]; } }
+    function reset(){ drawMode=false; cropMode=false; cropRectEl.style.display='none'; if (history.length){ const first=new Image(); first.onload=()=>{ canvas.width=first.width; canvas.height=first.height; ctx.setTransform(1,0,0,1,0,0); ctx.clearRect(0,0,canvas.width,canvas.height); ctx.drawImage(first,0,0); pushHistory(); }; first.src = history[0]; } }
 
     function safeName(s){ return (s||'edit').replace(/[^\w.\-]+/g,'_'); }
     function dataUrlToBlob(dataUrl){ const [head,b64]=dataUrl.split(','); const mime=(head.match(/data:(.*);base64/)||[])[1]||'image/jpeg'; const bin=atob(b64); const u8=new Uint8Array(bin.length); for(let i=0;i<bin.length;i++)u8[i]=bin.charCodeAt(i); return new Blob([u8],{type:mime}); }
@@ -484,6 +489,7 @@
         if (window.opener) window.opener.postMessage(payload, "*");
         else if (window.parent) window.parent.postMessage(payload, "*");
 
+        // update UI list
         currentFolderList.splice(currentIndex+1, 0, { url, path });
         const a=document.createElement('a'); a.href='javascript:void(0)'; a.innerHTML=`<img src="${url}" alt="photo">`;
         a.addEventListener('click', ()=> openEditorByIndex(currentIndex+1)); thumbsEl.insertBefore(a, thumbsEl.children[currentIndex+1]||null);
