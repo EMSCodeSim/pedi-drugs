@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1"/>
-<title>FireOpsSim — Photo Viewer & Editor (DB path → Storage, Auth Thumbs)</title>
+<title>FireOpsSim — Photo Viewer & Editor (DB path → Storage URL logic)</title>
 <style>
   :root{--bg:#0b1220;--card:#111a2e;--muted:#b8c4e2;--line:#1b2b50;--ink:#e8eefc;--accent:#2c5cff;--ok:#7CFF7C;--bad:#FF7C7C}
   *{box-sizing:border-box}
@@ -59,7 +59,7 @@
     <div class="row">
       <div class="muted">Realtime DB:</div><div class="mono">dailyquiz-d5279</div>
       <div class="muted">Storage:</div><div class="mono">gs://fireopssim.appspot.com</div>
-      <span class="pill">Reads paths from DB → loads from Storage (auth thumbs)</span>
+      <span class="pill">Reads paths from DB → loads via getDownloadURL()</span>
     </div>
     <div class="row">
       <button id="btnRefreshScenarios" class="primary">Refresh Scenarios</button>
@@ -217,13 +217,10 @@
 
     // ===== thumbnails & editor =====
     let currentScenarioId = null;
-    let currentFolderList = []; // [{path, url?}]
+    let currentFolderList = []; // [{path, url}]
     let currentIndex = -1;
 
-    function normPath(p){
-      if (!p) return p;
-      return p.replace(/^\/+/, ''); // strip leading /
-    }
+    function normPath(p){ return (p||'').replace(/^\/+/, ''); }
     function extractStoragePathFromURL(url){
       try{
         const m = /\/o\/([^?]+)/.exec(url);
@@ -294,7 +291,7 @@
       }
     }
 
-    // ---- Thumbnails: try getBytes (auth) first, then getDownloadURL fallback ----
+    // ---- Thumbnails: use uploader's logic — getDownloadURL() ----
     async function renderThumbsFromPaths(list){
       thumbsEl.innerHTML = '';
       if (!list.length){ emptyEl.style.display=''; return; }
@@ -315,35 +312,20 @@
         const img = anchors[i].querySelector('img');
         const errDiv = anchors[i].querySelector('.thumb-err');
         try{
-          // 1) Auth route: getBytes (works with private rules)
-          const MAX = 15 * 1024 * 1024; // 15 MB
-          const bytes = await ref.getBytes(MAX);
-          const ext = (item.path.split('.').pop()||'').toLowerCase();
-          const mime = ext==='png'?'image/png':ext==='webp'?'image/webp':'image/jpeg';
-          const blob = new Blob([bytes], {type: mime});
-          const url = URL.createObjectURL(blob);
-          item.url = url; // in-memory ObjectURL
+          const url = await ref.getDownloadURL(); // uploader's approach
+          item.url = url;
           img.src = url;
           img.removeAttribute('aria-busy');
-        }catch(e1){
-          warn(`Thumb getBytes failed for ${item.path}: ${(e1.code||'')}`);
-          try{
-            // 2) Fallback to downloadURL (if rules allow public token)
-            const url = await ref.getDownloadURL();
-            item.url = url;
-            img.src = url;
-            img.removeAttribute('aria-busy');
-          }catch(e2){
-            anchors[i].style.opacity = 0.6;
-            errDiv.style.display = '';
-            errDiv.textContent = 'Preview failed';
-            bad(`Thumb URL error for ${item.path}: ${(e2.code||'')} ${(e2.message||e2)}`);
-          }
+        }catch(e2){
+          anchors[i].style.opacity = 0.6;
+          errDiv.style.display = '';
+          errDiv.textContent = 'Preview failed';
+          bad(`Thumb URL error for ${item.path}: ${(e2.code||'')} ${(e2.message||e2)}`);
         }
       }));
     }
 
-    // ===== Editor (bytes via getBytes) — NO popups =====
+    // ===== Editor (load via downloadURL → fetch → blob → canvas) =====
     const overlay = $('#editorOverlay');
     const canvas  = $('#editCanvas');
     const ctx = canvas.getContext('2d');
@@ -369,15 +351,6 @@
       pushHistory();
     }
 
-    async function getBlobForItem(item){
-      const MAX = 30 * 1024 * 1024; // 30 MB safety
-      const ref = storage.ref().child(normPath(item.path));
-      const bytes = await ref.getBytes(MAX);
-      const ext = (item.path.split('.').pop()||'').toLowerCase();
-      const mime = ext==='png'?'image/png':ext==='webp'?'image/webp':'image/jpeg';
-      return new Blob([bytes], { type: mime });
-    }
-
     async function openEditorByIndex(idx){
       if (!currentFolderList.length) return;
       currentIndex = Math.max(0, Math.min(currentFolderList.length-1, idx));
@@ -394,7 +367,12 @@
     async function openEditorItem(item){
       showBusy(true);
       try{
-        const blob = await getBlobForItem(item);
+        const ref = storage.ref().child(normPath(item.path));
+        const url = await ref.getDownloadURL(); // uploader’s logic
+        const res = await fetch(url);
+        if (!res.ok) throw new Error('Failed to fetch image data.');
+        const blob = await res.blob();
+
         if (currentBlobURL) URL.revokeObjectURL(currentBlobURL);
         currentBlobURL = URL.createObjectURL(blob);
 
@@ -413,7 +391,7 @@
       }catch(e){
         showBusy(false);
         bad('Open editor failed: '+(e.code||'')+' '+(e.message||e));
-        alert('Could not open this image in the editor.\nCheck storage rules and the recorded storagePath.');
+        alert('Could not open this image in the editor.\nCheck the stored storagePath and Storage rules.');
       }
     }
 
@@ -492,12 +470,11 @@
       Object.assign(cropRectEl.style,{left:left+'px',top:top+'px',width:ww+'px',height:hh+'px'});
     }
 
+    function dataUrlToBlob(dataUrl){ const [head,b64]=dataUrl.split(','); const mime=(head.match(/data:(.*);base64/)||[])[1]||'image/jpeg'; const bin=atob(b64); const u8=new Uint8Array(bin.length); for(let i=0;i<bin.length;i++)u8[i]=bin.charCodeAt(i); return new Blob([u8],{type:mime}); }
     function undo(){ if (history.length<=1) return; history.pop(); const img = new Image(); img.onload = ()=>{ canvas.width=img.width; canvas.height=img.height; ctx.setTransform(1,0,0,1,0,0); ctx.clearRect(0,0,canvas.width,canvas.height); ctx.drawImage(img,0,0); }; img.src = history[history.length-1]; }
     function reset(){ drawMode=false; cropMode=false; cropRect.style.display='none'; if (history.length){ const first=new Image(); first.onload=()=>{ canvas.width=first.width; canvas.height=first.height; ctx.setTransform(1,0,0,1,0,0); ctx.clearRect(0,0,canvas.width,canvas.height); ctx.drawImage(first,0,0); pushHistory(); }; first.src = history[0]; } }
     $('#btnUndo').addEventListener('click', undo);
     $('#btnReset').addEventListener('click', reset);
-
-    function dataUrlToBlob(dataUrl){ const [head,b64]=dataUrl.split(','); const mime=(head.match(/data:(.*);base64/)||[])[1]||'image/jpeg'; const bin=atob(b64); const u8=new Uint8Array(bin.length); for(let i=0;i<bin.length;i++)u8[i]=bin.charCodeAt(i); return new Blob([u8],{type:mime}); }
 
     async function saveEdited(){
       try{
@@ -524,12 +501,10 @@
         if (window.opener) window.opener.postMessage(payload, "*");
         else if (window.parent) window.parent.postMessage(payload, "*");
 
-        // Update local list & UI (derive a display URL for thumb)
+        // Update local list & UI (use URL for new thumb)
         currentFolderList.splice(currentIndex+1, 0, { path });
         try{
-          const MAX = 8*1024*1024; const bytes = await ref.getBytes(MAX);
-          const blob2 = new Blob([bytes], {type:'image/jpeg'});
-          const url2 = URL.createObjectURL(blob2);
+          const url2 = await ref.getDownloadURL();
           const a=document.createElement('a'); a.href='javascript:void(0)'; a.innerHTML=`<img src="${url2}" alt="photo">`;
           const newIdx = currentIndex+1;
           a.addEventListener('click', ()=> openEditorByIndex(newIdx));
