@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1"/>
-<title>FireOpsSim — Photo Viewer & Editor (Path-first, No Popups)</title>
+<title>FireOpsSim — Photo Viewer & Editor (DB path → Storage)</title>
 <style>
   :root{--bg:#0b1220;--card:#111a2e;--muted:#b8c4e2;--line:#1b2b50;--ink:#e8eefc;--accent:#2c5cff;--ok:#7CFF7C;--bad:#FF7C7C}
   *{box-sizing:border-box}
@@ -58,7 +58,7 @@
     <div class="row">
       <div class="muted">Realtime DB:</div><div class="mono">dailyquiz-d5279</div>
       <div class="muted">Storage:</div><div class="mono">gs://fireopssim.appspot.com</div>
-      <span class="pill">DB-first, Storage optional</span>
+      <span class="pill">Reads paths from DB → loads from Storage</span>
     </div>
     <div class="row">
       <button id="btnRefreshScenarios" class="primary">Refresh Scenarios</button>
@@ -225,7 +225,7 @@
 
     // ===== thumbnails & editor =====
     let currentScenarioId = null;
-    let currentFolderList = []; // [{path, url}] url optional cache
+    let currentFolderList = []; // [{path, url?}] we derive URL from path for thumbs
     let currentIndex = -1;
 
     function extractStoragePathFromURL(url){
@@ -247,11 +247,13 @@
       if (id) await loadPhotosFromDB(id);
     }
 
+    // ---- Load photos strictly from DB paths ----
     async function loadPhotosFromDB(id){
       try{
         await ensureAuth();
         thumbsEl.innerHTML = '<div class="muted">Loading photos from DB…</div>';
 
+        // Expect { photos: { <photoId>: { storagePath, createdAt, ... } } }
         let photos = (await rtdb.ref(`scenarios/${id}/photos`).once('value')).val();
         if (!photos) photos = (await rtdb.ref(`geophoto/scenarios/${id}/photos`).once('value')).val();
         const arr = photos ? Object.values(photos) : [];
@@ -260,9 +262,9 @@
 
         arr.sort((a,b)=> (b.createdAt||0)-(a.createdAt||0));
         currentFolderList = arr.map(p=>{
+          // Prefer storagePath; fall back to deriving from any legacy URL
           const path = p.storagePath || extractStoragePathFromURL(p.downloadURL || p.url || '') || null;
-          const url  = p.downloadURL || p.url || null; // optional cache
-          return path ? { path, url } : null;
+          return path ? { path } : null;
         }).filter(Boolean);
 
         await renderThumbsFromPaths(currentFolderList);
@@ -272,6 +274,7 @@
       }
     }
 
+    // ---- (Optional) list directly from Storage folder ----
     async function listFromStorage(){
       const id = $('#selectedId').value;
       if (!id){ alert('Select a scenario first.'); return; }
@@ -282,7 +285,7 @@
         const { items } = await folderRef.listAll();
         if (!items.length){ thumbsEl.innerHTML=''; emptyEl.style.display=''; ok('No objects in Storage folder.'); return; }
         items.sort((a,b)=> (b.name||'').localeCompare(a.name||''));
-        currentFolderList = items.map(it => ({ path: it.fullPath, url: null }));
+        currentFolderList = items.map(it => ({ path: it.fullPath }));
         await renderThumbsFromPaths(currentFolderList);
         ok(`Listed ${items.length} photo(s) from Storage.`);
       }catch(e){
@@ -292,6 +295,7 @@
       }
     }
 
+    // ---- Thumbnails from path (derive fresh URL) ----
     async function renderThumbsFromPaths(list){
       thumbsEl.innerHTML = '';
       if (!list.length){ emptyEl.style.display=''; return; }
@@ -310,20 +314,14 @@
       await Promise.all(list.map(async (item, i)=>{
         try{
           const ref = storage.ref().child(item.path);
-          const url = await ref.getDownloadURL();
+          const url = await ref.getDownloadURL(); // just for thumbnail
           item.url = url;
           const img = anchors[i].querySelector('img');
           img.src = url;
           img.removeAttribute('aria-busy');
         }catch(e){
-          if (item.url){
-            const img = anchors[i].querySelector('img');
-            img.src = item.url;
-            img.removeAttribute('aria-busy');
-          }else{
-            anchors[i].style.opacity = 0.5;
-            anchors[i].title = 'Unable to preview';
-          }
+          anchors[i].style.opacity = 0.5;
+          anchors[i].title = 'Unable to preview';
           console.warn('Thumb URL error for', item.path, e);
         }
       }));
@@ -360,15 +358,12 @@
       if (item.path){
         const ref = storage.ref().child(item.path);
         const bytes = await ref.getBytes(MAX);
-        return new Blob([bytes], { type: 'image/jpeg' });
+        // Try to infer content type from extension; default to jpeg for canvas
+        const ext = (item.path.split('.').pop()||'').toLowerCase();
+        const mime = ext==='png'?'image/png':ext==='webp'?'image/webp':'image/jpeg';
+        return new Blob([bytes], { type: mime });
       }
-      if (item.url){
-        const ref = storage.refFromURL(item.url);
-        const bytes = await ref.getBytes(MAX);
-        item.path = ref.fullPath;
-        return new Blob([bytes], { type: 'image/jpeg' });
-      }
-      throw new Error('No path/URL available for this item.');
+      throw new Error('No storagePath available for this item.');
     }
 
     async function openEditorByIndex(idx){
@@ -393,9 +388,9 @@
 
         const img = new Image();
         img.onload = ()=>{
-          const fileName = (item.path ? item.path.split('/').pop() : (item.url?.split('?')[0].split('/').pop() || 'image'));
+          const fileName = item.path.split('/').pop() || 'image';
           $('#editTitle').textContent = 'Editor';
-          $('#editInfo').textContent  = (currentScenarioId ? ('scenarios/'+currentScenarioId) : '') + (item.path?(' • '+item.path):' • '+fileName);
+          $('#editInfo').textContent  = (currentScenarioId ? ('scenarios/'+currentScenarioId) : '') + ' • ' + item.path;
           history.length = 0; drawMode=false; cropMode=false; flipH=false; flipV=false; rotation=0; cropRect.style.display='none';
           loadIntoCanvas(img);
           overlay.style.display = 'block';
@@ -505,7 +500,7 @@
         const item = currentFolderList[currentIndex]; if (!item){ alert('No image loaded'); return; }
         const ts = Date.now();
         const blob = await new Promise(res=> canvas.toBlob(res, 'image/jpeg', 0.92)) || dataUrlToBlob(canvas.toDataURL('image/jpeg',0.92));
-        const originalPath = item.path || extractStoragePathFromURL(item.url) || `scenarios/${sid}`;
+        const originalPath = item.path || `scenarios/${sid}`;
         const dir = originalPath.includes('/') ? originalPath.split('/').slice(0,-1).join('/') : `scenarios/${sid}`;
         const baseName = (originalPath.split('/').pop() || 'image.jpg').replace(/\.(jpg|jpeg|png|webp)$/i,'');
         const saveSame = $('#saveSameFolder').checked;
@@ -515,18 +510,23 @@
         const ref = storage.ref().child(path);
         log('Uploading edited → '+path);
         await ref.put(blob, { contentType:'image/jpeg' });
-        const url = await ref.getDownloadURL();
         ok('Edited image saved.');
 
-        // Post back to parent/builder so it can update DB
-        const payload = { type:'fo-upload-complete', scenarioId: sid, storagePath: path, downloadURL: url, contentType:'image/jpeg', createdAt: ts };
+        // Post back ONLY the storage path (no URL)
+        const payload = { type:'fo-upload-complete', scenarioId: sid, storagePath: path, gsUri: `gs://fireopssim.appspot.com/${path}`, contentType:'image/jpeg', createdAt: ts };
         if (window.opener) window.opener.postMessage(payload, "*");
         else if (window.parent) window.parent.postMessage(payload, "*");
 
         // Update local list & UI
-        currentFolderList.splice(currentIndex+1, 0, { path, url });
-        const a=document.createElement('a'); a.href='javascript:void(0)'; a.innerHTML=`<img src="${url}" alt="photo">`;
-        a.addEventListener('click', ()=> openEditorByIndex(currentIndex+1)); thumbsEl.insertBefore(a, thumbsEl.children[currentIndex+1]||null);
+        currentFolderList.splice(currentIndex+1, 0, { path });
+        // Generate a fresh URL for the just-saved thumb (display only)
+        try{
+          const thumbUrl = await ref.getDownloadURL();
+          const a=document.createElement('a'); a.href='javascript:void(0)'; a.innerHTML=`<img src="${thumbUrl}" alt="photo">`;
+          const newIdx = currentIndex+1;
+          a.addEventListener('click', ()=> openEditorByIndex(newIdx));
+          thumbsEl.insertBefore(a, thumbsEl.children[newIdx]||null);
+        }catch(_){}
         alert('Saved as new image.');
       }catch(e){
         bad('Save error: '+(e.message||e)); alert('Save failed:\n'+(e.message||e));
@@ -551,12 +551,13 @@
       window.open(url.toString(), 'fireops_uploader'); ok('Opened uploader for '+id);
     });
 
+    // Auto-select scenario by ?scenarioId=... if present
+    function scenarioFromUrl(){
+      const qsp = new URLSearchParams(location.search);
+      const q = qsp.get('scenarioId'); if (q) return decodeURIComponent(q);
+      const hash = (location.hash||'').replace(/^#/, ''); return decodeURIComponent(hash||'');
+    }
+
     // Boot
     (async function boot(){
-      try{ await ensureAuth(); }catch(e){ bad('Auth error: '+(e.message||e)); }
-      ok('Ready. Loading scenarios…'); await listScenarios();
-    })();
-  })();
-  </script>
-</body>
-</html>
+      try{ await ensureAut
