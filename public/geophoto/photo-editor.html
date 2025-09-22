@@ -31,17 +31,15 @@
   .pill{font-size:12px;padding:4px 8px;border:1px solid #2b3d70;border-radius:999px}
 
   /* Editor modal */
-  #editorOverlay{position:fixed;inset:0;background:rgba(6,10,20,.88);display:none;z-index:9999}
+  #editorOverlay{position:fixed;inset:0;background:rgba(6,10,20,.92);display:none;z-index:9999}
   #editor{position:absolute;inset:20px;display:flex;flex-direction:column;gap:10px}
   #editorHeader{display:flex;align-items:center;justify-content:space-between}
   #editorHeader .left{display:flex;gap:8px;align-items:center}
-  #editorHeader .right{display:flex;gap:8px;align-items:center}
-  #editorStage{flex:1;min-height:250px;display:flex;align-items:center;justify-content:center;border:1px solid #1b2b50;border-radius:12px;background:#0b1428;padding:8px;overflow:hidden}
+  #editorHeader .right{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+  #editorStage{flex:1;min-height:260px;display:flex;align-items:center;justify-content:center;border:1px solid #1b2b50;border-radius:12px;background:#0b1428;padding:8px;overflow:hidden}
   #stageWrap{position:relative;max-width:100%;max-height:100%}
   canvas#editCanvas{max-width:100%;max-height:100%;border:1px solid #1b2b50;border-radius:8px;background:#000}
-  /* crop rectangle */
   #cropRect{position:absolute;border:2px dashed #2c5cff;background:rgba(44,92,255,.12);display:none;pointer-events:none}
-  /* mobile */
   @media (max-width:560px){ .row{flex-direction:column;align-items:stretch} input,select,button{width:100%} #editorHeader{flex-direction:column;align-items:stretch;gap:8px} }
 </style>
 </head>
@@ -122,17 +120,17 @@
 
   <script>
   (function(){
-    // ===== UI helpers =====
+    // ===== helpers =====
     const $ = s=>document.querySelector(s);
     const logEl = $('#status'), scenariosEl = $('#scenarios'), thumbsEl = $('#thumbs'),
           emptyEl = $('#empty'), folderPathEl = $('#folderPath');
 
     const log = (m,c)=>{const d=document.createElement('div'); if(c)d.style.color=c; d.textContent='['+new Date().toLocaleTimeString()+'] '+m; logEl.appendChild(d); logEl.scrollTop=logEl.scrollHeight; console.log(m);};
-    const ok=m=>log(m,'#7CFF7C'), bad=m=>log(m,'#FF7C7C');
+    const ok = m=>log(m,'#7CFF7C'); const bad = m=>log(m,'#FF7C7C');
     const esc = s=>String(s||'').replace(/[&<>"']/g, m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
     const fmtDate = ts=>{try{return new Date(ts).toLocaleString();}catch(_){return String(ts||'');}};
 
-    // ===== Firebase apps =====
+    // ===== Firebase =====
     const dbCfg = { apiKey:"AIzaSyDM6DpRSeZueVKRpbyJyDmhf8WY66KyCDk", authDomain:"dailyquiz-d5279.firebaseapp.com", databaseURL:"https://dailyquiz-d5279-default-rtdb.firebaseio.com", projectId:"dailyquiz-d5279", storageBucket:"dailyquiz-d5279.appspot.com", appId:"1:94577748034:web:c032d3a1d72db1313de5db" };
     const stCfg = { apiKey:"AIzaSyBzwc75u8pG73OKcHN8ti2ADbucjKMHme8", authDomain:"fireopssim.firebaseapp.com", projectId:"fireopssim", storageBucket:"fireopssim.appspot.com", appId:"1:396140888722:web:demo" };
 
@@ -148,7 +146,7 @@
       if (!stAuth.currentUser){ const b=await stAuth.signInAnonymously(); ok('Storage auth OK (uid='+(b.user?.uid||'unknown')+')'); }
     }
 
-    // ===== scenarios =====
+    // ===== scenarios (with geophoto fallback) =====
     async function fetchScenarios(){
       let snap = await rtdb.ref('scenarios').limitToLast(200).once('value');
       let val = snap.val() || {};
@@ -203,7 +201,7 @@
       });
     }
 
-    // ===== photos =====
+    // ===== photos (DB-first) =====
     async function selectScenario(id){
       $('#selectedId').value = id || '';
       folderPathEl.textContent = id ? `scenarios/${id}` : 'scenarios/(none)';
@@ -261,24 +259,22 @@
       });
     }
 
-    // ===== Editor (canvas-based) =====
+    // ===== Editor (canvas) with safe blob loading =====
     const overlay = $('#editorOverlay');
     const canvas  = $('#editCanvas');
     const ctx = canvas.getContext('2d');
     const cropRect = $('#cropRect');
-    let baseImg = new Image();
     let history = [];
-    let drawMode = false, cropMode = false;
-    let isDrawing = false, lastX=0, lastY=0;
+    let drawMode=false, cropMode=false, isDrawing=false, lastX=0, lastY=0;
     let flipH=false, flipV=false, rotation=0;
-    let currentScenarioId = null, currentUrl = null;
+    let currentScenarioId=null, currentUrl=null, currentBlobURL=null;
 
     function pushHistory(){
-      try{ history.push(canvas.toDataURL('image/png')); if (history.length>15) history.shift(); }catch(_){}
+      try{ history.push(canvas.toDataURL('image/png')); if (history.length>20) history.shift(); }catch(_){}
     }
     function loadIntoCanvas(img){
       const maxW = window.innerWidth - 80;
-      const maxH = window.innerHeight - 200;
+      const maxH = window.innerHeight - 220;
       const ratio = Math.min(maxW/img.naturalWidth, maxH/img.naturalHeight, 1);
       const w = Math.round(img.naturalWidth * ratio);
       const h = Math.round(img.naturalHeight * ratio);
@@ -288,21 +284,43 @@
       ctx.drawImage(img, 0, 0, w, h);
       pushHistory();
     }
-    function openEditor(url, scenarioId){
-      currentScenarioId = scenarioId || $('#selectedId').value || '';
-      currentUrl = url;
-      $('#editTitle').textContent = 'Editor';
-      $('#editInfo').textContent = (currentScenarioId ? ('scenarios/'+currentScenarioId) : '') + ' • ' + url.split('?')[0].split('/').pop();
-      overlay.style.display = 'block';
-      cropRect.style.display = 'none'; cropMode=false; drawMode=false;
-      rotation=0; flipH=false; flipV=false; history.length=0;
-      baseImg = new Image();
-      baseImg.crossOrigin = 'anonymous';
-      baseImg.onload = ()=> loadIntoCanvas(baseImg);
-      baseImg.onerror = ()=> { bad('Failed to load image'); alert('Failed to load image'); };
-      baseImg.src = url;
+
+    async function openEditor(url, scenarioId){
+      try{
+        currentScenarioId = scenarioId || $('#selectedId').value || '';
+        currentUrl = url;
+        // Fetch as blob → createObjectURL (avoids cross-origin canvas taint)
+        const blob = await fetch(url, { mode:'cors', credentials:'omit' }).then(r=>{
+          if (!r.ok) throw new Error('HTTP '+r.status);
+          return r.blob();
+        });
+        if (currentBlobURL) URL.revokeObjectURL(currentBlobURL);
+        currentBlobURL = URL.createObjectURL(blob);
+
+        const img = new Image();
+        img.onload = ()=>{
+          $('#editTitle').textContent = 'Editor';
+          $('#editInfo').textContent  = (currentScenarioId ? ('scenarios/'+currentScenarioId) : '') + ' • ' + (url.split('?')[0].split('/').pop() || 'image');
+          history.length = 0; drawMode=false; cropMode=false; flipH=false; flipV=false; rotation=0; cropRect.style.display='none';
+          loadIntoCanvas(img);
+          overlay.style.display = 'block';
+        };
+        img.onerror = (e)=>{
+          bad('Failed to load image into editor.');
+          // Fallback: open in new tab so the user can still see it
+          window.open(url, '_blank', 'noopener');
+        };
+        img.src = currentBlobURL;
+      }catch(e){
+        bad('Open editor failed: '+(e.message||e));
+        // Fallback
+        window.open(url, '_blank', 'noopener');
+      }
     }
-    function closeEditor(){ overlay.style.display='none'; }
+    function closeEditor(){
+      overlay.style.display='none';
+      if (currentBlobURL){ URL.revokeObjectURL(currentBlobURL); currentBlobURL=null; }
+    }
 
     function redraw(){
       const w = canvas.width, h = canvas.height;
@@ -310,16 +328,15 @@
       const tctx = tmp.getContext('2d'); tctx.drawImage(canvas,0,0);
       ctx.setTransform(1,0,0,1,0,0); ctx.clearRect(0,0,w,h);
       ctx.save();
-      // apply transforms around center
       ctx.translate(w/2, h/2);
       if (rotation) ctx.rotate(rotation*Math.PI/180);
       ctx.scale(flipH?-1:1, flipV?-1:1);
       ctx.drawImage(tmp, -w/2, -h/2);
       ctx.restore();
     }
-    function rotateCW(){ rotation = (rotation+90)%360; redraw(); pushHistory(); }
-    function flipHoriz(){ flipH = !flipH; redraw(); pushHistory(); }
-    function flipVert(){ flipV = !flipV; redraw(); pushHistory(); }
+    const rotateCW = ()=>{ rotation=(rotation+90)%360; redraw(); pushHistory(); };
+    const flipHoriz = ()=>{ flipH=!flipH; redraw(); pushHistory(); };
+    const flipVert  = ()=>{ flipV=!flipV; redraw(); pushHistory(); };
 
     // Draw mode
     canvas.addEventListener('pointerdown', e=>{
@@ -339,10 +356,10 @@
     });
 
     // Crop mode
-    let cropStart=null, cropEnd=null;
+    const cropRectEl = $('#cropRect'); let cropStart=null, cropEnd=null;
     function startCrop(){
-      drawMode=false; cropMode=true; cropRect.style.display='';
-      cropStart=cropEnd=null; cropRect.style.left='0'; cropRect.style.top='0'; cropRect.style.width='0'; cropRect.style.height='0';
+      drawMode=false; cropMode=true; cropRectEl.style.display='';
+      cropStart=cropEnd=null; Object.assign(cropRectEl.style,{left:'0',top:'0',width:'0',height:'0'});
     }
     $('#stageWrap').addEventListener('pointerdown', e=>{
       if (!cropMode) return;
@@ -361,14 +378,12 @@
     });
     window.addEventListener('pointerup', ()=>{
       if (!cropMode || !cropStart) return;
-      // apply crop
       const x = Math.min(cropStart.x, cropEnd.x), y = Math.min(cropStart.y, cropEnd.y);
       const w = Math.max(10, Math.abs(cropEnd.x - cropStart.x)), h = Math.max(10, Math.abs(cropEnd.y - cropStart.y));
       const tmp = document.createElement('canvas'); tmp.width=w; tmp.height=h;
       tmp.getContext('2d').drawImage(canvas, x, y, w, h, 0, 0, w, h);
-      canvas.width=w; canvas.height=h;
-      ctx.setTransform(1,0,0,1,0,0); ctx.clearRect(0,0,w,h); ctx.drawImage(tmp,0,0);
-      cropMode=false; cropRect.style.display='none'; pushHistory();
+      canvas.width=w; canvas.height=h; ctx.setTransform(1,0,0,1,0,0); ctx.clearRect(0,0,w,h); ctx.drawImage(tmp,0,0);
+      cropMode=false; cropRectEl.style.display='none'; pushHistory();
     });
     function positionCropRect(){
       const r = canvas.getBoundingClientRect();
@@ -378,23 +393,22 @@
       const top  = r.top  + y * (r.height/ canvas.height);
       const ww   = w * (r.width / canvas.width);
       const hh   = h * (r.height/ canvas.height);
-      Object.assign(cropRect.style,{left:left+'px',top:top+'px',width:ww+'px',height:hh+'px'});
+      Object.assign(cropRectEl.style,{left:left+'px',top:top+'px',width:ww+'px',height:hh+'px'});
     }
 
-    // Undo/Reset
+    // Undo / Reset
     function undo(){
       if (history.length<=1) return;
       history.pop();
-      const img = new Image();
-      img.onload = ()=>{ canvas.width=img.width; canvas.height=img.height; ctx.setTransform(1,0,0,1,0,0); ctx.clearRect(0,0,canvas.width,canvas.height); ctx.drawImage(img,0,0); };
+      const img = new Image(); img.onload = ()=>{ canvas.width=img.width; canvas.height=img.height; ctx.setTransform(1,0,0,1,0,0); ctx.clearRect(0,0,canvas.width,canvas.height); ctx.drawImage(img,0,0); };
       img.src = history[history.length-1];
     }
     function reset(){
-      rotation=0; flipH=false; flipV=false; drawMode=false; cropMode=false; cropRect.style.display='none';
-      if (baseImg && baseImg.src){ loadIntoCanvas(baseImg); }
+      drawMode=false; cropMode=false; cropRectEl.style.display='none';
+      if (history.length){ const first=new Image(); first.onload=()=>{ canvas.width=first.width; canvas.height=first.height; ctx.setTransform(1,0,0,1,0,0); ctx.clearRect(0,0,canvas.width,canvas.height); ctx.drawImage(first,0,0); pushHistory(); }; first.src = history[0]; }
     }
 
-    // Save edited -> Storage -> postMessage
+    // Save edited -> Storage -> postMessage to builder
     function safeName(s){ return (s||'edit').replace(/[^\w.\-]+/g,'_'); }
     function dataUrlToBlob(dataUrl){
       const [head, b64] = dataUrl.split(',');
@@ -403,41 +417,42 @@
       for (let i=0;i<len;i++) u8[i]=bin.charCodeAt(i);
       return new Blob([u8], {type:mime});
     }
+
     async function saveEdited(){
       try{
         await ensureAuth();
-        if (!currentScenarioId){ alert('No scenario selected'); return; }
+        const id = $('#selectedId').value.trim();
+        if (!id){ alert('No scenario selected'); return; }
         const ts = Date.now();
         const blob = await new Promise(res=> canvas.toBlob(res, 'image/jpeg', 0.92)) || dataUrlToBlob(canvas.toDataURL('image/jpeg',0.92));
-        const fname = `${ts}_${safeName((currentUrl||'').split('/').pop()||'edited')}`;
-        const path = `scenarios/${currentScenarioId}/edited/${fname}`;
+        const fname = `${ts}_${safeName((currentUrl||'').split('?')[0].split('/').pop()||'edited')}`;
+        const path = `scenarios/${id}/edited/${fname}`;
         const ref = storage.ref().child(path);
         log('Uploading edited → '+path);
         await ref.put(blob, { contentType:'image/jpeg' });
         const url = await ref.getDownloadURL();
         ok('Edited image saved.');
 
-        // Send to builder (DB writer) to record URL
-        const payload = { type:'fo-upload-complete', scenarioId: currentScenarioId, url, path, contentType:'image/jpeg' };
+        // Tell builder to record in DB (same pattern as uploader)
+        const payload = { type:'fo-upload-complete', scenarioId: id, url, path, contentType:'image/jpeg' };
         if (window.opener) window.opener.postMessage(payload, "*");
         else if (window.parent) window.parent.postMessage(payload, "*");
 
         alert('Saved as new image.');
         closeEditor();
-        // optionally, prepend to current grid:
+        // prepend to grid
         const a=document.createElement('a'); a.href='javascript:void(0)'; a.innerHTML=`<img src="${url}" alt="photo">`;
-        a.addEventListener('click', ()=> openEditor(url, currentScenarioId));
-        thumbsEl.prepend(a);
+        a.addEventListener('click', ()=> openEditor(url, id)); thumbsEl.prepend(a);
       }catch(e){
         bad('Save error: '+(e.message||e)); alert('Save failed:\n'+(e.message||e));
       }
     }
 
-    // Editor controls
-    $('#btnRotateCW').addEventListener('click', rotateCW);
-    $('#btnFlipH').addEventListener('click', flipHoriz);
-    $('#btnFlipV').addEventListener('click', flipVert);
-    $('#btnCrop').addEventListener('click', startCrop);
+    // Controls
+    $('#btnRotateCW').addEventListener('click', ()=>{ rotation=(rotation+90)%360; redraw(); pushHistory(); });
+    $('#btnFlipH').addEventListener('click', ()=>{ flipH=!flipH; redraw(); pushHistory(); });
+    $('#btnFlipV').addEventListener('click', ()=>{ flipV=!flipV; redraw(); pushHistory(); });
+    $('#btnCrop').addEventListener('click', ()=>{ drawMode=false; startCrop(); });
     $('#btnDraw').addEventListener('click', ()=>{ drawMode=!drawMode; cropMode=false; cropRect.style.display='none'; });
     $('#btnUndo').addEventListener('click', undo);
     $('#btnReset').addEventListener('click', reset);
@@ -451,7 +466,7 @@
     $('#btnListFromStorage').addEventListener('click', listFromStorage);
     const UPLOADER_URL='https://fireopssim.com/geophoto/test-edit-uploader';
     $('#btnOpenUploader').addEventListener('click', ()=>{
-      const id = $('#selectedId').value.trim(); if (!id){ alert('Select a scenario first.'); return; }
+      const id=$('#selectedId').value.trim(); if(!id){ alert('Select a scenario first.'); return; }
       const url = new URL(UPLOADER_URL); url.searchParams.set('scenarioId', id);
       window.open(url.toString(), 'fireops_uploader'); ok('Opened uploader for '+id);
     });
