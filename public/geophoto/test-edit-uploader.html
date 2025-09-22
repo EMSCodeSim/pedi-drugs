@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
-<title>FireOpsSim — Uploader (Storage path only)</title>
+<title>FireOpsSim — Uploader (path-only, classic logic)</title>
 <style>
   :root{--bg:#0b1220;--card:#111a2e;--muted:#b8c4e2;--line:#1b2b50;--ink:#e8eefc;--accent:#2c5cff;--ok:#7CFF7C;--bad:#FF7C7C}
   *{box-sizing:border-box}
@@ -21,11 +21,9 @@
   #thumbs{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px}
   #thumbs a{display:block}
   #thumbs img{width:96px;height:96px;object-fit:cover;border-radius:10px;border:1px solid #1a2b50}
-
   #progressWrap{display:none;align-items:center;gap:8px}
   progress{width:240px;height:16px}
   #pct{min-width:40px;text-align:right}
-
   @media (max-width:560px){
     .row{flex-direction:column;align-items:stretch}
     input,button,progress{width:100%}
@@ -47,7 +45,7 @@
     </div>
 
     <div class="row">
-      <!-- Two pickers help across iOS/Android -->
+      <!-- two inputs helps across iOS/Android -->
       <input id="fileInputCamera" type="file" accept="image/*" capture="environment"/>
       <input id="fileInput" type="file" accept="image/*"/>
     </div>
@@ -79,7 +77,7 @@
     <div id="status">Booting…</div>
   </div>
 
-  <!-- Firebase compat SDKs -->
+  <!-- Firebase compat SDKs (classic logic) -->
   <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-storage-compat.js"></script>
@@ -97,10 +95,6 @@
     }
     const ok=m=>log(m,'ok'), bad=m=>log(m,'bad');
 
-    const progWrap = $('#progressWrap'), prog = $('#progress'), pct = $('#pct');
-    function showProgress(p){ progWrap.style.display='flex'; prog.value = p; pct.textContent = Math.round(p)+'%'; }
-    function resetProgress(){ progWrap.style.display='none'; prog.value = 0; pct.textContent = '0%'; }
-
     window.addEventListener('error', e => bad('Script error: '+(e.message||e.error||'unknown')));
 
     // ---------- Scenario from URL ----------
@@ -110,13 +104,12 @@
       const hash = (location.hash||'').replace(/^#/, ''); return decodeURIComponent(hash||'');
     }
 
-    // ---------- Firebase (Storage-only) ----------
-    // Bind explicitly to the fireopssim bucket via gs:// to avoid config mismatch.
+    // ---------- Firebase (Storage-only; explicit gs:// bind) ----------
     const cfg = {
       apiKey: "AIzaSyBzwc75u8pG73OKcHN8ti2ADbucjKMHme8",
       authDomain: "fireopssim.firebaseapp.com",
       projectId: "fireopssim",
-      storageBucket: "fireopssim.appspot.com",
+      storageBucket: "fireopssim.appspot.com", // info-only; binding uses gs:// below
       appId: "1:396140888722:web:demo"
     };
     const app = firebase.initializeApp(cfg);
@@ -132,6 +125,10 @@
     }
 
     // ---------- Helpers ----------
+    const progWrap = $('#progressWrap'), prog = $('#progress'), pct = $('#pct');
+    function showProgress(p){ progWrap.style.display='flex'; prog.value = p; pct.textContent = Math.round(p)+'%'; }
+    function resetProgress(){ progWrap.style.display='none'; prog.value = 0; pct.textContent = '0%'; }
+
     function safeName(s){ return (s||'photo').replace(/[^\w.\-]+/g,'_'); }
     function basePath(sid){ return sid ? `scenarios/${sid}` : 'uploads'; }
     function pickFile(){
@@ -139,7 +136,17 @@
       return (cam.files && cam.files[0]) || (lib.files && lib.files[0]) || null;
     }
 
-    // ---------- Upload (resumable with progress) ----------
+    // Fallback: if direct put() fails (rare mobile mime quirks), re-read as DataURL and putString()
+    function fileToDataURL(file){
+      return new Promise((res, rej)=>{
+        const r = new FileReader();
+        r.onload = () => res(r.result);
+        r.onerror = rej;
+        r.readAsDataURL(file);
+      });
+    }
+
+    // ---------- Upload (classic logic: ref.put with state_changed) ----------
     async function upload(){
       try{
         await ensureAuth();
@@ -149,7 +156,6 @@
           bad('Missing scenarioId in URL.');
           return;
         }
-
         const f = pickFile();
         if (!f){ alert('Pick or take a photo first.'); log('No file selected.'); return; }
         if (f.size > 25*1024*1024){ alert('Max 25 MB'); return; }
@@ -160,17 +166,35 @@
         log('Starting upload → '+path);
         showProgress(0);
 
-        const task = ref.put(f, { contentType: f.type || 'image/jpeg' });
-        await new Promise((resolve, reject)=>{
-          task.on('state_changed',
-            snap=>{
-              const p = (snap.bytesTransferred / snap.totalBytes) * 100;
-              showProgress(p);
-            },
-            err=>reject(err),
-            ()=>resolve()
-          );
-        });
+        // Primary path: direct put(file)
+        try{
+          const task = ref.put(f, { contentType: f.type || 'image/jpeg' });
+          await new Promise((resolve, reject)=>{
+            task.on('state_changed',
+              snap=>{
+                const p = (snap.bytesTransferred / snap.totalBytes) * 100;
+                showProgress(p);
+              },
+              err=>reject(err),
+              ()=>resolve()
+            );
+          });
+        }catch(primaryErr){
+          // Fallback path: DataURL + putString (handles odd blobs/mimes on older mobile browsers)
+          log('Primary put(file) failed, retrying with putString(DataURL)…');
+          const dataUrl = await fileToDataURL(f);
+          const task2 = ref.putString(dataUrl, 'data_url');
+          await new Promise((resolve, reject)=>{
+            task2.on('state_changed',
+              snap=>{
+                const p = (snap.bytesTransferred / snap.totalBytes) * 100;
+                showProgress(p);
+              },
+              err=>reject(err),
+              ()=>resolve()
+            );
+          });
+        }
 
         ok('Upload complete → '+path);
         resetProgress();
@@ -198,7 +222,7 @@
       }
     }
 
-    // ---------- Gallery (for operator awareness only) ----------
+    // ---------- Gallery (operator awareness only) ----------
     async function refresh(){
       try{
         await ensureAuth();
