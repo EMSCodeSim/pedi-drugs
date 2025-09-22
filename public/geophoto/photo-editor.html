@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1"/>
-<title>FireOpsSim — Photo Viewer</title>
+<title>FireOpsSim — Photo Viewer & Editor</title>
 <style>
   :root{--bg:#0b1220;--card:#111a2e;--muted:#b8c4e2;--line:#1b2b50;--ink:#e8eefc;--accent:#2c5cff;--ok:#7CFF7C;--bad:#FF7C7C}
   *{box-sizing:border-box}
@@ -11,32 +11,42 @@
   h1{margin:0 0 10px;font-size:20px}
   h2{margin:8px 0 10px;font-size:16px}
   .row{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:8px 0}
-  input,button{background:#091125;color:var(--ink);border:1px solid #20407a;border-radius:10px;padding:10px 12px}
+  input,button,select{background:#091125;color:var(--ink);border:1px solid #20407a;border-radius:10px;padding:10px 12px}
   button{cursor:pointer}
   button.primary{background:#1a3fbb;border-color:var(--accent)}
   .card{background:var(--card);border:1px solid #1b2b50;border-radius:14px;padding:12px;margin:12px 0}
   .muted{color:var(--muted)}
   .mono{font-family:ui-monospace,Menlo,Consolas,monospace}
   #status{white-space:pre-wrap;background:#0c1530;border:1px solid #1b2b50;border-radius:10px;padding:10px;max-height:300px;overflow:auto}
-
   #scenarios{max-height:260px;overflow:auto;border:1px solid #1b2b50;border-radius:10px}
   .scenario{padding:10px;border-bottom:1px solid #1b2b50;display:flex;gap:10px;align-items:center;justify-content:space-between}
   .scenario:last-child{border-bottom:none}
   .scenario .meta{display:flex;flex-direction:column}
   .scenario .name{font-weight:600}
   .scenario .small{font-size:12px;color:#99a8d8}
-
   #thumbs{display:grid;grid-template-columns:repeat(auto-fill,minmax(110px,1fr));gap:10px}
   #thumbs a{display:block}
   #thumbs img{width:100%;height:110px;object-fit:cover;border-radius:10px;border:1px solid #1a2b50}
   #empty{color:#9ab0e6}
   .pill{font-size:12px;padding:4px 8px;border:1px solid #2b3d70;border-radius:999px}
 
-  @media (max-width:560px){ .row{flex-direction:column;align-items:stretch} input,button{width:100%} }
+  /* Editor modal */
+  #editorOverlay{position:fixed;inset:0;background:rgba(6,10,20,.88);display:none;z-index:9999}
+  #editor{position:absolute;inset:20px;display:flex;flex-direction:column;gap:10px}
+  #editorHeader{display:flex;align-items:center;justify-content:space-between}
+  #editorHeader .left{display:flex;gap:8px;align-items:center}
+  #editorHeader .right{display:flex;gap:8px;align-items:center}
+  #editorStage{flex:1;min-height:250px;display:flex;align-items:center;justify-content:center;border:1px solid #1b2b50;border-radius:12px;background:#0b1428;padding:8px;overflow:hidden}
+  #stageWrap{position:relative;max-width:100%;max-height:100%}
+  canvas#editCanvas{max-width:100%;max-height:100%;border:1px solid #1b2b50;border-radius:8px;background:#000}
+  /* crop rectangle */
+  #cropRect{position:absolute;border:2px dashed #2c5cff;background:rgba(44,92,255,.12);display:none;pointer-events:none}
+  /* mobile */
+  @media (max-width:560px){ .row{flex-direction:column;align-items:stretch} input,select,button{width:100%} #editorHeader{flex-direction:column;align-items:stretch;gap:8px} }
 </style>
 </head>
 <body>
-  <h1>FireOpsSim — Photo Viewer</h1>
+  <h1>FireOpsSim — Photo Viewer & Editor</h1>
 
   <div class="card">
     <div class="row">
@@ -75,6 +85,35 @@
     <div id="status">Booting…</div>
   </div>
 
+  <!-- EDITOR MODAL -->
+  <div id="editorOverlay">
+    <div id="editor">
+      <div id="editorHeader">
+        <div class="left">
+          <strong id="editTitle">Editor</strong>
+          <span class="muted mono" id="editInfo"></span>
+        </div>
+        <div class="right">
+          <button id="btnRotateCW">Rotate 90°</button>
+          <button id="btnFlipH">Flip H</button>
+          <button id="btnFlipV">Flip V</button>
+          <button id="btnCrop">Crop</button>
+          <button id="btnDraw">Draw</button>
+          <button id="btnUndo">Undo</button>
+          <button id="btnReset">Reset</button>
+          <button id="btnSave" class="primary">Save as New</button>
+          <button id="btnClose">Close</button>
+        </div>
+      </div>
+      <div id="editorStage">
+        <div id="stageWrap">
+          <canvas id="editCanvas"></canvas>
+          <div id="cropRect"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- Firebase compat SDKs -->
   <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
@@ -83,104 +122,46 @@
 
   <script>
   (function(){
-    // ===== helpers =====
+    // ===== UI helpers =====
     const $ = s=>document.querySelector(s);
-    const logEl = $('#status'); const scenariosEl = $('#scenarios');
-    const thumbsEl = $('#thumbs'); const emptyEl = $('#empty'); const folderPathEl = $('#folderPath');
+    const logEl = $('#status'), scenariosEl = $('#scenarios'), thumbsEl = $('#thumbs'),
+          emptyEl = $('#empty'), folderPathEl = $('#folderPath');
 
     const log = (m,c)=>{const d=document.createElement('div'); if(c)d.style.color=c; d.textContent='['+new Date().toLocaleTimeString()+'] '+m; logEl.appendChild(d); logEl.scrollTop=logEl.scrollHeight; console.log(m);};
-    const ok = m=>log(m,'#7CFF7C'); const bad = m=>log(m,'#FF7C7C');
+    const ok=m=>log(m,'#7CFF7C'), bad=m=>log(m,'#FF7C7C');
     const esc = s=>String(s||'').replace(/[&<>"']/g, m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
     const fmtDate = ts=>{try{return new Date(ts).toLocaleString();}catch(_){return String(ts||'');}};
 
     // ===== Firebase apps =====
-    // DB app (dailyquiz)
-    const dbCfg = {
-      apiKey:"AIzaSyDM6DpRSeZueVKRpbyJyDmhf8WY66KyCDk",
-      authDomain:"dailyquiz-d5279.firebaseapp.com",
-      databaseURL:"https://dailyquiz-d5279-default-rtdb.firebaseio.com",
-      projectId:"dailyquiz-d5279",
-      storageBucket:"dailyquiz-d5279.appspot.com",
-      appId:"1:94577748034:web:c032d3a1d72db1313de5db"
-    };
-    // Storage app (fireopssim)
-    const stCfg = {
-      apiKey:"AIzaSyBzwc75u8pG73OKcHN8ti2ADbucjKMHme8",
-      authDomain:"fireopssim.firebaseapp.com",
-      projectId:"fireopssim",
-      storageBucket:"fireopssim.appspot.com",
-      appId:"1:396140888722:web:demo"
-    };
+    const dbCfg = { apiKey:"AIzaSyDM6DpRSeZueVKRpbyJyDmhf8WY66KyCDk", authDomain:"dailyquiz-d5279.firebaseapp.com", databaseURL:"https://dailyquiz-d5279-default-rtdb.firebaseio.com", projectId:"dailyquiz-d5279", storageBucket:"dailyquiz-d5279.appspot.com", appId:"1:94577748034:web:c032d3a1d72db1313de5db" };
+    const stCfg = { apiKey:"AIzaSyBzwc75u8pG73OKcHN8ti2ADbucjKMHme8", authDomain:"fireopssim.firebaseapp.com", projectId:"fireopssim", storageBucket:"fireopssim.appspot.com", appId:"1:396140888722:web:demo" };
 
     const dbApp = firebase.initializeApp(dbCfg, 'dbApp');
     const stApp = firebase.initializeApp(stCfg, 'stApp');
-
     const rtdb = firebase.database(dbApp);
     const dbAuth = firebase.auth(dbApp);
     const stAuth = firebase.auth(stApp);
     const storage = firebase.storage(stApp, "gs://fireopssim.appspot.com");
 
     async function ensureAuth(){
-      if (!dbAuth.currentUser){ const a=await dbAuth.signInAnonymously(); ok('DB auth OK (uid='+ (a.user?.uid||'unknown') +')'); }
-      if (!stAuth.currentUser){ const b=await stAuth.signInAnonymously(); ok('Storage auth OK (uid='+ (b.user?.uid||'unknown') +')'); }
+      if (!dbAuth.currentUser){ const a=await dbAuth.signInAnonymously(); ok('DB auth OK (uid='+(a.user?.uid||'unknown')+')'); }
+      if (!stAuth.currentUser){ const b=await stAuth.signInAnonymously(); ok('Storage auth OK (uid='+(b.user?.uid||'unknown')+')'); }
     }
 
-    // ===== robust scenario fetch (with fallback path) =====
+    // ===== scenarios =====
     async function fetchScenarios(){
-      // primary path
       let snap = await rtdb.ref('scenarios').limitToLast(200).once('value');
       let val = snap.val() || {};
-      // fallback if empty or not an object
-      if (!val || (typeof val !== 'object') || !Object.keys(val).length){
-        ok('Primary /scenarios empty, trying /geophoto/scenarios…');
+      if (!val || !Object.keys(val).length){
+        ok('Falling back to /geophoto/scenarios');
         snap = await rtdb.ref('geophoto/scenarios').limitToLast(200).once('value');
         val = snap.val() || {};
       }
-      // normalize to array with id from key if missing
       const rows = Object.keys(val).map(k=>{
         const v = val[k] || {};
-        return {
-          id: v.id || k,
-          title: v.title || '(untitled)',
-          createdAt: v.createdAt || v.created || v.time || 0,
-          dispatch: v.dispatch || v.description || ''
-        };
-      });
-      // newest first
-      rows.sort((a,b)=>(b.createdAt||0)-(a.createdAt||0) || String(b.id).localeCompare(String(a.id)));
+        return { id: v.id || k, title: v.title || '(untitled)', createdAt: v.createdAt || v.created || v.time || 0, dispatch: v.dispatch || v.description || '' };
+      }).sort((a,b)=>(b.createdAt||0)-(a.createdAt||0) || String(b.id).localeCompare(String(a.id)));
       return rows;
-    }
-
-    function renderScenarioList(rows){
-      const filter = ($('#filter').value||'').toLowerCase().trim();
-      const filtered = rows.filter(r => {
-        if (!filter) return true;
-        return (r.id||'').toLowerCase().includes(filter) || (r.title||'').toLowerCase().includes(filter);
-      });
-
-      scenariosEl.innerHTML = '';
-      if (!filtered.length){
-        scenariosEl.innerHTML = '<div class="muted" style="padding:10px">No scenarios found.</div>';
-        return;
-      }
-
-      filtered.forEach(r=>{
-        const div = document.createElement('div');
-        div.className = 'scenario';
-        div.innerHTML = `
-          <div class="meta">
-            <div class="name">${esc(r.title)}</div>
-            <div class="small mono">${esc(r.id)} • ${esc(fmtDate(r.createdAt))}</div>
-            ${r.dispatch ? `<div class="small">${esc(r.dispatch)}</div>` : ''}
-          </div>
-          <div><button class="primary btnView" data-id="${esc(r.id)}">View</button></div>
-        `;
-        scenariosEl.appendChild(div);
-      });
-
-      scenariosEl.querySelectorAll('.btnView').forEach(btn=>{
-        btn.addEventListener('click', ()=> selectScenario(btn.getAttribute('data-id')));
-      });
     }
 
     async function listScenarios(){
@@ -196,7 +177,33 @@
       }
     }
 
-    // ===== selection & photo loading =====
+    function renderScenarioList(rows){
+      const filter = ($('#filter').value||'').toLowerCase().trim();
+      const filtered = rows.filter(r => !filter || (r.id||'').toLowerCase().includes(filter) || (r.title||'').toLowerCase().includes(filter));
+
+      scenariosEl.innerHTML = '';
+      if (!filtered.length){
+        scenariosEl.innerHTML = '<div class="muted" style="padding:10px">No scenarios found.</div>';
+        return;
+      }
+      filtered.forEach(r=>{
+        const div = document.createElement('div');
+        div.className = 'scenario';
+        div.innerHTML = `
+          <div class="meta">
+            <div class="name">${esc(r.title)}</div>
+            <div class="small mono">${esc(r.id)} • ${esc(fmtDate(r.createdAt))}</div>
+            ${r.dispatch ? `<div class="small">${esc(r.dispatch)}</div>` : ''}
+          </div>
+          <div><button class="primary btnView" data-id="${esc(r.id)}">View</button></div>`;
+        scenariosEl.appendChild(div);
+      });
+      scenariosEl.querySelectorAll('.btnView').forEach(btn=>{
+        btn.addEventListener('click', ()=> selectScenario(btn.getAttribute('data-id')));
+      });
+    }
+
+    // ===== photos =====
     async function selectScenario(id){
       $('#selectedId').value = id || '';
       folderPathEl.textContent = id ? `scenarios/${id}` : 'scenarios/(none)';
@@ -209,29 +216,15 @@
       try{
         await ensureAuth();
         thumbsEl.innerHTML = '<div class="muted">Loading photos from DB…</div>';
-        const snap = await rtdb.ref(`scenarios/${id}/photos`).once('value');
-        let photos = snap.val();
-
-        // fallback to geophoto path if primary empty
-        if (!photos){
-          const snap2 = await rtdb.ref(`geophoto/scenarios/${id}/photos`).once('value');
-          photos = snap2.val();
-        }
-
+        let photos = (await rtdb.ref(`scenarios/${id}/photos`).once('value')).val();
+        if (!photos) photos = (await rtdb.ref(`geophoto/scenarios/${id}/photos`).once('value')).val();
         const arr = photos ? Object.values(photos) : [];
-        if (!arr.length){
-          thumbsEl.innerHTML = '';
-          emptyEl.style.display = '';
-          ok('No DB-recorded photos for this scenario.');
-          return;
-        }
-        arr.sort((a,b)=> (b.createdAt||0) - (a.createdAt||0));
-        renderThumbs(arr.map(p=>p.url).filter(Boolean));
+        if (!arr.length){ thumbsEl.innerHTML=''; emptyEl.style.display=''; ok('No DB-recorded photos.'); return; }
+        arr.sort((a,b)=> (b.createdAt||0)-(a.createdAt||0));
+        renderThumbs(arr.map(p=>p.url).filter(Boolean), id);
         ok(`Loaded ${arr.length} photo(s) from DB.`);
       }catch(e){
-        thumbsEl.innerHTML = '';
-        emptyEl.style.display = '';
-        bad('Load-from-DB error: '+(e.message||e));
+        thumbsEl.innerHTML=''; emptyEl.style.display=''; bad('Load-from-DB error: '+(e.message||e));
       }
     }
 
@@ -240,65 +233,233 @@
       if (!id){ alert('Select a scenario first.'); return; }
       try{
         await ensureAuth();
-        thumbsEl.innerHTML = '<div class="muted">Listing photos from Storage…</div>';
+        thumbsEl.innerHTML = '<div class="muted">Listing from Storage…</div>';
         const folderRef = storage.ref().child(`scenarios/${id}`);
         const { items } = await folderRef.listAll();
-        if (!items.length){
-          thumbsEl.innerHTML = '';
-          emptyEl.style.display = '';
-          ok('No objects found in Storage folder.');
-          return;
-        }
+        if (!items.length){ thumbsEl.innerHTML=''; emptyEl.style.display=''; ok('No objects in Storage folder.'); return; }
         items.sort((a,b)=> (b.name||'').localeCompare(a.name||''));
         const urls = await Promise.all(items.map(it => it.getDownloadURL().catch(()=>null)));
-        renderThumbs(urls.filter(Boolean));
+        renderThumbs(urls.filter(Boolean), id);
         ok(`Listed ${items.length} photo(s) from Storage.`);
       }catch(e){
-        thumbsEl.innerHTML = '';
-        emptyEl.style.display = '';
-        if (String(e).includes('storage/unauthorized')){
-          bad('Storage denied read. Use "Load Photos from DB" or relax read rules for testing.');
-        } else {
-          bad('List-from-Storage error: '+(e.code||'')+' '+(e.message||e));
-        }
+        thumbsEl.innerHTML=''; emptyEl.style.display='';
+        if (String(e).includes('storage/unauthorized')) bad('Storage denied read.');
+        else bad('List-from-Storage error: '+(e.code||'')+' '+(e.message||e));
       }
     }
 
-    function renderThumbs(urls){
+    function renderThumbs(urls, scenarioId){
       thumbsEl.innerHTML = '';
-      if (!urls.length){ emptyEl.style.display = ''; return; }
-      emptyEl.style.display = 'none';
+      if (!urls.length){ emptyEl.style.display=''; return; }
+      emptyEl.style.display='none';
       urls.forEach(url=>{
         const a = document.createElement('a');
-        a.href = url; a.target = '_blank'; a.rel='noopener';
+        a.href = 'javascript:void(0)';
         a.innerHTML = `<img src="${url}" alt="photo">`;
+        a.addEventListener('click', ()=> openEditor(url, scenarioId));
         thumbsEl.appendChild(a);
       });
     }
 
-    // ===== open uploader tab =====
-    const UPLOADER_URL = 'https://fireopssim.com/geophoto/test-edit-uploader';
-    function openUploader(){
-      const id = $('#selectedId').value.trim();
-      if (!id){ alert('Select a scenario first.'); return; }
-      const url = new URL(UPLOADER_URL);
-      url.searchParams.set('scenarioId', id);
-      window.open(url.toString(), 'fireops_uploader');
-      ok('Opened uploader for '+id);
+    // ===== Editor (canvas-based) =====
+    const overlay = $('#editorOverlay');
+    const canvas  = $('#editCanvas');
+    const ctx = canvas.getContext('2d');
+    const cropRect = $('#cropRect');
+    let baseImg = new Image();
+    let history = [];
+    let drawMode = false, cropMode = false;
+    let isDrawing = false, lastX=0, lastY=0;
+    let flipH=false, flipV=false, rotation=0;
+    let currentScenarioId = null, currentUrl = null;
+
+    function pushHistory(){
+      try{ history.push(canvas.toDataURL('image/png')); if (history.length>15) history.shift(); }catch(_){}
+    }
+    function loadIntoCanvas(img){
+      const maxW = window.innerWidth - 80;
+      const maxH = window.innerHeight - 200;
+      const ratio = Math.min(maxW/img.naturalWidth, maxH/img.naturalHeight, 1);
+      const w = Math.round(img.naturalWidth * ratio);
+      const h = Math.round(img.naturalHeight * ratio);
+      canvas.width = w; canvas.height = h;
+      ctx.setTransform(1,0,0,1,0,0);
+      ctx.clearRect(0,0,w,h);
+      ctx.drawImage(img, 0, 0, w, h);
+      pushHistory();
+    }
+    function openEditor(url, scenarioId){
+      currentScenarioId = scenarioId || $('#selectedId').value || '';
+      currentUrl = url;
+      $('#editTitle').textContent = 'Editor';
+      $('#editInfo').textContent = (currentScenarioId ? ('scenarios/'+currentScenarioId) : '') + ' • ' + url.split('?')[0].split('/').pop();
+      overlay.style.display = 'block';
+      cropRect.style.display = 'none'; cropMode=false; drawMode=false;
+      rotation=0; flipH=false; flipV=false; history.length=0;
+      baseImg = new Image();
+      baseImg.crossOrigin = 'anonymous';
+      baseImg.onload = ()=> loadIntoCanvas(baseImg);
+      baseImg.onerror = ()=> { bad('Failed to load image'); alert('Failed to load image'); };
+      baseImg.src = url;
+    }
+    function closeEditor(){ overlay.style.display='none'; }
+
+    function redraw(){
+      const w = canvas.width, h = canvas.height;
+      const tmp = document.createElement('canvas'); tmp.width=w; tmp.height=h;
+      const tctx = tmp.getContext('2d'); tctx.drawImage(canvas,0,0);
+      ctx.setTransform(1,0,0,1,0,0); ctx.clearRect(0,0,w,h);
+      ctx.save();
+      // apply transforms around center
+      ctx.translate(w/2, h/2);
+      if (rotation) ctx.rotate(rotation*Math.PI/180);
+      ctx.scale(flipH?-1:1, flipV?-1:1);
+      ctx.drawImage(tmp, -w/2, -h/2);
+      ctx.restore();
+    }
+    function rotateCW(){ rotation = (rotation+90)%360; redraw(); pushHistory(); }
+    function flipHoriz(){ flipH = !flipH; redraw(); pushHistory(); }
+    function flipVert(){ flipV = !flipV; redraw(); pushHistory(); }
+
+    // Draw mode
+    canvas.addEventListener('pointerdown', e=>{
+      if (!drawMode) return;
+      isDrawing = true;
+      const r = canvas.getBoundingClientRect(); lastX = e.clientX - r.left; lastY = e.clientY - r.top;
+    });
+    canvas.addEventListener('pointermove', e=>{
+      if (!drawMode || !isDrawing) return;
+      const r = canvas.getBoundingClientRect(); const x = e.clientX - r.left; const y = e.clientY - r.top;
+      ctx.strokeStyle = '#2c5cff'; ctx.lineWidth = 3; ctx.lineCap='round';
+      ctx.beginPath(); ctx.moveTo(lastX,lastY); ctx.lineTo(x,y); ctx.stroke();
+      lastX=x; lastY=y;
+    });
+    window.addEventListener('pointerup', ()=>{
+      if (drawMode && isDrawing){ isDrawing=false; pushHistory(); }
+    });
+
+    // Crop mode
+    let cropStart=null, cropEnd=null;
+    function startCrop(){
+      drawMode=false; cropMode=true; cropRect.style.display='';
+      cropStart=cropEnd=null; cropRect.style.left='0'; cropRect.style.top='0'; cropRect.style.width='0'; cropRect.style.height='0';
+    }
+    $('#stageWrap').addEventListener('pointerdown', e=>{
+      if (!cropMode) return;
+      const r = canvas.getBoundingClientRect();
+      cropStart = { x: Math.max(0, Math.min(canvas.width,  (e.clientX - r.left) * (canvas.width / r.width))),
+                    y: Math.max(0, Math.min(canvas.height, (e.clientY - r.top)  * (canvas.height / r.height)))};
+      cropEnd = {...cropStart};
+      positionCropRect();
+    });
+    $('#stageWrap').addEventListener('pointermove', e=>{
+      if (!cropMode || !cropStart) return;
+      const r = canvas.getBoundingClientRect();
+      cropEnd = { x: Math.max(0, Math.min(canvas.width,  (e.clientX - r.left) * (canvas.width / r.width))),
+                  y: Math.max(0, Math.min(canvas.height, (e.clientY - r.top)  * (canvas.height / r.height)))};
+      positionCropRect();
+    });
+    window.addEventListener('pointerup', ()=>{
+      if (!cropMode || !cropStart) return;
+      // apply crop
+      const x = Math.min(cropStart.x, cropEnd.x), y = Math.min(cropStart.y, cropEnd.y);
+      const w = Math.max(10, Math.abs(cropEnd.x - cropStart.x)), h = Math.max(10, Math.abs(cropEnd.y - cropStart.y));
+      const tmp = document.createElement('canvas'); tmp.width=w; tmp.height=h;
+      tmp.getContext('2d').drawImage(canvas, x, y, w, h, 0, 0, w, h);
+      canvas.width=w; canvas.height=h;
+      ctx.setTransform(1,0,0,1,0,0); ctx.clearRect(0,0,w,h); ctx.drawImage(tmp,0,0);
+      cropMode=false; cropRect.style.display='none'; pushHistory();
+    });
+    function positionCropRect(){
+      const r = canvas.getBoundingClientRect();
+      const x = Math.min(cropStart.x, cropEnd.x), y = Math.min(cropStart.y, cropEnd.y);
+      const w = Math.abs(cropEnd.x - cropStart.x), h = Math.abs(cropEnd.y - cropStart.y);
+      const left = r.left + x * (r.width / canvas.width);
+      const top  = r.top  + y * (r.height/ canvas.height);
+      const ww   = w * (r.width / canvas.width);
+      const hh   = h * (r.height/ canvas.height);
+      Object.assign(cropRect.style,{left:left+'px',top:top+'px',width:ww+'px',height:hh+'px'});
     }
 
-    // ===== events =====
+    // Undo/Reset
+    function undo(){
+      if (history.length<=1) return;
+      history.pop();
+      const img = new Image();
+      img.onload = ()=>{ canvas.width=img.width; canvas.height=img.height; ctx.setTransform(1,0,0,1,0,0); ctx.clearRect(0,0,canvas.width,canvas.height); ctx.drawImage(img,0,0); };
+      img.src = history[history.length-1];
+    }
+    function reset(){
+      rotation=0; flipH=false; flipV=false; drawMode=false; cropMode=false; cropRect.style.display='none';
+      if (baseImg && baseImg.src){ loadIntoCanvas(baseImg); }
+    }
+
+    // Save edited -> Storage -> postMessage
+    function safeName(s){ return (s||'edit').replace(/[^\w.\-]+/g,'_'); }
+    function dataUrlToBlob(dataUrl){
+      const [head, b64] = dataUrl.split(',');
+      const mime = (head.match(/data:(.*);base64/)||[])[1] || 'image/jpeg';
+      const bin = atob(b64); const len = bin.length; const u8 = new Uint8Array(len);
+      for (let i=0;i<len;i++) u8[i]=bin.charCodeAt(i);
+      return new Blob([u8], {type:mime});
+    }
+    async function saveEdited(){
+      try{
+        await ensureAuth();
+        if (!currentScenarioId){ alert('No scenario selected'); return; }
+        const ts = Date.now();
+        const blob = await new Promise(res=> canvas.toBlob(res, 'image/jpeg', 0.92)) || dataUrlToBlob(canvas.toDataURL('image/jpeg',0.92));
+        const fname = `${ts}_${safeName((currentUrl||'').split('/').pop()||'edited')}`;
+        const path = `scenarios/${currentScenarioId}/edited/${fname}`;
+        const ref = storage.ref().child(path);
+        log('Uploading edited → '+path);
+        await ref.put(blob, { contentType:'image/jpeg' });
+        const url = await ref.getDownloadURL();
+        ok('Edited image saved.');
+
+        // Send to builder (DB writer) to record URL
+        const payload = { type:'fo-upload-complete', scenarioId: currentScenarioId, url, path, contentType:'image/jpeg' };
+        if (window.opener) window.opener.postMessage(payload, "*");
+        else if (window.parent) window.parent.postMessage(payload, "*");
+
+        alert('Saved as new image.');
+        closeEditor();
+        // optionally, prepend to current grid:
+        const a=document.createElement('a'); a.href='javascript:void(0)'; a.innerHTML=`<img src="${url}" alt="photo">`;
+        a.addEventListener('click', ()=> openEditor(url, currentScenarioId));
+        thumbsEl.prepend(a);
+      }catch(e){
+        bad('Save error: '+(e.message||e)); alert('Save failed:\n'+(e.message||e));
+      }
+    }
+
+    // Editor controls
+    $('#btnRotateCW').addEventListener('click', rotateCW);
+    $('#btnFlipH').addEventListener('click', flipHoriz);
+    $('#btnFlipV').addEventListener('click', flipVert);
+    $('#btnCrop').addEventListener('click', startCrop);
+    $('#btnDraw').addEventListener('click', ()=>{ drawMode=!drawMode; cropMode=false; cropRect.style.display='none'; });
+    $('#btnUndo').addEventListener('click', undo);
+    $('#btnReset').addEventListener('click', reset);
+    $('#btnSave').addEventListener('click', saveEdited);
+    $('#btnClose').addEventListener('click', closeEditor);
+
+    // Buttons
     $('#btnRefreshScenarios').addEventListener('click', listScenarios);
     $('#filter').addEventListener('input', listScenarios);
-    $('#btnLoadFromDB').addEventListener('click', ()=> { const id=$('#selectedId').value; if(id) loadPhotosFromDB(id); });
+    $('#btnLoadFromDB').addEventListener('click', ()=>{ const id=$('#selectedId').value; if(id) loadPhotosFromDB(id); });
     $('#btnListFromStorage').addEventListener('click', listFromStorage);
-    $('#btnOpenUploader').addEventListener('click', openUploader);
+    const UPLOADER_URL='https://fireopssim.com/geophoto/test-edit-uploader';
+    $('#btnOpenUploader').addEventListener('click', ()=>{
+      const id = $('#selectedId').value.trim(); if (!id){ alert('Select a scenario first.'); return; }
+      const url = new URL(UPLOADER_URL); url.searchParams.set('scenarioId', id);
+      window.open(url.toString(), 'fireops_uploader'); ok('Opened uploader for '+id);
+    });
 
-    // ===== boot =====
+    // Boot
     (async function boot(){
       try{ await ensureAuth(); }catch(e){ bad('Auth error: '+(e.message||e)); }
-      ok('Ready. Loading scenarios…');
-      await listScenarios();
+      ok('Ready. Loading scenarios…'); await listScenarios();
     })();
   })();
   </script>
