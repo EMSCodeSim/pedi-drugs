@@ -225,7 +225,7 @@
 
     // ===== thumbnails & editor =====
     let currentScenarioId = null;
-    let currentFolderList = []; // [{path, url}] url is generated lazily for thumbs
+    let currentFolderList = []; // [{path, url}] url optional cache
     let currentIndex = -1;
 
     function extractStoragePathFromURL(url){
@@ -252,14 +252,12 @@
         await ensureAuth();
         thumbsEl.innerHTML = '<div class="muted">Loading photos from DB…</div>';
 
-        // DB: photos written by uploader/editor
         let photos = (await rtdb.ref(`scenarios/${id}/photos`).once('value')).val();
         if (!photos) photos = (await rtdb.ref(`geophoto/scenarios/${id}/photos`).once('value')).val();
         const arr = photos ? Object.values(photos) : [];
 
         if (!arr.length){ thumbsEl.innerHTML=''; emptyEl.style.display=''; ok('No DB-recorded photos.'); return; }
 
-        // Prefer storagePath; fallback to URL-derived path
         arr.sort((a,b)=> (b.createdAt||0)-(a.createdAt||0));
         currentFolderList = arr.map(p=>{
           const path = p.storagePath || extractStoragePathFromURL(p.downloadURL || p.url || '') || null;
@@ -267,7 +265,6 @@
           return path ? { path, url } : null;
         }).filter(Boolean);
 
-        // Render thumbs by generating fresh URLs from path (if needed)
         await renderThumbsFromPaths(currentFolderList);
         ok(`Loaded ${currentFolderList.length} photo(s) from DB.`);
       }catch(e){
@@ -300,7 +297,6 @@
       if (!list.length){ emptyEl.style.display=''; return; }
       emptyEl.style.display='none';
 
-      // Build elements first for snappy UI, then hydrate src as URLs resolve
       const anchors = list.map((item, idx)=>{
         const a = document.createElement('a');
         a.href = 'javascript:void(0)';
@@ -311,7 +307,6 @@
         return a;
       });
 
-      // Resolve URLs (prefer from path)
       await Promise.all(list.map(async (item, i)=>{
         try{
           const ref = storage.ref().child(item.path);
@@ -321,7 +316,6 @@
           img.src = url;
           img.removeAttribute('aria-busy');
         }catch(e){
-          // fallback: if we had a cached URL, try it just for the thumb
           if (item.url){
             const img = anchors[i].querySelector('img');
             img.src = item.url;
@@ -363,17 +357,15 @@
 
     async function getBlobForItem(item){
       const MAX = 30 * 1024 * 1024; // 30 MB safety
-      // 1) Known path → getBytes
       if (item.path){
         const ref = storage.ref().child(item.path);
         const bytes = await ref.getBytes(MAX);
         return new Blob([bytes], { type: 'image/jpeg' });
       }
-      // 2) If only URL is known (legacy), resolve to ref → getBytes
       if (item.url){
         const ref = storage.refFromURL(item.url);
         const bytes = await ref.getBytes(MAX);
-        item.path = ref.fullPath; // cache for future saves
+        item.path = ref.fullPath;
         return new Blob([bytes], { type: 'image/jpeg' });
       }
       throw new Error('No path/URL available for this item.');
@@ -445,7 +437,6 @@
     $('#btnFlipV').addEventListener('click', ()=>{ flipV=!flipV; redraw(); pushHistory(); });
 
     // Draw mode
-    let isDrawing=false, lastX=0, lastY=0;
     $('#btnDraw').addEventListener('click', ()=>{ drawMode=!drawMode; cropMode=false; cropRect.style.display='none'; });
     canvas.addEventListener('pointerdown', e=>{
       if (!drawMode) return;
@@ -527,7 +518,7 @@
         const url = await ref.getDownloadURL();
         ok('Edited image saved.');
 
-        // PostMessage back to builder (centralized DB writes)
+        // Post back to parent/builder so it can update DB
         const payload = { type:'fo-upload-complete', scenarioId: sid, storagePath: path, downloadURL: url, contentType:'image/jpeg', createdAt: ts };
         if (window.opener) window.opener.postMessage(payload, "*");
         else if (window.parent) window.parent.postMessage(payload, "*");
