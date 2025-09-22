@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1"/>
-<title>FireOpsSim — Photo Viewer & Editor (Same-Folder)</title>
+<title>FireOpsSim — Photo Viewer & Editor (Same-Folder, SDK Bytes)</title>
 <style>
   :root{--bg:#0b1220;--card:#111a2e;--muted:#b8c4e2;--line:#1b2b50;--ink:#e8eefc;--accent:#2c5cff;--ok:#7CFF7C;--bad:#FF7C7C}
   *{box-sizing:border-box}
@@ -158,7 +158,7 @@
       if (!stAuth.currentUser){ const b=await stAuth.signInAnonymously(); ok('Storage auth OK (uid='+(b.user?.uid||'unknown')+')'); }
     }
 
-    // ===== scenario list (with geophoto fallback) =====
+    // ===== scenarios (with geophoto fallback) =====
     async function fetchScenarios(){
       let snap = await rtdb.ref('scenarios').limitToLast(200).once('value');
       let val = snap.val() || {};
@@ -215,16 +215,14 @@
 
     // ===== DB-first photo load =====
     let currentScenarioId = null;
-    // Keeps the current folder's photos (url + path) to allow Prev/Next navigation
     let currentFolderList = []; // [{url, path}]
     let currentIndex = -1;
 
     function extractStoragePathFromURL(url){
-      // Works for Firebase download URLs like .../o/scenarios%2F{sid}%2Ffile?alt=media&token=...
       try{
         const m = /\/o\/([^?]+)/.exec(url);
         if (!m) return null;
-        return decodeURIComponent(m[1]); // e.g. "scenarios/ID/filename.jpg"
+        return decodeURIComponent(m[1]); // "scenarios/ID/filename.jpg"
       }catch(_){ return null; }
     }
 
@@ -248,7 +246,6 @@
         const arr = photos ? Object.values(photos) : [];
         if (!arr.length){ thumbsEl.innerHTML=''; emptyEl.style.display=''; ok('No DB-recorded photos.'); return; }
         arr.sort((a,b)=> (b.createdAt||0)-(a.createdAt||0));
-        // Build currentFolderList from url + storagePath (if provided)
         currentFolderList = arr.map(p=>{
           let path = p.storagePath || extractStoragePathFromURL(p.url) || null;
           return { url: p.url, path };
@@ -294,7 +291,7 @@
       });
     }
 
-    // ===== Editor with blob loading + Prev/Next and same-folder save =====
+    // ===== Editor with SDK getBytes (CORS-proof) + Prev/Next & same-folder save =====
     const overlay = $('#editorOverlay');
     const canvas  = $('#editCanvas');
     const ctx = canvas.getContext('2d');
@@ -318,6 +315,43 @@
       pushHistory();
     }
 
+    async function getBlobForItem(item){
+      // Try Storage SDK getBytes first (best for CORS). Requires a path.
+      const MAX = 30 * 1024 * 1024; // 30MB safety ceiling
+      if (item.path){
+        try{
+          const ref = storage.ref().child(item.path);
+          const bytes = await ref.getBytes(MAX);
+          return new Blob([bytes], { type: 'image/jpeg' });
+        }catch(e){
+          // fallthrough to URL-based methods
+          console.warn('getBytes failed, will try URL fetch', e);
+        }
+      }else{
+        // Attempt to reconstruct path from URL
+        const derived = extractStoragePathFromURL(item.url);
+        if (derived){
+          try{
+            const ref = storage.ref().child(derived);
+            const bytes = await ref.getBytes(MAX);
+            item.path = derived; // cache it
+            return new Blob([bytes], { type: 'image/jpeg' });
+          }catch(e){
+            console.warn('getBytes via derived path failed, trying fetch', e);
+          }
+        }
+      }
+      // Fallback: try a CORS fetch for the public download URL
+      try{
+        const r = await fetch(item.url, { mode:'cors', credentials:'omit', cache:'no-cache' });
+        if (!r.ok) throw new Error('HTTP '+r.status);
+        return await r.blob();
+      }catch(e){
+        // Last resort: throw so caller can open in new tab
+        throw e;
+      }
+    }
+
     async function openEditorByIndex(idx){
       if (!currentFolderList.length) return;
       currentIndex = Math.max(0, Math.min(currentFolderList.length-1, idx));
@@ -332,26 +366,26 @@
     }
 
     async function openEditorItem(item){
-      const { url, path } = item;
       try{
-        const blob = await fetch(url, { mode:'cors', credentials:'omit' }).then(r=>{ if(!r.ok) throw new Error('HTTP '+r.status); return r.blob(); });
+        const blob = await getBlobForItem(item);
         if (currentBlobURL) URL.revokeObjectURL(currentBlobURL);
         currentBlobURL = URL.createObjectURL(blob);
 
         const img = new Image();
         img.onload = ()=>{
-          const fileName = (path ? path.split('/').pop() : (url.split('?')[0].split('/').pop() || 'image'));
+          const fileName = (item.path ? item.path.split('/').pop() : (item.url.split('?')[0].split('/').pop() || 'image'));
           $('#editTitle').textContent = 'Editor';
-          $('#editInfo').textContent  = (currentScenarioId ? ('scenarios/'+currentScenarioId) : '') + (path?(' • '+path):' • '+fileName);
+          $('#editInfo').textContent  = (currentScenarioId ? ('scenarios/'+currentScenarioId) : '') + (item.path?(' • '+item.path):' • '+fileName);
           history.length = 0; drawMode=false; cropMode=false; flipH=false; flipV=false; rotation=0; cropRect.style.display='none';
           loadIntoCanvas(img);
           overlay.style.display = 'block';
         };
-        img.onerror = ()=>{ window.open(url, '_blank', 'noopener'); };
+        img.onerror = ()=>{ window.open(item.url, '_blank', 'noopener'); };
         img.src = currentBlobURL;
       }catch(e){
         bad('Open editor failed: '+(e.message||e));
-        window.open(url, '_blank', 'noopener');
+        // Fallback so user still sees the image
+        window.open(item.url, '_blank', 'noopener');
       }
     }
 
@@ -455,12 +489,10 @@
         const url = await ref.getDownloadURL();
         ok('Edited image saved.');
 
-        // Notify builder to record in DB (keeps DB writes centralized)
         const payload = { type:'fo-upload-complete', scenarioId: sid, url, path, contentType:'image/jpeg' };
         if (window.opener) window.opener.postMessage(payload, "*");
         else if (window.parent) window.parent.postMessage(payload, "*");
 
-        // update local list & UI
         currentFolderList.splice(currentIndex+1, 0, { url, path });
         const a=document.createElement('a'); a.href='javascript:void(0)'; a.innerHTML=`<img src="${url}" alt="photo">`;
         a.addEventListener('click', ()=> openEditorByIndex(currentIndex+1)); thumbsEl.insertBefore(a, thumbsEl.children[currentIndex+1]||null);
