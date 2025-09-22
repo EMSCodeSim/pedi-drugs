@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1"/>
-<title>FireOpsSim — Photo Viewer & Editor (No New Window)</title>
+<title>FireOpsSim — Photo Viewer & Editor (Path-first, No Popups)</title>
 <style>
   :root{--bg:#0b1220;--card:#111a2e;--muted:#b8c4e2;--line:#1b2b50;--ink:#e8eefc;--accent:#2c5cff;--ok:#7CFF7C;--bad:#FF7C7C}
   *{box-sizing:border-box}
@@ -92,7 +92,7 @@
   </div>
 
   <!-- EDITOR MODAL -->
-  <div id="editorOverlay">
+  <div id="editorOverlay" aria-hidden="true">
     <div id="editor">
       <div id="editorHeader">
         <div class="left">
@@ -122,7 +122,7 @@
         <div id="stageWrap">
           <canvas id="editCanvas"></canvas>
           <div id="cropRect"></div>
-          <div id="busy" class="spinner"></div>
+          <div id="busy" class="spinner" aria-hidden="true"></div>
         </div>
       </div>
     </div>
@@ -147,7 +147,7 @@
     const fmtDate = ts=>{try{return new Date(ts).toLocaleString();}catch(_){return String(ts||'');}};
     window.addEventListener('error', e => bad('Script error: '+(e.message||e.error||'unknown')));
 
-    // ===== Firebase =====
+    // ===== Firebase (DB app + Storage app) =====
     const dbCfg = { apiKey:"AIzaSyDM6DpRSeZueVKRpbyJyDmhf8WY66KyCDk", authDomain:"dailyquiz-d5279.firebaseapp.com", databaseURL:"https://dailyquiz-d5279-default-rtdb.firebaseio.com", projectId:"dailyquiz-d5279", storageBucket:"dailyquiz-d5279.appspot.com", appId:"1:94577748034:web:c032d3a1d72db1313de5db" };
     const stCfg = { apiKey:"AIzaSyBzwc75u8pG73OKcHN8ti2ADbucjKMHme8", authDomain:"fireopssim.firebaseapp.com", projectId:"fireopssim", storageBucket:"fireopssim.appspot.com", appId:"1:396140888722:web:demo" };
 
@@ -163,7 +163,7 @@
       if (!stAuth.currentUser){ const b=await stAuth.signInAnonymously(); ok('Storage auth OK (uid='+(b.user?.uid||'unknown')+')'); }
     }
 
-    // ===== scenarios (with /geophoto fallback) =====
+    // ===== scenario listing (with geophoto fallback) =====
     async function fetchScenarios(){
       let snap = await rtdb.ref('scenarios').limitToLast(200).once('value');
       let val = snap.val() || {};
@@ -223,16 +223,16 @@
       }
     }
 
-    // ===== DB-first photo load =====
+    // ===== thumbnails & editor =====
     let currentScenarioId = null;
-    let currentFolderList = []; // [{url, path}]
+    let currentFolderList = []; // [{path, url}] url is generated lazily for thumbs
     let currentIndex = -1;
 
     function extractStoragePathFromURL(url){
       try{
         const m = /\/o\/([^?]+)/.exec(url);
         if (!m) return null;
-        return decodeURIComponent(m[1]); // "scenarios/ID/file.jpg"
+        return decodeURIComponent(m[1]); // "scenarios/<sid>/file.jpg"
       }catch(_){ return null; }
     }
 
@@ -251,17 +251,25 @@
       try{
         await ensureAuth();
         thumbsEl.innerHTML = '<div class="muted">Loading photos from DB…</div>';
+
+        // DB: photos written by uploader/editor
         let photos = (await rtdb.ref(`scenarios/${id}/photos`).once('value')).val();
         if (!photos) photos = (await rtdb.ref(`geophoto/scenarios/${id}/photos`).once('value')).val();
         const arr = photos ? Object.values(photos) : [];
+
         if (!arr.length){ thumbsEl.innerHTML=''; emptyEl.style.display=''; ok('No DB-recorded photos.'); return; }
+
+        // Prefer storagePath; fallback to URL-derived path
         arr.sort((a,b)=> (b.createdAt||0)-(a.createdAt||0));
         currentFolderList = arr.map(p=>{
-          const path = p.storagePath || extractStoragePathFromURL(p.url) || null;
-          return { url: p.url, path };
-        }).filter(x=>x.url);
-        renderThumbs(currentFolderList);
-        ok(`Loaded ${arr.length} photo(s) from DB.`);
+          const path = p.storagePath || extractStoragePathFromURL(p.downloadURL || p.url || '') || null;
+          const url  = p.downloadURL || p.url || null; // optional cache
+          return path ? { path, url } : null;
+        }).filter(Boolean);
+
+        // Render thumbs by generating fresh URLs from path (if needed)
+        await renderThumbsFromPaths(currentFolderList);
+        ok(`Loaded ${currentFolderList.length} photo(s) from DB.`);
       }catch(e){
         thumbsEl.innerHTML=''; emptyEl.style.display=''; bad('Load-from-DB error: '+(e.message||e));
       }
@@ -277,9 +285,8 @@
         const { items } = await folderRef.listAll();
         if (!items.length){ thumbsEl.innerHTML=''; emptyEl.style.display=''; ok('No objects in Storage folder.'); return; }
         items.sort((a,b)=> (b.name||'').localeCompare(a.name||''));
-        const urls = await Promise.all(items.map(it => it.getDownloadURL().catch(()=>null)));
-        currentFolderList = items.map((it,i)=>({ url: urls[i], path: it.fullPath })).filter(x=>x.url);
-        renderThumbs(currentFolderList);
+        currentFolderList = items.map(it => ({ path: it.fullPath, url: null }));
+        await renderThumbsFromPaths(currentFolderList);
         ok(`Listed ${items.length} photo(s) from Storage.`);
       }catch(e){
         thumbsEl.innerHTML=''; emptyEl.style.display='';
@@ -288,20 +295,47 @@
       }
     }
 
-    function renderThumbs(list){
+    async function renderThumbsFromPaths(list){
       thumbsEl.innerHTML = '';
       if (!list.length){ emptyEl.style.display=''; return; }
       emptyEl.style.display='none';
-      list.forEach((item, idx)=>{
+
+      // Build elements first for snappy UI, then hydrate src as URLs resolve
+      const anchors = list.map((item, idx)=>{
         const a = document.createElement('a');
         a.href = 'javascript:void(0)';
-        a.innerHTML = `<img src="${item.url}" alt="photo">`;
+        a.dataset.idx = String(idx);
+        a.innerHTML = `<img alt="photo" aria-busy="true">`;
         a.addEventListener('click', ()=> openEditorByIndex(idx));
         thumbsEl.appendChild(a);
+        return a;
       });
+
+      // Resolve URLs (prefer from path)
+      await Promise.all(list.map(async (item, i)=>{
+        try{
+          const ref = storage.ref().child(item.path);
+          const url = await ref.getDownloadURL();
+          item.url = url;
+          const img = anchors[i].querySelector('img');
+          img.src = url;
+          img.removeAttribute('aria-busy');
+        }catch(e){
+          // fallback: if we had a cached URL, try it just for the thumb
+          if (item.url){
+            const img = anchors[i].querySelector('img');
+            img.src = item.url;
+            img.removeAttribute('aria-busy');
+          }else{
+            anchors[i].style.opacity = 0.5;
+            anchors[i].title = 'Unable to preview';
+          }
+          console.warn('Thumb URL error for', item.path, e);
+        }
+      }));
     }
 
-    // ===== Editor (CORS-proof via getBytes/refFromURL) — NO window.open fallbacks =====
+    // ===== Editor (bytes via getBytes) — NO popups =====
     const overlay = $('#editorOverlay');
     const canvas  = $('#editCanvas');
     const ctx = canvas.getContext('2d');
@@ -328,27 +362,21 @@
     }
 
     async function getBlobForItem(item){
-      const MAX = 30 * 1024 * 1024; // 30 MB
+      const MAX = 30 * 1024 * 1024; // 30 MB safety
       // 1) Known path → getBytes
       if (item.path){
-        try{
-          const ref = storage.ref().child(item.path);
-          const bytes = await ref.getBytes(MAX);
-          return new Blob([bytes], { type: 'image/jpeg' });
-        }catch(e){
-          console.warn('getBytes(path) failed, trying refFromURL', e);
-        }
+        const ref = storage.ref().child(item.path);
+        const bytes = await ref.getBytes(MAX);
+        return new Blob([bytes], { type: 'image/jpeg' });
       }
-      // 2) Resolve download URL → ref → getBytes
-      try{
+      // 2) If only URL is known (legacy), resolve to ref → getBytes
+      if (item.url){
         const ref = storage.refFromURL(item.url);
         const bytes = await ref.getBytes(MAX);
-        item.path = ref.fullPath; // cache the path
+        item.path = ref.fullPath; // cache for future saves
         return new Blob([bytes], { type: 'image/jpeg' });
-      }catch(e){
-        console.warn('getBytes(refFromURL) failed', e);
-        throw e; // <-- stop here; do NOT fetch; do NOT open new window
       }
+      throw new Error('No path/URL available for this item.');
     }
 
     async function openEditorByIndex(idx){
@@ -373,12 +401,13 @@
 
         const img = new Image();
         img.onload = ()=>{
-          const fileName = (item.path ? item.path.split('/').pop() : (item.url.split('?')[0].split('/').pop() || 'image'));
+          const fileName = (item.path ? item.path.split('/').pop() : (item.url?.split('?')[0].split('/').pop() || 'image'));
           $('#editTitle').textContent = 'Editor';
           $('#editInfo').textContent  = (currentScenarioId ? ('scenarios/'+currentScenarioId) : '') + (item.path?(' • '+item.path):' • '+fileName);
           history.length = 0; drawMode=false; cropMode=false; flipH=false; flipV=false; rotation=0; cropRect.style.display='none';
           loadIntoCanvas(img);
           overlay.style.display = 'block';
+          overlay.setAttribute('aria-hidden','false');
           showBusy(false);
         };
         img.onerror = ()=>{
@@ -389,13 +418,14 @@
         img.src = currentBlobURL;
       }catch(e){
         showBusy(false);
-        bad('Open editor failed (bytes): '+(e.message||e));
-        alert('Could not open this image in the editor.\nCheck storage rules or the URL/path for this photo.');
+        bad('Open editor failed: '+(e.message||e));
+        alert('Could not open this image in the editor.\nCheck storage rules and the recorded storagePath.');
       }
     }
 
     function closeEditor(){
       overlay.style.display='none';
+      overlay.setAttribute('aria-hidden','true');
       if (currentBlobURL){ URL.revokeObjectURL(currentBlobURL); currentBlobURL=null; }
     }
 
@@ -415,6 +445,8 @@
     $('#btnFlipV').addEventListener('click', ()=>{ flipV=!flipV; redraw(); pushHistory(); });
 
     // Draw mode
+    let isDrawing=false, lastX=0, lastY=0;
+    $('#btnDraw').addEventListener('click', ()=>{ drawMode=!drawMode; cropMode=false; cropRect.style.display='none'; });
     canvas.addEventListener('pointerdown', e=>{
       if (!drawMode) return;
       isDrawing = true;
@@ -432,6 +464,7 @@
     // Crop mode
     const cropRectEl = $('#cropRect'); let cropStart=null, cropEnd=null;
     function startCrop(){ drawMode=false; cropMode=true; cropRectEl.style.display=''; cropStart=cropEnd=null; Object.assign(cropRectEl.style,{left:'0',top:'0',width:'0',height:'0'}); }
+    $('#btnCrop').addEventListener('click', startCrop);
     $('#stageWrap').addEventListener('pointerdown', e=>{
       if (!cropMode) return;
       const r = canvas.getBoundingClientRect();
@@ -467,9 +500,10 @@
     }
 
     function undo(){ if (history.length<=1) return; history.pop(); const img = new Image(); img.onload = ()=>{ canvas.width=img.width; canvas.height=img.height; ctx.setTransform(1,0,0,1,0,0); ctx.clearRect(0,0,canvas.width,canvas.height); ctx.drawImage(img,0,0); }; img.src = history[history.length-1]; }
-    function reset(){ drawMode=false; cropMode=false; cropRectEl.style.display='none'; if (history.length){ const first=new Image(); first.onload=()=>{ canvas.width=first.width; canvas.height=first.height; ctx.setTransform(1,0,0,1,0,0); ctx.clearRect(0,0,canvas.width,canvas.height); ctx.drawImage(first,0,0); pushHistory(); }; first.src = history[0]; } }
+    function reset(){ drawMode=false; cropMode=false; cropRect.style.display='none'; if (history.length){ const first=new Image(); first.onload=()=>{ canvas.width=first.width; canvas.height=first.height; ctx.setTransform(1,0,0,1,0,0); ctx.clearRect(0,0,canvas.width,canvas.height); ctx.drawImage(first,0,0); pushHistory(); }; first.src = history[0]; } }
+    $('#btnUndo').addEventListener('click', undo);
+    $('#btnReset').addEventListener('click', reset);
 
-    function safeName(s){ return (s||'edit').replace(/[^\w.\-]+/g,'_'); }
     function dataUrlToBlob(dataUrl){ const [head,b64]=dataUrl.split(','); const mime=(head.match(/data:(.*);base64/)||[])[1]||'image/jpeg'; const bin=atob(b64); const u8=new Uint8Array(bin.length); for(let i=0;i<bin.length;i++)u8[i]=bin.charCodeAt(i); return new Blob([u8],{type:mime}); }
 
     async function saveEdited(){
@@ -493,11 +527,13 @@
         const url = await ref.getDownloadURL();
         ok('Edited image saved.');
 
-        const payload = { type:'fo-upload-complete', scenarioId: sid, url, path, contentType:'image/jpeg' };
+        // PostMessage back to builder (centralized DB writes)
+        const payload = { type:'fo-upload-complete', scenarioId: sid, storagePath: path, downloadURL: url, contentType:'image/jpeg', createdAt: ts };
         if (window.opener) window.opener.postMessage(payload, "*");
         else if (window.parent) window.parent.postMessage(payload, "*");
 
-        currentFolderList.splice(currentIndex+1, 0, { url, path });
+        // Update local list & UI
+        currentFolderList.splice(currentIndex+1, 0, { path, url });
         const a=document.createElement('a'); a.href='javascript:void(0)'; a.innerHTML=`<img src="${url}" alt="photo">`;
         a.addEventListener('click', ()=> openEditorByIndex(currentIndex+1)); thumbsEl.insertBefore(a, thumbsEl.children[currentIndex+1]||null);
         alert('Saved as new image.');
@@ -505,15 +541,6 @@
         bad('Save error: '+(e.message||e)); alert('Save failed:\n'+(e.message||e));
       }
     }
-
-    // Editor controls
-    $('#btnRotateCW').addEventListener('click', ()=>{ rotation=(rotation+90)%360; redraw(); pushHistory(); });
-    $('#btnFlipH').addEventListener('click', ()=>{ flipH=!flipH; redraw(); pushHistory(); });
-    $('#btnFlipV').addEventListener('click', ()=>{ flipV=!flipV; redraw(); pushHistory(); });
-    $('#btnCrop').addEventListener('click', ()=>{ drawMode=false; startCrop(); });
-    $('#btnDraw').addEventListener('click', ()=>{ drawMode=!drawMode; cropMode=false; cropRect.style.display='none'; });
-    $('#btnUndo').addEventListener('click', undo);
-    $('#btnReset').addEventListener('click', reset);
     $('#btnSave').addEventListener('click', saveEdited);
     $('#btnClose').addEventListener('click', ()=>{ closeEditor(); });
 
@@ -521,7 +548,7 @@
     $('#btnPrev').addEventListener('click', async ()=>{ if (currentIndex>0){ await openEditorByIndex(currentIndex-1); } });
     $('#btnNext').addEventListener('click', async ()=>{ if (currentIndex<currentFolderList.length-1){ await openEditorByIndex(currentIndex+1); } });
 
-    // Buttons
+    // Top buttons
     $('#btnRefreshScenarios').addEventListener('click', listScenarios);
     $('#filter').addEventListener('input', listScenarios);
     $('#btnLoadFromDB').addEventListener('click', ()=>{ const id=$('#selectedId').value; if(id) loadPhotosFromDB(id); });
