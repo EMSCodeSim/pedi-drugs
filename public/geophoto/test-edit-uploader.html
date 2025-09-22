@@ -42,7 +42,7 @@
       <button id="btnUpload" class="primary" type="button">Upload Photo</button>
       <button id="btnRefresh" type="button">Refresh Gallery</button>
     </div>
-    <div class="muted">Uploads to Cloud Storage only. This page will send URL + GPS back to Scenario Builder.</div>
+    <div class="muted">Uploads to Cloud Storage only. This page will send <strong>Storage path</strong> + GPS back to Scenario Builder (no download URL).</div>
   </div>
 
   <div id="preview" class="card" style="display:none">
@@ -133,7 +133,7 @@
         // === Older upload pattern (compat) ===
         const ref = storage.ref().child(path);
         await ref.put(f, { contentType: f.type || 'image/jpeg' });
-        const url = await ref.getDownloadURL();
+        const url = await ref.getDownloadURL(); // used locally for preview/gallery only
         // =====================================
 
         ok('Upload OK');
@@ -144,19 +144,19 @@
         let address = null;
         if (gps && gps.lat && gps.lng){ try{ address = await reverseGeocode(gps.lat, gps.lng); }catch(_){} }
 
+        // IMPORTANT: send only Storage location (no download URL)
         const payload = {
           type: 'fo-upload-complete',
           scenarioId: sid,
-          url,
-          path: ref.fullPath,
+          storagePath: ref.fullPath,
           gsUri: `gs://fireopssim.appspot.com/${ref.fullPath}`,
           contentType: f.type || 'image/jpeg',
-          gps, address
+          gps, address,
+          createdAt: Date.now()
         };
-        // Post to opener OR parent (builder opened us in new tab)
         if (window.opener) window.opener.postMessage(payload, "*");
         else if (window.parent) window.parent.postMessage(payload, "*");
-        ok('Sent photo URL + GPS back to Scenario Builder.');
+        ok('Sent storage path + GPS back to Scenario Builder.');
       }catch(e){
         bad('Upload error: '+(e.code?e.code+' ':'')+(e.message||e));
         if (String(e).includes('storage/unauthorized')) bad('Storage rules blocked the upload.');
