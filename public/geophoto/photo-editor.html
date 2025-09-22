@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1"/>
-<title>FireOpsSim — Photo Viewer & Editor (CORS-proof)</title>
+<title>FireOpsSim — Photo Viewer & Editor (No New Window)</title>
 <style>
   :root{--bg:#0b1220;--card:#111a2e;--muted:#b8c4e2;--line:#1b2b50;--ink:#e8eefc;--accent:#2c5cff;--ok:#7CFF7C;--bad:#FF7C7C}
   *{box-sizing:border-box}
@@ -45,6 +45,9 @@
   canvas#editCanvas{max-width:100%;max-height:100%;border:1px solid #1b2b50;border-radius:8px;background:#000}
   #cropRect{position:absolute;border:2px dashed #2c5cff;background:rgba(44,92,255,.12);display:none;pointer-events:none}
   .navBtns{display:flex;gap:6px}
+  .spinner{display:none;position:absolute;inset:0;align-items:center;justify-content:center;background:rgba(10,15,30,.6)}
+  .spinner::after{content:"";width:36px;height:36px;border-radius:50%;border:4px solid #3a4b80;border-top-color:#2c5cff;animation:spin 1s linear infinite}
+  @keyframes spin{to{transform:rotate(360deg)}}
   @media (max-width:560px){ .row{flex-direction:column;align-items:stretch} input,select,button{width:100%} #editorHeader{flex-direction:column;align-items:stretch;gap:8px} .navBtns button{flex:1} }
 </style>
 </head>
@@ -119,6 +122,7 @@
         <div id="stageWrap">
           <canvas id="editCanvas"></canvas>
           <div id="cropRect"></div>
+          <div id="busy" class="spinner"></div>
         </div>
       </div>
     </div>
@@ -141,8 +145,6 @@
     const ok = m=>log(m,'#7CFF7C'); const bad = m=>log(m,'#FF7C7C');
     const esc = s=>String(s||'').replace(/[&<>"']/g, m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
     const fmtDate = ts=>{try{return new Date(ts).toLocaleString();}catch(_){return String(ts||'');}};
-
-    // Surface any JS error to the Status panel
     window.addEventListener('error', e => bad('Script error: '+(e.message||e.error||'unknown')));
 
     // ===== Firebase =====
@@ -299,16 +301,18 @@
       });
     }
 
-    // ===== Editor (CORS-proof via getBytes / refFromURL) =====
+    // ===== Editor (CORS-proof via getBytes/refFromURL) — NO window.open fallbacks =====
     const overlay = $('#editorOverlay');
     const canvas  = $('#editCanvas');
     const ctx = canvas.getContext('2d');
     const cropRect = $('#cropRect');
+    const busy = $('#busy');
     let history = [];
     let drawMode=false, cropMode=false, isDrawing=false, lastX=0, lastY=0;
     let flipH=false, flipV=false, rotation=0;
     let currentBlobURL=null;
 
+    function showBusy(on){ busy.style.display = on ? 'flex' : 'none'; }
     function pushHistory(){ try{ history.push(canvas.toDataURL('image/png')); if (history.length>20) history.shift(); }catch(_){ } }
     function loadIntoCanvas(img){
       const maxW = window.innerWidth - 80;
@@ -342,12 +346,9 @@
         item.path = ref.fullPath; // cache the path
         return new Blob([bytes], { type: 'image/jpeg' });
       }catch(e){
-        console.warn('getBytes(refFromURL) failed, falling back to fetch', e);
+        console.warn('getBytes(refFromURL) failed', e);
+        throw e; // <-- stop here; do NOT fetch; do NOT open new window
       }
-      // 3) Fallback fetch (may be CORS-blocked)
-      const r = await fetch(item.url, { mode:'cors', credentials:'omit', cache:'no-cache' });
-      if (!r.ok) throw new Error('HTTP '+r.status);
-      return await r.blob();
     }
 
     async function openEditorByIndex(idx){
@@ -364,6 +365,7 @@
     }
 
     async function openEditorItem(item){
+      showBusy(true);
       try{
         const blob = await getBlobForItem(item);
         if (currentBlobURL) URL.revokeObjectURL(currentBlobURL);
@@ -377,12 +379,18 @@
           history.length = 0; drawMode=false; cropMode=false; flipH=false; flipV=false; rotation=0; cropRect.style.display='none';
           loadIntoCanvas(img);
           overlay.style.display = 'block';
+          showBusy(false);
         };
-        img.onerror = ()=>{ window.open(item.url, '_blank', 'noopener'); };
+        img.onerror = ()=>{
+          showBusy(false);
+          bad('Failed to render image in editor.');
+          alert('Could not render this image in the editor.');
+        };
         img.src = currentBlobURL;
       }catch(e){
-        bad('Open editor failed: '+(e.message||e));
-        window.open(item.url, '_blank', 'noopener');
+        showBusy(false);
+        bad('Open editor failed (bytes): '+(e.message||e));
+        alert('Could not open this image in the editor.\nCheck storage rules or the URL/path for this photo.');
       }
     }
 
@@ -489,7 +497,6 @@
         if (window.opener) window.opener.postMessage(payload, "*");
         else if (window.parent) window.parent.postMessage(payload, "*");
 
-        // update UI list
         currentFolderList.splice(currentIndex+1, 0, { url, path });
         const a=document.createElement('a'); a.href='javascript:void(0)'; a.innerHTML=`<img src="${url}" alt="photo">`;
         a.addEventListener('click', ()=> openEditorByIndex(currentIndex+1)); thumbsEl.insertBefore(a, thumbsEl.children[currentIndex+1]||null);
