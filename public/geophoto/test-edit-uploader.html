@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
-<title>FireOpsSim — Uploader (Storage-only)</title>
+<title>FireOpsSim — Uploader (Storage-only, Path Postback)</title>
 <style>
   :root{--bg:#0b1220;--card:#111a2e;--muted:#b8c4e2;--line:#1b2b50;--ink:#e8eefc;--accent:#2c5cff;--ok:#7CFF7C;--bad:#FF7C7C}
   *{box-sizing:border-box}
@@ -42,11 +42,11 @@
       <button id="btnUpload" class="primary" type="button">Upload Photo</button>
       <button id="btnRefresh" type="button">Refresh Gallery</button>
     </div>
-    <div class="muted">Uploads to Cloud Storage only. This page will send URL + GPS back to Scenario Builder.</div>
+    <div class="muted">Uploads to Cloud Storage only. This page will send <em>storage path</em> + GPS back to Scenario Builder (no download URL).</div>
   </div>
 
   <div id="preview" class="card" style="display:none">
-    <strong>Uploaded Preview</strong>
+    <strong>Selected Preview</strong>
     <div id="previewImg"></div>
   </div>
 
@@ -117,6 +117,7 @@
       return null;
     }
 
+    // ---------- Upload (now posts ONLY path + gsUri back) ----------
     async function upload(){
       try{
         await ensureAuth();
@@ -128,16 +129,14 @@
         if (f.size > 25*1024*1024){ alert('Max 25 MB'); return; }
 
         const path = `${basePath(sid)}/${Date.now()}_${safeName(f.name)}`;
-        log('Uploading → '+path);
-
-        // === Older upload pattern (compat) ===
         const ref = storage.ref().child(path);
-        await ref.put(f, { contentType: f.type || 'image/jpeg' });
-        const url = await ref.getDownloadURL();
-        // =====================================
 
-        ok('Upload OK');
-        showPreview(url);
+        log('Uploading → '+path);
+        await ref.put(f, { contentType: f.type || 'image/jpeg' });
+        ok('Upload OK to ' + path);
+
+        // Immediately refresh the gallery (uses getDownloadURL internally)
+        refresh();
 
         // GPS + address (best effort), then message back to builder
         const gps = await getGPS();
@@ -147,16 +146,18 @@
         const payload = {
           type: 'fo-upload-complete',
           scenarioId: sid,
-          url,
-          path: ref.fullPath,
+          // IMPORTANT: post only path (no download URL)
+          storagePath: ref.fullPath,
           gsUri: `gs://fireopssim.appspot.com/${ref.fullPath}`,
           contentType: f.type || 'image/jpeg',
+          createdAt: Date.now(),
           gps, address
         };
-        // Post to opener OR parent (builder opened us in new tab)
+        // Do NOT include a URL; keep compatibility by also omitting 'path' alias:
+        // (Scenario Builder already reads storagePath)
         if (window.opener) window.opener.postMessage(payload, "*");
         else if (window.parent) window.parent.postMessage(payload, "*");
-        ok('Sent photo URL + GPS back to Scenario Builder.');
+        ok('Sent storagePath + GPS back to Scenario Builder.');
       }catch(e){
         bad('Upload error: '+(e.code?e.code+' ':'')+(e.message||e));
         if (String(e).includes('storage/unauthorized')) bad('Storage rules blocked the upload.');
@@ -164,15 +165,10 @@
       }
     }
 
-    function showPreview(url){
-      $('#preview').style.display='';
-      $('#previewImg').innerHTML = `<a href="${url}" target="_blank" rel="noopener"><img src="${url}" alt="preview"></a>`;
-      const a = document.createElement('a');
-      a.href = url; a.target = '_blank'; a.rel='noopener';
-      a.innerHTML = `<img src="${url}" alt="thumb">`;
-      const wrap = $('#thumbs');
-      if (wrap.firstElementChild && wrap.firstElementChild.classList.contains('muted')) wrap.innerHTML='';
-      wrap.prepend(a);
+    function showLocalPreview(file){
+      const r = new FileReader();
+      r.onload = (e)=>{ $('#preview').style.display=''; $('#previewImg').innerHTML = `<img src="${e.target.result}" alt="preview">`; };
+      r.readAsDataURL(file);
     }
 
     async function refresh(){
@@ -205,10 +201,7 @@
     $('#btnRefresh').addEventListener('click', refresh);
     $('#fileInput').addEventListener('change', ()=>{
       const f = $('#fileInput').files && $('#fileInput').files[0];
-      if (!f) return;
-      const r = new FileReader();
-      r.onload = (e)=>{ $('#preview').style.display=''; $('#previewImg').innerHTML = `<img src="${e.target.result}" alt="preview">`; };
-      r.readAsDataURL(f);
+      if (f) showLocalPreview(f);
     });
 
     // --- Boot ---
