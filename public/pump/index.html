@@ -3,102 +3,148 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
-<title>Visual Pump Builder — Deploy-to-Show Math</title>
+<title>FireOps SIM — Pump</title>
 <meta name="theme-color" content="#0b0b0b">
 <style>
-  :root{--bg:#0b0b0b;--fg:#eaeaea;--muted:#a3a3a3;--card:#151515;--accent:#3b82f6}
+  :root{--bg:#0b0b0b;--fg:#eaeaea;--muted:#a3a3a3;--card:#151515;--accent:#3b82f6;--border:#232323}
   *{box-sizing:border-box}
   html,body{margin:0;padding:0;background:var(--bg);color:var(--fg);font:16px/1.45 system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
-  .wrap{width:min(980px,92%);margin:0 auto}
+  .wrap{width:min(1100px,92%);margin:0 auto}
   header{padding:20px 0 6px}
   h1{margin:0;font-size:22px}
+  .tag{color:var(--muted);margin-top:6px}
+
   .grid{display:grid;gap:16px;grid-template-columns:1fr; padding:12px 0 28px}
-  @media (min-width:900px){.grid{grid-template-columns:1fr 1fr}}
-  .card{background:var(--card);border:1px solid #232323;border-radius:16px;padding:16px}
-  .row{display:flex;gap:10px;align-items:center;margin:8px 0}
-  label{min-width:86px;opacity:.9}
-  select, input{width:100%;background:#0f0f0f;color:var(--fg);border:1px solid #232323;border-radius:12px;padding:10px}
-  .switch{display:flex;align-items:center;gap:10px;margin:8px 0}
-  .pill{display:inline-block;background:#0f0f0f;border:1px solid #232323;border-radius:9999px;padding:6px 10px;font-size:12px;margin-left:8px}
-  .metrics{display:flex;gap:10px;flex-wrap:wrap;margin-top:10px}
-  .metric{background:#0f0f0f;border:1px solid #232323;border-radius:12px;padding:10px 12px}
-  .metric b{display:block;font-size:12px;opacity:.8}
-  .metric span{font-size:16px;font-weight:700}
+  @media (min-width:1000px){.grid{grid-template-columns:380px 1fr}}
+  .card{background:var(--card);border:1px solid var(--border);border-radius:16px;padding:16px}
   .title{font-weight:700;margin:0 0 10px}
-  .foot{color:var(--muted);padding:16px 0 28px}
+  .row{display:flex;gap:10px;align-items:center;margin:8px 0}
+  label{min-width:96px;opacity:.9}
+  select,input{width:100%;background:#0f0f0f;color:var(--fg);border:1px solid var(--border);border-radius:12px;padding:10px}
+  .switch{display:flex;align-items:center;gap:10px;margin:8px 0}
+  .pill{display:inline-block;background:#0f0f0f;border:1px solid var(--border);border-radius:9999px;padding:6px 10px;font-size:12px;margin-left:8px}
+
+  /* Graphic builder canvas */
+  .gb{height:340px;border:1px dashed #2a2a2a;border-radius:12px;display:flex;align-items:center;justify-content:center;color:var(--muted);}
+
+  /* Total PDP box */
+  .bigpsi{font-size:40px;font-weight:800;margin-top:6px}
+  .pdp-sub{color:var(--muted);font-size:13px}
+
+  /* Breakdown (hidden until any line deployed) */
+  .calc-row{display:flex;justify-content:space-between;gap:16px;padding:6px 0;border-bottom:1px solid #1c1c1c}
+  .calc-row:last-child{border-bottom:0}
+  .calc-line{opacity:.8}
+  .total-line{font-weight:800}
   .is-hidden{display:none!important}
+
+  /* Line cards */
+  .lineHead{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:8px}
+  .metrics{display:flex;gap:10px;flex-wrap:wrap;margin-top:8px}
+  .metric{background:#0f0f0f;border:1px solid var(--border);border-radius:12px;padding:8px 10px}
+  .metric b{display:block;font-size:12px;opacity:.8}
+  .metric span{font-size:15px;font-weight:700}
+
+  footer{color:var(--muted);padding:18px 0 32px}
 </style>
 </head>
 <body>
-  <header class="wrap">
-    <h1>Visual Pump Builder <span class="pill">Math shows only when deployed</span></h1>
-  </header>
+<header class="wrap">
+  <h1>FireOps SIM — Pump <span class="pill">Graphic Builder always visible</span></h1>
+  <div class="tag">Total shows always; math breakdown appears only when a line is deployed.</div>
+</header>
 
-  <main class="wrap grid">
+<main class="wrap grid">
+  <!-- LEFT SIDEBAR: Controls for Lines -->
+  <aside class="card">
+    <p class="title">Lines</p>
+
     <!-- LINE A -->
-    <section class="card" id="leftLine">
-      <p class="title">Line A</p>
-
-      <div class="switch">
-        <input id="deployLeft" type="checkbox">
-        <label for="deployLeft">Deploy Line A</label>
+    <section class="card" style="padding:12px;margin:0 0 12px">
+      <div class="lineHead">
+        <div class="title" style="margin:0">Line A</div>
+        <label class="switch" style="margin:0">
+          <input id="deployLeft" type="checkbox">
+          <span>Deploy</span>
+        </label>
       </div>
-
       <div class="row">
         <label for="nozLeft">Nozzle</label>
         <select id="nozLeft"></select>
       </div>
-
-      <!-- math box (hidden until deployed) -->
-      <div id="leftMath" class="is-hidden">
-        <div class="metrics">
-          <div class="metric"><b>Type</b><span id="leftType">—</span></div>
-          <div class="metric"><b>NP (psi)</b><span id="leftNP">—</span></div>
-          <div class="metric"><b>Flow (gpm)</b><span id="leftGPM">—</span></div>
-        </div>
+      <div class="metrics">
+        <div class="metric"><b>Type</b><span id="leftType">—</span></div>
+        <div class="metric"><b>NP (psi)</b><span id="leftNP">—</span></div>
+        <div class="metric"><b>Flow (gpm)</b><span id="leftGPM">—</span></div>
       </div>
     </section>
 
     <!-- LINE B -->
-    <section class="card" id="rightLine">
-      <p class="title">Line B</p>
-
-      <div class="switch">
-        <input id="deployRight" type="checkbox">
-        <label for="deployRight">Deploy Line B</label>
+    <section class="card" style="padding:12px;margin:0">
+      <div class="lineHead">
+        <div class="title" style="margin:0">Line B</div>
+        <label class="switch" style="margin:0">
+          <input id="deployRight" type="checkbox">
+          <span>Deploy</span>
+        </label>
       </div>
-
       <div class="row">
         <label for="nozRight">Nozzle</label>
         <select id="nozRight"></select>
       </div>
-
-      <!-- math box (hidden until deployed) -->
-      <div id="rightMath" class="is-hidden">
-        <div class="metrics">
-          <div class="metric"><b>Type</b><span id="rightType">—</span></div>
-          <div class="metric"><b>NP (psi)</b><span id="rightNP">—</span></div>
-          <div class="metric"><b>Flow (gpm)</b><span id="rightGPM">—</span></div>
-        </div>
+      <div class="metrics">
+        <div class="metric"><b>Type</b><span id="rightType">—</span></div>
+        <div class="metric"><b>NP (psi)</b><span id="rightNP">—</span></div>
+        <div class="metric"><b>Flow (gpm)</b><span id="rightGPM">—</span></div>
       </div>
     </section>
-  </main>
+  </aside>
 
-  <footer class="wrap foot">
-    <small>© <script>document.write(new Date().getFullYear())</script> FireOps SIM</small>
-  </footer>
+  <!-- RIGHT: Graphic Builder + Total + Breakdown -->
+  <section>
+    <!-- Graphic Builder (ALWAYS visible) -->
+    <div class="card">
+      <div class="title">Graphic Builder</div>
+      <div class="gb" id="graphicBuilder">
+        <!-- Replace this with your SVG/Canvas UI -->
+        <div>Graphics go here (always visible)</div>
+      </div>
+    </div>
+
+    <!-- Total Pump Pressure (ALWAYS visible) -->
+    <div class="card" id="pumpTotalBox" style="margin-top:12px">
+      <div class="title">Total Pump Pressure</div>
+      <div id="pumpTotalPsi" class="bigpsi">— psi</div>
+      <div class="pdp-sub" id="pdpHint">Deploy a line to calculate PDP.</div>
+    </div>
+
+    <!-- Math breakdown (HIDDEN until any line is deployed) -->
+    <div class="card is-hidden" id="calcBreakdown" style="margin-top:12px">
+      <div class="title">Breakdown</div>
+      <div id="calcBody">
+        <!-- Filled by JS once a line is deployed -->
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer class="wrap">
+  <small>© <script>document.write(new Date().getFullYear())</script> FireOps SIM</small>
+</footer>
 
 <script>
-/* Nozzle catalog (Smooth Bore + Fog) */
+/* ===========================================
+   Nozzle Catalog (Smooth Bore + Fog)
+   =========================================== */
 const NOZ = {
-  // Smooth-bore
+  // Smooth-bore (handline tips)
   sb7_8:     {id:'sb7_8',     grp:'Smooth Bore', name:'SB 7/8″',     gpm:160, NP:50},
   sb15_16:   {id:'sb15_16',   grp:'Smooth Bore', name:'SB 15/16″',   gpm:185, NP:50},
   sb1_0:     {id:'sb1_0',     grp:'Smooth Bore', name:'SB 1″',       gpm:210, NP:50},
   sb1_1_8:   {id:'sb1_1_8',   grp:'Smooth Bore', name:'SB 1 1/8″',   gpm:265, NP:50},
   sb1_1_4:   {id:'sb1_1_4',   grp:'Smooth Bore', name:'SB 1 1/4″',   gpm:325, NP:50},
 
-  // Fog
+  // Fog (selectable/constant-gallonage)
   fog125_75: {id:'fog125_75', grp:'Fog',         name:'Fog 125',     gpm:125, NP:75},
   fog150_75: {id:'fog150_75', grp:'Fog',         name:'Fog 150',     gpm:150, NP:75},
   fog150_100:{id:'fog150_100',grp:'Fog',         name:'Fog 150',     gpm:150, NP:100},
@@ -107,17 +153,22 @@ const NOZ = {
   fog200_75: {id:'fog200_75', grp:'Fog',         name:'Fog 200',     gpm:200, NP:75},
   fog200_100:{id:'fog200_100',grp:'Fog',         name:'Fog 200',     gpm:200, NP:100},
 
-  // Legacy-friendly example
+  // Legacy example (if your old presets referenced this)
   chiefXD:   {id:'chiefXD',   grp:'Fog',         name:'ChiefXD 185', gpm:185, NP:50}
 };
 const NOZ_LIST = Object.values(NOZ);
 
-/* State (now includes 'deployed' flags) */
-const L = {
-  left:  { deployed:false, noz: NOZ.sb15_16 },   // default SB 15/16 @50
-  right: { deployed:false, noz: NOZ.fog150_75 }  // default Fog 150 @75
+/* ===========================================
+   Simple App State
+   =========================================== */
+window.L = {
+  left:  { deployed:false, noz: NOZ.sb15_16 },  // Line A defaults to SB 15/16 @50
+  right: { deployed:false, noz: NOZ.fog150_75 } // Line B defaults to Fog 150 @75
 };
 
+/* ===========================================
+   UI Helpers
+   =========================================== */
 function renderNozzleSelect(sel, side){
   const groups = {
     'Smooth Bore': NOZ_LIST.filter(n => n.grp === 'Smooth Bore'),
@@ -138,45 +189,111 @@ function updateLineMetrics(side){
   document.getElementById(side+'GPM').textContent  = noz.gpm;
 }
 
+function updateBreakdownVisibility(){
+  const anyDeployed = (L.left.deployed || L.right.deployed);
+  const box = document.getElementById('calcBreakdown');
+  box.classList.toggle('is-hidden', !anyDeployed);
+  document.getElementById('pdpHint').textContent = anyDeployed
+    ? 'Using highest-demand line.' : 'Deploy a line to calculate PDP.';
+}
+
+/* ===========================================
+   PDP Calculation (Placeholder)
+   - Replace with your real friction loss/elevation/appliance math.
+   - For now: PDP for a line = nozzle NP (demo only).
+   - Total PDP = highest of deployed lines.
+   =========================================== */
+function computeLinePDP(line){
+  const n = line.noz;
+  const NP = n.NP;
+
+  // TODO: Insert your real math here:
+  // const FL = calcFrictionLoss(line); const AL = calcApplianceLoss(line); const ELEV = calcElevation(line);
+  const FL = 0, AL = 0, ELEV = 0;
+
+  return { NP, FL, AL, ELEV, PDP: NP + FL + AL + ELEV };
+}
+
+function recomputeAndRender(){
+  const left  = L.left.deployed  ? computeLinePDP(L.left)   : null;
+  const right = L.right.deployed ? computeLinePDP(L.right)  : null;
+
+  // Total PDP = max of deployed lines, or 0
+  const pdps = [left?.PDP, right?.PDP].filter(v => typeof v === 'number');
+  const totalPDP = pdps.length ? Math.max(...pdps) : 0;
+
+  // Update Total box
+  document.getElementById('pumpTotalPsi').textContent = pdps.length ? `${totalPDP} psi` : '— psi';
+
+  // Update Breakdown visibility & content
+  updateBreakdownVisibility();
+  const calc = document.getElementById('calcBody');
+  if (!pdps.length){ calc.innerHTML = ''; return; }
+
+  let html = '';
+  if (left){
+    html += row('Line A', left);
+  }
+  if (right){
+    html += row('Line B', right);
+  }
+  html += `<div class="calc-row total-line"><div class="calc-line">Selected PDP (highest)</div><div>${totalPDP} psi</div></div>`;
+  calc.innerHTML = html;
+
+  function row(label, o){
+    return `
+      <div class="calc-row"><div class="calc-line">${label} — Nozzle Pressure</div><div>${o.NP} psi</div></div>
+      <div class="calc-row"><div class="calc-line">${label} — Friction Loss</div><div>${o.FL} psi</div></div>
+      <div class="calc-row"><div class="calc-line">${label} — Appliance Loss</div><div>${o.AL} psi</div></div>
+      <div class="calc-row"><div class="calc-line">${label} — Elevation</div><div>${o.ELEV} psi</div></div>
+      <div class="calc-row total-line"><div class="calc-line">${label} — PDP</div><div>${o.PDP} psi</div></div>
+    `;
+  }
+}
+
+/* ===========================================
+   Wiring
+   =========================================== */
 function setDeployed(side, val){
-  if(side==='left'){ L.left.deployed = val; }
-  else { L.right.deployed = val; }
-  document.getElementById(side+'Math').classList.toggle('is-hidden', !val);
-  // Fire an event for the larger app if you want to recalc PDP, etc.
+  L[side].deployed = val;
   window.dispatchEvent(new CustomEvent('line:deploy', { detail:{ side, deployed:val }}));
+  recomputeAndRender();
 }
 
-function attachSelect(sel, side){
-  sel.addEventListener('change', ()=>{
-    const n = NOZ[ sel.value ];
-    if(side === 'left') L.left.noz = n; else L.right.noz = n;
-    updateLineMetrics(side);
-    window.dispatchEvent(new CustomEvent('nozzle:changed', { detail: { side, nozzle: n }}));
+function attach(){
+  const nozLeft  = document.getElementById('nozLeft');
+  const nozRight = document.getElementById('nozRight');
+  const depLeft  = document.getElementById('deployLeft');
+  const depRight = document.getElementById('deployRight');
+
+  renderNozzleSelect(nozLeft, 'left');
+  renderNozzleSelect(nozRight,'right');
+
+  nozLeft.addEventListener('change', ()=>{
+    L.left.noz = NOZ[nozLeft.value];
+    updateLineMetrics('left');
+    window.dispatchEvent(new CustomEvent('nozzle:changed', { detail:{ side:'left', nozzle:L.left.noz }}));
+    recomputeAndRender();
   });
+
+  nozRight.addEventListener('change', ()=>{
+    L.right.noz = NOZ[nozRight.value];
+    updateLineMetrics('right');
+    window.dispatchEvent(new CustomEvent('nozzle:changed', { detail:{ side:'right', nozzle:L.right.noz }}));
+    recomputeAndRender();
+  });
+
+  depLeft.addEventListener('change', ()=> setDeployed('left',  depLeft.checked));
+  depRight.addEventListener('change',()=> setDeployed('right', depRight.checked));
 }
 
-function boot(){
-  const leftSel   = document.getElementById('nozLeft');
-  const rightSel  = document.getElementById('nozRight');
-  const depLeft   = document.getElementById('deployLeft');
-  const depRight  = document.getElementById('deployRight');
-
-  renderNozzleSelect(leftSel, 'left');
-  renderNozzleSelect(rightSel,'right');
-  attachSelect(leftSel, 'left');
-  attachSelect(rightSel,'right');
-
-  // deploy toggles
-  depLeft.addEventListener('change', ()=> setDeployed('left', depLeft.checked));
-  depRight.addEventListener('change',()=> setDeployed('right', depRight.checked));
-
-  // initial metrics update (remain hidden until deployed)
+document.addEventListener('DOMContentLoaded', ()=>{
+  attach();
   updateLineMetrics('left');
   updateLineMetrics('right');
-  setDeployed('left',  L.left.deployed);
-  setDeployed('right', L.right.deployed);
-}
-document.addEventListener('DOMContentLoaded', boot);
+  updateBreakdownVisibility();   // hidden at first
+  recomputeAndRender();          // shows "— psi" until deployed
+});
 </script>
 </body>
 </html>
