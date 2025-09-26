@@ -1,299 +1,731 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
-<title>FireOps SIM — Pump</title>
-<meta name="theme-color" content="#0b0b0b">
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"/>
+<title>FireOps SIM — Visual Pump Builder</title>
 <style>
-  :root{--bg:#0b0b0b;--fg:#eaeaea;--muted:#a3a3a3;--card:#151515;--accent:#3b82f6;--border:#232323}
-  *{box-sizing:border-box}
-  html,body{margin:0;padding:0;background:var(--bg);color:var(--fg);font:16px/1.45 system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
-  .wrap{width:min(1100px,92%);margin:0 auto}
-  header{padding:20px 0 6px}
-  h1{margin:0;font-size:22px}
-  .tag{color:var(--muted);margin-top:6px}
+  :root{
+    --bg:#0b0f14; --panel:#0f1624; --ink:#eaf2ff; --muted:#9fb0c8; --edge:rgba(255,255,255,.14);
+    --hose5:#ecd464;       /* 5" */
+    --hose25:#6ecbff;      /* 2½" (blue) */
+    --hose175:#ff6b6b;     /* 1¾" (red) */
+    --bubble:#172134; --bubble-edge:rgba(255,255,255,.15);
+    --btn:#0b1320; --btnEdge:#20324f;
+  }
+  *{box-sizing:border-box} html,body{margin:0;background:var(--bg);color:var(--ink);font-family:system-ui,Segoe UI,Inter,Arial,sans-serif}
+  .app{display:flex;flex-direction:column;min-height:100vh}
 
-  .grid{display:grid;gap:16px;grid-template-columns:1fr; padding:12px 0 28px}
-  @media (min-width:1000px){.grid{grid-template-columns:380px 1fr}}
-  .card{background:var(--card);border:1px solid var(--border);border-radius:16px;padding:16px}
-  .title{font-weight:700;margin:0 0 10px}
-  .row{display:flex;gap:10px;align-items:center;margin:8px 0}
-  label{min-width:96px;opacity:.9}
-  select,input{width:100%;background:#0f0f0f;color:var(--fg);border:1px solid var(--border);border-radius:12px;padding:10px}
-  .switch{display:flex;align-items:center;gap:10px;margin:8px 0}
-  .pill{display:inline-block;background:#0f0f0f;border:1px solid var(--border);border-radius:9999px;padding:6px 10px;font-size:12px;margin-left:8px}
+  header{position:sticky;top:0;z-index:100;padding:10px 14px;background:linear-gradient(180deg,#0c1320,#0b0f14);border-bottom:1px solid var(--edge)}
+  .title{font-weight:700}
+  .sub{font-size:12px;color:#9fb0c8}
 
-  /* Graphic builder canvas */
-  .gb{height:340px;border:1px dashed #2a2a2a;border-radius:12px;display:flex;align-items:center;justify-content:center;color:var(--muted);}
+  .wrapper{border-top:1px solid var(--edge);border-bottom:1px solid var(--edge);background:linear-gradient(180deg,#0b0f14,#0e1726)}
+  .stage{position:relative;width:100%;max-width:900px;margin:0 auto;min-height:260px}
+  #overlay{position:absolute;inset:0;width:100%;height:100%;display:block;pointer-events:auto}
+  .info{position:absolute;left:50%;top:8px;transform:translateX(-50%);background:var(--bubble);border:1px solid var(--bubble-edge);border-radius:999px;padding:6px 10px;font-size:12px;z-index:15}
 
-  /* Total PDP box */
-  .bigpsi{font-size:40px;font-weight:800;margin-top:6px}
-  .pdp-sub{color:var(--muted);font-size:13px}
+  .linebar{
+    position:absolute;left:0;right:0;bottom:8px;
+    display:flex;justify-content:center;align-items:center;gap:6px;z-index:16;flex-wrap:nowrap;padding:0 8px;
+  }
+  .linebtn,.supplybtn{
+    background:var(--btn);border:1px solid var(--btnEdge);color:#eaf2ff;border-radius:10px;
+    padding:10px 12px;font-size:14px;cursor:pointer;box-shadow:0 6px 16px rgba(0,0,0,.35);white-space:nowrap
+  }
+  .linebtn.active{outline:2px solid #3aa7ff}
+  @media (max-width:390px){ .linebtn,.supplybtn{padding:9px 10px;font-size:13px} .linebar{gap:4px} }
 
-  /* Breakdown (hidden until any line deployed) */
-  .calc-row{display:flex;justify-content:space-between;gap:16px;padding:6px 0;border-bottom:1px solid #1c1c1c}
-  .calc-row:last-child{border-bottom:0}
-  .calc-line{opacity:.8}
-  .total-line{font-weight:800}
+  .hoseBase{fill:none;stroke-linecap:round;stroke-linejoin:round}
+  .hose5{stroke:var(--hose5);stroke-width:12}
+  .hose25{stroke:var(--hose25);stroke-width:9}
+  .hose175{stroke:var(--hose175);stroke-width:6}
+  .shadow{stroke:rgba(0,0,0,.35);stroke-width:12}
+
+  .hose-end{cursor:pointer;pointer-events:all}
+  .plus-hit{fill:transparent;stroke:transparent;rx:12;ry:12}
+  .plus-circle{fill:#fff;stroke:#111;stroke-width:1.5;filter:drop-shadow(0 2px 4px rgba(0,0,0,.45))}
+  .plus-sign{stroke:#111;stroke-width:3;stroke-linecap:round}
+
+  /* phone-friendly math panel */
+  .panel{padding:10px 12px;background:var(--panel)}
+  .card{background:#0e1726;border:1px solid var(--edge);border-radius:14px;padding:12px;margin:10px 0}
+  .kpis{display:flex;gap:10px;flex-wrap:wrap}
+  .kpi{background:#0b1320;border:1px solid var(--edge);border-radius:12px;padding:10px 12px;font-size:13px;color:#cfe4ff}
+  .kpi b{font-size:18px}
+  .linesTable{margin-top:8px;border-top:1px solid var(--edge);padding-top:8px;display:grid;gap:10px}
+
+  .lineRow{background:#0b1320;border:1px solid var(--edge);border-radius:12px;padding:10px}
+  .lineHeader{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:2px;font-size:12px;color:#cfe4ff}
+  .lineHeader .title{font-weight:700;color:#eaf2ff}
+  .lineHeader .tag{display:inline-block;background:#0b1a29;border:1px solid #1f3a57;border-radius:999px;padding:4px 8px;margin:2px 4px;font-size:11px}
+
+  /* visual math */
+  details.math{background:#0b1a29;border:1px solid #1f3a57;border-radius:12px;padding:8px 10px;margin-top:8px}
+  details.math summary{cursor:pointer;color:#cfe4ff;font-weight:700}
+  .hoseviz{margin-top:8px}
+  .hoseLegend{display:flex;gap:10px;align-items:center;font-size:11px;color:#cfe4ff;margin:4px 0 8px}
+  .legSwatch{width:14px;height:8px;border-radius:3px;display:inline-block;border:1px solid rgba(0,0,0,.35)}
+  .sw175{background:var(--hose175)} .sw25{background:var(--hose25)} .sw5{background:var(--hose5)}
+  .barWrap{background:#0b1320;border:1px solid #1f3a57;border-radius:10px;padding:8px;margin:6px 0}
+  .barTitle{font-size:12px;color:#9fb0c8;margin-bottom:6px}
+  .ppEq{font-size:14px;color:#eaf2ff;margin-top:6px;font-weight:700}
+
+  .lbl{font-size:10px;fill:#0b0f14}
+
+  /* Compact in-place picker (buttons-first) */
+  .picker{
+    position:absolute; background:#0b1320;border:1px solid var(--bubble-edge);border-radius:12px;
+    min-width:320px;padding:8px; z-index:50; box-shadow:0 18px 40px rgba(0,0,0,.55); display:none;
+  }
+  .picker h3{font-size:12px;color:#cfe4ff;margin:4px 8px 4px}
+  .pickSummary{font-size:12px;color:#cfe4ff;margin:0 8px 8px}
+  .pickSummary .tag{display:inline-block;background:#0b1a29;border:1px solid #1f3a57;border-radius:999px;padding:3px 8px;margin:2px 4px}
+  .row{display:flex;gap:8px;align-items:center;padding:6px 8px;flex-wrap:wrap}
+  .pill{background:#0b1a29;border:1px solid #1f3a57;border-radius:10px;color:#eaf2ff;padding:8px 10px;font-size:13px;cursor:pointer}
+  .pill:hover{background:#0e2337}
+  .row input, .row select{background:#0b1320;color:#eaf2ff;border:1px solid var(--edge);border-radius:10px;padding:8px 10px;font-size:14px}
+  .mini{font-size:11px;color:#9fb0c8}
+
+  /* simple helper to hide the math panel until deployed */
   .is-hidden{display:none!important}
-
-  /* Line cards */
-  .lineHead{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:8px}
-  .metrics{display:flex;gap:10px;flex-wrap:wrap;margin-top:8px}
-  .metric{background:#0f0f0f;border:1px solid var(--border);border-radius:12px;padding:8px 10px}
-  .metric b{display:block;font-size:12px;opacity:.8}
-  .metric span{font-size:15px;font-weight:700}
-
-  footer{color:var(--muted);padding:18px 0 32px}
 </style>
 </head>
 <body>
-<header class="wrap">
-  <h1>FireOps SIM — Pump <span class="pill">Graphic Builder always visible</span></h1>
-  <div class="tag">Total shows always; math breakdown appears only when a line is deployed.</div>
-</header>
+<div class="app">
 
-<main class="wrap grid">
-  <!-- LEFT SIDEBAR: Controls for Lines -->
-  <aside class="card">
-    <p class="title">Lines</p>
+  <header>
+    <div class="title">FireOps SIM — Visual Pump Builder</div>
+    <div class="sub">Graphic Builder always visible. KPIs always show; the line math below appears only after you deploy a line.</div>
+  </header>
 
-    <!-- LINE A -->
-    <section class="card" style="padding:12px;margin:0 0 12px">
-      <div class="lineHead">
-        <div class="title" style="margin:0">Line A</div>
-        <label class="switch" style="margin:0">
-          <input id="deployLeft" type="checkbox">
-          <span>Deploy</span>
-        </label>
-      </div>
-      <div class="row">
-        <label for="nozLeft">Nozzle</label>
-        <select id="nozLeft"></select>
-      </div>
-      <div class="metrics">
-        <div class="metric"><b>Type</b><span id="leftType">—</span></div>
-        <div class="metric"><b>NP (psi)</b><span id="leftNP">—</span></div>
-        <div class="metric"><b>Flow (gpm)</b><span id="leftGPM">—</span></div>
-      </div>
-    </section>
+  <section class="wrapper">
+    <div class="stage" id="stage">
+      <svg id="overlay" viewBox="0 0 390 260" preserveAspectRatio="xMidYMax meet" aria-label="Visual stage">
+        <image id="truckImg" href="https://fireopssim.com/pump/engine181.png" x="0" y="0" width="390" height="260" preserveAspectRatio="xMidYMax meet"></image>
+        <g id="hoses"></g><g id="branches"></g><g id="labels"></g><g id="tips"></g>
+        <g id="supplyG"></g>
+      </svg>
 
-    <!-- LINE B -->
-    <section class="card" style="padding:12px;margin:0">
-      <div class="lineHead">
-        <div class="title" style="margin:0">Line B</div>
-        <label class="switch" style="margin:0">
-          <input id="deployRight" type="checkbox">
-          <span>Deploy</span>
-        </label>
-      </div>
-      <div class="row">
-        <label for="nozRight">Nozzle</label>
-        <select id="nozRight"></select>
-      </div>
-      <div class="metrics">
-        <div class="metric"><b>Type</b><span id="rightType">—</span></div>
-        <div class="metric"><b>NP (psi)</b><span id="rightNP">—</span></div>
-        <div class="metric"><b>Flow (gpm)</b><span id="rightGPM">—</span></div>
-      </div>
-    </section>
-  </aside>
+      <div class="info" id="topInfo">No lines deployed</div>
 
-  <!-- RIGHT: Graphic Builder + Total + Breakdown -->
-  <section>
-    <!-- Graphic Builder (ALWAYS visible) -->
-    <div class="card">
-      <div class="title">Graphic Builder</div>
-      <div class="gb" id="graphicBuilder">
-        <!-- Replace this with your SVG/Canvas UI -->
-        <div>Graphics go here (always visible)</div>
+      <div class="linebar" id="linebar">
+        <button class="linebtn" data-line="left">Line 1</button>
+        <button class="linebtn" data-line="back">Line 2</button>
+        <button class="linebtn" data-line="right">Line 3</button>
+        <button class="supplybtn" id="supplyBtn">Supply ▾</button>
+        <div id="supplyMenu" class="picker" role="menu" aria-hidden="true" style="min-width:160px">
+          <div class="row" style="padding:6px 8px 0"><span class="mini">Supply</span></div>
+          <div class="row">
+            <button class="pill" data-supply="drafting">Drafting</button>
+            <button class="pill" data-supply="pressurized">Pressurized</button>
+            <button class="pill" data-supply="relay">Relay</button>
+            <button class="pill" data-supply="none">Clear</button>
+          </div>
+        </div>
       </div>
-    </div>
 
-    <!-- Total Pump Pressure (ALWAYS visible) -->
-    <div class="card" id="pumpTotalBox" style="margin-top:12px">
-      <div class="title">Total Pump Pressure</div>
-      <div id="pumpTotalPsi" class="bigpsi">— psi</div>
-      <div class="pdp-sub" id="pdpHint">Deploy a line to calculate PDP.</div>
-    </div>
+      <!-- Buttons-first editor -->
+      <div id="picker" class="picker" role="dialog" aria-modal="true" aria-hidden="true">
+        <h3 id="pickerTitle">Line</h3>
+        <div id="pickSum" class="pickSummary"></div>
 
-    <!-- Math breakdown (HIDDEN until any line is deployed) -->
-    <div class="card is-hidden" id="calcBreakdown" style="margin-top:12px">
-      <div class="title">Breakdown</div>
-      <div id="calcBody">
-        <!-- Filled by JS once a line is deployed -->
+        <div class="row"><span class="mini">Quick add (same or smaller):</span></div>
+        <div class="row" id="addBtns"></div>
+
+        <div class="row" style="margin-top:2px"><span class="mini">Nozzle</span></div>
+        <div class="row">
+          <select id="nozSelect"></select>
+          <button class="pill" id="swapSides" title="If wye, swap left/right nozzles">Swap LR</button>
+        </div>
+
+        <div class="row" style="margin-top:2px"><span class="mini">Appliance</span></div>
+        <div class="row">
+          <button class="pill" id="toggleWye">Add Wye (+10)</button>
+          <button class="pill" id="clearBranches">Clear Branches</button>
+        </div>
+
+        <div class="row" style="margin-top:2px"><span class="mini">Elevation (± ft)</span></div>
+        <div class="row">
+          <input id="elevInput" type="number" step="1" value="0" style="width:120px">
+          <button class="pill" id="saveElev">Save</button>
+        </div>
+
+        <div class="row" style="margin-top:2px"><span class="mini">Main (replace):</span></div>
+        <div class="row" id="quickMain"></div>
       </div>
     </div>
   </section>
-</main>
 
-<footer class="wrap">
-  <small>© <script>document.write(new Date().getFullYear())</script> FireOps SIM</small>
-</footer>
+  <!-- KPIs + (read-only) line math panel -->
+  <section class="panel">
+    <div class="card">
+      <div class="kpis">
+        <div class="kpi"><div>Total Flow (deployed)</div><b id="GPM">— gpm</b></div>
+        <div class="kpi"><div>Max PP (deployed)</div><b id="PDP">— psi</b></div>
+      </div>
+      <!-- math panel is just this container; we toggle it -->
+      <div class="linesTable is-hidden" id="linesTable"></div>
+    </div>
+  </section>
+
+</div>
 
 <script>
-/* ===========================================
-   Nozzle Catalog (Smooth Bore + Fog)
-   =========================================== */
+/* ===== Constants ===== */
+const TRUCK_W = 390, TRUCK_H = 260;
+const PX_PER_50FT = 45;
+const PUMP_REL = { x:0.515, y:0.74 };
+const CURVE_PULL = 36;
+const BRANCH_LIFT = 10;
+const PSI_PER_FT = 0.434;
+
+const COEFF = { "1.75":15.5, "2.5":2, "5":0.08 };
 const NOZ = {
-  // Smooth-bore (handline tips)
-  sb7_8:     {id:'sb7_8',     grp:'Smooth Bore', name:'SB 7/8″',     gpm:160, NP:50},
-  sb15_16:   {id:'sb15_16',   grp:'Smooth Bore', name:'SB 15/16″',   gpm:185, NP:50},
-  sb1_0:     {id:'sb1_0',     grp:'Smooth Bore', name:'SB 1″',       gpm:210, NP:50},
-  sb1_1_8:   {id:'sb1_1_8',   grp:'Smooth Bore', name:'SB 1 1/8″',   gpm:265, NP:50},
-  sb1_1_4:   {id:'sb1_1_4',   grp:'Smooth Bore', name:'SB 1 1/4″',   gpm:325, NP:50},
-
-  // Fog (selectable/constant-gallonage)
-  fog125_75: {id:'fog125_75', grp:'Fog',         name:'Fog 125',     gpm:125, NP:75},
-  fog150_75: {id:'fog150_75', grp:'Fog',         name:'Fog 150',     gpm:150, NP:75},
-  fog150_100:{id:'fog150_100',grp:'Fog',         name:'Fog 150',     gpm:150, NP:100},
-  fog185_75: {id:'fog185_75', grp:'Fog',         name:'Fog 185',     gpm:185, NP:75},
-  fog185_100:{id:'fog185_100',grp:'Fog',         name:'Fog 185',     gpm:185, NP:100},
-  fog200_75: {id:'fog200_75', grp:'Fog',         name:'Fog 200',     gpm:200, NP:75},
-  fog200_100:{id:'fog200_100',grp:'Fog',         name:'Fog 200',     gpm:200, NP:100},
-
-  // Legacy example (if your old presets referenced this)
-  chiefXD:   {id:'chiefXD',   grp:'Fog',         name:'ChiefXD 185', gpm:185, NP:50}
+  chiefXD:   {id:'chiefXD',   name:'ChiefXD',     gpm:185, NP:50},
+  chief265:  {id:'chief265',  name:'ChiefXD 265', gpm:265, NP:50}, // default for Line 3
+  fog150_75: {id:'fog150_75', name:'Fog 150',     gpm:150, NP:75},
+  sb265:     {id:'sb265',     name:'SB 1 1/8″',   gpm:265, NP:50}
 };
 const NOZ_LIST = Object.values(NOZ);
+const COLORS = {"1.75":"#ff6b6b","2.5":"#6ecbff","5":"#ecd464"};
 
-/* ===========================================
-   Simple App State
-   =========================================== */
-window.L = {
-  left:  { deployed:false, noz: NOZ.sb15_16 },  // Line A defaults to SB 15/16 @50
-  right: { deployed:false, noz: NOZ.fog150_75 } // Line B defaults to Fog 150 @75
-};
-
-/* ===========================================
-   UI Helpers
-   =========================================== */
-function renderNozzleSelect(sel, side){
-  const groups = {
-    'Smooth Bore': NOZ_LIST.filter(n => n.grp === 'Smooth Bore'),
-    'Fog':         NOZ_LIST.filter(n => n.grp === 'Fog')
+/* ===== State ===== */
+function emptyHose(label){
+  return {
+    label,
+    itemsMain:[], hasWye:false, wyeLoss:10,
+    itemsLeft:[], itemsRight:[],
+    nozLeft:NOZ.chiefXD, nozRight:NOZ.chiefXD,
+    elevFt:0, visible:false
   };
-  sel.innerHTML = Object.entries(groups).map(([label, items]) =>
-    `<optgroup label="${label}">` +
-      items.map(n => `<option value="${n.id}">${n.name} ${n.NP}/${n.gpm}</option>`).join('') +
-    `</optgroup>`
-  ).join('');
-  sel.value = (side === 'left' ? L.left.noz.id : L.right.noz.id);
+}
+const lines = { left:emptyHose('Line 1'), back:emptyHose('Line 2'), right:emptyHose('Line 3') };
+
+let plusContext = { key:null, where:'main' };
+let currentSupply = 'none';
+
+/* ===== DOM ===== */
+const overlay   = document.getElementById('overlay');
+const truckImg  = document.getElementById('truckImg');
+const stage     = document.getElementById('stage');
+const G_hoses   = document.getElementById('hoses');
+const G_branches= document.getElementById('branches');
+const G_labels  = document.getElementById('labels');
+const G_tips    = document.getElementById('tips');
+const topInfo   = document.getElementById('topInfo');
+const linesTable= document.getElementById('linesTable');
+
+const picker    = document.getElementById('picker');
+const pickerTitle = document.getElementById('pickerTitle');
+const pickSum   = document.getElementById('pickSum');
+const addBtns   = document.getElementById('addBtns');
+const nozSelect = document.getElementById('nozSelect');
+const swapSides = document.getElementById('swapSides');
+const toggleWye = document.getElementById('toggleWye');
+const clearBranches = document.getElementById('clearBranches');
+const elevInput = document.getElementById('elevInput');
+const saveElev  = document.getElementById('saveElev');
+const quickMain = document.getElementById('quickMain');
+
+const supplyBtn = document.getElementById('supplyBtn');
+const supplyMenu= document.getElementById('supplyMenu');
+
+/* ===== Helpers ===== */
+function clsFor(size){ return size==='5'?'hose5':(size==='2.5'?'hose25':'hose175'); }
+function sumFt(items){ return (items||[]).reduce((s,h)=>s + (h.lengthFt||0), 0); }
+function FL(gpm, size, ft){ const C=COEFF[size]||0, Q=gpm/100; return C*(Q*Q)*(ft/100); }
+function FL_total(gpm, segments){ return (segments||[]).reduce((acc,seg)=> acc + FL(gpm, seg.size, seg.lengthFt||0), 0); }
+function clearGroup(g){ while(g.firstChild) g.removeChild(g.firstChild); }
+function supplyHeight(){ return currentSupply==='drafting'?150: currentSupply==='pressurized'?150: currentSupply==='relay'?170: 0; }
+function sizeLabel(sz){ return sz==='2.5'?'2½″':(sz==='1.75'?'1¾″':sz+'"'); }
+function round(n){ return Math.round(n); }
+
+/* split into <=100′ sections for visuals */
+function splitIntoSections(segments){
+  const out=[]; (segments||[]).forEach(seg=>{ let r=seg.lengthFt||0; while(r>0){ const take=Math.min(100,r); out.push({size:seg.size,lengthFt:take}); r-=take; }});
+  return out;
 }
 
-function updateLineMetrics(side){
-  const noz = side === 'left' ? L.left.noz : L.right.noz;
-  document.getElementById(side+'Type').textContent = noz.grp;
-  document.getElementById(side+'NP').textContent   = noz.NP;
-  document.getElementById(side+'GPM').textContent  = noz.gpm;
+function computeNeededHeightPx(){
+  const needs = Object.values(lines).filter(l=>l.visible);
+  let maxUp = 0;
+  needs.forEach(L=>{
+    const mainPx = (sumFt(L.itemsMain)/50)*PX_PER_50FT;
+    let branchPx = 0;
+    if(L.hasWye){
+      const lpx = (sumFt(L.itemsLeft)/50)*PX_PER_50FT;
+      const rpx = (sumFt(L.itemsRight)/50)*PX_PER_50FT;
+      branchPx = Math.max(lpx, rpx) + BRANCH_LIFT;
+    }
+    maxUp = Math.max(maxUp, mainPx + branchPx);
+  });
+  return Math.max(TRUCK_H + supplyHeight() + 10, TRUCK_H + maxUp + 40 + supplyHeight());
+}
+function truckTopY(viewH){ return viewH - TRUCK_H - supplyHeight(); }
+function pumpXY(viewH){
+  const top = truckTopY(viewH);
+  return { x: TRUCK_W * PUMP_REL.x, y: top + TRUCK_H * PUMP_REL.y };
 }
 
-function updateBreakdownVisibility(){
-  const anyDeployed = (L.left.deployed || L.right.deployed);
-  const box = document.getElementById('calcBreakdown');
-  box.classList.toggle('is-hidden', !anyDeployed);
-  document.getElementById('pdpHint').textContent = anyDeployed
-    ? 'Using highest-demand line.' : 'Deploy a line to calculate PDP.';
+/* Geometry */
+function mainCurve(dir, totalPx, viewH){
+  const {x:sx,y:sy} = pumpXY(viewH);
+  const ex = dir===-1 ? sx - 110 : dir===1 ? sx + 110 : sx;
+  const ey = Math.max(10, sy - totalPx);
+  const cx = (sx+ex)/2 + (dir===-1?-CURVE_PULL:dir===1?CURVE_PULL:0);
+  const cy = sy - (sy-ey)*0.48;
+  return { d:`M ${sx},${sy} Q ${cx},${cy} ${ex},${ey}`, endX:ex, endY:ey };
+}
+function straightBranch(side, startX, startY, totalPx){
+  const dir = side==='L'?-1:1;
+  const x = startX + dir*20;
+  const y1 = startY - BRANCH_LIFT;
+  const y2 = Math.max(8, y1 - totalPx);
+  return { d:`M ${startX},${startY} L ${startX},${y1} L ${x},${y1} L ${x},${y2}`, endX:x, endY:y2 };
 }
 
-/* ===========================================
-   PDP Calculation (Placeholder)
-   - Replace with your real friction loss/elevation/appliance math.
-   - For now: PDP for a line = nozzle NP (demo only).
-   - Total PDP = highest of deployed lines.
-   =========================================== */
-function computeLinePDP(line){
-  const n = line.noz;
-  const NP = n.NP;
+/* draw segmented on rig */
+function drawSegmentedPath(group, basePath, segs, sizeToClass){
+  const sh = document.createElementNS('http://www.w3.org/2000/svg','path');
+  sh.setAttribute('class','hoseBase shadow');
+  sh.setAttribute('d', basePath.getAttribute('d'));
+  group.appendChild(sh);
 
-  // TODO: Insert your real math here:
-  // const FL = calcFrictionLoss(line); const AL = calcApplianceLoss(line); const ELEV = calcElevation(line);
-  const FL = 0, AL = 0, ELEV = 0;
-
-  return { NP, FL, AL, ELEV, PDP: NP + FL + AL + ELEV };
+  const total = basePath.getTotalLength();
+  let offset = 0;
+  const totalPx = (sumFt(segs)/50)*PX_PER_50FT || 1;
+  segs.forEach(seg=>{
+    const px = (seg.lengthFt/50)*PX_PER_50FT;
+    const portion = Math.min(total, (px/totalPx)*total);
+    const p = document.createElementNS('http://www.w3.org/2000/svg','path');
+    p.setAttribute('class', `hoseBase ${sizeToClass(seg.size)}`);
+    p.setAttribute('d', basePath.getAttribute('d'));
+    p.setAttribute('stroke-dasharray', `${portion} ${total}`);
+    p.setAttribute('stroke-dashoffset', `${-offset}`);
+    group.appendChild(p);
+    offset += portion;
+  });
 }
 
-function recomputeAndRender(){
-  const left  = L.left.deployed  ? computeLinePDP(L.left)   : null;
-  const right = L.right.deployed ? computeLinePDP(L.right)  : null;
+/* rig labels (show hose length + gpm + nozzle NP) */
+function addLabel(text, x, y, dy=0){
+  const g = document.createElementNS('http://www.w3.org/2000/svg','g');
+  const pad = 4;
+  const t = document.createElementNS('http://www.w3.org/2000/svg','text');
+  t.setAttribute('class','lbl'); t.setAttribute('x', x); t.setAttribute('y', y+dy); t.setAttribute('text-anchor','middle'); t.textContent = text;
+  g.appendChild(t); G_labels.appendChild(g);
+  const bb = t.getBBox();
+  const bg = document.createElementNS('http://www.w3.org/2000/svg','rect');
+  bg.setAttribute('x', bb.x - pad); bg.setAttribute('y', bb.y - pad);
+  bg.setAttribute('width', bb.width + pad*2); bg.setAttribute('height', bb.height + pad*2);
+  bg.setAttribute('fill', '#eaf2ff'); bg.setAttribute('opacity', '0.92'); bg.setAttribute('stroke', '#111'); bg.setAttribute('stroke-width', '.5'); bg.setAttribute('rx','4'); bg.setAttribute('ry','4');
+  g.insertBefore(bg, t);
+}
+function labelDyForLine(key){ return key==='left' ? -10 : key==='back' ? -22 : -34; }
 
-  // Total PDP = max of deployed lines, or 0
-  const pdps = [left?.PDP, right?.PDP].filter(v => typeof v === 'number');
-  const totalPDP = pdps.length ? Math.max(...pdps) : 0;
+/* ===== Draw everything ===== */
+function drawAll(){
+  const viewH = Math.ceil(computeNeededHeightPx());
+  overlay.setAttribute('viewBox', `0 0 ${TRUCK_W} ${viewH}`);
+  stage.style.height = viewH + 'px';
+  truckImg.setAttribute('y', String(truckTopY(viewH)));
 
-  // Update Total box
-  document.getElementById('pumpTotalPsi').textContent = pdps.length ? `${totalPDP} psi` : '— psi';
+  clearGroup(G_hoses); clearGroup(G_branches); clearGroup(G_tips); clearGroup(G_labels);
 
-  // Update Breakdown visibility & content
-  updateBreakdownVisibility();
-  const calc = document.getElementById('calcBody');
-  if (!pdps.length){ calc.innerHTML = ''; return; }
+  const visibleKeys = ['left','back','right'].filter(k=>lines[k].visible);
+  topInfo.textContent = visibleKeys.length ? `Deployed: ${visibleKeys.map(k=>lines[k].label).join(' • ')}` : 'No lines deployed';
 
-  let html = '';
-  if (left){
-    html += row('Line A', left);
+  ['left','back','right'].filter(k=>lines[k].visible).forEach(key=>{
+    const L = lines[key];
+    const dir = key==='left'?-1:key==='right'?1:0;
+    const mainFt = sumFt(L.itemsMain);
+    const geom = mainCurve(dir, (mainFt/50)*PX_PER_50FT, Math.ceil(computeNeededHeightPx()));
+
+    const base = document.createElementNS('http://www.w3.org/2000/svg','path');
+    base.setAttribute('d', geom.d);
+    G_hoses.appendChild(base);
+
+    drawSegmentedPath(G_hoses, base, L.itemsMain, clsFor);
+    addTip(key,'main',geom.endX,geom.endY);
+
+    const flowGpm = L.hasWye ? (L.nozLeft.gpm + L.nozRight.gpm) : L.nozRight.gpm;
+    addLabel(`${mainFt}′ @ ${flowGpm} gpm — Nozzle ${L.nozRight.NP} psi`, geom.endX, geom.endY-6, labelDyForLine(key)-10);
+
+    if(L.hasWye){
+      if(sumFt(L.itemsLeft)>0){
+        const gL = straightBranch('L', geom.endX, geom.endY, (sumFt(L.itemsLeft)/50)*PX_PER_50FT);
+        const pathL = document.createElementNS('http://www.w3.org/2000/svg','path');
+        pathL.setAttribute('d', gL.d); G_branches.appendChild(pathL);
+        drawSegmentedPath(G_branches, pathL, L.itemsLeft, clsFor);
+        addTip(key,'L',gL.endX,gL.endY);
+        const mid = pathL.getTotalLength()/2, pt = pathL.getPointAtLength(mid);
+        addLabel(`${sumFt(L.itemsLeft)}′ @ ${L.nozLeft.gpm} gpm`, pt.x, pt.y, labelDyForLine(key)-8);
+      } else addTip(key,'L',geom.endX-20,geom.endY-20);
+
+      if(sumFt(L.itemsRight)>0){
+        const gR = straightBranch('R', geom.endX, geom.endY, (sumFt(L.itemsRight)/50)*PX_PER_50FT);
+        const pathR = document.createElementNS('http://www.w3.org/2000/svg','path');
+        pathR.setAttribute('d', gR.d); G_branches.appendChild(pathR);
+        drawSegmentedPath(G_branches, pathR, L.itemsRight, clsFor);
+        addTip(key,'R',gR.endX,gR.endY);
+        const mid = pathR.getTotalLength()/2, pt = pathR.getPointAtLength(mid);
+        addLabel(`${sumFt(L.itemsRight)}′ @ ${L.nozRight.gpm} gpm`, pt.x, pt.y, labelDyForLine(key)-8);
+      } else addTip(key,'R',geom.endX+20,geom.endY-20);
+    }
+    base.remove();
+  });
+
+  drawSupply(Math.ceil(computeNeededHeightPx()));
+  refreshTotals();
+  renderLinesPanel();
+}
+
+/* Supply visuals */
+function drawSupply(viewH){
+  const G = document.getElementById('supplyG'); clearGroup(G);
+  const h = supplyHeight(); if(!h) return;
+  const baseY = truckTopY(viewH) + TRUCK_H + 6; const ns=G.namespaceURI;
+  if(currentSupply==='pressurized'){
+    let hyd=document.createElementNS(ns,'rect'); hyd.setAttribute('x','10'); hyd.setAttribute('y', String(baseY+20)); hyd.setAttribute('width','80'); hyd.setAttribute('height','60');
+    hyd.setAttribute('fill','#243614'); hyd.setAttribute('stroke','#7aa35e'); G.appendChild(hyd);
+    let t=document.createElementNS(ns,'text'); t.setAttribute('x','50'); t.setAttribute('y', String(baseY+55)); t.setAttribute('fill','#cfe4ff'); t.setAttribute('text-anchor','middle'); t.setAttribute('font-size','12'); t.textContent='Hydrant'; G.appendChild(t);
+    const pump = pumpXY(viewH);
+    let hose=document.createElementNS(ns,'path');
+    hose.setAttribute('d',`M 90 ${baseY+50} C 160 ${baseY+50} 240 ${baseY+50} ${pump.x} ${pump.y-20}`);
+    hose.setAttribute('stroke','#ecd464'); hose.setAttribute('stroke-width','12'); hose.setAttribute('fill','none'); hose.setAttribute('stroke-linecap','round'); G.appendChild(hose);
+  } else if(currentSupply==='drafting'){
+    let r=document.createElementNS(ns,'rect'); r.setAttribute('x','10'); r.setAttribute('y', String(baseY+60)); r.setAttribute('width','120'); r.setAttribute('height','70');
+    r.setAttribute('fill','#10233b'); r.setAttribute('stroke','#4a6a9b'); G.appendChild(r);
+    let t=document.createElementNS(ns,'text'); t.setAttribute('x','70'); t.setAttribute('y', String(baseY+100)); t.setAttribute('fill','#cfe4ff'); t.setAttribute('text-anchor','middle'); t.setAttribute('font-size','12'); t.textContent='Static Source'; G.appendChild(t);
+    const pump = pumpXY(viewH);
+    let path=document.createElementNS(ns,'path');
+    path.setAttribute('d',`M ${pump.x},${pump.y} C 240 ${baseY+40}, 190 ${baseY+65}, 130 ${baseY+95}`);
+    path.setAttribute('stroke','#6ecbff'); path.setAttribute('stroke-width','8'); path.setAttribute('fill','none'); path.setAttribute('stroke-linecap','round'); G.appendChild(path);
+  } else if(currentSupply==='relay'){
+    let img=document.createElementNS(ns,'rect'); img.setAttribute('x','10'); img.setAttribute('y', String(baseY)); img.setAttribute('width','120'); img.setAttribute('height','80'); img.setAttribute('fill','#162032'); img.setAttribute('stroke','#2b3c5a'); G.appendChild(img);
+    let tt=document.createElementNS(ns,'text'); tt.setAttribute('x','70'); tt.setAttribute('y', String(baseY+45)); tt.setAttribute('fill','#cfe4ff'); tt.setAttribute('text-anchor','middle'); tt.setAttribute('font-size','12'); tt.textContent='Engine 2'; G.appendChild(tt);
+    const pump = pumpXY(viewH);
+    let hose=document.createElementNS(ns,'path');
+    hose.setAttribute('d',`M 130 ${baseY+40} C 190 ${baseY+36} 250 ${baseY+36} ${pump.x} ${pump.y-20}`);
+    hose.setAttribute('stroke','#ecd464'); hose.setAttribute('stroke-width','12'); hose.setAttribute('fill','none'); hose.setAttribute('stroke-linecap','round'); G.appendChild(hose);
   }
-  if (right){
-    html += row('Line B', right);
-  }
-  html += `<div class="calc-row total-line"><div class="calc-line">Selected PDP (highest)</div><div>${totalPDP} psi</div></div>`;
-  calc.innerHTML = html;
+}
 
-  function row(label, o){
-    return `
-      <div class="calc-row"><div class="calc-line">${label} — Nozzle Pressure</div><div>${o.NP} psi</div></div>
-      <div class="calc-row"><div class="calc-line">${label} — Friction Loss</div><div>${o.FL} psi</div></div>
-      <div class="calc-row"><div class="calc-line">${label} — Appliance Loss</div><div>${o.AL} psi</div></div>
-      <div class="calc-row"><div class="calc-line">${label} — Elevation</div><div>${o.ELEV} psi</div></div>
-      <div class="calc-row total-line"><div class="calc-line">${label} — PDP</div><div>${o.PDP} psi</div></div>
+/* Totals */
+function refreshTotals(){
+  const vis = Object.values(lines).filter(l=>l.visible);
+  let totalGPM = 0, maxPDP = 0;
+  vis.forEach(L=>{
+    const gpm = L.hasWye ? (L.nozLeft?.gpm||0) + (L.nozRight?.gpm||0) : (L.nozRight?.gpm||0);
+    const mainFL = FL_total(gpm, L.itemsMain);
+    const leftNeed = L.hasWye ? FL_total(L.nozLeft?.gpm||0, L.itemsLeft) + (L.nozLeft?.NP||0) : 0;
+    const rightNeed= L.hasWye ? FL_total(L.nozRight?.gpm||0, L.itemsRight) + (L.nozRight?.NP||0) : (L.nozRight?.NP||0);
+    const branchMax = L.hasWye ? Math.max(leftNeed, rightNeed) : rightNeed;
+    const PDP = branchMax + mainFL + (L.hasWye ? L.wyeLoss:0) + (L.elevFt * PSI_PER_FT);
+    totalGPM += gpm; maxPDP = Math.max(maxPDP, PDP);
+  });
+  document.getElementById('GPM').textContent = vis.length? `${totalGPM} gpm` : '— gpm';
+  document.getElementById('PDP').textContent = vis.length? `${Math.round(maxPDP)} psi` : '— psi';
+}
+
+/* Breakdown + equations (unchanged math) */
+function breakdown(L){
+  const mainLen  = sumFt(L.itemsMain) || 0;
+  const flow     = L.hasWye ? (L.nozLeft?.gpm||0)+(L.nozRight?.gpm||0) : (L.nozRight?.gpm||0);
+  const mainFL   = flow ? FL_total(flow, L.itemsMain) : 0;
+  const lLen  = sumFt(L.itemsLeft)||0, rLen = sumFt(L.itemsRight)||0;
+  const lFL   = L.hasWye ? FL_total(L.nozLeft?.gpm||0, L.itemsLeft) : 0;
+  const rFL   = L.hasWye ? FL_total(L.nozRight?.gpm||0, L.itemsRight) : 0;
+  const leftNeed  = L.hasWye ? (lFL + (L.nozLeft?.NP||0)) : 0;
+  const rightNeed = L.hasWye ? (rFL + (L.nozRight?.NP||0)) : (L.nozRight?.NP||0);
+  const branchMax = L.hasWye ? Math.max(leftNeed, rightNeed) : rightNeed;
+  const wye = L.hasWye ? L.wyeLoss : 0;
+  const elevPsi = (L.elevFt||0) * PSI_PER_FT;
+  const PDP = branchMax + mainFL + wye + elevPsi;
+  return { mainLen, flow, mainFL, lLen, lFL, rLen, rFL, leftNeed, rightNeed, branchMax, wye, elevPsi, PDP };
+}
+function eqStringNoWye(L){
+  const b = breakdown(L);
+  const sections = splitIntoSections(L.itemsMain);
+  const fls = sections.map(s => round(FL(b.flow, s.size, s.lengthFt)));
+  const elev = round(b.elevPsi);
+  const np = round(L.nozRight?.NP||0);
+  const elevPart = elev===0 ? '' : (elev>0 ? ` + ${elev}` : ` - ${Math.abs(elev)}`);
+  return `PP = NP + FL ± Elev = ${np} + ${fls.join(' + ')}${elevPart}`;
+}
+function eqStringsWye(L){
+  const b = breakdown(L);
+  const aSections = splitIntoSections(L.itemsLeft);
+  const bSections = splitIntoSections(L.itemsRight);
+  const aFls = aSections.map(s => round(FL(L.nozLeft?.gpm||0, s.size, s.lengthFt)));
+  const bFls = bSections.map(s => round(FL(L.nozRight?.gpm||0, s.size, s.lengthFt)));
+  const aEq = `A = NP + FL = ${round(L.nozLeft?.NP||0)} + ${aFls.join(' + ')||0}`;
+  const bEq = `B = NP + FL = ${round(L.nozRight?.NP||0)} + ${bFls.join(' + ')||0}`;
+  const mainSections = splitIntoSections(L.itemsMain);
+  const mainFls = mainSections.map(s => round(FL((L.nozLeft?.gpm||0)+(L.nozRight?.gpm||0), s.size, s.lengthFt)));
+  const elev = round(b.elevPsi);
+  const elevPart = elev===0 ? '' : (elev>0 ? ` + ${elev}` : ` - ${Math.abs(elev)}`);
+  const wye = L.wyeLoss? ` + ${round(L.wyeLoss)}` : '';
+  const final = `PP = max(A,B) + Main FL${wye} ± Elev = max(A,B) + ${mainFls.join(' + ')||0}${wye}${elevPart}`;
+  return { aEq, bEq, final };
+}
+
+/* Horizontal bar with NP pill */
+function drawHoseBar(container, sections, gpm, npPsi, nozzleText){
+  const totalLen = sumFt(sections); container.innerHTML=''; if(!totalLen||!gpm){ container.textContent='No hose yet'; container.style.color='#9fb0c8'; container.style.fontSize='12px'; return; }
+  const W = Math.max(320, Math.min(container.clientWidth||640, 720)), NP_W=70, H=56;
+  const svgNS='http://www.w3.org/2000/svg'; const svg=document.createElementNS(svgNS,'svg'); svg.setAttribute('width','100%'); svg.setAttribute('height',H); svg.setAttribute('viewBox',`0 0 ${W} ${H}`); const innerW=W-16-NP_W;
+
+  if(nozzleText){ const t=document.createElementNS(svgNS,'text'); t.setAttribute('x',8); t.setAttribute('y',12); t.setAttribute('fill','#cfe4ff'); t.setAttribute('font-size','12'); t.textContent=nozzleText; svg.appendChild(t); }
+
+  const track=document.createElementNS(svgNS,'rect'); track.setAttribute('x',8); track.setAttribute('y',20); track.setAttribute('width',innerW); track.setAttribute('height',20); track.setAttribute('fill','#0c1726'); track.setAttribute('stroke','#20324f'); track.setAttribute('rx',6); track.setAttribute('ry',6); svg.appendChild(track);
+
+  let x=8;
+  sections.forEach(seg=>{
+    const segW=(seg.lengthFt/totalLen)*innerW;
+    const r=document.createElementNS(svgNS,'rect'); r.setAttribute('x',x); r.setAttribute('y',20); r.setAttribute('width',Math.max(segW,1)); r.setAttribute('height',20); r.setAttribute('fill',COLORS[seg.size]||'#888'); r.setAttribute('stroke','rgba(0,0,0,.35)'); r.setAttribute('rx',5); r.setAttribute('ry',5); svg.appendChild(r);
+    const fl=FL(gpm,seg.size,seg.lengthFt);
+    const t=document.createElementNS(svgNS,'text'); t.setAttribute('fill','#0b0f14'); t.setAttribute('font-size','11'); t.setAttribute('font-family','ui-monospace,Menlo,Consolas,monospace'); t.setAttribute('text-anchor','middle'); t.setAttribute('x',x+segW/2); t.setAttribute('y',35); t.textContent=`${seg.lengthFt}′ • ${Math.round(fl)} psi`; svg.appendChild(t);
+    x+=segW;
+  });
+
+  const pill=document.createElementNS(svgNS,'rect'); pill.setAttribute('x',innerW+8+6); pill.setAttribute('y',20); pill.setAttribute('width',NP_W-12); pill.setAttribute('height',20); pill.setAttribute('fill','#eaf2ff'); pill.setAttribute('stroke','#20324f'); pill.setAttribute('rx',6); pill.setAttribute('ry',6); svg.appendChild(pill);
+  const npT=document.createElementNS(svgNS,'text'); npT.setAttribute('x',innerW+8+(NP_W-12)/2); npT.setAttribute('y',34); npT.setAttribute('text-anchor','middle'); npT.setAttribute('fill','#0b0f14'); npT.setAttribute('font-size','11'); npT.setAttribute('font-family','ui-monospace,Menlo,Consolas,monospace'); npT.textContent=`NP ${npPsi}`; svg.appendChild(npT);
+
+  container.appendChild(svg);
+}
+
+/* ===== Read-only line panel (math only) ===== */
+function renderLinesPanel(){
+  // NEW: Hide math panel unless any line is deployed
+  const anyDeployed = Object.values(lines).some(l=>l.visible);
+  if(!anyDeployed){
+    linesTable.innerHTML = '';
+    linesTable.classList.add('is-hidden');
+    return;
+  }
+  linesTable.classList.remove('is-hidden');
+
+  linesTable.innerHTML='';
+  ['left','back','right'].forEach(key=>{
+    const L = lines[key];
+    const row = document.createElement('div'); row.className='lineRow';
+
+    const segs = L.itemsMain.length ? L.itemsMain.map(s=>`${s.lengthFt}′ ${sizeLabel(s.size)}`).join(' + ') : 'empty';
+    const flow = L.hasWye ? (L.nozLeft.gpm + L.nozRight.gpm) : L.nozRight.gpm;
+    const head = document.createElement('div'); head.className='lineHeader'; head.innerHTML = `
+      <span class="title">${L.label}</span>
+      <span class="tag">Main: ${sumFt(L.itemsMain)}′ (${segs})</span>
+      <span class="tag">Flow: ${flow} gpm</span>
+      <span class="tag">Nozzle: ${L.nozRight.name} ${L.nozRight.NP}/${L.nozRight.gpm}</span>
+      <span class="tag">Elev: ${L.elevFt||0}′</span>
+      <span class="tag">${L.visible? 'DEPLOYED':'not deployed'}</span>
     `;
+    row.appendChild(head);
+    linesTable.appendChild(row);
+
+    if(L.visible){
+      const b = breakdown(L);
+      const gpmMain = L.hasWye ? (L.nozLeft?.gpm||0)+(L.nozRight?.gpm||0) : (L.nozRight?.gpm||0);
+      const mathWrap = document.createElement('div');
+      mathWrap.innerHTML = `
+        <details class="math" open>
+          <summary>Line math</summary>
+          <div class="hoseviz">
+            <div class="hoseLegend">
+              <span class="legSwatch sw175"></span> 1¾″
+              <span class="legSwatch sw25"></span> 2½″
+              <span class="legSwatch sw5"></span> 5″
+            </div>
+            <div class="barWrap">
+              <div class="barTitle">Main ${b.mainLen}′ @ ${b.flow} gpm — nozzle ${L.nozRight.gpm} gpm ${L.nozRight.NP} psi</div>
+              <div class="hosebar" id="viz_main_${key}"></div>
+              ${L.hasWye ? `` : `<div class="ppEq" id="eq_main_${key}"></div>`}
+            </div>
+            ${L.hasWye ? `
+              <div class="barWrap">
+                <div class="barTitle">Branch A ${b.lLen||0}′ @ ${L.nozLeft.gpm} gpm — nozzle ${L.nozLeft.gpm} gpm ${L.nozLeft.NP} psi</div>
+                <div class="hosebar" id="viz_L_${key}"></div>
+                <div class="ppEq" id="eq_L_${key}"></div>
+              </div>
+              <div class="barWrap">
+                <div class="barTitle">Branch B ${b.rLen||0}′ @ ${L.nozRight.gpm} gpm — nozzle ${L.nozRight.gpm} gpm ${L.nozRight.NP} psi</div>
+                <div class="hosebar" id="viz_R_${key}"></div>
+                <div class="ppEq" id="eq_R_${key}"></div>
+              </div>
+              <div class="ppEq" id="eq_final_${key}"></div>
+            `: ``}
+          </div>
+        </details>
+      `;
+      linesTable.appendChild(mathWrap);
+
+      // render bars + eq
+      drawHoseBar(document.getElementById(`viz_main_${key}`), splitIntoSections(L.itemsMain), gpmMain, (L.nozRight?.NP||0),
+        `Main ${sumFt(L.itemsMain)}′ @ ${gpmMain} gpm — nozzle ${L.nozRight.gpm} @ ${L.nozRight.NP} psi`);
+      if(!L.hasWye){
+        const eq = document.getElementById(`eq_main_${key}`); if(eq) eq.textContent = eqStringNoWye(L);
+      }else{
+        drawHoseBar(document.getElementById(`viz_L_${key}`), splitIntoSections(L.itemsLeft), L.nozLeft?.gpm||0, L.nozLeft?.NP||0,
+          `Branch A ${sumFt(L.itemsLeft)||0}′ @ ${L.nozLeft.gpm} gpm`);
+        drawHoseBar(document.getElementById(`viz_R_${key}`), splitIntoSections(L.itemsRight), L.nozRight?.gpm||0, L.nozRight?.NP||0,
+          `Branch B ${sumFt(L.itemsRight)||0}′ @ ${L.nozRight.gpm} gpm`);
+        const {aEq,bEq,final}=eqStringsWye(L);
+        document.getElementById(`eq_L_${key}`).textContent=aEq;
+        document.getElementById(`eq_R_${key}`).textContent=bEq;
+        document.getElementById(`eq_final_${key}`).textContent=final;
+      }
+    }
+  });
+}
+
+/* ===== + bubbles (open full editor with buttons) ===== */
+function allowedAddOptions(curr){
+  return (curr==='2.5')
+    ? [{len:50,size:'2.5'},{len:50,size:'1.75'},{len:100,size:'1.75'}]
+    : [{len:50,size:'1.75'},{len:100,size:'1.75'}];
+}
+function addTip(key, where, x, y){
+  const g = document.createElementNS('http://www.w3.org/2000/svg','g');
+  g.setAttribute('class','hose-end'); g.setAttribute('data-line',key); g.setAttribute('data-where',where);
+  const hit = document.createElementNS('http://www.w3.org/2000/svg','rect'); hit.setAttribute('class','plus-hit'); hit.setAttribute('x', x-20); hit.setAttribute('y', y-20); hit.setAttribute('width', 40); hit.setAttribute('height', 40);
+  const c = document.createElementNS('http://www.w3.org/2000/svg','circle'); c.setAttribute('class','plus-circle'); c.setAttribute('cx',x); c.setAttribute('cy',y); c.setAttribute('r',14);
+  const v = document.createElementNS('http://www.w3.org/2000/svg','line'); v.setAttribute('class','plus-sign'); v.setAttribute('x1',x); v.setAttribute('y1',y-6); v.setAttribute('x2',x); v.setAttribute('y2',y+6);
+  const h = document.createElementNS('http://www.w3.org/2000/svg','line'); h.setAttribute('class','plus-sign'); h.setAttribute('x1',x-6); h.setAttribute('y1',y); h.setAttribute('x2',x+6); h.setAttribute('y2',y);
+  g.appendChild(hit); g.appendChild(c); g.appendChild(v); g.appendChild(h); G_tips.appendChild(g);
+}
+
+overlay.addEventListener('click', (e)=>{
+  const tip = e.target.closest('.hose-end'); if(!tip) return;
+  const key = tip.getAttribute('data-line'); const where = tip.getAttribute('data-where');
+  const circ = tip.querySelector('.plus-circle'); const ov = overlay.getBoundingClientRect();
+  const vb = overlay.getAttribute('viewBox').split(' '); const viewH = Number(vb[3]);
+  const px = parseFloat(circ.getAttribute('cx')), py = parseFloat(circ.getAttribute('cy'));
+  const clientX = ov.left + (px/TRUCK_W)*ov.width, clientY = ov.top + (py/viewH)*ov.height;
+  showPicker(key, where, clientX, clientY);
+});
+document.addEventListener('click', (e)=>{
+  const inPick = picker.contains(e.target);
+  const inSupply = supplyMenu.contains(e.target) || e.target===supplyBtn;
+  if(inPick || inSupply) return;
+  if(e.target.closest('.hose-end')) return;
+  hidePicker(); hideSupplyMenu();
+});
+
+function showPicker(key, where, cx, cy){
+  plusContext = { key, where };
+  const L = lines[key];
+  pickerTitle.textContent = where==='main' ? `${L.label} — Main` : `${L.label} — ${where==='L'?'Left':'Right'}`;
+
+  // summary
+  const totalFt = sumFt(L.itemsMain);
+  const gpm = L.hasWye ? (L.nozLeft.gpm + L.nozRight.gpm) : L.nozRight.gpm;
+  pickSum.innerHTML = `
+    <span class="tag">Main: ${totalFt}′</span>
+    <span class="tag">Flow: ${gpm} gpm</span>
+    <span class="tag">Nozzle: ${where==='L'?L.nozLeft.name:L.nozRight.name} ${(where==='L'?L.nozLeft.NP:L.nozRight.NP)}/${(where==='L'?L.nozLeft.gpm:L.nozRight.gpm)}</span>
+    <span class="tag">Elev: ${L.elevFt||0}′</span>
+  `;
+
+  // quick add buttons
+  const currentSize = currentSegmentSize(L, where);
+  addBtns.innerHTML='';
+  allowedAddOptions(currentSize).forEach(o=>{
+    const b=document.createElement('button'); b.className='pill'; b.textContent=`+${o.len}′ ${o.size==='2.5'?'2½″':'1¾″'}`;
+    b.addEventListener('click',()=>{ addSegmentFromPicker(L, where, o.size, o.len); });
+    addBtns.appendChild(b);
+  });
+
+  // nozzle select for this side
+  nozSelect.innerHTML = NOZ_LIST.map(n=>`<option value="${n.id}" ${((where==='L'?L.nozLeft:L.nozRight).id===n.id)?'selected':''}>${n.name} ${n.NP}/${n.gpm}</option>`).join('');
+  nozSelect.onchange = ()=>{ const n = NOZ[nozSelect.value]; if(where==='L'){ L.nozLeft=n; } else { L.nozRight=n; } if(!L.visible){ L.visible=true; toggleLineBtn(key,true); } drawAll(); };
+
+  // wye controls
+  toggleWye.textContent = L.hasWye ? 'Remove Wye' : 'Add Wye (+10)';
+  toggleWye.onclick = ()=>{ L.hasWye = !L.hasWye; if(!L.hasWye){L.itemsLeft=[];L.itemsRight=[];} if(!L.visible){ L.visible=true; toggleLineBtn(key,true);} drawAll(); showPicker(key, where, cx, cy); };
+  clearBranches.onclick = ()=>{ L.itemsLeft=[]; L.itemsRight=[]; drawAll(); showPicker(key, where, cx, cy); };
+  swapSides.onclick = ()=>{ const t=L.nozLeft; L.nozLeft=L.nozRight; L.nozRight=t; drawAll(); showPicker(key, where, cx, cy); };
+
+  // elevation
+  elevInput.value = String(L.elevFt||0);
+  saveElev.onclick = ()=>{ L.elevFt = Number(elevInput.value||0); if(!L.visible){ L.visible=true; toggleLineBtn(key,true);} hidePicker(); drawAll(); };
+
+  // quick replace main
+  quickMain.innerHTML='';
+  [50,100,150,200,250,300].forEach(n=>{
+    const b=document.createElement('button'); b.className='pill'; b.textContent=`Set main ${n}′`;
+    b.addEventListener('click',()=>{ L.itemsMain=[{size:(L.itemsMain[0]?.size||currentSize), lengthFt:n}]; if(!L.visible){ L.visible=true; toggleLineBtn(key,true);} hidePicker(); drawAll(); });
+    quickMain.appendChild(b);
+  });
+
+  // position + show
+  picker.style.display='block'; picker.setAttribute('aria-hidden','false');
+  const stg = stage.getBoundingClientRect(); const pw=340, ph=320;
+  let x = cx - stg.left + 8, y = cy - stg.top - ph - 8; if(y<8) y = cy - stg.top + 8;
+  x = Math.max(8, Math.min(x, stg.width - pw - 8)); y = Math.max(8, Math.min(y, stg.height - ph - 8));
+  picker.style.left = `${x}px`; picker.style.top = `${y}px`;
+}
+function hidePicker(){ picker.style.display='none'; picker.setAttribute('aria-hidden','true'); }
+function currentSegmentSize(L, where){
+  if(where==='L')  return L.itemsLeft[0]?.size || '1.75';
+  if(where==='R')  return L.itemsRight[0]?.size || L.itemsMain[0]?.size || '1.75';
+  return L.itemsMain[L.itemsMain.length-1]?.size || '1.75';
+}
+function addSegmentFromPicker(L, where, size, len){
+  const curr = currentSegmentSize(L, where);
+  if(curr==='1.75' && size==='2.5'){ hidePicker(); return; } // cannot step up later
+  if(where==='L'){ L.itemsLeft.push({size,lengthFt:len}); }
+  else if(where==='R'){ L.itemsRight.push({size,lengthFt:len}); }
+  else { L.itemsMain.push({size,lengthFt:len}); }
+  if(!L.visible){ L.visible=true; toggleLineBtn(plusContext.key,true); }
+  hidePicker(); drawAll();
+}
+
+/* Supply menu */
+function showSupplyMenu(){
+  const rect = supplyBtn.getBoundingClientRect();
+  const lbRect = document.getElementById('linebar').getBoundingClientRect();
+  supplyMenu.style.left = (rect.left - lbRect.left) + 'px';
+  supplyMenu.style.top  = (rect.bottom - lbRect.top + 6) + 'px';
+  supplyMenu.style.display='block';
+  supplyMenu.setAttribute('aria-hidden','false');
+}
+function hideSupplyMenu(){ supplyMenu.style.display='none'; supplyMenu.setAttribute('aria-hidden','true'); }
+supplyBtn.addEventListener('click', ()=>{ if(supplyMenu.style.display==='block') hideSupplyMenu(); else showSupplyMenu(); });
+supplyMenu.addEventListener('click',(e)=>{
+  const val = e.target.dataset.supply; if(!val) return;
+  currentSupply = val; hideSupplyMenu(); drawAll();
+});
+
+/* Defaults when hitting a line button first */
+function applyDefaultsForKey(key){
+  const L = lines[key];
+  if(key==='left' || key==='back'){           // Line 1 & 2
+    L.itemsMain=[{size:'1.75', lengthFt:200}];
+    L.nozLeft=L.nozRight=NOZ.chiefXD;         // 185 gpm @ 50 psi
+  } else {                                     // Line 3
+    L.itemsMain=[{size:'2.5', lengthFt:250}];
+    L.nozLeft=L.nozRight=NOZ.chief265;        // 265 gpm @ 50 psi
   }
 }
 
-/* ===========================================
-   Wiring
-   =========================================== */
-function setDeployed(side, val){
-  L[side].deployed = val;
-  window.dispatchEvent(new CustomEvent('line:deploy', { detail:{ side, deployed:val }}));
-  recomputeAndRender();
+/* Top line buttons: toggle deploy; first click seeds defaults */
+function toggleLineBtn(key,on){
+  const btn=document.querySelector(`.linebtn[data-line="${key}"]`);
+  if(btn){ btn.classList.toggle('active', on); }
 }
-
-function attach(){
-  const nozLeft  = document.getElementById('nozLeft');
-  const nozRight = document.getElementById('nozRight');
-  const depLeft  = document.getElementById('deployLeft');
-  const depRight = document.getElementById('deployRight');
-
-  renderNozzleSelect(nozLeft, 'left');
-  renderNozzleSelect(nozRight,'right');
-
-  nozLeft.addEventListener('change', ()=>{
-    L.left.noz = NOZ[nozLeft.value];
-    updateLineMetrics('left');
-    window.dispatchEvent(new CustomEvent('nozzle:changed', { detail:{ side:'left', nozzle:L.left.noz }}));
-    recomputeAndRender();
+document.querySelectorAll('.linebtn').forEach(b=>{
+  b.addEventListener('click', ()=>{
+    const key=b.dataset.line; const L=lines[key];
+    if(!L.itemsMain.length){ applyDefaultsForKey(key); }
+    L.visible = !L.visible; b.classList.toggle('active', L.visible);
+    drawAll(); // numbers mirror panel
   });
-
-  nozRight.addEventListener('change', ()=>{
-    L.right.noz = NOZ[nozRight.value];
-    updateLineMetrics('right');
-    window.dispatchEvent(new CustomEvent('nozzle:changed', { detail:{ side:'right', nozzle:L.right.noz }}));
-    recomputeAndRender();
-  });
-
-  depLeft.addEventListener('change', ()=> setDeployed('left',  depLeft.checked));
-  depRight.addEventListener('change',()=> setDeployed('right', depRight.checked));
-}
-
-document.addEventListener('DOMContentLoaded', ()=>{
-  attach();
-  updateLineMetrics('left');
-  updateLineMetrics('right');
-  updateBreakdownVisibility();   // hidden at first
-  recomputeAndRender();          // shows "— psi" until deployed
 });
+
+/* Boot */
+drawAll();
 </script>
 </body>
 </html>
