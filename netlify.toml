@@ -1,64 +1,14 @@
-# -------------------------
-# Netlify configuration
-# -------------------------
-
-[build]
-  # Your static output directory (adjust if you use a different one)
-  publish = "public"
-
-  # If you have a framework build step, uncomment and set:
-  # command = "npm run build"
-
-# ✅ Secrets scanning: keep enabled, but omit the one public value (Firebase Web API key).
-#    Do NOT put any real secrets (OpenAI, Replicate, service accounts) in this file or repo.
-[build.environment]
-  SECRETS_SCAN_SMART_DETECTION_ENABLED = "true"
-  SECRETS_SCAN_SMART_DETECTION_OMIT_VALUES = "AIzaSyBzwc75u8pG73OKcHN8ti2ADbucjKMHme8"
-
-# If you need Netlify Functions, this is a sane default.
-[functions]
-  directory    = "netlify/functions"
-  node_bundler = "esbuild"
-
-# -------------------------
-# Redirects
-# -------------------------
-
-# Pump routes
-[[redirects]]
-  from = "/pump/pump"
-  to = "/pump/"
-  status = 301
-  force = true
-
 [[redirects]]
   from = "/pump"
-  to = "/pump/index.html"
-  status = 200
-
-[[redirects]]
-  from = "/pump/"
-  to = "/pump/index.html"
+  to = "/pump/pump.html"
   status = 200
 
 [[redirects]]
   from = "/pump/*"
-  to = "/pump/index.html"
-  status = 200
-
-# GeoPhoto viewer routes
-[[redirects]]
-  from = "/geophoto/viewer"
-  to = "/geophoto/viewer/index.html"
+  to = "/pump/pump.html"
   status = 200
 
 [[redirects]]
-  from = "/geophoto/viewer/*"
-  to = "/geophoto/viewer/index.html"
+  from = "/pump/pump"
+  to = "/pump/pump.html"
   status = 200
-
-# (Optional) SPA catch-all — enable only if your site needs it.
-# [[redirects]]
-#   from = "/*"
-#   to = "/index.html"
-#   status = 200
