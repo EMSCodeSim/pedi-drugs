@@ -1,5 +1,30 @@
+# netlify.toml
+
+[build]
+  # Your static files live in /public
+  publish = "public"
+  # If you don't have a build step, leave command unset.
+  # If you *do* have one (e.g., Vite/Next), set it here.
+  # command = "npm run build"
+
+[dev]
+  publish = "public"
+
+# --- Short/clean links for the pump page ---
+# All of these will serve /pump/pump.html
+
 [[redirects]]
   from = "/pump"
+  to = "/pump/pump.html"
+  status = 200
+
+[[redirects]]
+  from = "/pump/"
+  to = "/pump/pump.html"
+  status = 200
+
+[[redirects]]
+  from = "/pump/pump"
   to = "/pump/pump.html"
   status = 200
 
@@ -8,7 +33,9 @@
   to = "/pump/pump.html"
   status = 200
 
-[[redirects]]
-  from = "/pump/pump"
-  to = "/pump/pump.html"
-  status = 200
+# --- Optional: custom 404 page if you have /public/404.html ---
+# (Keep this LAST so earlier redirects still work.)
+# [[redirects]]
+#   from = "/*"
+#   to = "/404.html"
+#   status = 404
