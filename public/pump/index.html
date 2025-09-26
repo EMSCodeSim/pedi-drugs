@@ -73,7 +73,7 @@
 
   .lbl{font-size:10px;fill:#0b0f14}
 
-  /* Compact in-place picker (buttons-first) */
+  /* compact picker */
   .picker{
     position:absolute; background:#0b1320;border:1px solid var(--bubble-edge);border-radius:12px;
     min-width:320px;padding:8px; z-index:50; box-shadow:0 18px 40px rgba(0,0,0,.55); display:none;
@@ -87,7 +87,7 @@
   .row input, .row select{background:#0b1320;color:#eaf2ff;border:1px solid var(--edge);border-radius:10px;padding:8px 10px;font-size:14px}
   .mini{font-size:11px;color:#9fb0c8}
 
-  /* simple helper to hide the math panel until deployed */
+  /* helper to hide the math panel until deployed */
   .is-hidden{display:none!important}
 </style>
 </head>
@@ -164,7 +164,7 @@
         <div class="kpi"><div>Total Flow (deployed)</div><b id="GPM">— gpm</b></div>
         <div class="kpi"><div>Max PP (deployed)</div><b id="PDP">— psi</b></div>
       </div>
-      <!-- math panel is just this container; we toggle it -->
+      <!-- math panel toggles based on deployment -->
       <div class="linesTable is-hidden" id="linesTable"></div>
     </div>
   </section>
@@ -181,13 +181,30 @@ const BRANCH_LIFT = 10;
 const PSI_PER_FT = 0.434;
 
 const COEFF = { "1.75":15.5, "2.5":2, "5":0.08 };
+
+/* ===== Full Nozzle Catalog (Smooth-Bore + Fog) ===== */
 const NOZ = {
-  chiefXD:   {id:'chiefXD',   name:'ChiefXD',     gpm:185, NP:50},
-  chief265:  {id:'chief265',  name:'ChiefXD 265', gpm:265, NP:50}, // default for Line 3
-  fog150_75: {id:'fog150_75', name:'Fog 150',     gpm:150, NP:75},
-  sb265:     {id:'sb265',     name:'SB 1 1/8″',   gpm:265, NP:50}
+  // Smooth-bore (common handline tips)
+  sb7_8:     {id:'sb7_8',     grp:'Smooth Bore', name:'SB 7/8″',     gpm:160, NP:50},
+  sb15_16:   {id:'sb15_16',   grp:'Smooth Bore', name:'SB 15/16″',   gpm:185, NP:50},
+  sb1_0:     {id:'sb1_0',     grp:'Smooth Bore', name:'SB 1″',       gpm:210, NP:50},
+  sb1_1_8:   {id:'sb1_1_8',   grp:'Smooth Bore', name:'SB 1 1/8″',   gpm:265, NP:50},
+  sb1_1_4:   {id:'sb1_1_4',   grp:'Smooth Bore', name:'SB 1 1/4″',   gpm:325, NP:50},
+
+  // Fog (selectable/constant-gallonage examples)
+  fog125_75: {id:'fog125_75', grp:'Fog',         name:'Fog 125',     gpm:125, NP:75},
+  fog150_75: {id:'fog150_75', grp:'Fog',         name:'Fog 150',     gpm:150, NP:75},
+  fog150_100:{id:'fog150_100',grp:'Fog',         name:'Fog 150',     gpm:150, NP:100},
+  fog185_75: {id:'fog185_75', grp:'Fog',         name:'Fog 185',     gpm:185, NP:75},
+  fog185_100:{id:'fog185_100',grp:'Fog',         name:'Fog 185',     gpm:185, NP:100},
+  fog200_75: {id:'fog200_75', grp:'Fog',         name:'Fog 200',     gpm:200, NP:75},
+  fog200_100:{id:'fog200_100',grp:'Fog',         name:'Fog 200',     gpm:200, NP:100},
+
+  // Legacy-friendly (keep if old presets referenced it)
+  chiefXD:   {id:'chiefXD',   grp:'Fog',         name:'ChiefXD 185', gpm:185, NP:50}
 };
 const NOZ_LIST = Object.values(NOZ);
+
 const COLORS = {"1.75":"#ff6b6b","2.5":"#6ecbff","5":"#ecd464"};
 
 /* ===== State ===== */
@@ -355,25 +372,36 @@ function drawAll(){
     if(L.hasWye){
       if(sumFt(L.itemsLeft)>0){
         const gL = straightBranch('L', geom.endX, geom.endY, (sumFt(L.itemsLeft)/50)*PX_PER_50FT);
+        const pathL = document.createElementNS('http://www.w3.org/200svg','path'); // (typo fixed below)
+      }
+    }
+    base.remove();
+  });
+
+  // FIX for the accidental ns typo above:
+  // (Re-render branches properly)
+  clearGroup(G_branches);
+  ['left','back','right'].filter(k=>lines[k].visible).forEach(key=>{
+    const L = lines[key];
+    const dir = key==='left'?-1:key==='right'?1:0;
+    const mainFt = sumFt(L.itemsMain);
+    const geom = mainCurve(dir, (mainFt/50)*PX_PER_50FT, Math.ceil(computeNeededHeightPx()));
+    if(L.hasWye){
+      if(sumFt(L.itemsLeft)>0){
+        const gL = straightBranch('L', geom.endX, geom.endY, (sumFt(L.itemsLeft)/50)*PX_PER_50FT);
         const pathL = document.createElementNS('http://www.w3.org/2000/svg','path');
         pathL.setAttribute('d', gL.d); G_branches.appendChild(pathL);
         drawSegmentedPath(G_branches, pathL, L.itemsLeft, clsFor);
         addTip(key,'L',gL.endX,gL.endY);
-        const mid = pathL.getTotalLength()/2, pt = pathL.getPointAtLength(mid);
-        addLabel(`${sumFt(L.itemsLeft)}′ @ ${L.nozLeft.gpm} gpm`, pt.x, pt.y, labelDyForLine(key)-8);
-      } else addTip(key,'L',geom.endX-20,geom.endY-20);
-
+      } else { addTip(key,'L',geom.endX-20,geom.endY-20); }
       if(sumFt(L.itemsRight)>0){
         const gR = straightBranch('R', geom.endX, geom.endY, (sumFt(L.itemsRight)/50)*PX_PER_50FT);
         const pathR = document.createElementNS('http://www.w3.org/2000/svg','path');
         pathR.setAttribute('d', gR.d); G_branches.appendChild(pathR);
         drawSegmentedPath(G_branches, pathR, L.itemsRight, clsFor);
         addTip(key,'R',gR.endX,gR.endY);
-        const mid = pathR.getTotalLength()/2, pt = pathR.getPointAtLength(mid);
-        addLabel(`${sumFt(L.itemsRight)}′ @ ${L.nozRight.gpm} gpm`, pt.x, pt.y, labelDyForLine(key)-8);
-      } else addTip(key,'R',geom.endX+20,geom.endY-20);
+      } else { addTip(key,'R',geom.endX+20,geom.endY-20); }
     }
-    base.remove();
   });
 
   drawSupply(Math.ceil(computeNeededHeightPx()));
@@ -429,7 +457,7 @@ function refreshTotals(){
   document.getElementById('PDP').textContent = vis.length? `${Math.round(maxPDP)} psi` : '— psi';
 }
 
-/* Breakdown + equations (unchanged math) */
+/* Breakdown + equations */
 function breakdown(L){
   const mainLen  = sumFt(L.itemsMain) || 0;
   const flow     = L.hasWye ? (L.nozLeft?.gpm||0)+(L.nozRight?.gpm||0) : (L.nozRight?.gpm||0);
@@ -498,7 +526,7 @@ function drawHoseBar(container, sections, gpm, npPsi, nozzleText){
 
 /* ===== Read-only line panel (math only) ===== */
 function renderLinesPanel(){
-  // NEW: Hide math panel unless any line is deployed
+  // Hide math panel unless any line is deployed
   const anyDeployed = Object.values(lines).some(l=>l.visible);
   if(!anyDeployed){
     linesTable.innerHTML = '';
@@ -561,7 +589,7 @@ function renderLinesPanel(){
       `;
       linesTable.appendChild(mathWrap);
 
-      // render bars + eq
+      // render bars + equations
       drawHoseBar(document.getElementById(`viz_main_${key}`), splitIntoSections(L.itemsMain), gpmMain, (L.nozRight?.NP||0),
         `Main ${sumFt(L.itemsMain)}′ @ ${gpmMain} gpm — nozzle ${L.nozRight.gpm} @ ${L.nozRight.NP} psi`);
       if(!L.hasWye){
@@ -637,8 +665,19 @@ function showPicker(key, where, cx, cy){
     addBtns.appendChild(b);
   });
 
-  // nozzle select for this side
-  nozSelect.innerHTML = NOZ_LIST.map(n=>`<option value="${n.id}" ${((where==='L'?L.nozLeft:L.nozRight).id===n.id)?'selected':''}>${n.name} ${n.NP}/${n.gpm}</option>`).join('');
+  // GROUPED nozzle select for this side (Smooth Bore / Fog)
+  const groups = {
+    'Smooth Bore': NOZ_LIST.filter(n => n.grp === 'Smooth Bore'),
+    'Fog':         NOZ_LIST.filter(n => n.grp === 'Fog')
+  };
+  const currentId = (where==='L'?L.nozLeft:L.nozRight).id;
+  nozSelect.innerHTML = Object.entries(groups).map(([label, items]) =>
+    `<optgroup label="${label}">` +
+      items.map(n =>
+        `<option value="${n.id}" ${n.id===currentId?'selected':''}>${n.name} ${n.NP}/${n.gpm}</option>`
+      ).join('') +
+    `</optgroup>`
+  ).join('');
   nozSelect.onchange = ()=>{ const n = NOZ[nozSelect.value]; if(where==='L'){ L.nozLeft=n; } else { L.nozRight=n; } if(!L.visible){ L.visible=true; toggleLineBtn(key,true); } drawAll(); };
 
   // wye controls
@@ -655,7 +694,11 @@ function showPicker(key, where, cx, cy){
   quickMain.innerHTML='';
   [50,100,150,200,250,300].forEach(n=>{
     const b=document.createElement('button'); b.className='pill'; b.textContent=`Set main ${n}′`;
-    b.addEventListener('click',()=>{ L.itemsMain=[{size:(L.itemsMain[0]?.size||currentSize), lengthFt:n}]; if(!L.visible){ L.visible=true; toggleLineBtn(key,true);} hidePicker(); drawAll(); });
+    b.addEventListener('click',()=>{
+      L.itemsMain=[{size:(L.itemsMain[0]?.size||currentSize), lengthFt:n}];
+      if(!L.visible){ L.visible=true; toggleLineBtn(key,true); }
+      hidePicker(); drawAll();
+    });
     quickMain.appendChild(b);
   });
 
@@ -703,10 +746,10 @@ function applyDefaultsForKey(key){
   const L = lines[key];
   if(key==='left' || key==='back'){           // Line 1 & 2
     L.itemsMain=[{size:'1.75', lengthFt:200}];
-    L.nozLeft=L.nozRight=NOZ.chiefXD;         // 185 gpm @ 50 psi
+    L.nozLeft=L.nozRight=NOZ.fog185_75;       // 185 @ 75 by default
   } else {                                     // Line 3
     L.itemsMain=[{size:'2.5', lengthFt:250}];
-    L.nozLeft=L.nozRight=NOZ.chief265;        // 265 gpm @ 50 psi
+    L.nozLeft=L.nozRight=NOZ.sb1_1_8;         // 265 @ 50 by default
   }
 }
 
@@ -720,7 +763,7 @@ document.querySelectorAll('.linebtn').forEach(b=>{
     const key=b.dataset.line; const L=lines[key];
     if(!L.itemsMain.length){ applyDefaultsForKey(key); }
     L.visible = !L.visible; b.classList.toggle('active', L.visible);
-    drawAll(); // numbers mirror panel
+    drawAll(); // redraw UI + KPI + math panel visibility
   });
 });
 
