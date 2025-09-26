@@ -3,13 +3,14 @@
 <head>
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"/>
-<title>FireOps SIM — Phone View</title>
+<title>FireOps SIM — Visual Builder (Phone)</title>
 <style>
   :root{
     --bg:#0b0f14; --panel:#0f1624; --ink:#eaf2ff; --muted:#9fb0c8; --edge:rgba(255,255,255,.14);
     --hose5:#ecd464; --hose25:#6ecbff; --hose175:#ff6b6b;
     --bubble:#172134; --bubble-edge:rgba(255,255,255,.15);
     --btn:#0b1320; --btnEdge:#20324f;
+    --accent:#3aa7ff;
   }
   *{box-sizing:border-box}
   html,body{margin:0;background:var(--bg);color:var(--ink);font-family:system-ui,Segoe UI,Inter,Arial,sans-serif}
@@ -17,25 +18,21 @@
   .title{font-weight:700}
   .sub{font-size:12px;color:#9fb0c8}
 
-  /* Single column stack */
   .stack{display:flex;flex-direction:column;gap:10px;padding:10px}
-
   .card{background:#0e1726;border:1px solid var(--edge);border-radius:14px;padding:10px}
 
   /* Visual builder */
   .wrapper{background:linear-gradient(180deg,#0b0f14,#0e1726);border:1px solid var(--edge);border-radius:14px}
   .stage{position:relative;width:100%;max-width:900px;margin:0 auto;min-height:260px}
   #overlay{position:absolute;inset:0;width:100%;height:100%;display:block;pointer-events:auto}
-  .info{position:absolute;left:50%;top:8px;transform:translateX(-50%);background:var(--bubble);border:1px solid var(--bubble-edge);border-radius:999px;padding:6px 10px;font-size:12px;z-index:2}
+  .info{position:absolute;left:50%;top:8px;transform:translateX(-50%);background:var(--bubble);border:1px solid var(--bubble-edge);border-radius:999px;padding:6px 10px;font-size:12px;z-index:3}
 
-  .linebar{
-    position:absolute;left:0;right:0;bottom:8px;display:flex;justify-content:center;gap:6px;z-index:3;padding:0 8px
-  }
-  .linebtn,.supplybtn{
+  .linebar{position:absolute;left:0;right:0;bottom:8px;display:flex;justify-content:center;gap:6px;z-index:3;padding:0 8px}
+  .linebtn,.supplybtn,.presetsbtn{
     background:var(--btn);border:1px solid var(--btnEdge);color:#eaf2ff;border-radius:10px;
     padding:8px 10px;font-size:13px;cursor:pointer;box-shadow:0 6px 16px rgba(0,0,0,.35);white-space:nowrap
   }
-  .linebtn.active{outline:2px solid #3aa7ff}
+  .linebtn.active{outline:2px solid var(--accent)}
 
   .hoseBase{fill:none;stroke-linecap:round;stroke-linejoin:round}
   .hose5{stroke:var(--hose5);stroke-width:12}
@@ -69,16 +66,34 @@
   .lbl{font-size:10px;fill:#0b0f14}
   .is-hidden{display:none!important}
 
-  /* Presets row */
-  .presetRow{display:flex;gap:6px;flex-wrap:wrap}
-  .chip{background:#0b1a29;border:1px solid #1f3a57;border-radius:999px;padding:8px 10px;font-size:13px;color:#eaf2ff;cursor:pointer}
-  .chip:active{transform:translateY(1px)}
+  /* Tip Editor (floating compact form) */
+  .tip-editor{
+    position:absolute; z-index:5; min-width:250px; max-width:300px;
+    background:#0f1624;border:1px solid var(--edge);border-radius:12px;padding:10px;
+    box-shadow:0 12px 28px rgba(0,0,0,.45)
+  }
+  .te-row{display:flex;gap:8px;align-items:center;margin:6px 0}
+  .te-row label{width:88px;font-size:12px;color:#cfe4ff}
+  .te-row input,.te-row select{flex:1;background:#0b1320;color:#eaf2ff;border:1px solid var(--edge);border-radius:10px;padding:6px 8px;font-size:14px}
+  .te-actions{display:flex;gap:8px;justify-content:flex-end;margin-top:6px}
+  .btn{background:#0b1a29;border:1px solid #1f3a57;border-radius:10px;color:#eaf2ff;padding:8px 10px;font-size:13px;cursor:pointer}
+  .btn.primary{border-color:#2b6aa3;background:#123659}
+
+  /* Preset bottom sheet */
+  .sheet-backdrop{position:fixed;inset:0;background:rgba(0,0,0,.4);backdrop-filter:saturate(110%) blur(2px);z-index:40;display:none}
+  .sheet{position:fixed;left:0;right:0;bottom:0;z-index:41;background:#0e1726;border-top:1px solid var(--edge);border-radius:16px 16px 0 0;padding:12px 12px 16px;transform:translateY(100%);transition:.28s ease}
+  .sheet.show + .sheet-backdrop{display:block}
+  .sheet.show{transform:translateY(0)}
+  .preset-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:8px}
+  .preset{background:#0b1a29;border:1px solid #1f3a57;border-radius:12px;padding:10px;text-align:center;font-size:13px;cursor:pointer}
+  .linepick{display:flex;gap:8px;margin-top:10px}
+  .linepick .preset{flex:1}
 </style>
 </head>
 <body>
 <header>
   <div class="title">FireOps SIM — Phone</div>
-  <div class="sub">Visual builder → KPIs → Presets. Math shows after a line is deployed.</div>
+  <div class="sub">Tap + on a line to edit. Use Presets to apply Standpipe/Sprinkler/Foam/Monitor/Aerial to Line 1–3.</div>
 </header>
 
 <main class="stack">
@@ -97,6 +112,52 @@
         <button class="linebtn" data-line="back">Line 2</button>
         <button class="linebtn" data-line="right">Line 3</button>
         <button class="supplybtn" id="supplyBtn">Supply</button>
+        <button class="presetsbtn" id="presetsBtn">Presets</button>
+      </div>
+    </div>
+
+    <!-- Floating tip editor -->
+    <div id="tipEditor" class="tip-editor is-hidden" role="dialog" aria-modal="true">
+      <div class="mini" id="teTitle" style="margin-bottom:6px;opacity:.9">Edit Line</div>
+
+      <div class="te-row"><label>Where</label><input id="teWhere" readonly></div>
+
+      <div class="te-row"><label>Diameter</label>
+        <select id="teSize">
+          <option value="1.75">1¾″</option>
+          <option value="2.5">2½″</option>
+        </select>
+      </div>
+
+      <div class="te-row"><label>Length (ft)</label>
+        <input type="number" id="teLen" min="0" step="25" value="200">
+      </div>
+
+      <div class="te-row"><label>Nozzle</label>
+        <select id="teNoz"></select>
+      </div>
+
+      <div class="te-row"><label>Elevation (ft)</label>
+        <input type="number" id="teElev" step="5" value="0">
+      </div>
+
+      <div class="te-row"><label>Wye</label>
+        <select id="teWye">
+          <option value="off">Off</option>
+          <option value="on">On</option>
+        </select>
+      </div>
+
+      <div id="branchBlock" class="is-hidden">
+        <div class="te-row"><label>Branch A len</label><input type="number" id="teLenA" min="0" step="25" value="100"></div>
+        <div class="te-row"><label>Branch A noz</label><select id="teNozA"></select></div>
+        <div class="te-row"><label>Branch B len</label><input type="number" id="teLenB" min="0" step="25" value="100"></div>
+        <div class="te-row"><label>Branch B noz</label><select id="teNozB"></select></div>
+      </div>
+
+      <div class="te-actions">
+        <button class="btn" id="teCancel">Cancel</button>
+        <button class="btn primary" id="teApply">Apply</button>
       </div>
     </div>
   </section>
@@ -110,18 +171,33 @@
     <div class="linesTable is-hidden" id="linesTable"></div>
   </section>
 
-  <!-- 3) PRESETS ONLY -->
-  <section class="card">
-    <div class="presetRow">
-      <button class="chip" data-preset="standpipe">Standpipe</button>
-      <button class="chip" data-preset="sprinkler">Sprinkler</button>
-      <button class="chip" data-preset="foam">Foam</button>
-      <button class="chip" data-preset="monitor">Monitor</button>
-      <button class="chip" data-preset="aerial">Aerial</button>
-    </div>
-  </section>
-
 </main>
+
+<!-- Preset bottom sheet -->
+<div id="sheet" class="sheet" aria-modal="true" role="dialog">
+  <div style="display:flex;justify-content:space-between;align-items:center">
+    <div class="title">Presets</div>
+    <button class="btn" id="sheetClose">Close</button>
+  </div>
+  <div class="mini" style="opacity:.85;margin-top:4px">Pick a setup, then choose line to apply.</div>
+
+  <div class="preset-grid" id="presetGrid">
+    <div class="preset" data-preset="standpipe">Standpipe</div>
+    <div class="preset" data-preset="sprinkler">Sprinkler</div>
+    <div class="preset" data-preset="foam">Foam</div>
+    <div class="preset" data-preset="monitor">Monitor</div>
+    <div class="preset" data-preset="aerial">Aerial</div>
+  </div>
+
+  <div class="mini" style="opacity:.85;margin-top:10px">Apply to:</div>
+  <div class="linepick">
+    <div class="preset" data-applyline="left">Line 1</div>
+    <div class="preset" data-applyline="back">Line 2</div>
+    <div class="preset" data-applyline="right">Line 3</div>
+  </div>
+  <div class="te-actions"><button class="btn primary" id="sheetApply" disabled>Apply Preset</button></div>
+</div>
+<div id="sheetBackdrop" class="sheet-backdrop"></div>
 
 <script>
 /* ===== Constants ===== */
@@ -134,24 +210,34 @@ const PSI_PER_FT = 0.434;
 const COEFF = { "1.75":15.5, "2.5":2, "5":0.08 };
 const COLORS = {"1.75":"#ff6b6b","2.5":"#6ecbff","5":"#ecd464"};
 
-/* ===== Nozzles (for defaults) ===== */
+/* ===== Nozzles ===== */
 const NOZ = {
-  sb7_8:{id:'sb7_8',grp:'Smooth Bore',name:'SB 7/8″',gpm:160,NP:50},
-  sb15_16:{id:'sb15_16',grp:'Smooth Bore',name:'SB 15/16″',gpm:185,NP:50},
-  sb1_1_8:{id:'sb1_1_8',grp:'Smooth Bore',name:'SB 1 1/8″',gpm:265,NP:50},
-  fog150_75:{id:'fog150_75',grp:'Fog',name:'Fog 150',gpm:150,NP:75},
-  fog185_75:{id:'fog185_75',grp:'Fog',name:'Fog 185',gpm:185,NP:75},
-  fog200_75:{id:'fog200_75',grp:'Fog',name:'Fog 200',gpm:200,NP:75},
-  chiefXD:{id:'chiefXD',grp:'Fog',name:'ChiefXD 185',gpm:185,NP:50}
+  // Smooth-bore
+  sb7_8:{id:'sb7_8',grp:'Smooth Bore',name:'SB 7/8″ (160@50)',gpm:160,NP:50},
+  sb15_16:{id:'sb15_16',grp:'Smooth Bore',name:'SB 15/16″ (185@50)',gpm:185,NP:50},
+  sb1_1_8:{id:'sb1_1_8',grp:'Smooth Bore',name:'SB 1 1/8″ (265@50)',gpm:265,NP:50},
+  // Fog
+  fog125_75:{id:'fog125_75',grp:'Fog',name:'Fog 125@75',gpm:125,NP:75},
+  fog150_75:{id:'fog150_75',grp:'Fog',name:'Fog 150@75',gpm:150,NP:75},
+  fog185_75:{id:'fog185_75',grp:'Fog',name:'Fog 185@75',gpm:185,NP:75},
+  fog200_75:{id:'fog200_75',grp:'Fog',name:'Fog 200@75',gpm:200,NP:75},
+  chiefXD:{id:'chiefXD',grp:'Fog',name:'ChiefXD 185@50',gpm:185,NP:50}
 };
+const NOZ_LIST = Object.values(NOZ);
 
 /* ===== State ===== */
 function emptyHose(label){
-  return { label, itemsMain:[], hasWye:false, wyeLoss:10, itemsLeft:[], itemsRight:[],
-    nozLeft:NOZ.fog185_75||NOZ.chiefXD, nozRight:NOZ.fog185_75||NOZ.chiefXD, elevFt:0, visible:false };
+  return { label, itemsMain:[/* {size:'1.75',lengthFt:0} */], hasWye:false, wyeLoss:10,
+    itemsLeft:[], itemsRight:[],
+    nozLeft:NOZ.fog185_75, nozRight:NOZ.fog185_75,
+    elevFt:0, visible:false
+  };
 }
 const lines = { left:emptyHose('Line 1'), back:emptyHose('Line 2'), right:emptyHose('Line 3') };
 let currentSupply = 'none';
+
+/* Preset selection temp */
+let chosenPreset = null, chosenLine = null;
 
 /* ===== DOM ===== */
 const overlay   = document.getElementById('overlay');
@@ -164,7 +250,30 @@ const G_tips    = document.getElementById('tips');
 const topInfo   = document.getElementById('topInfo');
 const linesTable= document.getElementById('linesTable');
 
-/* ===== Helpers ===== */
+const tipEditor = document.getElementById('tipEditor');
+const teTitle = document.getElementById('teTitle');
+const teWhere = document.getElementById('teWhere');
+const teSize  = document.getElementById('teSize');
+const teLen   = document.getElementById('teLen');
+const teNoz   = document.getElementById('teNoz');
+const teElev  = document.getElementById('teElev');
+const teWye   = document.getElementById('teWye');
+const branchBlock = document.getElementById('branchBlock');
+const teLenA = document.getElementById('teLenA');
+const teLenB = document.getElementById('teLenB');
+const teNozA = document.getElementById('teNozA');
+theNozInit(teNoz); theNozInit(teNozA); theNozInit(document.getElementById('teNozB'));
+function theNozInit(sel){ sel.innerHTML = NOZ_LIST.map(n=>`<option value="${n.id}">${n.name}</option>`).join(''); }
+const teNozB = document.getElementById('teNozB');
+
+/* Helpers for editor position */
+function placeEditor(x,y){
+  const rect = stage.getBoundingClientRect();
+  tipEditor.style.left = Math.min(rect.width-310, Math.max(8, x-rect.left-140)) + 'px';
+  tipEditor.style.top  = Math.min(rect.height-10, Math.max(8, y-rect.top+8)) + 'px';
+}
+
+/* ===== Utility ===== */
 function clsFor(size){ return size==='5'?'hose5':(size==='2.5'?'hose25':'hose175'); }
 function sumFt(items){ return (items||[]).reduce((s,h)=>s + (h.lengthFt||0), 0); }
 function FL(gpm, size, ft){ const C=COEFF[size]||0, Q=gpm/100; return C*(Q*Q)*(ft/100); }
@@ -190,11 +299,14 @@ function computeNeededHeightPx(){
 }
 function truckTopY(viewH){ return viewH - TRUCK_H - supplyHeight(); }
 function pumpXY(viewH){ const top = truckTopY(viewH); return { x: TRUCK_W*0.515, y: top + TRUCK_H*0.74 }; }
+function sizeLabel(sz){ return sz==='2.5'?'2½″':(sz==='1.75'?'1¾″':sz+'"'); }
+
+/* ===== Geometry & draw ===== */
 function mainCurve(dir, totalPx, viewH){
   const {x:sx,y:sy} = pumpXY(viewH);
   const ex = dir===-1 ? sx - 110 : dir===1 ? sx + 110 : sx;
   const ey = Math.max(10, sy - totalPx);
-  const cx = (sx+ex)/2 + (dir===-1?-36:dir===1?36:0);
+  const cx = (sx+ex)/2 + (dir===-1?-CURVE_PULL:dir===1?CURVE_PULL:0);
   const cy = sy - (sy-ey)*0.48;
   return { d:`M ${sx},${sy} Q ${cx},${cy} ${ex},${ey}`, endX:ex, endY:ey };
 }
@@ -233,7 +345,7 @@ function addLabel(text, x, y, dy=0){
   g.insertBefore(bg, t);
 }
 
-/* ===== Draw ===== */
+/* ===== Draw everything ===== */
 function drawAll(){
   const viewH = Math.ceil(computeNeededHeightPx());
   overlay.setAttribute('viewBox', `0 0 ${TRUCK_W} ${viewH}`);
@@ -251,7 +363,9 @@ function drawAll(){
     const geom = mainCurve(dir, (mainFt/50)*PX_PER_50FT, viewH);
 
     const base = document.createElementNS('http://www.w3.org/2000/svg','path'); base.setAttribute('d', geom.d); G_hoses.appendChild(base);
-    drawSegmentedPath(G_hoses, base, L.itemsMain, clsFor);
+    drawSegmentedPath(G_hoses, base, L.itemsMain, (s)=>clsFor(s));
+
+    // Make + clickable editor
     addTip(key,'main',geom.endX,geom.endY);
 
     const flowGpm = L.hasWye ? (L.nozLeft.gpm + L.nozRight.gpm) : L.nozRight.gpm;
@@ -261,14 +375,14 @@ function drawAll(){
       if(sumFt(L.itemsLeft)>0){
         const gL = straightBranch('L', geom.endX, geom.endY, (sumFt(L.itemsLeft)/50)*PX_PER_50FT);
         const pathL = document.createElementNS('http://www.w3.org/2000/svg','path'); pathL.setAttribute('d', gL.d); G_branches.appendChild(pathL);
-        drawSegmentedPath(G_branches, pathL, L.itemsLeft, clsFor);
+        drawSegmentedPath(G_branches, pathL, L.itemsLeft, (s)=>clsFor(s));
         addTip(key,'L',gL.endX,gL.endY);
       } else addTip(key,'L',geom.endX-20,geom.endY-20);
 
       if(sumFt(L.itemsRight)>0){
         const gR = straightBranch('R', geom.endX, geom.endY, (sumFt(L.itemsRight)/50)*PX_PER_50FT);
         const pathR = document.createElementNS('http://www.w3.org/2000/svg','path'); pathR.setAttribute('d', gR.d); G_branches.appendChild(pathR);
-        drawSegmentedPath(G_branches, pathR, L.itemsRight, clsFor);
+        drawSegmentedPath(G_branches, pathR, L.itemsRight, (s)=>clsFor(s));
         addTip(key,'R',gR.endX,gR.endY);
       } else addTip(key,'R',geom.endX+20,geom.endY-20);
     }
@@ -280,7 +394,7 @@ function drawAll(){
   renderLinesPanel();
 }
 
-/* Supply visuals (kept minimal; Supply button cycles options) */
+/* ===== Supply visuals ===== */
 function drawSupply(viewH){
   const G = document.getElementById('supplyG'); clearGroup(G);
   const h = supplyHeight(); if(!h) return;
@@ -311,7 +425,7 @@ function drawSupply(viewH){
   }
 }
 
-/* Totals */
+/* ===== Totals ===== */
 function refreshTotals(){
   const vis = Object.values(lines).filter(l=>l.visible);
   let totalGPM = 0, maxPDP = 0;
@@ -328,7 +442,7 @@ function refreshTotals(){
   document.getElementById('PDP').textContent = vis.length? `${Math.round(maxPDP)} psi` : '— psi';
 }
 
-/* Breakdown + equations (for the panel) */
+/* ===== Math panel ===== */
 function breakdown(L){
   const mainLen  = sumFt(L.itemsMain) || 0;
   const flow     = L.hasWye ? (L.nozLeft?.gpm||0)+(L.nozRight?.gpm||0) : (L.nozRight?.gpm||0);
@@ -349,11 +463,8 @@ function drawHoseBar(container, sections, gpm, npPsi, nozzleText){
   const totalLen = sumFt(sections); container.innerHTML=''; if(!totalLen||!gpm){ container.textContent='No hose yet'; container.style.color='#9fb0c8'; container.style.fontSize='12px'; return; }
   const W = Math.max(300, Math.min(container.clientWidth||360, 720)), NP_W=64, H=54;
   const svgNS='http://www.w3.org/2000/svg'; const svg=document.createElementNS(svgNS,'svg'); svg.setAttribute('width','100%'); svg.setAttribute('height',H); svg.setAttribute('viewBox',`0 0 ${W} ${H}`); const innerW=W-16-NP_W;
-
   if(nozzleText){ const t=document.createElementNS(svgNS,'text'); t.setAttribute('x',8); t.setAttribute('y',12); t.setAttribute('fill','#cfe4ff'); t.setAttribute('font-size','12'); t.textContent=nozzleText; svg.appendChild(t); }
-
   const track=document.createElementNS(svgNS,'rect'); track.setAttribute('x',8); track.setAttribute('y',20); track.setAttribute('width',innerW); track.setAttribute('height',18); track.setAttribute('fill','#0c1726'); track.setAttribute('stroke','#20324f'); track.setAttribute('rx',6); track.setAttribute('ry',6); svg.appendChild(track);
-
   let x=8;
   sections.forEach(seg=>{
     const segW=(seg.lengthFt/totalLen)*innerW;
@@ -362,10 +473,8 @@ function drawHoseBar(container, sections, gpm, npPsi, nozzleText){
     const t=document.createElementNS(svgNS,'text'); t.setAttribute('fill','#0b0f14'); t.setAttribute('font-size','11'); t.setAttribute('font-family','ui-monospace,Menlo,Consolas,monospace'); t.setAttribute('text-anchor','middle'); t.setAttribute('x',x+segW/2); t.setAttribute('y',34); t.textContent=`${seg.lengthFt}′ • ${Math.round(fl)} psi`; svg.appendChild(t);
     x+=segW;
   });
-
   const pill=document.createElementNS(svgNS,'rect'); pill.setAttribute('x',innerW+8+6); pill.setAttribute('y',20); pill.setAttribute('width',NP_W-12); pill.setAttribute('height',18); pill.setAttribute('fill','#eaf2ff'); pill.setAttribute('stroke','#20324f'); pill.setAttribute('rx',6); pill.setAttribute('ry',6); svg.appendChild(pill);
   const npT=document.createElementNS(svgNS,'text'); npT.setAttribute('x',innerW+8+(NP_W-12)/2); npT.setAttribute('y',33); npT.setAttribute('text-anchor','middle'); npT.setAttribute('fill','#0b0f14'); npT.setAttribute('font-size','11'); npT.setAttribute('font-family','ui-monospace,Menlo,Consolas,monospace'); npT.textContent=`NP ${npPsi}`; svg.appendChild(npT);
-
   container.appendChild(svg);
 }
 function eqStringNoWye(L){
@@ -389,8 +498,6 @@ function eqStringsWye(L){
   const final = `PP = max(A,B) + Main FL${wye} ± Elev = max(A,B) + ${mainFls.join(' + ')||0}${wye}${elevPart}`;
   return { aEq, bEq, final };
 }
-
-/* Lines panel (hidden until any deployed) */
 function renderLinesPanel(){
   const anyDeployed = Object.values(lines).some(l=>l.visible);
   if(!anyDeployed){ linesTable.innerHTML=''; linesTable.classList.add('is-hidden'); return; }
@@ -399,7 +506,7 @@ function renderLinesPanel(){
   ['left','back','right'].forEach(key=>{
     const L = lines[key];
     const row = document.createElement('div'); row.className='lineRow';
-    const segs = L.itemsMain.length ? L.itemsMain.map(s=>`${s.lengthFt}′ ${s.size === '2.5' ? '2½″' : s.size==='1.75'?'1¾″':s.size+'"'}`).join(' + ') : 'empty';
+    const segs = L.itemsMain.length ? L.itemsMain.map(s=>`${s.lengthFt}′ ${sizeLabel(s.size)}`).join(' + ') : 'empty';
     const flow = L.hasWye ? (L.nozLeft.gpm + L.nozRight.gpm) : L.nozRight.gpm;
     const head = document.createElement('div'); head.className='lineHeader'; head.innerHTML = `
       <span class="title">${L.label}</span>
@@ -445,10 +552,7 @@ function renderLinesPanel(){
         </details>
       `;
       linesTable.appendChild(mathWrap);
-
-      // draw bars + equations
-      drawHoseBar(document.getElementById(`viz_main_${key}`), splitSections(L.itemsMain), gpmMain, (L.nozRight?.NP||0),
-        `Main ${sumFt(L.itemsMain)}′ @ ${gpmMain} gpm`);
+      drawHoseBar(document.getElementById(`viz_main_${key}`), splitSections(L.itemsMain), gpmMain, (L.nozRight?.NP||0), `Main ${sumFt(L.itemsMain)}′ @ ${gpmMain} gpm`);
       if(!L.hasWye){
         const eq = document.getElementById(`eq_main_${key}`); if(eq) eq.textContent = eqStringNoWye(L);
       }else{
@@ -463,7 +567,7 @@ function renderLinesPanel(){
   });
 }
 
-/* Tips (+) quick-add (phone simple): each tap adds 50′ of appropriate size */
+/* ===== Add + tips ===== */
 function addTip(key, where, x, y){
   const g = document.createElementNS('http://www.w3.org/2000/svg','g');
   g.setAttribute('class','hose-end'); g.setAttribute('data-line',key); g.setAttribute('data-where',where);
@@ -473,22 +577,102 @@ function addTip(key, where, x, y){
   const h = document.createElementNS('http://www.w3.org/2000/svg','line'); h.setAttribute('class','plus-sign'); h.setAttribute('x1',x-6); h.setAttribute('y1',y); h.setAttribute('x2',x+6); h.setAttribute('y2',y);
   g.appendChild(hit); g.appendChild(c); g.appendChild(v); g.appendChild(h); G_tips.appendChild(g);
 }
+
+/* ===== Editor logic ===== */
+let editorContext = null; // {key, where}
 overlay.addEventListener('click', (e)=>{
   const tip = e.target.closest('.hose-end'); if(!tip) return;
   const key = tip.getAttribute('data-line'); const where = tip.getAttribute('data-where');
   const L = lines[key];
-  if(where==='main'){ L.itemsMain.push({size:(L.itemsMain.at(-1)?.size || (key==='right'?'2.5':'1.75')), lengthFt:50}); }
-  else if(where==='L'){ L.itemsLeft.push({size:'1.75', lengthFt:50}); L.hasWye=true; }
-  else if(where==='R'){ L.itemsRight.push({size:'1.75', lengthFt:50}); L.hasWye=true; }
-  L.visible = true; drawAll();
+  // Seed a default line if empty
+  if(!L.itemsMain.length){ L.itemsMain=[{size:(key==='right'?'2.5':'1.75'), lengthFt:200}]; L.nozRight=NOZ.fog185_75; L.visible=true; }
+
+  // Load editor
+  editorContext = {key, where};
+  teTitle.textContent = `${L.label} — ${where==='main'?'Main':'Branch '+where}`;
+  teWhere.value = where.toUpperCase();
+  teElev.value = L.elevFt||0;
+  teWye.value  = L.hasWye? 'on':'off';
+
+  // Main OR Branch inputs
+  if(where==='main'){
+    const seg = L.itemsMain[0] || {size:'1.75',lengthFt:200};
+    teSize.value = seg.size;
+    teLen.value  = seg.lengthFt||0;
+    teNoz.value  = L.nozRight.id; // primary nozzle (or right branch if wye)
+  } else if(where==='L'){
+    const seg = L.itemsLeft[0] || {size:'1.75',lengthFt:100};
+    teSize.value = seg.size;
+    teLen.value = seg.lengthFt;
+    teNoz.value = (L.nozLeft||NOZ.fog150_75).id;
+  } else if(where==='R'){
+    const seg = L.itemsRight[0] || {size:'1.75',lengthFt:100};
+    teSize.value = seg.size;
+    teLen.value = seg.lengthFt;
+    teNoz.value = (L.nozRight||NOZ.fog150_75).id;
+  }
+
+  // Branch controls visibility
+  branchBlock.classList.toggle('is-hidden', teWye.value==='off');
+  teLenA.value = (L.itemsLeft[0]?.lengthFt)||100;
+  teLenB.value = (L.itemsRight[0]?.lengthFt)||100;
+  teNozA.value = (L.nozLeft?.id)||'fog150_75';
+  teNozB.value = (L.nozRight?.id)||'fog150_75';
+
+  // Position & show
+  placeEditor(e.clientX, e.clientY);
+  tipEditor.classList.remove('is-hidden');
 });
 
-/* Buttons on visual */
-document.getElementById('supplyBtn').addEventListener('click', ()=>{
-  const order = ['none','pressurized','drafting','relay'];
-  currentSupply = order[(order.indexOf(currentSupply)+1)%order.length];
+teWye.addEventListener('change', ()=>{ branchBlock.classList.toggle('is-hidden', teWye.value==='off'); });
+
+document.getElementById('teCancel').addEventListener('click', ()=>{ tipEditor.classList.add('is-hidden'); });
+
+document.getElementById('teApply').addEventListener('click', ()=>{
+  if(!editorContext) return;
+  const {key, where} = editorContext;
+  const L = lines[key];
+  const size = teSize.value;
+  const len  = Math.max(0, +teLen.value||0);
+  const noz  = NOZ[teNoz.value];
+  const elev = +teElev.value||0;
+  const wyeOn = teWye.value==='on';
+
+  // Apply elevation to the whole line
+  L.elevFt = elev;
+
+  if(where==='main'){
+    L.itemsMain = [{size, lengthFt:len}];
+    if(!wyeOn){
+      L.hasWye=false; L.itemsLeft=[]; L.itemsRight=[];
+      L.nozRight = noz; // nozzle on the main
+    }else{
+      L.hasWye=true;
+      // ensure branch segments exist
+      const lenA = Math.max(0, +teLenA.value||100);
+      const lenB = Math.max(0, +teLenB.value||100);
+      L.itemsLeft  = [{size:'1.75',lengthFt:lenA}];
+      L.itemsRight = [{size:'1.75',lengthFt:lenB}];
+      L.nozLeft  = NOZ[teNozA.value];
+      L.nozRight = NOZ[teNozB.value];
+    }
+  } else if(where==='L'){
+    L.hasWye = wyeOn || true; // editing branch implies wye on
+    L.itemsLeft  = [{size, lengthFt:len}];
+    L.nozLeft = noz;
+    // keep right side as-is
+  } else if(where==='R'){
+    L.hasWye = wyeOn || true;
+    L.itemsRight = [{size, lengthFt:len}];
+    L.nozRight = noz;
+  }
+
+  L.visible = true;
+  tipEditor.classList.add('is-hidden');
   drawAll();
 });
+
+/* ===== Line toggle buttons ===== */
 document.querySelectorAll('.linebtn').forEach(b=>{
   b.addEventListener('click', ()=>{
     const key=b.dataset.line; const L=lines[key];
@@ -501,43 +685,74 @@ document.querySelectorAll('.linebtn').forEach(b=>{
   });
 });
 
-/* Presets (bottom chips) */
-function clearAll(){ Object.values(lines).forEach(L=>{ L.visible=false; L.itemsMain=[]; L.itemsLeft=[]; L.itemsRight=[]; L.hasWye=false; L.elevFt=0; }); }
-document.querySelector('.presetRow').addEventListener('click',(e)=>{
-  const id = e.target.dataset.preset; if(!id) return;
-
-  if(id==='standpipe'){
-    clearAll();
-    const L=lines.right; L.visible=true;
-    L.itemsMain=[{size:'2.5',lengthFt:0}]; // fed by FDC visually
-    L.nozRight=NOZ.fog150_75; L.elevFt=60; // example rise
-  }
-  if(id==='sprinkler'){
-    clearAll();
-    currentSupply='pressurized';
-    // Visual stays clear; use math/KPI when you add supply lengths if desired
-  }
-  if(id==='foam'){
-    clearAll();
-    const L=lines.left; L.visible=true;
-    L.itemsMain=[{size:'1.75',lengthFt:200}]; L.nozRight=NOZ.fog150_75; L.hasWye=false;
-  }
-  if(id==='monitor'){
-    clearAll();
-    const L=lines.right; L.visible=true;
-    L.itemsMain=[{size:'2.5',lengthFt:200}]; L.nozRight=NOZ.sb1_1_8; L.elevFt=0;
-  }
-  if(id==='aerial'){
-    clearAll();
-    currentSupply='pressurized';
-    // Add supply lengths to represent aerial feed if you want on the rig
-  }
+/* ===== Supply & Presets buttons ===== */
+document.getElementById('supplyBtn').addEventListener('click', ()=>{
+  const order = ['none','pressurized','drafting','relay'];
+  currentSupply = order[(order.indexOf(currentSupply)+1)%order.length];
   drawAll();
 });
 
-/* Boot */
-function pumpXY(viewH){ const top = truckTopY(viewH); return { x: TRUCK_W*0.515, y: top + TRUCK_H*0.74 }; } // re-declare to satisfy usage above
-function truckTopY(viewH){ return viewH - TRUCK_H - supplyHeight(); } // re-declare for boot order
+/* Bottom sheet (Presets) */
+const sheet = document.getElementById('sheet');
+const sheetBackdrop = document.getElementById('sheetBackdrop');
+function openSheet(){ sheet.classList.add('show'); sheetBackdrop.style.display='block'; }
+function closeSheet(){ sheet.classList.remove('show'); sheetBackdrop.style.display='none'; chosenPreset=null; chosenLine=null; document.getElementById('sheetApply').disabled=true; }
+document.getElementById('presetsBtn').addEventListener('click', openSheet);
+document.getElementById('sheetClose').addEventListener('click', closeSheet);
+sheetBackdrop.addEventListener('click', closeSheet);
+
+document.getElementById('presetGrid').addEventListener('click',(e)=>{
+  const p = e.target.closest('.preset'); if(!p) return;
+  chosenPreset = p.dataset.preset;
+  // simple highlight
+  document.querySelectorAll('#presetGrid .preset').forEach(x=>x.style.outline='none');
+  p.style.outline = '2px solid var(--accent)';
+  updateSheetApply();
+});
+document.querySelector('.linepick').addEventListener('click',(e)=>{
+  const p = e.target.closest('.preset'); if(!p) return;
+  chosenLine = p.dataset.applyline;
+  document.querySelectorAll('.linepick .preset').forEach(x=>x.style.outline='none');
+  p.style.outline = '2px solid var(--accent)';
+  updateSheetApply();
+});
+function updateSheetApply(){ document.getElementById('sheetApply').disabled = !(chosenPreset && chosenLine); }
+
+document.getElementById('sheetApply').addEventListener('click', ()=>{
+  if(!(chosenPreset && chosenLine)) return;
+  applyPresetTo(chosenPreset, chosenLine);
+  closeSheet();
+});
+
+/* ===== Preset logic ===== */
+function clearLine(L){ L.itemsMain=[]; L.itemsLeft=[]; L.itemsRight=[]; L.hasWye=false; L.elevFt=0; }
+function applyPresetTo(preset, key){
+  const L = lines[key]; clearLine(L); L.visible = true;
+  switch(preset){
+    case 'standpipe':
+      L.itemsMain=[{size:'2.5', lengthFt:0}]; // FDC feed visual
+      L.hasWye=false; L.nozRight=NOZ.fog150_75; L.elevFt=60;
+      break;
+    case 'sprinkler':
+      currentSupply='pressurized';
+      // Visual left empty; intent is target PDP at FDC — you can add LDH if desired
+      L.itemsMain=[{size:'2.5', lengthFt:50}]; L.nozRight=NOZ.fog150_75; L.hasWye=false;
+      break;
+    case 'foam':
+      L.itemsMain=[{size:'1.75', lengthFt:200}]; L.nozRight=NOZ.fog150_75; L.hasWye=false; L.elevFt=0;
+      break;
+    case 'monitor':
+      L.itemsMain=[{size:'2.5', lengthFt:200}]; L.nozRight=NOZ.sb1_1_8; L.hasWye=false; L.elevFt=0;
+      break;
+    case 'aerial':
+      currentSupply='pressurized';
+      L.itemsMain=[{size:'2.5', lengthFt:150}]; L.nozRight=NOZ.sb1_1_8; L.hasWye=false; L.elevFt=80;
+      break;
+  }
+  drawAll();
+}
+
+/* ===== Boot ===== */
 drawAll();
 </script>
 </body>
