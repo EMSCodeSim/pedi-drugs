@@ -10,7 +10,7 @@
     --hose5:#ecd464; --hose25:#6ecbff; --hose175:#ff6b6b;
     --bubble:#172134; --bubble-edge:rgba(255,255,255,.15);
     --btn:#0b1320; --btnEdge:#20324f;
-    --accent:#3aa7ff;
+    --accent:#3aa7ff; --ok:#9fe879;
   }
   *{box-sizing:border-box}
   html,body{margin:0;background:var(--bg);color:var(--ink);font-family:system-ui,Segoe UI,Inter,Arial,sans-serif}
@@ -47,8 +47,11 @@
 
   /* KPIs + math */
   .kpis{display:flex;gap:8px;flex-wrap:wrap}
-  .kpi{background:#0b1320;border:1px solid var(--edge);border-radius:12px;padding:8px 10px;font-size:13px;color:#cfe4ff;flex:1;min-width:140px}
+  .kpi{background:#0b1320;border:1px solid var(--edge);border-radius:12px;padding:8px 10px;font-size:13px;color:#cfe4ff;flex:1;min-width:140px;display:flex;align-items:center;justify-content:space-between;gap:8px}
   .kpi b{font-size:18px}
+  .whyBtn{margin-left:auto;background:#0b1a29;border:1px solid #1f3a57;color:#eaf2ff;border-radius:999px;padding:6px 9px;font-size:12px;cursor:pointer}
+  .whyBtn:active{transform:translateY(1px)}
+
   .linesTable{margin-top:8px;border-top:1px solid var(--edge);padding-top:8px;display:grid;gap:8px}
   .lineRow{background:#0b1320;border:1px solid var(--edge);border-radius:12px;padding:8px}
   .lineHeader{display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-bottom:2px;font-size:12px;color:#cfe4ff}
@@ -71,6 +74,10 @@
   .simpleBox b{color:#eaf2ff}
   .simpleList{margin:6px 0 0 16px;padding:0}
   .simpleList li{margin:2px 0}
+
+  /* Flash highlight when jumping to PP explanation */
+  @keyframes flashBox{0%{box-shadow:0 0 0 rgba(63,191,255,0)} 25%{box-shadow:0 0 0 4px rgba(58,167,255,.35)} 100%{box-shadow:0 0 0 rgba(63,191,255,0)}}
+  .flash{animation:flashBox 1200ms ease 1}
 
   /* Tip Editor (floating compact form) */
   .tip-editor{
@@ -172,7 +179,11 @@
   <section class="card">
     <div class="kpis">
       <div class="kpi"><div>Total Flow</div><b id="GPM">— gpm</b></div>
-      <div class="kpi"><div>Max PP</div><b id="PDP">— psi</b></div>
+      <div class="kpi">
+        <div>Max PP</div>
+        <b id="PDP">— psi</b>
+        <button id="whyBtn" class="whyBtn" title="Why this number?">Why?</button>
+      </div>
     </div>
     <div class="linesTable is-hidden" id="linesTable"></div>
   </section>
@@ -209,7 +220,6 @@
 /* ===== Constants ===== */
 const TRUCK_W = 390, TRUCK_H = 260;
 const PX_PER_50FT = 45;
-const PUMP_REL = { x:0.515, y:0.74 };
 const CURVE_PULL = 36;
 const BRANCH_LIFT = 10;
 const PSI_PER_FT = 0.434;
@@ -242,6 +252,9 @@ function emptyHose(label){
 const lines = { left:emptyHose('Line 1'), back:emptyHose('Line 2'), right:emptyHose('Line 3') };
 let currentSupply = 'none';
 
+/* Track which line currently sets the Max PP (for Why?) */
+let lastMaxKey = null;
+
 /* Preset selection temp */
 let chosenPreset = null, chosenLine = null;
 
@@ -255,6 +268,7 @@ const G_labels  = document.getElementById('labels');
 const G_tips    = document.getElementById('tips');
 const topInfo   = document.getElementById('topInfo');
 const linesTable= document.getElementById('linesTable');
+const whyBtn    = document.getElementById('whyBtn');
 
 /* Tip editor elements */
 const tipEditor = document.getElementById('tipEditor');
@@ -327,17 +341,11 @@ function straightBranch(side, startX, startY, totalPx){
 function drawSegmentedPath(group, basePath, segs, sizeToClass){
   const sh = document.createElementNS('http://www.w3.org/2000/svg','path');
   sh.setAttribute('class','hoseBase shadow'); sh.setAttribute('d', basePath.getAttribute('d')); group.appendChild(sh);
+
   const total = basePath.getTotalLength(); let offset = 0;
   const totalPx = (sumFt(segs)/50)*PX_PER_50FT || 1;
+
   segs.forEach(seg=>{
-    const px = (seg.lengthFt/50)*PX_PER_50FT;
-    const portion = Math.min(total, (px/totalPx)*total);
-    const p = document.createElementNS('http://www.w3.org/200/svg','path');
-    // namespace typo guard:
-  });
-  // re-create correctly:
-  group.lastChild && group.removeChild(group.lastChild);
-  segs.forEach((seg, i)=>{
     const px = (seg.lengthFt/50)*PX_PER_50FT;
     const portion = Math.min(total, (px/totalPx)*total);
     const p = document.createElementNS('http://www.w3.org/2000/svg','path');
@@ -415,6 +423,10 @@ function drawAll(){
 }
 
 /* ===== Supply visuals ===== */
+function supplyHeight(){ return currentSupply==='drafting'?150: currentSupply==='pressurized'?150: currentSupply==='relay'?170: 0; }
+function truckTopY(viewH){ return viewH - TRUCK_H - supplyHeight(); }
+function pumpXY(viewH){ const top = truckTopY(viewH); return { x: TRUCK_W*0.515, y: top + TRUCK_H*0.74 }; }
+
 function drawSupply(viewH){
   const G = document.getElementById('supplyG'); clearGroup(G);
   const h = supplyHeight(); if(!h) return;
@@ -445,20 +457,22 @@ function drawSupply(viewH){
   }
 }
 
-/* ===== Totals ===== */
+/* ===== Totals (also tracks max-PP line key) ===== */
 function refreshTotals(){
-  const vis = Object.values(lines).filter(l=>l.visible);
-  let totalGPM = 0, maxPDP = 0;
-  vis.forEach(L=>{
+  const vis = Object.entries(lines).filter(([_k,l])=>l.visible);
+  let totalGPM = 0, maxPDP = -Infinity, maxKey = null;
+  vis.forEach(([key, L])=>{
     const gpm = L.hasWye ? (L.nozLeft?.gpm||0) + (L.nozRight?.gpm||0) : (L.nozRight?.gpm||0);
     const mainFL = FL_total(gpm, L.itemsMain);
     const leftNeed = L.hasWye ? FL_total(L.nozLeft?.gpm||0, L.itemsLeft) + (L.nozLeft?.NP||0) : 0;
     const rightNeed= L.hasWye ? FL_total(L.nozRight?.gpm||0, L.itemsRight) + (L.nozRight?.NP||0) : (L.nozRight?.NP||0);
     const branchMax = L.hasWye ? Math.max(leftNeed, rightNeed) : rightNeed;
     const PDP = branchMax + mainFL + (L.hasWye ? L.wyeLoss:0) + (L.elevFt * PSI_PER_FT);
-    totalGPM += gpm; maxPDP = Math.max(maxPDP, PDP);
+    totalGPM += gpm;
+    if(PDP > maxPDP){ maxPDP = PDP; maxKey = key; }
   });
-  document.getElementById('GPM').textContent = vis.length? `${totalGPM} gpm` : '— gpm';
+  lastMaxKey = maxKey;
+  document.getElementById('GPM').textContent = vis.length? `${Math.round(totalGPM)} gpm` : '— gpm';
   document.getElementById('PDP').textContent = vis.length? `${Math.round(maxPDP)} psi` : '— psi';
 }
 
@@ -478,7 +492,7 @@ function ppExplainHTML(L){
           <li><b>Friction Loss (Main)</b> = ${mainSecs.length? mainSecs.map((s,i)=>`${fmt(mainFLs[i])} (${s.lengthFt}′ ${s.size==='2.5'?'2½″':s.size==='1.75'?'1¾″':s.size+'″'})`).join(' + ') : 0} = <b>${fmt(mainFLsum)} psi</b></li>
           <li><b>Elevation</b> = ${b.elevPsi>=0? '+':''}${fmt(b.elevPsi)} psi</li>
         </ul>
-        <div style="margin-top:6px"><b>PP = NP + FL ± Elev = ${fmt(L.nozRight?.NP||0)} + ${fmt(mainFLsum)} ${b.elevPsi>=0?'+':''}${fmt(b.elevPsi)} = <span style="color:#9fe879">${fmt(b.PDP)} psi</span></b></div>
+        <div style="margin-top:6px"><b>PP = NP + FL ± Elev = ${fmt(L.nozRight?.NP||0)} + ${fmt(mainFLsum)} ${b.elevPsi>=0?'+':''}${fmt(b.elevPsi)} = <span style="color:var(--ok)">${fmt(b.PDP)} psi</span></b></div>
       </div>
     `;
   } else {
@@ -504,7 +518,7 @@ function ppExplainHTML(L){
         <div style="margin-top:6px">
           <b>PP = max(A,B) + Main FL ${wyeLoss?`+ Wye`:``} ± Elev
              = ${fmt(maxNeed)} + ${fmt(mainFLsum)} ${wyeLoss?`+ ${fmt(wyeLoss)} `:``}${b.elevPsi>=0?'+':''}${fmt(b.elevPsi)}
-             = <span style="color:#9fe879">${fmt(b.PDP)} psi</span></b>
+             = <span style="color:var(--ok)">${fmt(b.PDP)} psi</span></b>
         </div>
       </div>
     `;
@@ -527,7 +541,6 @@ function breakdown(L){
   const PDP = branchMax + mainFL + wye + elevPsi;
   return { mainLen, flow, mainFL, lLen, lFL, rLen, rFL, leftNeed, rightNeed, branchMax, wye, elevPsi, PDP };
 }
-function splitSections(segments){ return splitIntoSections(segments); }
 function drawHoseBar(container, sections, gpm, npPsi, nozzleText){
   const totalLen = sumFt(sections); container.innerHTML=''; if(!totalLen||!gpm){ container.textContent='No hose yet'; container.style.color='#9fb0c8'; container.style.fontSize='12px'; return; }
   const W = Math.max(300, Math.min(container.clientWidth||360, 720)), NP_W=64, H=54;
@@ -543,12 +556,12 @@ function drawHoseBar(container, sections, gpm, npPsi, nozzleText){
     x+=segW;
   });
   const pill=document.createElementNS(svgNS,'rect'); pill.setAttribute('x',innerW+8+6); pill.setAttribute('y',20); pill.setAttribute('width',NP_W-12); pill.setAttribute('height',18); pill.setAttribute('fill','#eaf2ff'); pill.setAttribute('stroke','#20324f'); pill.setAttribute('rx',6); pill.setAttribute('ry',6); svg.appendChild(pill);
-  const npT=document.createElementNS(svgNS,'text'); npT.setAttribute('x',innerW+8+(NP_W-12)/2); npT.setAttribute('y',33); npT.setAttribute('text-anchor','middle'); npT.setAttribute('fill','#0b0f14'); npT.setAttribute('font-size','11'); npT.setAttribute('font-family','ui-monospace,Menlo,Consolas,monospace'); npT.textContent=`NP ${npPsi}`; svg.appendChild(npT);
+  const npT=document.createElementNS(svgNS,'text'); npT.setAttribute('x',innerW+8+(NP_W-12)/2); npT.setAttribute('y',33); npT.setAttribute('text-anchor','middle'); npT.setAttribute('fill','#0b0f14'); npT.setAttribute('font-size','11'); npT.textContent=`NP ${npPsi}`; svg.appendChild(npT);
   container.appendChild(svg);
 }
 function eqStringNoWye(L){
   const b = breakdown(L);
-  const sections = splitSections(L.itemsMain);
+  const sections = splitIntoSections(L.itemsMain);
   const fls = sections.map(s => round(FL(b.flow, s.size, s.lengthFt)));
   const elev = round(b.elevPsi);
   const elevPart = elev===0 ? '' : (elev>0 ? ` + ${elev}` : ` - ${Math.abs(elev)}`);
@@ -556,11 +569,11 @@ function eqStringNoWye(L){
 }
 function eqStringsWye(L){
   const b = breakdown(L);
-  const aFls = splitSections(L.itemsLeft).map(s => round(FL(L.nozLeft?.gpm||0, s.size, s.lengthFt)));
-  const bFls = splitSections(L.itemsRight).map(s => round(FL(L.nozRight?.gpm||0, s.size, s.lengthFt)));
+  const aFls = splitIntoSections(L.itemsLeft).map(s => round(FL(L.nozLeft?.gpm||0, s.size, s.lengthFt)));
+  const bFls = splitIntoSections(L.itemsRight).map(s => round(FL(L.nozRight?.gpm||0, s.size, s.lengthFt)));
   const aEq = `A = NP + FL = ${round(L.nozLeft?.NP||0)} + ${aFls.join(' + ')||0}`;
   const bEq = `B = NP + FL = ${round(L.nozRight?.NP||0)} + ${bFls.join(' + ')||0}`;
-  const mainFls = splitSections(L.itemsMain).map(s => round(FL((L.nozLeft?.gpm||0)+(L.nozRight?.gpm||0), s.size, s.lengthFt)));
+  const mainFls = splitIntoSections(L.itemsMain).map(s => round(FL((L.nozLeft?.gpm||0)+(L.nozRight?.gpm||0), s.size, s.lengthFt)));
   const elev = round(b.elevPsi);
   const elevPart = elev===0 ? '' : (elev>0 ? ` + ${elev}` : ` - ${Math.abs(elev)}`);
   const wye = L.wyeLoss? ` + ${round(L.wyeLoss)}` : '';
@@ -626,12 +639,12 @@ function renderLinesPanel(){
       linesTable.appendChild(mathWrap);
 
       // draw bars + equations
-      drawHoseBar(document.getElementById(`viz_main_${key}`), splitSections(L.itemsMain), gpmMain, (L.nozRight?.NP||0), `Main ${sumFt(L.itemsMain)}′ @ ${gpmMain} gpm`);
+      drawHoseBar(document.getElementById(`viz_main_${key}`), splitIntoSections(L.itemsMain), gpmMain, (L.nozRight?.NP||0), `Main ${sumFt(L.itemsMain)}′ @ ${gpmMain} gpm`);
       if(!L.hasWye){
         const eq = document.getElementById(`eq_main_${key}`); if(eq) eq.textContent = eqStringNoWye(L);
       }else{
-        drawHoseBar(document.getElementById(`viz_L_${key}`), splitSections(L.itemsLeft), L.nozLeft?.gpm||0, L.nozLeft?.NP||0, `Branch A ${sumFt(L.itemsLeft)||0}′`);
-        drawHoseBar(document.getElementById(`viz_R_${key}`), splitSections(L.itemsRight), L.nozRight?.gpm||0, L.nozRight?.NP||0, `Branch B ${sumFt(L.itemsRight)||0}′`);
+        drawHoseBar(document.getElementById(`viz_L_${key}`), splitIntoSections(L.itemsLeft), L.nozLeft?.gpm||0, L.nozLeft?.NP||0, `Branch A ${sumFt(L.itemsLeft)||0}′`);
+        drawHoseBar(document.getElementById(`viz_R_${key}`), splitIntoSections(L.itemsRight), L.nozRight?.gpm||0, L.nozRight?.NP||0, `Branch B ${sumFt(L.itemsRight)||0}′`);
         const {aEq,bEq,final}=eqStringsWye(L);
         document.getElementById(`eq_L_${key}`).textContent=aEq;
         document.getElementById(`eq_R_${key}`).textContent=bEq;
@@ -726,7 +739,6 @@ document.getElementById('teApply').addEventListener('click', ()=>{
       L.nozRight = noz; // nozzle on the main
     }else{
       L.hasWye=true;
-      // ensure branch segments exist
       const lenA = Math.max(0, +teLenA.value||100);
       const lenB = Math.max(0, +teLenB.value||100);
       L.itemsLeft  = [{size:'1.75',lengthFt:lenA}];
@@ -767,6 +779,31 @@ document.getElementById('supplyBtn').addEventListener('click', ()=>{
   const order = ['none','pressurized','drafting','relay'];
   currentSupply = order[(order.indexOf(currentSupply)+1)%order.length];
   drawAll();
+});
+
+/* ===== Why? button behavior ===== */
+whyBtn.addEventListener('click', ()=>{
+  if(!lastMaxKey){
+    // If nothing deployed, nudge user
+    alert('Deploy a line to see Pump Pressure breakdown.');
+    return;
+  }
+  // Ensure math is visible
+  const table = document.getElementById('linesTable');
+  if(table.classList.contains('is-hidden')) return;
+
+  // Scroll to the explanation for the max line and flash it
+  const target = document.getElementById(`pp_simple_${lastMaxKey}`);
+  if(target){
+    target.scrollIntoView({behavior:'smooth', block:'center'});
+    target.classList.remove('flash'); // restart animation if already present
+    // Force reflow to restart animation
+    void target.offsetWidth;
+    target.classList.add('flash');
+    // auto-open details if collapsed
+    const details = target.closest('details');
+    if(details && !details.open){ details.open = true; }
+  }
 });
 
 /* Bottom sheet (Presets) */
