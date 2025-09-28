@@ -175,14 +175,14 @@
     </div>
   </section>
 
-  <!-- 2) KPIs + (math below on demand) -->
+  <!-- 2) KPIs + (math below only after Why?) -->
   <section class="card">
     <div class="kpis">
       <div class="kpi"><div>Total Flow</div><b id="GPM">— gpm</b></div>
       <div class="kpi">
         <div>Max PP</div>
         <b id="PDP">— psi</b>
-        <button id="whyBtn" class="whyBtn" title="Why this number?">Why?</button>
+        <button id="whyBtn" class="whyBtn" title="Show math and explanation">Why?</button>
       </div>
     </div>
     <div class="linesTable is-hidden" id="linesTable"></div>
@@ -245,7 +245,7 @@ const NOZ_LIST = Object.values(NOZ);
 function emptyHose(label){
   return { label, itemsMain:[], hasWye:false, wyeLoss:10,
     itemsLeft:[], itemsRight:[],
-    nozLeft:NOZ.fog185_75, nozRight:NOZ.fog185_75,
+    nozLeft:NOZ.chiefXD, nozRight:NOZ.chiefXD,
     elevFt:0, visible:false
   };
 }
@@ -254,6 +254,8 @@ let currentSupply = 'none';
 
 /* Track which line currently sets the Max PP (for Why?) */
 let lastMaxKey = null;
+/* Hide math until Why? */
+let showMath = false;
 
 /* Preset selection temp */
 let chosenPreset = null, chosenLine = null;
@@ -324,6 +326,18 @@ function computeNeededHeightPx(){
 function truckTopY(viewH){ return viewH - TRUCK_H - supplyHeight(); }
 function pumpXY(viewH){ const top = truckTopY(viewH); return { x: TRUCK_W*0.515, y: top + TRUCK_H*0.74 }; }
 function sizeLabel(sz){ return sz==='2.5'?'2½″':(sz==='1.75'?'1¾″':sz+'"'); }
+
+/* Default seeds for each line */
+function seedDefaultsForKey(key, L){
+  if(L.itemsMain.length) return;
+  if(key==='left' || key==='back'){
+    L.itemsMain=[{size:'1.75', lengthFt:200}];
+    L.nozRight = NOZ.chiefXD;     // 185 gpm @ 50 psi
+  } else if(key==='right'){
+    L.itemsMain=[{size:'2.5', lengthFt:250}];
+    L.nozRight = NOZ.sb1_1_8;     // 265 gpm @ 50 psi
+  }
+}
 
 /* ===== Geometry & draw ===== */
 function mainCurve(dir, totalPx, viewH){
@@ -423,10 +437,6 @@ function drawAll(){
 }
 
 /* ===== Supply visuals ===== */
-function supplyHeight(){ return currentSupply==='drafting'?150: currentSupply==='pressurized'?150: currentSupply==='relay'?170: 0; }
-function truckTopY(viewH){ return viewH - TRUCK_H - supplyHeight(); }
-function pumpXY(viewH){ const top = truckTopY(viewH); return { x: TRUCK_W*0.515, y: top + TRUCK_H*0.74 }; }
-
 function drawSupply(viewH){
   const G = document.getElementById('supplyG'); clearGroup(G);
   const h = supplyHeight(); if(!h) return;
@@ -584,7 +594,7 @@ function eqStringsWye(L){
 /* ===== Lines panel ===== */
 function renderLinesPanel(){
   const anyDeployed = Object.values(lines).some(l=>l.visible);
-  if(!anyDeployed){ linesTable.innerHTML=''; linesTable.classList.add('is-hidden'); return; }
+  if(!anyDeployed || !showMath){ linesTable.innerHTML=''; linesTable.classList.add('is-hidden'); return; }
   linesTable.classList.remove('is-hidden'); linesTable.innerHTML='';
 
   ['left','back','right'].forEach(key=>{
@@ -675,8 +685,10 @@ overlay.addEventListener('click', (e)=>{
   const tip = e.target.closest('.hose-end'); if(!tip) return;
   const key = tip.getAttribute('data-line'); const where = tip.getAttribute('data-where');
   const L = lines[key];
-  // Seed a default line if empty
-  if(!L.itemsMain.length){ L.itemsMain=[{size:(key==='right'?'2.5':'1.75'), lengthFt:200}]; L.nozRight=NOZ.fog185_75; L.visible=true; }
+
+  // Seed defaults if empty
+  seedDefaultsForKey(key, L);
+  L.visible = true;
 
   // Load editor
   editorContext = {key, where};
@@ -695,20 +707,20 @@ overlay.addEventListener('click', (e)=>{
     const seg = L.itemsLeft[0] || {size:'1.75',lengthFt:100};
     teSize.value = seg.size;
     teLen.value = seg.lengthFt;
-    teNoz.value = (L.nozLeft||NOZ.fog150_75).id;
+    teNoz.value = (L.nozLeft||NOZ.chiefXD).id;
   } else if(where==='R'){
     const seg = L.itemsRight[0] || {size:'1.75',lengthFt:100};
     teSize.value = seg.size;
     teLen.value = seg.lengthFt;
-    teNoz.value = (L.nozRight||NOZ.fog150_75).id;
+    teNoz.value = (L.nozRight||NOZ.chiefXD).id;
   }
 
   // Branch controls visibility
   branchBlock.classList.toggle('is-hidden', teWye.value==='off');
   teLenA.value = (L.itemsLeft[0]?.lengthFt)||100;
   teLenB.value = (L.itemsRight[0]?.lengthFt)||100;
-  teNozA.value = (L.nozLeft?.id)||'fog150_75';
-  teNozB.value = (L.nozRight?.id)||'fog150_75';
+  teNozA.value = (L.nozLeft?.id)||'chiefXD';
+  teNozB.value = (L.nozRight?.id)||'chiefXD';
 
   // Position & show
   placeEditor(e.clientX, e.clientY);
@@ -765,10 +777,7 @@ document.getElementById('teApply').addEventListener('click', ()=>{
 document.querySelectorAll('.linebtn').forEach(b=>{
   b.addEventListener('click', ()=>{
     const key=b.dataset.line; const L=lines[key];
-    if(!L.itemsMain.length){
-      if(key==='right'){ L.itemsMain=[{size:'2.5',lengthFt:200}]; L.nozRight=NOZ.sb1_1_8; }
-      else { L.itemsMain=[{size:'1.75',lengthFt:200}]; L.nozRight=NOZ.fog185_75; }
-    }
+    seedDefaultsForKey(key, L);
     L.visible = !L.visible; b.classList.toggle('active', L.visible);
     drawAll();
   });
@@ -781,28 +790,22 @@ document.getElementById('supplyBtn').addEventListener('click', ()=>{
   drawAll();
 });
 
-/* ===== Why? button behavior ===== */
+/* ===== Why? button behavior (reveals math once) ===== */
 whyBtn.addEventListener('click', ()=>{
-  if(!lastMaxKey){
-    // If nothing deployed, nudge user
+  const anyDeployed = Object.values(lines).some(l=>l.visible);
+  if(!anyDeployed){
     alert('Deploy a line to see Pump Pressure breakdown.');
     return;
   }
-  // Ensure math is visible
-  const table = document.getElementById('linesTable');
-  if(table.classList.contains('is-hidden')) return;
-
+  // Reveal math
+  if(!showMath){ showMath = true; renderLinesPanel(); }
   // Scroll to the explanation for the max line and flash it
+  if(!lastMaxKey) return;
   const target = document.getElementById(`pp_simple_${lastMaxKey}`);
   if(target){
     target.scrollIntoView({behavior:'smooth', block:'center'});
-    target.classList.remove('flash'); // restart animation if already present
-    // Force reflow to restart animation
-    void target.offsetWidth;
-    target.classList.add('flash');
-    // auto-open details if collapsed
-    const details = target.closest('details');
-    if(details && !details.open){ details.open = true; }
+    target.classList.remove('flash'); void target.offsetWidth; target.classList.add('flash');
+    const details = target.closest('details'); if(details && !details.open){ details.open = true; }
   }
 });
 
