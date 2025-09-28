@@ -3,15 +3,15 @@
 <head>
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"/>
-<title>FireOps SIM — Visual Builder (Phone)</title>
+<title>FireOps SIM — Visual Builder + Practice + Charts + Settings</title>
 <style>
   :root{
     --bg:#0b0f14; --panel:#0f1624; --ink:#eaf2ff; --muted:#9fb0c8; --edge:rgba(255,255,255,.14);
     --hose5:#ecd464; --hose25:#6ecbff; --hose175:#ff6b6b;
     --bubble:#172134; --bubble-edge:rgba(255,255,255,.15);
     --btn:#0b1320; --btnEdge:#20324f;
-    --accent:#3aa7ff; --ok:#9fe879;
-    --warn:#ffa726; --alert:#ef5350;
+    --accent:#3aa7ff; --ok:#9fe879; --warn:#ffa726; --alert:#ef5350;
+    --nav:#0a111d; --navEdge:#1b2a44;
   }
   *{box-sizing:border-box}
   html,body{margin:0;background:var(--bg);color:var(--ink);font-family:system-ui,Segoe UI,Inter,Arial,sans-serif}
@@ -19,7 +19,7 @@
   .title{font-weight:700}
   .sub{font-size:12px;color:#9fb0c8}
 
-  .stack{display:flex;flex-direction:column;gap:10px;padding:10px}
+  .stack{display:flex;flex-direction:column;gap:10px;padding:10px;padding-bottom:84px} /* space for bottom nav */
   .card{background:#0e1726;border:1px solid var(--edge);border-radius:14px;padding:10px}
 
   /* Visual builder */
@@ -60,7 +60,7 @@
   .lineHeader{display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-bottom:2px;font-size:12px;color:#cfe4ff}
   .lineHeader .title{font-weight:700;color:#eaf2ff}
   .lineHeader .tag{display:inline-block;background:#0b1a29;border:1px solid #1f3a57;border-radius:999px;padding:3px 7px;margin:2px 2px;font-size:11px}
-  details.math{background:#0b1a29;border:1f3a57;border-radius:12px;padding:6px 8px;margin-top:6px;border:1px solid #1f3a57}
+  details.math{background:#0b1a29;border:1px solid #1f3a57;border-radius:12px;padding:6px 8px;margin-top:6px}
   details.math summary{cursor:pointer;color:#cfe4ff;font-weight:700}
   .hoseviz{margin-top:6px}
   .hoseLegend{display:flex;gap:8px;align-items:center;font-size:11px;color:#cfe4ff;margin:2px 0 6px}
@@ -78,7 +78,7 @@
   .simpleList{margin:6px 0 0 16px;padding:0}
   .simpleList li{margin:2px 0}
 
-  /* Flash highlight when jumping to PP explanation */
+  /* Flash highlight */
   @keyframes flashBox{0%{box-shadow:0 0 0 rgba(63,191,255,0)} 25%{box-shadow:0 0 0 4px rgba(58,167,255,.35)} 100%{box-shadow:0 0 0 rgba(63,191,255,0)}}
   .flash{animation:flashBox 1200ms ease 1}
 
@@ -104,96 +104,239 @@
   .preset{background:#0b1a29;border:1px solid #1f3a57;border-radius:12px;padding:10px;text-align:center;font-size:13px;cursor:pointer}
   .linepick{display:flex;gap:8px;margin-top:10px}
   .linepick .preset{flex:1}
+
+  /* Bottom nav */
+  .bottom-nav{
+    position:fixed;left:0;right:0;bottom:0;z-index:50;background:var(--nav);border-top:1px solid var(--navEdge);
+    display:grid;grid-template-columns:repeat(4,1fr);gap:6px;padding:8px;
+    padding-bottom:calc(8px + env(safe-area-inset-bottom));
+  }
+  .navbtn{
+    background:#0b1320;border:1px solid var(--navEdge);border-radius:12px;color:#cfe4ff;padding:10px 8px;font-size:12px;text-align:center;cursor:pointer
+  }
+  .navbtn.active{outline:2px solid var(--accent); color:#eaf2ff}
+  .view{display:none}
+  .view.active{display:block}
+  .grid{display:grid;gap:10px}
+  .row{display:flex;gap:8px;flex-wrap:wrap}
+  .field{flex:1;min-width:140px}
+  .field label{display:block;font-size:12px;color:#cfe4ff;margin:2px 0 4px}
+  .field input,.field select{width:100%;background:#0b1320;color:#eaf2ff;border:1px solid var(--edge);border-radius:10px;padding:8px}
+  .status{font-size:13px;color:#cfe4ff;margin-top:6px}
+  .ok{color:var(--ok)} .warn{color:var(--warn)} .alert{color:var(--alert)}
+  table{width:100%;border-collapse:collapse}
+  th,td{border:1px solid var(--edge);padding:6px 8px;font-size:13px}
+  th{background:#0b1320;color:#cfe4ff;text-align:left}
+  caption{caption-side:top;text-align:left;color:#cfe4ff;font-weight:700;margin:6px 0}
 </style>
 </head>
 <body>
 <header>
-  <div class="title">FireOps SIM — Phone</div>
-  <div class="sub">Tap + on a line to edit. Use Presets to apply Standpipe/Sprinkler/Foam/Monitor/Aerial to Line 1–3.</div>
+  <div class="title">FireOps SIM</div>
+  <div class="sub">Calculations • Practice • Charts • Settings</div>
 </header>
 
-<main class="stack">
-
-  <!-- 1) VISUAL BUILDER -->
-  <section class="wrapper card">
-    <div class="stage" id="stage">
-      <svg id="overlay" viewBox="0 0 390 260" preserveAspectRatio="xMidYMax meet" aria-label="Visual stage">
-        <image id="truckImg" href="https://fireopssim.com/pump/engine181.png" x="0" y="0" width="390" height="260" preserveAspectRatio="xMidYMax meet"></image>
-        <g id="hoses"></g><g id="branches"></g><g id="labels"></g><g id="tips"></g>
-        <g id="supplyG"></g>
-      </svg>
-      <div class="info" id="topInfo">No lines deployed</div>
-      <div class="linebar">
-        <button class="linebtn" data-line="left">Line 1</button>
-        <button class="linebtn" data-line="back">Line 2</button>
-        <button class="linebtn" data-line="right">Line 3</button>
-        <button class="supplybtn" id="supplyBtn">Supply</button>
-        <button class="presetsbtn" id="presetsBtn">Presets</button>
-      </div>
-    </div>
-
-    <!-- Floating tip editor -->
-    <div id="tipEditor" class="tip-editor is-hidden" role="dialog" aria-modal="true">
-      <div class="mini" id="teTitle" style="margin-bottom:6px;opacity:.9">Edit Line</div>
-
-      <div class="te-row"><label>Where</label><input id="teWhere" readonly></div>
-
-      <div class="te-row"><label>Diameter</label>
-        <select id="teSize">
-          <option value="1.75">1¾″</option>
-          <option value="2.5">2½″</option>
-        </select>
+<!-- ======== CALCULATIONS VIEW ======== -->
+<main id="view-calc" class="view active">
+  <section class="stack">
+    <!-- Visual Builder -->
+    <section class="wrapper card">
+      <div class="stage" id="stage">
+        <svg id="overlay" viewBox="0 0 390 260" preserveAspectRatio="xMidYMax meet" aria-label="Visual stage">
+          <image id="truckImg" href="https://fireopssim.com/pump/engine181.png" x="0" y="0" width="390" height="260" preserveAspectRatio="xMidYMax meet"></image>
+          <g id="hoses"></g><g id="branches"></g><g id="labels"></g><g id="tips"></g>
+          <g id="supplyG"></g>
+        </svg>
+        <div class="info" id="topInfo">No lines deployed</div>
+        <div class="linebar">
+          <button class="linebtn" data-line="left">Line 1</button>
+          <button class="linebtn" data-line="back">Line 2</button>
+          <button class="linebtn" data-line="right">Line 3</button>
+          <button class="supplybtn" id="supplyBtn">Supply</button>
+          <button class="presetsbtn" id="presetsBtn">Presets</button>
+        </div>
       </div>
 
-      <div class="te-row"><label>Length (ft)</label>
-        <input type="number" id="teLen" min="0" step="25" value="200">
-      </div>
+      <!-- Floating tip editor -->
+      <div id="tipEditor" class="tip-editor is-hidden" role="dialog" aria-modal="true">
+        <div class="mini" id="teTitle" style="margin-bottom:6px;opacity:.9">Edit Line</div>
 
-      <div class="te-row"><label>Nozzle</label>
-        <select id="teNoz"></select>
-      </div>
+        <div class="te-row"><label>Where</label><input id="teWhere" readonly></div>
 
-      <div class="te-row"><label>Elevation (ft)</label>
-        <input type="number" id="teElev" step="5" value="0">
-      </div>
+        <div class="te-row"><label>Diameter</label>
+          <select id="teSize">
+            <option value="1.75">1¾″</option>
+            <option value="2.5">2½″</option>
+          </select>
+        </div>
 
-      <div class="te-row"><label>Wye</label>
-        <select id="teWye">
-          <option value="off">Off</option>
-          <option value="on">On</option>
-        </select>
-      </div>
+        <div class="te-row"><label>Length (ft)</label>
+          <input type="number" id="teLen" min="0" step="25" value="200">
+        </div>
 
-      <div id="branchBlock" class="is-hidden">
-        <div class="te-row"><label>Branch A len</label><input type="number" id="teLenA" min="0" step="25" value="100"></div>
-        <div class="te-row"><label>Branch A noz</label><select id="teNozA"></select></div>
-        <div class="te-row"><label>Branch B len</label><input type="number" id="teLenB" min="0" step="25" value="100"></div>
-        <div class="te-row"><label>Branch B noz</label><select id="teNozB"></select></div>
-      </div>
+        <div class="te-row"><label>Nozzle</label>
+          <select id="teNoz"></select>
+        </div>
 
-      <div class="te-actions">
-        <button class="btn" id="teCancel">Cancel</button>
-        <button class="btn primary" id="teApply">Apply</button>
+        <div class="te-row"><label>Elevation (ft)</label>
+          <input type="number" id="teElev" step="5" value="0">
+        </div>
+
+        <div class="te-row"><label>Wye</label>
+          <select id="teWye">
+            <option value="off">Off</option>
+            <option value="on">On</option>
+          </select>
+        </div>
+
+        <div id="branchBlock" class="is-hidden">
+          <div class="te-row"><label>Branch A len</label><input type="number" id="teLenA" min="0" step="25" value="100"></div>
+          <div class="te-row"><label>Branch A noz</label><select id="teNozA"></select></div>
+          <div class="te-row"><label>Branch B len</label><input type="number" id="teLenB" min="0" step="25" value="100"></div>
+          <div class="te-row"><label>Branch B noz</label><select id="teNozB"></select></div>
+        </div>
+
+        <div class="te-actions">
+          <button class="btn" id="teCancel">Cancel</button>
+          <button class="btn primary" id="teApply">Apply</button>
+        </div>
       </div>
-    </div>
+    </section>
+
+    <!-- KPIs -->
+    <section class="card">
+      <div class="kpis">
+        <div class="kpi"><div>Total Flow</div><b id="GPM">— gpm</b></div>
+        <div class="kpi">
+          <div>Max PP</div>
+          <b id="PDP">— psi</b>
+          <button id="whyBtn" class="whyBtn" title="Show math and explanation">Why?</button>
+        </div>
+      </div>
+      <div class="linesTable is-hidden" id="linesTable"></div>
+    </section>
   </section>
-
-  <!-- 2) KPIs + (math below only after Why?) -->
-  <section class="card">
-    <div class="kpis">
-      <div class="kpi"><div>Total Flow</div><b id="GPM">— gpm</b></div>
-      <div class="kpi">
-        <div>Max PP</div>
-        <b id="PDP">— psi</b>
-        <button id="whyBtn" class="whyBtn" title="Show math and explanation">Why?</button>
-      </div>
-    </div>
-    <div class="linesTable is-hidden" id="linesTable"></div>
-  </section>
-
 </main>
 
-<!-- Preset bottom sheet -->
+<!-- ======== PRACTICE VIEW ======== -->
+<main id="view-practice" class="view">
+  <section class="stack">
+    <section class="card">
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap">
+        <div><b>Practice Mode</b><div class="sub">We’ll build a random scenario. Find the correct PP.</div></div>
+        <div class="row">
+          <button class="btn" id="newScenarioBtn">New Scenario</button>
+          <button class="btn" id="revealBtn">Reveal</button>
+        </div>
+      </div>
+      <div class="row" style="margin-top:8px">
+        <div class="field" style="max-width:180px">
+          <label>Your PP guess (psi)</label>
+          <input type="number" id="ppGuess" placeholder="e.g., 145">
+        </div>
+        <div class="field" style="max-width:180px">
+          <label>Tolerance (± psi)</label>
+          <input type="number" id="ppTol" value="10">
+        </div>
+        <div class="field" style="align-self:flex-end;max-width:160px">
+          <button class="btn primary" id="checkBtn" style="width:100%">Check</button>
+        </div>
+      </div>
+      <div id="practiceStatus" class="status">Tap <b>New Scenario</b> to start.</div>
+    </section>
+
+    <!-- Reuse the same visual builder canvas for practice -->
+    <section class="wrapper card">
+      <div class="stage">
+        <svg id="overlayPractice" viewBox="0 0 390 260" preserveAspectRatio="xMidYMax meet" aria-label="Visual stage (practice)">
+          <image href="https://fireopssim.com/pump/engine181.png" x="0" y="0" width="390" height="260"></image>
+          <g id="hosesP"></g><g id="branchesP"></g><g id="labelsP"></g>
+        </svg>
+        <div class="info" id="practiceInfo">Scenario not generated</div>
+      </div>
+    </section>
+  </section>
+</main>
+
+<!-- ======== CHARTS VIEW ======== -->
+<main id="view-charts" class="view">
+  <section class="stack">
+    <section class="card">
+      <h3 style="margin:4px 0 8px">Reference Charts</h3>
+      <div class="grid">
+        <div class="card">
+          <caption>Friction Loss per 100′</caption>
+          <table>
+            <thead><tr><th>Hose</th><th>Formula</th><th>Example @ 150 gpm</th></tr></thead>
+            <tbody>
+              <tr><td>1¾″</td><td>15.5 × (Q²) (Q = gpm/100)</td><td>15.5 × (1.5²) = 34.9 psi</td></tr>
+              <tr><td>2½″</td><td>2 × (Q²)</td><td>2 × (1.5²) = 4.5 psi</td></tr>
+              <tr><td>5″</td><td>0.08 × (Q²)</td><td>0.08 × (1.5²) = 0.18 psi</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="card">
+          <caption>Smooth Bore Tip GPM @ 50 psi NP</caption>
+          <table>
+            <thead><tr><th>Tip</th><th>GPM</th></tr></thead>
+            <tbody>
+              <tr><td>7/8″</td><td>~160 gpm</td></tr>
+              <tr><td>15/16″</td><td>~185 gpm</td></tr>
+              <tr><td>1 1/8″</td><td>~265 gpm</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="card">
+          <caption>Rules of Thumb</caption>
+          <ul style="margin:6px 0 0 18px">
+            <li>Elevation: ~0.434 psi per foot</li>
+            <li>Standpipe: start around 150 psi (check policy)</li>
+            <li>Sprinkler on hydrant: often 100–150 psi to FDC (verify system)</li>
+            <li>Wye/appliance loss: ~10 psi (if used with two flowing branches)</li>
+            <li>Large LDH supply keeps intake ≥ 20 psi residual</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+  </section>
+</main>
+
+<!-- ======== SETTINGS VIEW ======== -->
+<main id="view-settings" class="view">
+  <section class="stack">
+    <section class="card">
+      <h3 style="margin:4px 0 8px">Customize Presets</h3>
+      <div class="row">
+        <div class="field"><label>Line 1 length (ft)</label><input id="s_len1" type="number" value="200"></div>
+        <div class="field"><label>Line 1 size</label>
+          <select id="s_sz1"><option value="1.75">1¾″</option><option value="2.5">2½″</option></select>
+        </div>
+        <div class="field"><label>Line 1 nozzle</label><select id="s_noz1"></select></div>
+      </div>
+      <div class="row">
+        <div class="field"><label>Line 2 length (ft)</label><input id="s_len2" type="number" value="200"></div>
+        <div class="field"><label>Line 2 size</label>
+          <select id="s_sz2"><option value="1.75">1¾″</option><option value="2.5">2½″</option></select>
+        </div>
+        <div class="field"><label>Line 2 nozzle</label><select id="s_noz2"></select></div>
+      </div>
+      <div class="row">
+        <div class="field"><label>Line 3 length (ft)</label><input id="s_len3" type="number" value="250"></div>
+        <div class="field"><label>Line 3 size</label>
+          <select id="s_sz3"><option value="1.75">1¾″</option><option value="2.5" selected>2½″</option></select>
+        </div>
+        <div class="field"><label>Line 3 nozzle</label><select id="s_noz3"></select></div>
+      </div>
+      <div class="te-actions">
+        <button class="btn" id="settingsReset">Reset Defaults</button>
+        <button class="btn primary" id="settingsSave">Save Presets</button>
+      </div>
+      <div id="settingsMsg" class="status"></div>
+    </section>
+  </section>
+</main>
+
+<!-- Preset bottom sheet (Calculations view) -->
 <div id="sheet" class="sheet" aria-modal="true" role="dialog">
   <div style="display:flex;justify-content:space-between;align-items:center">
     <div class="title">Presets</div>
@@ -219,23 +362,32 @@
 </div>
 <div id="sheetBackdrop" class="sheet-backdrop"></div>
 
+<!-- Bottom Navigation -->
+<nav class="bottom-nav">
+  <button class="navbtn active" data-view="calc">Calculations</button>
+  <button class="navbtn" data-view="practice">Practice</button>
+  <button class="navbtn" data-view="charts">Charts</button>
+  <button class="navbtn" data-view="settings">Settings</button>
+</nav>
+
 <script>
-/* ===== Constants ===== */
+/* ===== Shared Constants and Data ===== */
 const TRUCK_W = 390, TRUCK_H = 260;
-const PX_PER_50FT = 45;
-const CURVE_PULL = 36;
-const BRANCH_LIFT = 10;
+const PX_PER_50FT = 45, CURVE_PULL = 36, BRANCH_LIFT = 10;
 const PSI_PER_FT = 0.434;
 const COEFF = { "1.75":15.5, "2.5":2, "5":0.08 };
 const COLORS = {"1.75":"#ff6b6b","2.5":"#6ecbff","5":"#ecd464"};
+const defaultPresets = {
+  left:  {len:200, size:'1.75', noz:'chiefXD'},         // 185 @ 50
+  back:  {len:200, size:'1.75', noz:'chiefXD'},         // 185 @ 50
+  right: {len:250, size:'2.5',  noz:'chiefXD265'}       // ChiefXD 265 @ 50 (per your change)
+};
 
 /* ===== Nozzles ===== */
 const NOZ = {
-  // Smooth-bore
   sb7_8:{id:'sb7_8',grp:'Smooth Bore',name:'SB 7/8″ (160@50)',gpm:160,NP:50},
   sb15_16:{id:'sb15_16',grp:'Smooth Bore',name:'SB 15/16″ (185@50)',gpm:185,NP:50},
   sb1_1_8:{id:'sb1_1_8',grp:'Smooth Bore',name:'SB 1 1/8″ (265@50)',gpm:265,NP:50},
-  // Fog / combo
   fog125_75:{id:'fog125_75',grp:'Fog',name:'Fog 125@75',gpm:125,NP:75},
   fog150_75:{id:'fog150_75',grp:'Fog',name:'Fog 150@75',gpm:150,NP:75},
   fog185_75:{id:'fog185_75',grp:'Fog',name:'Fog 185@75',gpm:185,NP:75},
@@ -245,7 +397,16 @@ const NOZ = {
 };
 const NOZ_LIST = Object.values(NOZ);
 
-/* ===== State ===== */
+/* ===== Utilities ===== */
+const $ = s=>document.querySelector(s);
+const $$ = s=>Array.from(document.querySelectorAll(s));
+function sumFt(items){ return (items||[]).reduce((s,h)=>s + (h.lengthFt||0), 0); }
+function FL(gpm,size,ft){ const C=COEFF[size]||0, Q=gpm/100; return C*(Q*Q)*(ft/100); }
+function FL_total(gpm,segments){ return (segments||[]).reduce((a,seg)=>a+FL(gpm,seg.size,seg.lengthFt||0),0); }
+function splitIntoSections(segments){ const out=[];(segments||[]).forEach(seg=>{let r=seg.lengthFt||0; while(r>0){ const t=Math.min(100,r); out.push({size:seg.size,lengthFt:t}); r-=t; }}); return out; }
+function round(n){ return Math.round(n); }
+
+/* ===== Calculations View State ===== */
 function emptyHose(label){
   return { label, itemsMain:[], hasWye:false, wyeLoss:10,
     itemsLeft:[], itemsRight:[],
@@ -255,78 +416,55 @@ function emptyHose(label){
 }
 const lines = { left:emptyHose('Line 1'), back:emptyHose('Line 2'), right:emptyHose('Line 3') };
 let currentSupply = 'none';
-
-/* Track which line currently sets the Max PP (for Why?) */
-let lastMaxKey = null;
-/* Hide math until Why? */
-let showMath = false;
-
-/* Preset selection temp */
+let lastMaxKey = null, showMath=false;
 let chosenPreset = null, chosenLine = null;
 
-/* ===== DOM ===== */
-const overlay   = document.getElementById('overlay');
-const truckImg  = document.getElementById('truckImg');
-const stage     = document.getElementById('stage');
-const G_hoses   = document.getElementById('hoses');
-const G_branches= document.getElementById('branches');
-const G_labels  = document.getElementById('labels');
-const G_tips    = document.getElementById('tips');
-const topInfo   = document.getElementById('topInfo');
-const linesTable= document.getElementById('linesTable');
-const whyBtn    = document.getElementById('whyBtn');
-const PDPel     = document.getElementById('PDP');
+/* ===== DOM (Calc) ===== */
+const overlay   = $('#overlay'), stage = $('#stage'), truckImg = $('#truckImg');
+const G_hoses   = $('#hoses'), G_branches = $('#branches'), G_labels = $('#labels'), G_tips = $('#tips'), G_supply=$('#supplyG');
+const topInfo   = $('#topInfo'), linesTable = $('#linesTable'), whyBtn = $('#whyBtn'), PDPel = $('#PDP');
 
 /* Tip editor elements */
-const tipEditor = document.getElementById('tipEditor');
-const teTitle = document.getElementById('teTitle');
-const teWhere = document.getElementById('teWhere');
-const teSize  = document.getElementById('teSize');
-const teLen   = document.getElementById('teLen');
-const teNoz   = document.getElementById('teNoz');
-const teElev  = document.getElementById('teElev');
-const teWye   = document.getElementById('teWye');
-const branchBlock = document.getElementById('branchBlock');
-const teLenA = document.getElementById('teLenA');
-const teLenB = document.getElementById('teLenB');
-const teNozA = document.getElementById('teNozA');
-const teNozB = document.getElementById('teNozB');
-
-/* Populate nozzle selects */
+const tipEditor = $('#tipEditor'); const teTitle=$('#teTitle'); const teWhere=$('#teWhere'); const teSize=$('#teSize'); const teLen=$('#teLen'); const teNoz=$('#teNoz'); const teElev=$('#teElev'); const teWye=$('#teWye');
+const branchBlock = $('#branchBlock'); const teLenA=$('#teLenA'); const teLenB=$('#teLenB'); const teNozA=$('#teNozA'); const teNozB=$('#teNozB');
 function theNozInit(sel){ sel.innerHTML = NOZ_LIST.map(n=>`<option value="${n.id}">${n.name}</option>`).join(''); }
 theNozInit(teNoz); theNozInit(teNozA); theNozInit(teNozB);
 
-/* ===== Helpers ===== */
-function placeEditor(x,y){
-  const rect = stage.getBoundingClientRect();
-  tipEditor.style.left = Math.min(rect.width-310, Math.max(8, x-rect.left-140)) + 'px';
-  tipEditor.style.top  = Math.min(rect.height-10, Math.max(8, y-rect.top+8)) + 'px';
-}
+/* ===== Calculations: helpers and draw ===== */
 function clsFor(size){ return size==='5'?'hose5':(size==='2.5'?'hose25':'hose175'); }
-function sumFt(items){ return (items||[]).reduce((s,h)=>s + (h.lengthFt||0), 0); }
-function FL(gpm, size, ft){ const C=COEFF[size]||0, Q=gpm/100; return C*(Q*Q)*(ft/100); }
-function FL_total(gpm, segments){ return (segments||[]).reduce((acc,seg)=> acc + FL(gpm, seg.size, seg.lengthFt||0), 0); }
 function clearGroup(g){ while(g.firstChild) g.removeChild(g.firstChild); }
 function supplyHeight(){ return currentSupply==='drafting'?150: currentSupply==='pressurized'?150: currentSupply==='relay'?170: 0; }
-function round(n){ return Math.round(n); }
-function splitIntoSections(segments){
-  const out=[]; (segments||[]).forEach(seg=>{ let r=seg.lengthFt||0; while(r>0){ const t=Math.min(100,r); out.push({size:seg.size,lengthFt:t}); r-=t; }});
-  return out;
+function computeNeededHeightPx(){
+  const needs = Object.values(lines).filter(l=>l.visible);
+  let maxUp = 0;
+  needs.forEach(L=>{
+    const mainPx = (sumFt(L.itemsMain)/50)*PX_PER_50FT;
+    let branchPx = 0;
+    if(L.hasWye){
+      const lpx = (sumFt(L.itemsLeft)/50)*PX_PER_50FT;
+      const rpx = (sumFt(L.itemsRight)/50)*PX_PER_50FT;
+      branchPx = Math.max(lpx, rpx) + BRANCH_LIFT;
+    }
+    maxUp = Math.max(maxUp, mainPx + branchPx);
+  });
+  return Math.max(TRUCK_H + supplyHeight() + 10, TRUCK_H + maxUp + 40 + supplyHeight());
 }
 function truckTopY(viewH){ return viewH - TRUCK_H - supplyHeight(); }
 function pumpXY(viewH){ const top = truckTopY(viewH); return { x: TRUCK_W*0.515, y: top + TRUCK_H*0.74 }; }
 function sizeLabel(sz){ return sz==='2.5'?'2½″':(sz==='1.75'?'1¾″':sz+'"'); }
 
-/* Default seeds for each line */
+/* Defaults seeded from settings/localStorage */
+function getPresetState(){
+  try{ const s=JSON.parse(localStorage.getItem('fireops_presets')); if(s) return s; }catch{}
+  return JSON.parse(JSON.stringify(defaultPresets));
+}
+let currentPresets = getPresetState();
+
 function seedDefaultsForKey(key, L){
   if(L.itemsMain.length) return;
-  if(key==='left' || key==='back'){
-    L.itemsMain=[{size:'1.75', lengthFt:200}];
-    L.nozRight = NOZ.chiefXD;     // 185 gpm @ 50 psi
-  } else if(key==='right'){
-    L.itemsMain=[{size:'2.5', lengthFt:250}];
-    L.nozRight = NOZ.chiefXD265;  // 265 gpm @ 50 psi (requested)
-  }
+  const p = currentPresets[key];
+  L.itemsMain=[{size:p.size, lengthFt:p.len}];
+  L.nozRight = NOZ[p.noz] || NOZ.chiefXD;
 }
 
 /* Wye helpers */
@@ -342,7 +480,7 @@ function activeNozzle(L){
   return null;
 }
 
-/* ===== Geometry & draw ===== */
+/* Paths */
 function mainCurve(dir, totalPx, viewH){
   const {x:sx,y:sy} = pumpXY(viewH);
   const ex = dir===-1 ? sx - 110 : dir===1 ? sx + 110 : sx;
@@ -358,10 +496,8 @@ function straightBranch(side, startX, startY, totalPx){
 function drawSegmentedPath(group, basePath, segs, sizeToClass){
   const sh = document.createElementNS('http://www.w3.org/2000/svg','path');
   sh.setAttribute('class','hoseBase shadow'); sh.setAttribute('d', basePath.getAttribute('d')); group.appendChild(sh);
-
   const total = basePath.getTotalLength(); let offset = 0;
   const totalPx = (sumFt(segs)/50)*PX_PER_50FT || 1;
-
   segs.forEach(seg=>{
     const px = (seg.lengthFt/50)*PX_PER_50FT;
     const portion = Math.min(total, (px/totalPx)*total);
@@ -375,7 +511,7 @@ function drawSegmentedPath(group, basePath, segs, sizeToClass){
   });
 }
 
-/* Labels */
+/* Labels and tips */
 function addLabel(text, x, y, dy=0){
   const g = document.createElementNS('http://www.w3.org/2000/svg','g');
   const pad = 4;
@@ -389,15 +525,24 @@ function addLabel(text, x, y, dy=0){
   bg.setAttribute('fill', '#eaf2ff'); bg.setAttribute('opacity', '0.92'); bg.setAttribute('stroke', '#111'); bg.setAttribute('stroke-width', '.5'); bg.setAttribute('rx','4'); bg.setAttribute('ry','4');
   g.insertBefore(bg, t);
 }
+function addTip(key, where, x, y){
+  const g = document.createElementNS('http://www.w3.org/2000/svg','g');
+  g.setAttribute('class','hose-end'); g.setAttribute('data-line',key); g.setAttribute('data-where',where);
+  const hit = document.createElementNS('http://www.w3.org/2000/svg','rect'); hit.setAttribute('class','plus-hit'); hit.setAttribute('x', x-20); hit.setAttribute('y', y-20); hit.setAttribute('width', 40); hit.setAttribute('height', 40);
+  const c = document.createElementNS('http://www.w3.org/2000/svg','circle'); c.setAttribute('class','plus-circle'); c.setAttribute('cx',x); c.setAttribute('cy',y); c.setAttribute('r',14);
+  const v = document.createElementNS('http://www.w3.org/2000/svg','line'); v.setAttribute('class','plus-sign'); v.setAttribute('x1',x); v.setAttribute('y1',y-6); v.setAttribute('x2',x); v.setAttribute('y2',y+6);
+  const h = document.createElementNS('http://www.w3.org/2000/svg','line'); h.setAttribute('class','plus-sign'); h.setAttribute('x1',x-6); h.setAttribute('y1',y); h.setAttribute('x2',x+6); h.setAttribute('y2',y);
+  g.appendChild(hit); g.appendChild(c); g.appendChild(v); g.appendChild(h); G_tips.appendChild(g);
+}
 
-/* ===== Draw everything ===== */
+/* Draw Calculations view */
 function drawAll(){
-  const viewH = Math.ceil(Math.max(TRUCK_H + supplyHeight() + 10, TRUCK_H + 260));
+  const viewH = Math.ceil(computeNeededHeightPx());
   overlay.setAttribute('viewBox', `0 0 ${TRUCK_W} ${viewH}`);
   stage.style.height = viewH + 'px';
   truckImg.setAttribute('y', String(truckTopY(viewH)));
 
-  clearGroup(G_hoses); clearGroup(G_branches); clearGroup(G_tips); clearGroup(G_labels);
+  clearGroup(G_hoses); clearGroup(G_branches); clearGroup(G_tips); clearGroup(G_labels); clearGroup(G_supply);
 
   const visibleKeys = ['left','back','right'].filter(k=>lines[k].visible);
   topInfo.textContent = visibleKeys.length ? `Deployed: ${visibleKeys.map(k=>lines[k].label).join(' • ')}` : 'No lines deployed';
@@ -409,11 +554,8 @@ function drawAll(){
 
     const base = document.createElementNS('http://www.w3.org/2000/svg','path'); base.setAttribute('d', geom.d); G_hoses.appendChild(base);
     drawSegmentedPath(G_hoses, base, L.itemsMain, (s)=>clsFor(s));
-
-    // Make + clickable editor
     addTip(key,'main',geom.endX,geom.endY);
 
-    // Flow label (respect single-branch wye)
     const single = isSingleWye(L);
     const usedNoz = single ? activeNozzle(L) : L.hasWye ? null : L.nozRight;
     const flowGpm = single ? (usedNoz?.gpm||0) : (L.hasWye ? (L.nozLeft.gpm + L.nozRight.gpm) : L.nozRight.gpm);
@@ -443,9 +585,8 @@ function drawAll(){
   renderLinesPanel();
 }
 
-/* ===== Supply visuals ===== */
 function drawSupply(viewH){
-  const G = document.getElementById('supplyG'); clearGroup(G);
+  const G = G_supply; clearGroup(G);
   const h = supplyHeight(); if(!h) return;
   const baseY = truckTopY(viewH) + TRUCK_H + 6; const ns=G.namespaceURI;
   if(currentSupply==='pressurized'){
@@ -474,7 +615,7 @@ function drawSupply(viewH){
   }
 }
 
-/* ===== Totals (also tracks max-PP line key) ===== */
+/* Totals and PP coloring */
 function refreshTotals(){
   const vis = Object.entries(lines).filter(([_k,l])=>l.visible);
   let totalGPM = 0, maxPDP = -Infinity, maxKey = null;
@@ -483,12 +624,9 @@ function refreshTotals(){
     const flow = single ? (activeNozzle(L)?.gpm||0)
                : L.hasWye ? (L.nozLeft?.gpm||0) + (L.nozRight?.gpm||0)
                           : (L.nozRight?.gpm||0);
-
     const mainFL = FL_total(flow, L.itemsMain);
     let PDP=0;
-
     if(single){
-      // One branch in use: PP = NP(active) + FL(branch) + FL(main) ± Elev
       const side = activeSide(L);
       const bnSegs = side==='L' ? L.itemsLeft : L.itemsRight;
       const bnNoz  = activeNozzle(L);
@@ -501,14 +639,11 @@ function refreshTotals(){
     }else{
       PDP = (L.nozRight?.NP||0) + mainFL + (L.elevFt * PSI_PER_FT);
     }
-
     totalGPM += flow;
     if(PDP > maxPDP){ maxPDP = PDP; maxKey = key; }
   });
   lastMaxKey = maxKey;
-  // Update GPM
-  document.getElementById('GPM').textContent = vis.length? `${Math.round(totalGPM)} gpm` : '— gpm';
-  // Update PDP with color thresholds
+  $('#GPM').textContent = vis.length? `${Math.round(totalGPM)} gpm` : '— gpm';
   PDPel.classList.remove('orange','red');
   if(vis.length){
     const v = Math.round(maxPDP);
@@ -520,7 +655,7 @@ function refreshTotals(){
   }
 }
 
-/* ===== Breakdown + equations ===== */
+/* Equations + plain-English box (same as before) */
 function breakdown(L){
   const leftLen  = sumFt(L.itemsLeft)||0, rightLen = sumFt(L.itemsRight)||0;
   const single = isSingleWye(L);
@@ -529,9 +664,7 @@ function breakdown(L){
   const flow = single ? (activeNozzle(L)?.gpm||0)
              : L.hasWye ? (L.nozLeft?.gpm||0)+(L.nozRight?.gpm||0)
                         : (L.nozRight?.gpm||0);
-
   const mainFL = flow ? FL_total(flow, L.itemsMain) : 0;
-
   const lFL = L.hasWye ? FL_total(L.nozLeft?.gpm||0, L.itemsLeft) : 0;
   const rFL = L.hasWye ? FL_total(L.nozRight?.gpm||0, L.itemsRight) : 0;
 
@@ -540,7 +673,7 @@ function breakdown(L){
     const noz = activeNozzle(L);
     effNP = noz?.NP||0;
     effBranchFL = FL_total(noz?.gpm||0, side==='L'?L.itemsLeft:L.itemsRight);
-    branchMax = effNP + effBranchFL; // for convenience
+    branchMax = effNP + effBranchFL;
     wye = 0;
   }else if(L.hasWye){
     leftNeed  = lFL + (L.nozLeft?.NP||0);
@@ -549,25 +682,12 @@ function breakdown(L){
     wye = L.wyeLoss||0;
   }else{
     effNP = L.nozRight?.NP||0;
-    branchMax = effNP; // for convenience in equations
+    branchMax = effNP;
   }
-
   const elevPsi = (L.elevFt||0) * PSI_PER_FT;
-  const PDP = single
-    ? (effNP + effBranchFL + mainFL + elevPsi)
-    : (branchMax + mainFL + wye + elevPsi);
-
-  return {
-    single, side,
-    mainLen: sumFt(L.itemsMain)||0,
-    flow, mainFL,
-    lLen: leftLen, lFL,
-    rLen: rightLen, rFL,
-    leftNeed, rightNeed, branchMax, wye, effNP, effBranchFL,
-    elevPsi, PDP
-  };
+  const PDP = single ? (effNP + effBranchFL + mainFL + elevPsi) : (branchMax + mainFL + wye + elevPsi);
+  return { single, side, mainLen: sumFt(L.itemsMain)||0, flow, mainFL, lLen:leftLen, lFL, rLen:rightLen, rFL, leftNeed, rightNeed, branchMax, wye, effNP, effBranchFL, elevPsi, PDP };
 }
-
 function eqStringNoWye(L){
   const b = breakdown(L);
   const sections = splitIntoSections(L.itemsMain);
@@ -577,7 +697,6 @@ function eqStringNoWye(L){
   const np = L.nozRight?.NP||0;
   return `PP = NP + Main FL ± Elev = ${np} + ${fls.join(' + ')||0}${elevPart}`;
 }
-
 function eqStringsWye(L){
   const b = breakdown(L);
   if(b.single){
@@ -603,8 +722,6 @@ function eqStringsWye(L){
     return { single:false, aEq, bEq, final };
   }
 }
-
-/* ===== PP simple explanation ===== */
 function fmt(n){ return Math.round(n); }
 function ppExplainHTML(L){
   const b = breakdown(L);
@@ -613,37 +730,29 @@ function ppExplainHTML(L){
   const mainFLsum = mainFLs.reduce((a,c)=>a+c,0);
 
   if(!L.hasWye){
-    return `
-      <div><b>Simple PP:</b>
-        <ul class="simpleList">
-          <li><b>Nozzle Pressure</b> = ${fmt(L.nozRight?.NP||0)} psi</li>
-          <li><b>Friction Loss (Main)</b> = ${mainSecs.length? mainSecs.map((s,i)=>`${fmt(mainFLs[i])} (${s.lengthFt}′ ${s.size==='2.5'?'2½″':s.size==='1.75'?'1¾″':s.size+'″'})`).join(' + ') : 0} = <b>${fmt(mainFLsum)} psi</b></li>
-          <li><b>Elevation</b> = ${b.elevPsi>=0? '+':''}${fmt(b.elevPsi)} psi</li>
-        </ul>
-        <div style="margin-top:6px"><b>PP = NP + Main FL ± Elev = ${fmt(L.nozRight?.NP||0)} + ${fmt(mainFLsum)} ${b.elevPsi>=0?'+':''}${fmt(b.elevPsi)} = <span style="color:var(--ok)">${fmt(b.PDP)} psi</span></b></div>
-      </div>
-    `;
+    return `<div><b>Simple PP:</b>
+      <ul class="simpleList">
+        <li><b>Nozzle Pressure</b> = ${fmt(L.nozRight?.NP||0)} psi</li>
+        <li><b>Main FL</b> = ${mainSecs.length? mainSecs.map((s,i)=>\`${fmt(mainFLs[i])} (${s.lengthFt}′ ${s.size==='2.5'?'2½″':s.size==='1.75'?'1¾″':s.size+'″'})\`).join(' + ') : 0} = <b>${fmt(mainFLsum)} psi</b></li>
+        <li><b>Elevation</b> = ${b.elevPsi>=0? '+':''}${fmt(b.elevPsi)} psi</li>
+      </ul>
+      <div style="margin-top:6px"><b>PP = NP + Main FL ± Elev = ${fmt(L.nozRight?.NP||0)} + ${fmt(mainFLsum)} ${b.elevPsi>=0?'+':''}${fmt(b.elevPsi)} = <span style="color:var(--ok)">${fmt(b.PDP)} psi</span></b></div></div>`;
   } else if(b.single){
     const side = b.side==='L'?'A':'B';
     const noz = activeNozzle(L);
     const brSecs = splitIntoSections(b.side==='L'?L.itemsLeft:L.itemsRight);
     const brFLs = brSecs.map(s => FL(noz.gpm, s.size, s.lengthFt));
     const brSum = brFLs.reduce((x,y)=>x+y,0);
-    return `
-      <div><b>Simple PP (Single branch via wye):</b>
-        <ul class="simpleList">
-          <li><b>Nozzle Pressure</b> = ${fmt(noz.NP)} psi</li>
-          <li><b>Branch ${side} FL</b> = ${brSecs.length? brFLs.map((v,i)=>`${fmt(v)} (${brSecs[i].lengthFt}′ ${brSecs[i].size==='2.5'?'2½″':brSecs[i].size==='1.75'?'1¾″':brSecs[i].size+'″'})`).join(' + '):0} = <b>${fmt(brSum)} psi</b></li>
-          <li><b>Main FL</b> = ${mainSecs.length? mainSecs.map((s,i)=>`${fmt(mainFLs[i])} (${s.lengthFt}′ ${s.size==='2.5'?'2½″':s.size==='1.75'?'1¾″':s.size+'″'})`).join(' + '):0} = <b>${fmt(mainFLsum)} psi</b></li>
-          <li><b>Elevation</b> = ${b.elevPsi>=0? '+':''}${fmt(b.elevPsi)} psi</li>
-        </ul>
-        <div style="margin-top:6px">
-          <b>PP = NP + Branch FL + Main FL ± Elev
-             = ${fmt(noz.NP)} + ${fmt(brSum)} + ${fmt(mainFLsum)} ${b.elevPsi>=0?'+':''}${fmt(b.elevPsi)}
-             = <span style="color:var(--ok)">${fmt(b.PDP)} psi</span></b>
-        </div>
-      </div>
-    `;
+    return `<div><b>Simple PP (Single branch via wye):</b>
+      <ul class="simpleList">
+        <li><b>Nozzle Pressure</b> = ${fmt(noz.NP)} psi</li>
+        <li><b>Branch ${side} FL</b> = ${brSecs.length? brFLs.map((v,i)=>\`${fmt(v)} (${brSecs[i].lengthFt}′ ${brSecs[i].size==='2.5'?'2½″':brSecs[i].size==='1.75'?'1¾″':brSecs[i].size+'″'})\`).join(' + '):0} = <b>${fmt(brSum)} psi</b></li>
+        <li><b>Main FL</b> = ${mainSecs.length? mainFLs.map((v,i)=>\`${fmt(v)} (${mainSecs[i].lengthFt}′ ${mainSecs[i].size==='2.5'?'2½″':mainSecs[i].size==='1.75'?'1¾″':mainSecs[i].size+'″'})\`).join(' + '):0} = <b>${fmt(mainFLsum)} psi</b></li>
+        <li><b>Elevation</b> = ${b.elevPsi>=0? '+':''}${fmt(b.elevPsi)} psi</li>
+      </ul>
+      <div style="margin-top:6px"><b>PP = NP + Branch FL + Main FL ± Elev
+           = ${fmt(noz.NP)} + ${fmt(brSum)} + ${fmt(mainFLsum)} ${b.elevPsi>=0?'+':''}${fmt(b.elevPsi)}
+           = <span style="color:var(--ok)">${fmt(b.PDP)} psi</span></b></div></div>`;
   } else {
     const aSecs = splitIntoSections(L.itemsLeft);
     const bSecs = splitIntoSections(L.itemsRight);
@@ -653,28 +762,22 @@ function ppExplainHTML(L){
     const bNeed = (L.nozRight?.NP||0)+ bFLs.reduce((x,y)=>x+y,0);
     const maxNeed = Math.max(aNeed, bNeed);
     const wyeLoss = L.wyeLoss||0;
-
-    return `
-      <div><b>Simple PP (Wye):</b>
-        <ul class="simpleList">
-          <li><b>Branch A need</b> = NP ${fmt(L.nozLeft?.NP||0)} + FL ${aSecs.length? aFLs.map((v,i)=>`${fmt(v)} (${aSecs[i].lengthFt}′ 1¾″)`).join(' + '):0} = <b>${fmt(aNeed)} psi</b></li>
-          <li><b>Branch B need</b> = NP ${fmt(L.nozRight?.NP||0)} + FL ${bSecs.length? bFLs.map((v,i)=>`${fmt(v)} (${bSecs[i].lengthFt}′ 1¾″)`).join(' + '):0} = <b>${fmt(bNeed)} psi</b></li>
-          <li><b>Take the higher branch</b> = <b>${fmt(maxNeed)} psi</b></li>
-          <li><b>Main FL</b> (total ${b.flow} gpm) = ${mainSecs.length? mainSecs.map((s,i)=>`${fmt(mainFLs[i])} (${s.lengthFt}′ ${s.size==='2.5'?'2½″':s.size==='1.75'?'1¾″':s.size+'″'})`).join(' + '):0} = <b>${fmt(mainFLsum)} psi</b></li>
-          ${wyeLoss? `<li><b>Wye loss</b> = +${fmt(wyeLoss)} psi</li>` : ``}
-          <li><b>Elevation</b> = ${b.elevPsi>=0?'+':''}${fmt(b.elevPsi)} psi</li>
-        </ul>
-        <div style="margin-top:6px">
-          <b>PP = max(A,B) + Main FL ${wyeLoss?`+ Wye`:``} ± Elev
-             = ${fmt(maxNeed)} + ${fmt(mainFLsum)} ${wyeLoss?`+ ${fmt(wyeLoss)} `:``}${b.elevPsi>=0?'+':''}${fmt(b.elevPsi)}
-             = <span style="color:var(--ok)">${fmt(b.PDP)} psi</span></b>
-        </div>
-      </div>
-    `;
+    return `<div><b>Simple PP (Wye):</b>
+      <ul class="simpleList">
+        <li><b>Branch A need</b> = NP ${fmt(L.nozLeft?.NP||0)} + FL ${aSecs.length? aFLs.map((v,i)=>\`${fmt(v)} (${aSecs[i].lengthFt}′ 1¾″)\`).join(' + '):0} = <b>${fmt(aNeed)} psi</b></li>
+        <li><b>Branch B need</b> = NP ${fmt(L.nozRight?.NP||0)} + FL ${bSecs.length? bFLs.map((v,i)=>\`${fmt(v)} (${bSecs[i].lengthFt}′ 1¾″)\`).join(' + '):0} = <b>${fmt(bNeed)} psi</b></li>
+        <li><b>Take the higher branch</b> = <b>${fmt(maxNeed)} psi</b></li>
+        <li><b>Main FL</b> = ${mainSecs.length? mainFLs.map((v,i)=>\`${fmt(v)} (${mainSecs[i].lengthFt}′ ${mainSecs[i].size==='2.5'?'2½″':mainSecs[i].size==='1.75'?'1¾″':mainSecs[i].size+'″'})\`).join(' + '):0} = <b>${fmt(mainFLsum)} psi</b></li>
+        ${wyeLoss? `<li><b>Wye loss</b> = +${fmt(wyeLoss)} psi</li>` : ``}
+        <li><b>Elevation</b> = ${b.elevPsi>=0?'+':''}${fmt(b.elevPsi)} psi</li>
+      </ul>
+      <div style="margin-top:6px"><b>PP = max(A,B) + Main FL ${wyeLoss?`+ Wye`:``} ± Elev
+           = ${fmt(maxNeed)} + ${fmt(mainFLsum)} ${wyeLoss?`+ ${fmt(wyeLoss)} `:``}${b.elevPsi>=0?'+':''}${fmt(b.elevPsi)}
+           = <span style="color:var(--ok)">${fmt(b.PDP)} psi</span></b></div></div>`;
   }
 }
 
-/* ===== Lines panel ===== */
+/* Lines panel */
 function drawHoseBar(container, sections, gpm, npPsi, nozzleText){
   const totalLen = sumFt(sections); container.innerHTML=''; if(!totalLen||!gpm){ container.textContent='No hose yet'; container.style.color='#9fb0c8'; container.style.fontSize='12px'; return; }
   const W = Math.max(300, Math.min(container.clientWidth||360, 720)), NP_W=64, H=54;
@@ -693,7 +796,6 @@ function drawHoseBar(container, sections, gpm, npPsi, nozzleText){
   const npT=document.createElementNS(svgNS,'text'); npT.setAttribute('x',innerW+8+(NP_W-12)/2); npT.setAttribute('y',33); npT.setAttribute('text-anchor','middle'); npT.setAttribute('fill','#0b0f14'); npT.setAttribute('font-size','11'); npT.textContent=`NP ${npPsi}`; svg.appendChild(npT);
   container.appendChild(svg);
 }
-
 function renderLinesPanel(){
   const anyDeployed = Object.values(lines).some(l=>l.visible);
   if(!anyDeployed || !showMath){ linesTable.innerHTML=''; linesTable.classList.add('is-hidden'); return; }
@@ -722,7 +824,6 @@ function renderLinesPanel(){
       const mathWrap = document.createElement('div');
 
       if(L.hasWye && !single){
-        // Full wye (two branches)
         mathWrap.innerHTML = `
           <details class="math" open>
             <summary>Line math</summary>
@@ -763,7 +864,6 @@ function renderLinesPanel(){
         document.getElementById(`pp_simple_${key}`).innerHTML = ppExplainHTML(L);
 
       } else if(single){
-        // Single-branch via wye: show active nozzle on main, plus one branch FL bar
         const side = activeSide(L);
         const bnSegs = side==='L'? L.itemsLeft : L.itemsRight;
         const bnTitle = side==='L' ? 'Branch A' : 'Branch B';
@@ -797,14 +897,13 @@ function renderLinesPanel(){
 
         drawHoseBar(document.getElementById(`viz_main_${key}`), splitIntoSections(L.itemsMain), gpmMain, (noz?.NP||0), `Main ${sumFt(L.itemsMain)}′ @ ${gpmMain} gpm`);
         drawHoseBar(document.getElementById(`viz_BR_${key}`), splitIntoSections(bnSegs), gpmMain, (noz?.NP||0), `${bnTitle} ${sumFt(bnSegs)||0}′`);
-        const {single:_, final, branchEq}=eqStringsWye(L);
-        document.getElementById(`eq_main_${key}`).textContent = `Main FL = ` + splitIntoSections(L.itemsMain).map(s=>Math.round(FL(gpmMain, s.size, s.lengthFt))).join(' + ') || '0';
+        const {final, branchEq}=eqStringsWye(L);
+        document.getElementById(`eq_main_${key}`).textContent = `Main FL = ` + (splitIntoSections(L.itemsMain).map(s=>Math.round(FL(gpmMain, s.size, s.lengthFt))).join(' + ') || '0');
         document.getElementById(`eq_BR_${key}`).textContent = branchEq;
         document.getElementById(`eq_final_${key}`).textContent = final;
         document.getElementById(`pp_simple_${key}`).innerHTML = ppExplainHTML(L);
 
       } else {
-        // No wye
         mathWrap.innerHTML = `
           <details class="math" open>
             <summary>Line math</summary>
@@ -833,87 +932,54 @@ function renderLinesPanel(){
   });
 }
 
-/* ===== Add + tips ===== */
-function addTip(key, where, x, y){
-  const g = document.createElementNS('http://www.w3.org/2000/svg','g');
-  g.setAttribute('class','hose-end'); g.setAttribute('data-line',key); g.setAttribute('data-where',where);
-  const hit = document.createElementNS('http://www.w3.org/2000/svg','rect'); hit.setAttribute('class','plus-hit'); hit.setAttribute('x', x-20); hit.setAttribute('y', y-20); hit.setAttribute('width', 40); hit.setAttribute('height', 40);
-  const c = document.createElementNS('http://www.w3.org/2000/svg','circle'); c.setAttribute('class','plus-circle'); c.setAttribute('cx',x); c.setAttribute('cy',y); c.setAttribute('r',14);
-  const v = document.createElementNS('http://www.w3.org/2000/svg','line'); v.setAttribute('class','plus-sign'); v.setAttribute('x1',x); v.setAttribute('y1',y-6); v.setAttribute('x2',x); v.setAttribute('y2',y+6);
-  const h = document.createElementNS('http://www.w3.org/2000/svg','line'); h.setAttribute('class','plus-sign'); h.setAttribute('x1',x-6); h.setAttribute('y1',y); h.setAttribute('x2',x+6); h.setAttribute('y2',y);
-  g.appendChild(hit); g.appendChild(c); g.appendChild(v); g.appendChild(h); G_tips.appendChild(g);
-}
-
-/* ===== Editor logic ===== */
+/* Editor logic */
 let editorContext = null; // {key, where}
 overlay.addEventListener('click', (e)=>{
   const tip = e.target.closest('.hose-end'); if(!tip) return;
   const key = tip.getAttribute('data-line'); const where = tip.getAttribute('data-where');
   const L = lines[key];
-
-  // Seed defaults if empty
   seedDefaultsForKey(key, L);
   L.visible = true;
-
-  // Load editor
   editorContext = {key, where};
   teTitle.textContent = `${L.label} — ${where==='main'?'Main':'Branch '+where}`;
   teWhere.value = where.toUpperCase();
   teElev.value = L.elevFt||0;
   teWye.value  = L.hasWye? 'on':'off';
 
-  // Main OR Branch inputs
   if(where==='main'){
     const seg = L.itemsMain[0] || {size:'1.75',lengthFt:200};
-    teSize.value = seg.size;
-    teLen.value  = seg.lengthFt||0;
-    teNoz.value  = (isSingleWye(L)? activeNozzle(L)?.id : L.nozRight.id) || L.nozRight.id;
+    teSize.value = seg.size; teLen.value = seg.lengthFt||0;
+    teNoz.value = (isSingleWye(L)? activeNozzle(L)?.id : L.nozRight.id) || L.nozRight.id;
   } else if(where==='L'){
     const seg = L.itemsLeft[0] || {size:'1.75',lengthFt:100};
-    teSize.value = seg.size;
-    teLen.value = seg.lengthFt;
-    teNoz.value = (L.nozLeft||NOZ.chiefXD).id;
-  } else if(where==='R'){
+    teSize.value = seg.size; teLen.value = seg.lengthFt; teNoz.value = (L.nozLeft||NOZ.chiefXD).id;
+  } else {
     const seg = L.itemsRight[0] || {size:'1.75',lengthFt:100};
-    teSize.value = seg.size;
-    teLen.value = seg.lengthFt;
-    teNoz.value = (L.nozRight||NOZ.chiefXD265).id;
+    teSize.value = seg.size; teLen.value = seg.lengthFt; teNoz.value = (L.nozRight||NOZ.chiefXD265).id;
   }
 
-  // Branch controls visibility
   branchBlock.classList.toggle('is-hidden', teWye.value==='off');
   teLenA.value = (L.itemsLeft[0]?.lengthFt)||0;
   teLenB.value = (L.itemsRight[0]?.lengthFt)||0;
   teNozA.value = (L.nozLeft?.id)||'chiefXD';
   teNozB.value = (L.nozRight?.id)||'chiefXD265';
 
-  // Position & show
-  placeEditor(e.clientX, e.clientY);
+  const rect = stage.getBoundingClientRect();
+  tipEditor.style.left = Math.min(rect.width-310, Math.max(8, e.clientX-rect.left-140)) + 'px';
+  tipEditor.style.top  = Math.min(rect.height-10, Math.max(8, e.clientY-rect.top+8)) + 'px';
   tipEditor.classList.remove('is-hidden');
 });
-
 teWye.addEventListener('change', ()=>{ branchBlock.classList.toggle('is-hidden', teWye.value==='off'); });
-
-document.getElementById('teCancel').addEventListener('click', ()=>{ tipEditor.classList.add('is-hidden'); });
-
-document.getElementById('teApply').addEventListener('click', ()=>{
+$('#teCancel').addEventListener('click', ()=> tipEditor.classList.add('is-hidden'));
+$('#teApply').addEventListener('click', ()=>{
   if(!editorContext) return;
-  const {key, where} = editorContext;
-  const L = lines[key];
-  const size = teSize.value;
-  const len  = Math.max(0, +teLen.value||0);
-  const noz  = NOZ[teNoz.value];
-  const elev = +teElev.value||0;
-  const wyeOn = teWye.value==='on';
-
-  // Apply elevation to the whole line
+  const {key, where} = editorContext; const L = lines[key];
+  const size = teSize.value; const len = Math.max(0, +teLen.value||0); const noz = NOZ[teNoz.value]; const elev=+teElev.value||0; const wyeOn = teWye.value==='on';
   L.elevFt = elev;
-
   if(where==='main'){
     L.itemsMain = [{size, lengthFt:len}];
     if(!wyeOn){
-      L.hasWye=false; L.itemsLeft=[]; L.itemsRight=[];
-      L.nozRight = noz; // nozzle on the main/single
+      L.hasWye=false; L.itemsLeft=[]; L.itemsRight=[]; L.nozRight = noz;
     }else{
       L.hasWye=true;
       const lenA = Math.max(0, +teLenA.value||0);
@@ -924,22 +990,15 @@ document.getElementById('teApply').addEventListener('click', ()=>{
       L.nozRight = NOZ[teNozB.value] || L.nozRight;
     }
   } else if(where==='L'){
-    L.hasWye = wyeOn || true; // editing branch implies wye on
-    L.itemsLeft  = len? [{size, lengthFt:len}] : [];
-    L.nozLeft = noz;
-  } else if(where==='R'){
-    L.hasWye = wyeOn || true;
-    L.itemsRight = len? [{size, lengthFt:len}] : [];
-    L.nozRight = noz;
+    L.hasWye = wyeOn || true; L.itemsLeft = len? [{size, lengthFt:len}] : []; L.nozLeft = noz;
+  } else {
+    L.hasWye = wyeOn || true; L.itemsRight = len? [{size, lengthFt:len}] : []; L.nozRight = noz;
   }
-
-  L.visible = true;
-  tipEditor.classList.add('is-hidden');
-  drawAll();
+  L.visible = true; tipEditor.classList.add('is-hidden'); drawAll();
 });
 
-/* ===== Line toggle buttons ===== */
-document.querySelectorAll('.linebtn').forEach(b=>{
+/* Line toggle buttons */
+$$('.linebtn').forEach(b=>{
   b.addEventListener('click', ()=>{
     const key=b.dataset.line; const L=lines[key];
     seedDefaultsForKey(key, L);
@@ -948,23 +1007,52 @@ document.querySelectorAll('.linebtn').forEach(b=>{
   });
 });
 
-/* ===== Supply & Presets buttons ===== */
-document.getElementById('supplyBtn').addEventListener('click', ()=>{
+/* Supply & Presets */
+$('#supplyBtn').addEventListener('click', ()=>{
   const order = ['none','pressurized','drafting','relay'];
   currentSupply = order[(order.indexOf(currentSupply)+1)%order.length];
   drawAll();
 });
+const sheet = $('#sheet'), sheetBackdrop = $('#sheetBackdrop');
+function openSheet(){ sheet.classList.add('show'); sheetBackdrop.style.display='block'; }
+function closeSheet(){ sheet.classList.remove('show'); sheetBackdrop.style.display='none'; chosenPreset=null; chosenLine=null; $('#sheetApply').disabled=true; }
+$('#presetsBtn').addEventListener('click', openSheet);
+$('#sheetClose').addEventListener('click', closeSheet);
+sheetBackdrop.addEventListener('click', closeSheet);
+$('#presetGrid').addEventListener('click',(e)=>{
+  const p = e.target.closest('.preset'); if(!p) return;
+  chosenPreset = p.dataset.preset;
+  $$('#presetGrid .preset').forEach(x=>x.style.outline='none');
+  p.style.outline = '2px solid var(--accent)';
+  updateSheetApply();
+});
+document.querySelector('.linepick').addEventListener('click',(e)=>{
+  const p = e.target.closest('.preset'); if(!p) return;
+  chosenLine = p.dataset.applyline;
+  $$('.linepick .preset').forEach(x=>x.style.outline='none');
+  p.style.outline = '2px solid var(--accent)';
+  updateSheetApply();
+});
+function updateSheetApply(){ $('#sheetApply').disabled = !(chosenPreset && chosenLine); }
+$('#sheetApply').addEventListener('click', ()=>{ if(!(chosenPreset && chosenLine)) return; applyPresetTo(chosenPreset, chosenLine); closeSheet(); });
+function clearLine(L){ L.itemsMain=[]; L.itemsLeft=[]; L.itemsRight=[]; L.hasWye=false; L.elevFt=0; }
+function applyPresetTo(preset, key){
+  const L = lines[key]; clearLine(L); L.visible = true;
+  switch(preset){
+    case 'standpipe': L.itemsMain=[{size:'2.5', lengthFt:0}]; L.hasWye=false; L.nozRight=NOZ.fog150_75; L.elevFt=60; break;
+    case 'sprinkler': currentSupply='pressurized'; L.itemsMain=[{size:'2.5', lengthFt:50}]; L.nozRight=NOZ.fog150_75; L.hasWye=false; break;
+    case 'foam': L.itemsMain=[{size:'1.75', lengthFt:200}]; L.nozRight=NOZ.fog150_75; L.hasWye=false; L.elevFt=0; break;
+    case 'monitor': L.itemsMain=[{size:'2.5', lengthFt:200}]; L.nozRight=NOZ.sb1_1_8; L.hasWye=false; L.elevFt=0; break;
+    case 'aerial': currentSupply='pressurized'; L.itemsMain=[{size:'2.5', lengthFt:150}]; L.nozRight=NOZ.sb1_1_8; L.hasWye=false; L.elevFt=80; break;
+  }
+  drawAll();
+}
 
-/* ===== Why? button behavior (reveals math once) ===== */
+/* Why? (reveal math) */
 whyBtn.addEventListener('click', ()=>{
   const anyDeployed = Object.values(lines).some(l=>l.visible);
-  if(!anyDeployed){
-    alert('Deploy a line to see Pump Pressure breakdown.');
-    return;
-  }
-  // Reveal math
+  if(!anyDeployed){ alert('Deploy a line to see Pump Pressure breakdown.'); return; }
   if(!showMath){ showMath = true; renderLinesPanel(); }
-  // Scroll to the explanation for the max line and flash it
   if(!lastMaxKey) return;
   const target = document.getElementById(`pp_simple_${lastMaxKey}`);
   if(target){
@@ -974,66 +1062,117 @@ whyBtn.addEventListener('click', ()=>{
   }
 });
 
-/* Bottom sheet (Presets) */
-const sheet = document.getElementById('sheet');
-const sheetBackdrop = document.getElementById('sheetBackdrop');
-function openSheet(){ sheet.classList.add('show'); sheetBackdrop.style.display='block'; }
-function closeSheet(){ sheet.classList.remove('show'); sheetBackdrop.style.display='none'; chosenPreset=null; chosenLine=null; document.getElementById('sheetApply').disabled=true; }
-document.getElementById('presetsBtn').addEventListener('click', openSheet);
-document.getElementById('sheetClose').addEventListener('click', closeSheet);
-sheetBackdrop.addEventListener('click', closeSheet);
+/* ===== Practice View Logic ===== */
+const G_hosesP = $('#hosesP'), G_branchesP = $('#branchesP'), G_labelsP = $('#labelsP'); const practiceInfo = $('#practiceInfo');
+function clearPractice(){ while(G_hosesP.firstChild) G_hosesP.removeChild(G_hosesP.firstChild); while(G_branchesP.firstChild) G_branchesP.removeChild(G_branchesP.firstChild); while(G_labelsP.firstChild) G_labelsP.removeChild(G_labelsP.firstChild); }
+let practiceAnswer = null;
 
-document.getElementById('presetGrid').addEventListener('click',(e)=>{
-  const p = e.target.closest('.preset'); if(!p) return;
-  chosenPreset = p.dataset.preset;
-  document.querySelectorAll('#presetGrid .preset').forEach(x=>x.style.outline='none');
-  p.style.outline = '2px solid var(--accent)';
-  updateSheetApply();
-});
-document.querySelector('.linepick').addEventListener('click',(e)=>{
-  const p = e.target.closest('.preset'); if(!p) return;
-  chosenLine = p.dataset.applyline;
-  document.querySelectorAll('.linepick .preset').forEach(x=>x.style.outline='none');
-  p.style.outline = '2px solid var(--accent)';
-  updateSheetApply();
-});
-function updateSheetApply(){ document.getElementById('sheetApply').disabled = !(chosenPreset && chosenLine); }
+function randomPick(arr){ return arr[Math.floor(Math.random()*arr.length)]; }
+function makePractice(){
+  clearPractice();
+  // Randomize a single line: choose size, length, nozzle, maybe wye
+  const sizeMain = Math.random()<0.4 ? '2.5' : '1.75';
+  const lenMain = [150,200,250,300][Math.floor(Math.random()*4)];
+  const wye = Math.random()<0.35; // 35% chance of wye
+  const elev = [0,10,20,30,40][Math.floor(Math.random()*5)];
+  const nozChoices = [NOZ.chiefXD, NOZ.fog150_75, NOZ.fog185_75, NOZ.sb15_16, NOZ.sb1_1_8, NOZ.chiefXD265];
+  const noz = randomPick(nozChoices);
 
-document.getElementById('sheetApply').addEventListener('click', ()=>{
-  if(!(chosenPreset && chosenLine)) return;
-  applyPresetTo(chosenPreset, chosenLine);
-  closeSheet();
-});
+  // Geometry
+  const totalPx = (lenMain/50)*PX_PER_50FT;
+  const sx=200, sy=220; const ex=200, ey=Math.max(18, sy-totalPx);
+  const pathData = `M ${sx},${sy} Q 200 ${sy-totalPx*0.6} ${ex},${ey}`;
+  const base=document.createElementNS('http://www.w3.org/2000/svg','path'); base.setAttribute('d', pathData); G_hosesP.appendChild(base);
+  const segs=[{size:sizeMain,lengthFt:lenMain}];
+  // draw main
+  const totalLen = base.getTotalLength();
+  const p1=document.createElementNS('http://www.w3.org/2000/svg','path'); p1.setAttribute('class','hoseBase shadow'); p1.setAttribute('d', pathData); G_hosesP.appendChild(p1);
+  const p2=document.createElementNS('http://www.w3.org/2000/svg','path'); p2.setAttribute('class',`hoseBase ${sizeMain==='2.5'?'hose25':'hose175'}`); p2.setAttribute('d', pathData); p2.setAttribute('stroke-dasharray', `${totalLen} ${totalLen}`); p2.setAttribute('stroke-dashoffset','0'); G_hosesP.appendChild(p2);
 
-/* ===== Preset logic ===== */
-function clearLine(L){ L.itemsMain=[]; L.itemsLeft=[]; L.itemsRight=[]; L.hasWye=false; L.elevFt=0; }
-function applyPresetTo(preset, key){
-  const L = lines[key]; clearLine(L); L.visible = true;
-  switch(preset){
-    case 'standpipe':
-      L.itemsMain=[{size:'2.5', lengthFt:0}]; // FDC feed visual
-      L.hasWye=false; L.nozRight=NOZ.fog150_75; L.elevFt=60;
-      break;
-    case 'sprinkler':
-      currentSupply='pressurized';
-      L.itemsMain=[{size:'2.5', lengthFt:50}]; L.nozRight=NOZ.fog150_75; L.hasWye=false;
-      break;
-    case 'foam':
-      L.itemsMain=[{size:'1.75', lengthFt:200}]; L.nozRight=NOZ.fog150_75; L.hasWye=false; L.elevFt=0;
-      break;
-    case 'monitor':
-      L.itemsMain=[{size:'2.5', lengthFt:200}]; L.nozRight=NOZ.sb1_1_8; L.hasWye=false; L.elevFt=0;
-      break;
-    case 'aerial':
-      currentSupply='pressurized';
-      L.itemsMain=[{size:'2.5', lengthFt:150}]; L.nozRight=NOZ.sb1_1_8; L.hasWye=false; L.elevFt=80;
-      break;
+  // Branch?
+  let branchSegs=[], branchNoz=null, wyeLoss=10;
+  if(wye){
+    const bLen = [50,100,150][Math.floor(Math.random()*3)];
+    branchSegs = [{size:'1.75', lengthFt:bLen}];
+    branchNoz = randomPick([NOZ.chiefXD, NOZ.fog150_75, NOZ.sb15_16]);
+    const x = ex, y = ey; const bx = x+20, by = y-10, by2 = Math.max(8, by - (bLen/50)*PX_PER_50FT);
+    const bpath = `M ${x},${y} L ${x},${by} L ${bx},${by} L ${bx},${by2}`;
+    const bShadow=document.createElementNS('http://www.w3.org/2000/svg','path'); bShadow.setAttribute('class','hoseBase shadow'); bShadow.setAttribute('d',bpath); G_branchesP.appendChild(bShadow);
+    const bVis=document.createElementNS('http://www.w3.org/2000/svg','path'); bVis.setAttribute('class','hoseBase hose175'); bVis.setAttribute('d',bpath); G_branchesP.appendChild(bVis);
   }
-  drawAll();
+
+  // Compute PP answer
+  const flow = wye ? ((branchNoz?.gpm||0) + (noz.gpm)) : noz.gpm;
+  const mainFL = FL_total(flow, segs);
+  let PDP=0;
+  if(wye){
+    // 2 branches: pick higher branch need vs main nozzle branch
+    const bnFL = FL_total(branchNoz.gpm, branchSegs);
+    const needA = branchNoz.NP + bnFL;
+    const needB = noz.NP; // main end acts as nozzle branch with 0' branch
+    PDP = Math.max(needA, needB) + mainFL + wyeLoss + elev*PSI_PER_FT;
+  } else {
+    PDP = noz.NP + mainFL + elev*PSI_PER_FT;
+  }
+  practiceAnswer = Math.round(PDP);
+
+  // Labels
+  const npLabel = wye ? 'via Wye' : `Nozzle ${noz.NP} psi`;
+  const lbl = `${lenMain}′ @ ${wye? (noz.gpm + (branchNoz?.gpm||0)) : noz.gpm} gpm — ${npLabel}${elev?` — Elev ${elev}′`:''}`;
+  const text=document.createElementNS('http://www.w3.org/2000/svg','text'); text.setAttribute('x', ex); text.setAttribute('y', ey-10); text.setAttribute('text-anchor','middle'); text.setAttribute('fill','#eaf2ff'); text.setAttribute('font-size','12'); text.textContent = lbl; G_labelsP.appendChild(text);
+
+  practiceInfo.textContent = 'Scenario ready — enter your PP guess.';
+  $('#practiceStatus').textContent = `Hint: PP color thresholds— >200 orange, >250 red (Calculations view).`;
 }
+$('#newScenarioBtn').addEventListener('click', makePractice);
+$('#checkBtn').addEventListener('click', ()=>{
+  const guess = +($('#ppGuess').value||0), tol = Math.max(0,+($('#ppTol').value||10));
+  if(!practiceAnswer && practiceAnswer!==0){ $('#practiceStatus').textContent = 'Generate a scenario first.'; return; }
+  const diff = Math.abs(guess - practiceAnswer);
+  const status = $('#practiceStatus');
+  if(diff<=tol){ status.innerHTML = `<span class="ok">✅ Correct!</span> (Answer ${practiceAnswer} psi; Δ ${diff})`; }
+  else if(diff<=tol*2){ status.innerHTML = `<span class="warn">⚠️ Close.</span> (Answer ${practiceAnswer} psi; Δ ${diff})`; }
+  else{ status.innerHTML = `<span class="alert">❌ Not quite.</span> (Answer ${practiceAnswer} psi; Δ ${diff})`; }
+});
+$('#revealBtn').addEventListener('click', ()=>{ if(practiceAnswer||practiceAnswer===0) $('#practiceStatus').innerHTML = `<b>Answer:</b> ${practiceAnswer} psi`; });
+
+/* ===== Settings View Logic ===== */
+function populateSettings(){
+  const sels = [$('#s_noz1'),$('#s_noz2'),$('#s_noz3')];
+  sels.forEach(sel=> sel.innerHTML = NOZ_LIST.map(n=>`<option value="${n.id}">${n.name}</option>`).join('') );
+  // Load existing
+  $('#s_len1').value = currentPresets.left.len; $('#s_sz1').value = currentPresets.left.size; $('#s_noz1').value = currentPresets.left.noz;
+  $('#s_len2').value = currentPresets.back.len; $('#s_sz2').value = currentPresets.back.size; $('#s_noz2').value = currentPresets.back.noz;
+  $('#s_len3').value = currentPresets.right.len; $('#s_sz3').value = currentPresets.right.size; $('#s_noz3').value = currentPresets.right.noz;
+}
+$('#settingsReset').addEventListener('click', ()=>{
+  currentPresets = JSON.parse(JSON.stringify(defaultPresets));
+  populateSettings();
+  $('#settingsMsg').textContent = 'Defaults restored (not yet saved).';
+});
+$('#settingsSave').addEventListener('click', ()=>{
+  currentPresets = {
+    left:  {len:+$('#s_len1').value||200, size:$('#s_sz1').value, noz:$('#s_noz1').value},
+    back:  {len:+$('#s_len2').value||200, size:$('#s_sz2').value, noz:$('#s_noz2').value},
+    right: {len:+$('#s_len3').value||250, size:$('#s_sz3').value, noz:$('#s_noz3').value}
+  };
+  localStorage.setItem('fireops_presets', JSON.stringify(currentPresets));
+  $('#settingsMsg').textContent = 'Saved! New presets will apply when you deploy/edit lines.';
+});
+
+/* ===== Bottom Nav ===== */
+function setView(name){
+  $$('.view').forEach(v=>v.classList.remove('active'));
+  $(`#view-${name}`).classList.add('active');
+  $$('.navbtn').forEach(b=>b.classList.toggle('active', b.dataset.view===name));
+  if(name==='settings') populateSettings();
+}
+$$('.navbtn').forEach(b=> b.addEventListener('click', ()=> setView(b.dataset.view)) );
 
 /* ===== Boot ===== */
-drawAll();
+(function init(){
+  drawAll();
+})();
 </script>
 </body>
 </html>
