@@ -11,6 +11,7 @@
     --bubble:#172134; --bubble-edge:rgba(255,255,255,.15);
     --btn:#0b1320; --btnEdge:#20324f;
     --accent:#3aa7ff; --ok:#9fe879;
+    --warn:#ffa726; --alert:#ef5350;
   }
   *{box-sizing:border-box}
   html,body{margin:0;background:var(--bg);color:var(--ink);font-family:system-ui,Segoe UI,Inter,Arial,sans-serif}
@@ -51,13 +52,15 @@
   .kpi b{font-size:18px}
   .whyBtn{margin-left:auto;background:#0b1a29;border:1px solid #1f3a57;color:#eaf2ff;border-radius:999px;padding:6px 9px;font-size:12px;cursor:pointer}
   .whyBtn:active{transform:translateY(1px)}
+  #PDP.orange{color:var(--warn)}
+  #PDP.red{color:var(--alert)}
 
   .linesTable{margin-top:8px;border-top:1px solid var(--edge);padding-top:8px;display:grid;gap:8px}
   .lineRow{background:#0b1320;border:1px solid var(--edge);border-radius:12px;padding:8px}
   .lineHeader{display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-bottom:2px;font-size:12px;color:#cfe4ff}
   .lineHeader .title{font-weight:700;color:#eaf2ff}
   .lineHeader .tag{display:inline-block;background:#0b1a29;border:1px solid #1f3a57;border-radius:999px;padding:3px 7px;margin:2px 2px;font-size:11px}
-  details.math{background:#0b1a29;border:1px solid #1f3a57;border-radius:12px;padding:6px 8px;margin-top:6px}
+  details.math{background:#0b1a29;border:1f3a57;border-radius:12px;padding:6px 8px;margin-top:6px;border:1px solid #1f3a57}
   details.math summary{cursor:pointer;color:#cfe4ff;font-weight:700}
   .hoseviz{margin-top:6px}
   .hoseLegend{display:flex;gap:8px;align-items:center;font-size:11px;color:#cfe4ff;margin:2px 0 6px}
@@ -79,7 +82,7 @@
   @keyframes flashBox{0%{box-shadow:0 0 0 rgba(63,191,255,0)} 25%{box-shadow:0 0 0 4px rgba(58,167,255,.35)} 100%{box-shadow:0 0 0 rgba(63,191,255,0)}}
   .flash{animation:flashBox 1200ms ease 1}
 
-  /* Tip Editor (floating compact form) */
+  /* Tip Editor */
   .tip-editor{
     position:absolute; z-index:5; min-width:250px; max-width:300px;
     background:#0f1624;border:1px solid var(--edge);border-radius:12px;padding:10px;
@@ -232,12 +235,13 @@ const NOZ = {
   sb7_8:{id:'sb7_8',grp:'Smooth Bore',name:'SB 7/8″ (160@50)',gpm:160,NP:50},
   sb15_16:{id:'sb15_16',grp:'Smooth Bore',name:'SB 15/16″ (185@50)',gpm:185,NP:50},
   sb1_1_8:{id:'sb1_1_8',grp:'Smooth Bore',name:'SB 1 1/8″ (265@50)',gpm:265,NP:50},
-  // Fog
+  // Fog / combo
   fog125_75:{id:'fog125_75',grp:'Fog',name:'Fog 125@75',gpm:125,NP:75},
   fog150_75:{id:'fog150_75',grp:'Fog',name:'Fog 150@75',gpm:150,NP:75},
   fog185_75:{id:'fog185_75',grp:'Fog',name:'Fog 185@75',gpm:185,NP:75},
   fog200_75:{id:'fog200_75',grp:'Fog',name:'Fog 200@75',gpm:200,NP:75},
-  chiefXD:{id:'chiefXD',grp:'Fog',name:'ChiefXD 185@50',gpm:185,NP:50}
+  chiefXD:{id:'chiefXD',grp:'Fog',name:'ChiefXD 185@50',gpm:185,NP:50},
+  chiefXD265:{id:'chiefXD265',grp:'Fog',name:'ChiefXD 265@50',gpm:265,NP:50}
 };
 const NOZ_LIST = Object.values(NOZ);
 
@@ -271,6 +275,7 @@ const G_tips    = document.getElementById('tips');
 const topInfo   = document.getElementById('topInfo');
 const linesTable= document.getElementById('linesTable');
 const whyBtn    = document.getElementById('whyBtn');
+const PDPel     = document.getElementById('PDP');
 
 /* Tip editor elements */
 const tipEditor = document.getElementById('tipEditor');
@@ -308,21 +313,6 @@ function splitIntoSections(segments){
   const out=[]; (segments||[]).forEach(seg=>{ let r=seg.lengthFt||0; while(r>0){ const t=Math.min(100,r); out.push({size:seg.size,lengthFt:t}); r-=t; }});
   return out;
 }
-function computeNeededHeightPx(){
-  const needs = Object.values(lines).filter(l=>l.visible);
-  let maxUp = 0;
-  needs.forEach(L=>{
-    const mainPx = (sumFt(L.itemsMain)/50)*PX_PER_50FT;
-    let branchPx = 0;
-    if(L.hasWye){
-      const lpx = (sumFt(L.itemsLeft)/50)*PX_PER_50FT;
-      const rpx = (sumFt(L.itemsRight)/50)*PX_PER_50FT;
-      branchPx = Math.max(lpx, rpx) + BRANCH_LIFT;
-    }
-    maxUp = Math.max(maxUp, mainPx + branchPx);
-  });
-  return Math.max(TRUCK_H + supplyHeight() + 10, TRUCK_H + maxUp + 40 + supplyHeight());
-}
 function truckTopY(viewH){ return viewH - TRUCK_H - supplyHeight(); }
 function pumpXY(viewH){ const top = truckTopY(viewH); return { x: TRUCK_W*0.515, y: top + TRUCK_H*0.74 }; }
 function sizeLabel(sz){ return sz==='2.5'?'2½″':(sz==='1.75'?'1¾″':sz+'"'); }
@@ -335,8 +325,21 @@ function seedDefaultsForKey(key, L){
     L.nozRight = NOZ.chiefXD;     // 185 gpm @ 50 psi
   } else if(key==='right'){
     L.itemsMain=[{size:'2.5', lengthFt:250}];
-    L.nozRight = NOZ.sb1_1_8;     // 265 gpm @ 50 psi
+    L.nozRight = NOZ.chiefXD265;  // 265 gpm @ 50 psi (requested)
   }
+}
+
+/* Wye helpers */
+function hasLeft(L){ return sumFt(L.itemsLeft)>0 && (L.nozLeft?.gpm||0)>0; }
+function hasRight(L){ return sumFt(L.itemsRight)>0 && (L.nozRight?.gpm||0)>0; }
+function isSingleWye(L){ return L.hasWye && (hasLeft(L) ^ hasRight(L)); }
+function activeSide(L){ if(!L.hasWye) return null; return hasLeft(L) && !hasRight(L) ? 'L' : (!hasLeft(L) && hasRight(L) ? 'R' : null); }
+function activeNozzle(L){
+  const side = activeSide(L);
+  if(!L.hasWye) return L.nozRight;
+  if(side==='L') return L.nozLeft;
+  if(side==='R') return L.nozRight;
+  return null;
 }
 
 /* ===== Geometry & draw ===== */
@@ -389,7 +392,7 @@ function addLabel(text, x, y, dy=0){
 
 /* ===== Draw everything ===== */
 function drawAll(){
-  const viewH = Math.ceil(computeNeededHeightPx());
+  const viewH = Math.ceil(Math.max(TRUCK_H + supplyHeight() + 10, TRUCK_H + 260));
   overlay.setAttribute('viewBox', `0 0 ${TRUCK_W} ${viewH}`);
   stage.style.height = viewH + 'px';
   truckImg.setAttribute('y', String(truckTopY(viewH)));
@@ -410,8 +413,12 @@ function drawAll(){
     // Make + clickable editor
     addTip(key,'main',geom.endX,geom.endY);
 
-    const flowGpm = L.hasWye ? (L.nozLeft.gpm + L.nozRight.gpm) : L.nozRight.gpm;
-    addLabel(`${mainFt}′ @ ${flowGpm} gpm — Nozzle ${L.nozRight.NP} psi`, geom.endX, geom.endY-6, (key==='left')?-10:(key==='back')?-22:-34);
+    // Flow label (respect single-branch wye)
+    const single = isSingleWye(L);
+    const usedNoz = single ? activeNozzle(L) : L.hasWye ? null : L.nozRight;
+    const flowGpm = single ? (usedNoz?.gpm||0) : (L.hasWye ? (L.nozLeft.gpm + L.nozRight.gpm) : L.nozRight.gpm);
+    const npLabel = usedNoz ? ` — Nozzle ${usedNoz.NP} psi` : (L.hasWye ? ' — via Wye' : ` — Nozzle ${L.nozRight.NP} psi`);
+    addLabel(`${mainFt}′ @ ${flowGpm} gpm${npLabel}`, geom.endX, geom.endY-6, (key==='left')?-10:(key==='back')?-22:-34);
 
     if(L.hasWye){
       if(sumFt(L.itemsLeft)>0){
@@ -472,18 +479,129 @@ function refreshTotals(){
   const vis = Object.entries(lines).filter(([_k,l])=>l.visible);
   let totalGPM = 0, maxPDP = -Infinity, maxKey = null;
   vis.forEach(([key, L])=>{
-    const gpm = L.hasWye ? (L.nozLeft?.gpm||0) + (L.nozRight?.gpm||0) : (L.nozRight?.gpm||0);
-    const mainFL = FL_total(gpm, L.itemsMain);
-    const leftNeed = L.hasWye ? FL_total(L.nozLeft?.gpm||0, L.itemsLeft) + (L.nozLeft?.NP||0) : 0;
-    const rightNeed= L.hasWye ? FL_total(L.nozRight?.gpm||0, L.itemsRight) + (L.nozRight?.NP||0) : (L.nozRight?.NP||0);
-    const branchMax = L.hasWye ? Math.max(leftNeed, rightNeed) : rightNeed;
-    const PDP = branchMax + mainFL + (L.hasWye ? L.wyeLoss:0) + (L.elevFt * PSI_PER_FT);
-    totalGPM += gpm;
+    const single = isSingleWye(L);
+    const flow = single ? (activeNozzle(L)?.gpm||0)
+               : L.hasWye ? (L.nozLeft?.gpm||0) + (L.nozRight?.gpm||0)
+                          : (L.nozRight?.gpm||0);
+
+    const mainFL = FL_total(flow, L.itemsMain);
+    let PDP=0;
+
+    if(single){
+      // One branch in use: PP = NP(active) + FL(branch) + FL(main) ± Elev
+      const side = activeSide(L);
+      const bnSegs = side==='L' ? L.itemsLeft : L.itemsRight;
+      const bnNoz  = activeNozzle(L);
+      const branchFL = FL_total(bnNoz.gpm, bnSegs);
+      PDP = bnNoz.NP + branchFL + mainFL + (L.elevFt * PSI_PER_FT);
+    }else if(L.hasWye){
+      const lNeed = FL_total(L.nozLeft?.gpm||0, L.itemsLeft) + (L.nozLeft?.NP||0);
+      const rNeed = FL_total(L.nozRight?.gpm||0, L.itemsRight) + (L.nozRight?.NP||0);
+      PDP = Math.max(lNeed, rNeed) + mainFL + (L.wyeLoss||0) + (L.elevFt * PSI_PER_FT);
+    }else{
+      PDP = (L.nozRight?.NP||0) + mainFL + (L.elevFt * PSI_PER_FT);
+    }
+
+    totalGPM += flow;
     if(PDP > maxPDP){ maxPDP = PDP; maxKey = key; }
   });
   lastMaxKey = maxKey;
+  // Update GPM
   document.getElementById('GPM').textContent = vis.length? `${Math.round(totalGPM)} gpm` : '— gpm';
-  document.getElementById('PDP').textContent = vis.length? `${Math.round(maxPDP)} psi` : '— psi';
+  // Update PDP with color thresholds
+  PDPel.classList.remove('orange','red');
+  if(vis.length){
+    const v = Math.round(maxPDP);
+    PDPel.textContent = `${v} psi`;
+    if(v>250) PDPel.classList.add('red');
+    else if(v>200) PDPel.classList.add('orange');
+  }else{
+    PDPel.textContent = '— psi';
+  }
+}
+
+/* ===== Breakdown + equations ===== */
+function breakdown(L){
+  const leftLen  = sumFt(L.itemsLeft)||0, rightLen = sumFt(L.itemsRight)||0;
+  const single = isSingleWye(L);
+  const side = activeSide(L);
+
+  const flow = single ? (activeNozzle(L)?.gpm||0)
+             : L.hasWye ? (L.nozLeft?.gpm||0)+(L.nozRight?.gpm||0)
+                        : (L.nozRight?.gpm||0);
+
+  const mainFL = flow ? FL_total(flow, L.itemsMain) : 0;
+
+  const lFL = L.hasWye ? FL_total(L.nozLeft?.gpm||0, L.itemsLeft) : 0;
+  const rFL = L.hasWye ? FL_total(L.nozRight?.gpm||0, L.itemsRight) : 0;
+
+  let leftNeed=0,rightNeed=0,branchMax=0,wye=0,effNP=0,effBranchFL=0;
+  if(single){
+    const noz = activeNozzle(L);
+    effNP = noz?.NP||0;
+    effBranchFL = FL_total(noz?.gpm||0, side==='L'?L.itemsLeft:L.itemsRight);
+    branchMax = effNP + effBranchFL; // for convenience
+    wye = 0;
+  }else if(L.hasWye){
+    leftNeed  = lFL + (L.nozLeft?.NP||0);
+    rightNeed = rFL + (L.nozRight?.NP||0);
+    branchMax = Math.max(leftNeed, rightNeed);
+    wye = L.wyeLoss||0;
+  }else{
+    effNP = L.nozRight?.NP||0;
+    branchMax = effNP; // for convenience in equations
+  }
+
+  const elevPsi = (L.elevFt||0) * PSI_PER_FT;
+  const PDP = single
+    ? (effNP + effBranchFL + mainFL + elevPsi)
+    : (branchMax + mainFL + wye + elevPsi);
+
+  return {
+    single, side,
+    mainLen: sumFt(L.itemsMain)||0,
+    flow, mainFL,
+    lLen: leftLen, lFL,
+    rLen: rightLen, rFL,
+    leftNeed, rightNeed, branchMax, wye, effNP, effBranchFL,
+    elevPsi, PDP
+  };
+}
+
+function eqStringNoWye(L){
+  const b = breakdown(L);
+  const sections = splitIntoSections(L.itemsMain);
+  const fls = sections.map(s => round(FL(b.flow, s.size, s.lengthFt)));
+  const elev = round(b.elevPsi);
+  const elevPart = elev===0 ? '' : (elev>0 ? ` + ${elev}` : ` - ${Math.abs(elev)}`);
+  const np = L.nozRight?.NP||0;
+  return `PP = NP + Main FL ± Elev = ${np} + ${fls.join(' + ')||0}${elevPart}`;
+}
+
+function eqStringsWye(L){
+  const b = breakdown(L);
+  if(b.single){
+    const sectionsMain = splitIntoSections(L.itemsMain);
+    const mainFls = sectionsMain.map(s => round(FL(b.flow, s.size, s.lengthFt)));
+    const branchSegs = b.side==='L'? L.itemsLeft : L.itemsRight;
+    const branchFls  = splitIntoSections(branchSegs).map(s => round(FL(b.flow, s.size, s.lengthFt)));
+    const elev = round(b.elevPsi);
+    const elevPart = elev===0 ? '' : (elev>0 ? ` + ${elev}` : ` - ${Math.abs(elev)}`);
+    const np = activeNozzle(L)?.NP||0;
+    const final = `PP = NP + Branch FL + Main FL ± Elev = ${np} + ${branchFls.join(' + ')||0} + ${mainFls.join(' + ')||0}${elevPart}`;
+    return { single:true, final, branchEq: `Branch FL = ${branchFls.join(' + ')||0}` };
+  } else {
+    const aFls = splitIntoSections(L.itemsLeft).map(s => round(FL(L.nozLeft?.gpm||0, s.size, s.lengthFt)));
+    const bFls = splitIntoSections(L.itemsRight).map(s => round(FL(L.nozRight?.gpm||0, s.size, s.lengthFt)));
+    const aEq = `A = NP + FL = ${round(L.nozLeft?.NP||0)} + ${aFls.join(' + ')||0}`;
+    const bEq = `B = NP + FL = ${round(L.nozRight?.NP||0)} + ${bFls.join(' + ')||0}`;
+    const mainFls = splitIntoSections(L.itemsMain).map(s => round(FL((L.nozLeft?.gpm||0)+(L.nozRight?.gpm||0), s.size, s.lengthFt)));
+    const elev = round(b.elevPsi);
+    const elevPart = elev===0 ? '' : (elev>0 ? ` + ${elev}` : ` - ${Math.abs(elev)}`);
+    const wye = (L.wyeLoss? ` + ${round(L.wyeLoss)}` : '');
+    const final = `PP = max(A,B) + Main FL${wye} ± Elev = max(A,B) + ${mainFls.join(' + ')||0}${wye}${elevPart}`;
+    return { single:false, aEq, bEq, final };
+  }
 }
 
 /* ===== PP simple explanation ===== */
@@ -502,7 +620,28 @@ function ppExplainHTML(L){
           <li><b>Friction Loss (Main)</b> = ${mainSecs.length? mainSecs.map((s,i)=>`${fmt(mainFLs[i])} (${s.lengthFt}′ ${s.size==='2.5'?'2½″':s.size==='1.75'?'1¾″':s.size+'″'})`).join(' + ') : 0} = <b>${fmt(mainFLsum)} psi</b></li>
           <li><b>Elevation</b> = ${b.elevPsi>=0? '+':''}${fmt(b.elevPsi)} psi</li>
         </ul>
-        <div style="margin-top:6px"><b>PP = NP + FL ± Elev = ${fmt(L.nozRight?.NP||0)} + ${fmt(mainFLsum)} ${b.elevPsi>=0?'+':''}${fmt(b.elevPsi)} = <span style="color:var(--ok)">${fmt(b.PDP)} psi</span></b></div>
+        <div style="margin-top:6px"><b>PP = NP + Main FL ± Elev = ${fmt(L.nozRight?.NP||0)} + ${fmt(mainFLsum)} ${b.elevPsi>=0?'+':''}${fmt(b.elevPsi)} = <span style="color:var(--ok)">${fmt(b.PDP)} psi</span></b></div>
+      </div>
+    `;
+  } else if(b.single){
+    const side = b.side==='L'?'A':'B';
+    const noz = activeNozzle(L);
+    const brSecs = splitIntoSections(b.side==='L'?L.itemsLeft:L.itemsRight);
+    const brFLs = brSecs.map(s => FL(noz.gpm, s.size, s.lengthFt));
+    const brSum = brFLs.reduce((x,y)=>x+y,0);
+    return `
+      <div><b>Simple PP (Single branch via wye):</b>
+        <ul class="simpleList">
+          <li><b>Nozzle Pressure</b> = ${fmt(noz.NP)} psi</li>
+          <li><b>Branch ${side} FL</b> = ${brSecs.length? brFLs.map((v,i)=>`${fmt(v)} (${brSecs[i].lengthFt}′ ${brSecs[i].size==='2.5'?'2½″':brSecs[i].size==='1.75'?'1¾″':brSecs[i].size+'″'})`).join(' + '):0} = <b>${fmt(brSum)} psi</b></li>
+          <li><b>Main FL</b> = ${mainSecs.length? mainSecs.map((s,i)=>`${fmt(mainFLs[i])} (${s.lengthFt}′ ${s.size==='2.5'?'2½″':s.size==='1.75'?'1¾″':s.size+'″'})`).join(' + '):0} = <b>${fmt(mainFLsum)} psi</b></li>
+          <li><b>Elevation</b> = ${b.elevPsi>=0? '+':''}${fmt(b.elevPsi)} psi</li>
+        </ul>
+        <div style="margin-top:6px">
+          <b>PP = NP + Branch FL + Main FL ± Elev
+             = ${fmt(noz.NP)} + ${fmt(brSum)} + ${fmt(mainFLsum)} ${b.elevPsi>=0?'+':''}${fmt(b.elevPsi)}
+             = <span style="color:var(--ok)">${fmt(b.PDP)} psi</span></b>
+        </div>
       </div>
     `;
   } else {
@@ -535,22 +674,7 @@ function ppExplainHTML(L){
   }
 }
 
-/* ===== Breakdown + equations ===== */
-function breakdown(L){
-  const mainLen  = sumFt(L.itemsMain) || 0;
-  const flow     = L.hasWye ? (L.nozLeft?.gpm||0)+(L.nozRight?.gpm||0) : (L.nozRight?.gpm||0);
-  const mainFL   = flow ? FL_total(flow, L.itemsMain) : 0;
-  const lLen  = sumFt(L.itemsLeft)||0, rLen = sumFt(L.itemsRight)||0;
-  const lFL   = L.hasWye ? FL_total(L.nozLeft?.gpm||0, L.itemsLeft) : 0;
-  const rFL   = L.hasWye ? FL_total(L.nozRight?.gpm||0, L.itemsRight) : 0;
-  const leftNeed  = L.hasWye ? (lFL + (L.nozLeft?.NP||0)) : 0;
-  const rightNeed = L.hasWye ? (rFL + (L.nozRight?.NP||0)) : (L.nozRight?.NP||0);
-  const branchMax = L.hasWye ? Math.max(leftNeed, rightNeed) : rightNeed;
-  const wye = L.hasWye ? L.wyeLoss : 0;
-  const elevPsi = (L.elevFt||0) * PSI_PER_FT;
-  const PDP = branchMax + mainFL + wye + elevPsi;
-  return { mainLen, flow, mainFL, lLen, lFL, rLen, rFL, leftNeed, rightNeed, branchMax, wye, elevPsi, PDP };
-}
+/* ===== Lines panel ===== */
 function drawHoseBar(container, sections, gpm, npPsi, nozzleText){
   const totalLen = sumFt(sections); container.innerHTML=''; if(!totalLen||!gpm){ container.textContent='No hose yet'; container.style.color='#9fb0c8'; container.style.fontSize='12px'; return; }
   const W = Math.max(300, Math.min(container.clientWidth||360, 720)), NP_W=64, H=54;
@@ -569,29 +693,7 @@ function drawHoseBar(container, sections, gpm, npPsi, nozzleText){
   const npT=document.createElementNS(svgNS,'text'); npT.setAttribute('x',innerW+8+(NP_W-12)/2); npT.setAttribute('y',33); npT.setAttribute('text-anchor','middle'); npT.setAttribute('fill','#0b0f14'); npT.setAttribute('font-size','11'); npT.textContent=`NP ${npPsi}`; svg.appendChild(npT);
   container.appendChild(svg);
 }
-function eqStringNoWye(L){
-  const b = breakdown(L);
-  const sections = splitIntoSections(L.itemsMain);
-  const fls = sections.map(s => round(FL(b.flow, s.size, s.lengthFt)));
-  const elev = round(b.elevPsi);
-  const elevPart = elev===0 ? '' : (elev>0 ? ` + ${elev}` : ` - ${Math.abs(elev)}`);
-  return `PP = NP + FL ± Elev = ${round(L.nozRight?.NP||0)} + ${fls.join(' + ')}${elevPart}`;
-}
-function eqStringsWye(L){
-  const b = breakdown(L);
-  const aFls = splitIntoSections(L.itemsLeft).map(s => round(FL(L.nozLeft?.gpm||0, s.size, s.lengthFt)));
-  const bFls = splitIntoSections(L.itemsRight).map(s => round(FL(L.nozRight?.gpm||0, s.size, s.lengthFt)));
-  const aEq = `A = NP + FL = ${round(L.nozLeft?.NP||0)} + ${aFls.join(' + ')||0}`;
-  const bEq = `B = NP + FL = ${round(L.nozRight?.NP||0)} + ${bFls.join(' + ')||0}`;
-  const mainFls = splitIntoSections(L.itemsMain).map(s => round(FL((L.nozLeft?.gpm||0)+(L.nozRight?.gpm||0), s.size, s.lengthFt)));
-  const elev = round(b.elevPsi);
-  const elevPart = elev===0 ? '' : (elev>0 ? ` + ${elev}` : ` - ${Math.abs(elev)}`);
-  const wye = L.wyeLoss? ` + ${round(L.wyeLoss)}` : '';
-  const final = `PP = max(A,B) + Main FL${wye} ± Elev = max(A,B) + ${mainFls.join(' + ')||0}${wye}${elevPart}`;
-  return { aEq, bEq, final };
-}
 
-/* ===== Lines panel ===== */
 function renderLinesPanel(){
   const anyDeployed = Object.values(lines).some(l=>l.visible);
   if(!anyDeployed || !showMath){ linesTable.innerHTML=''; linesTable.classList.add('is-hidden'); return; }
@@ -601,7 +703,10 @@ function renderLinesPanel(){
     const L = lines[key];
     const row = document.createElement('div'); row.className='lineRow';
     const segs = L.itemsMain.length ? L.itemsMain.map(s=>`${s.lengthFt}′ ${sizeLabel(s.size)}`).join(' + ') : 'empty';
-    const flow = L.hasWye ? (L.nozLeft.gpm + L.nozRight.gpm) : L.nozRight.gpm;
+    const single = isSingleWye(L);
+    const usedNoz = single ? activeNozzle(L) : L.nozRight;
+    const flow = single ? (usedNoz?.gpm||0) : (L.hasWye ? (L.nozLeft.gpm + L.nozRight.gpm) : L.nozRight.gpm);
+
     const head = document.createElement('div'); head.className='lineHeader'; head.innerHTML = `
       <span class="title">${L.label}</span>
       <span class="tag">Main: ${sumFt(L.itemsMain)}′ (${segs})</span>
@@ -613,23 +718,24 @@ function renderLinesPanel(){
 
     if(L.visible){
       const b = breakdown(L);
-      const gpmMain = L.hasWye ? (L.nozLeft?.gpm||0)+(L.nozRight?.gpm||0) : (L.nozRight?.gpm||0);
+      const gpmMain = b.flow;
       const mathWrap = document.createElement('div');
-      mathWrap.innerHTML = `
-        <details class="math" open>
-          <summary>Line math</summary>
-          <div class="hoseviz">
-            <div class="hoseLegend">
-              <span class="legSwatch sw175"></span> 1¾″
-              <span class="legSwatch sw25"></span> 2½″
-              <span class="legSwatch sw5"></span> 5″
-            </div>
-            <div class="barWrap">
-              <div class="barTitle">Main ${b.mainLen}′ @ ${b.flow} gpm — NP ${L.nozRight.NP} psi</div>
-              <div class="hosebar" id="viz_main_${key}"></div>
-              ${L.hasWye ? `` : `<div class="ppEq" id="eq_main_${key}"></div>`}
-            </div>
-            ${L.hasWye ? `
+
+      if(L.hasWye && !single){
+        // Full wye (two branches)
+        mathWrap.innerHTML = `
+          <details class="math" open>
+            <summary>Line math</summary>
+            <div class="hoseviz">
+              <div class="hoseLegend">
+                <span class="legSwatch sw175"></span> 1¾″
+                <span class="legSwatch sw25"></span> 2½″
+                <span class="legSwatch sw5"></span> 5″
+              </div>
+              <div class="barWrap">
+                <div class="barTitle">Main ${b.mainLen}′ @ ${b.flow} gpm — NP ${L.nozRight.NP} psi</div>
+                <div class="hosebar" id="viz_main_${key}"></div>
+              </div>
               <div class="barWrap">
                 <div class="barTitle">Branch A ${b.lLen||0}′ @ ${L.nozLeft.gpm} gpm — NP ${L.nozLeft.NP} psi</div>
                 <div class="hosebar" id="viz_L_${key}"></div>
@@ -641,29 +747,88 @@ function renderLinesPanel(){
                 <div class="ppEq" id="eq_R_${key}"></div>
               </div>
               <div class="ppEq" id="eq_final_${key}"></div>
-            `: ``}
-            <div class="simpleBox" id="pp_simple_${key}"></div>
-          </div>
-        </details>
-      `;
-      linesTable.appendChild(mathWrap);
+              <div class="simpleBox" id="pp_simple_${key}"></div>
+            </div>
+          </details>
+        `;
+        linesTable.appendChild(mathWrap);
 
-      // draw bars + equations
-      drawHoseBar(document.getElementById(`viz_main_${key}`), splitIntoSections(L.itemsMain), gpmMain, (L.nozRight?.NP||0), `Main ${sumFt(L.itemsMain)}′ @ ${gpmMain} gpm`);
-      if(!L.hasWye){
-        const eq = document.getElementById(`eq_main_${key}`); if(eq) eq.textContent = eqStringNoWye(L);
-      }else{
+        drawHoseBar(document.getElementById(`viz_main_${key}`), splitIntoSections(L.itemsMain), gpmMain, (L.nozRight?.NP||0), `Main ${sumFt(L.itemsMain)}′ @ ${gpmMain} gpm`);
         drawHoseBar(document.getElementById(`viz_L_${key}`), splitIntoSections(L.itemsLeft), L.nozLeft?.gpm||0, L.nozLeft?.NP||0, `Branch A ${sumFt(L.itemsLeft)||0}′`);
         drawHoseBar(document.getElementById(`viz_R_${key}`), splitIntoSections(L.itemsRight), L.nozRight?.gpm||0, L.nozRight?.NP||0, `Branch B ${sumFt(L.itemsRight)||0}′`);
         const {aEq,bEq,final}=eqStringsWye(L);
         document.getElementById(`eq_L_${key}`).textContent=aEq;
         document.getElementById(`eq_R_${key}`).textContent=bEq;
         document.getElementById(`eq_final_${key}`).textContent=final;
-      }
+        document.getElementById(`pp_simple_${key}`).innerHTML = ppExplainHTML(L);
 
-      // inject the plain-English PP explanation
-      const simpleDiv = document.getElementById(`pp_simple_${key}`);
-      if(simpleDiv) simpleDiv.innerHTML = ppExplainHTML(L);
+      } else if(single){
+        // Single-branch via wye: show active nozzle on main, plus one branch FL bar
+        const side = activeSide(L);
+        const bnSegs = side==='L'? L.itemsLeft : L.itemsRight;
+        const bnTitle = side==='L' ? 'Branch A' : 'Branch B';
+        const noz = activeNozzle(L);
+
+        mathWrap.innerHTML = `
+          <details class="math" open>
+            <summary>Line math</summary>
+            <div class="hoseviz">
+              <div class="hoseLegend">
+                <span class="legSwatch sw175"></span> 1¾″
+                <span class="legSwatch sw25"></span> 2½″
+                <span class="legSwatch sw5"></span> 5″
+              </div>
+              <div class="barWrap">
+                <div class="barTitle">Main ${b.mainLen}′ @ ${b.flow} gpm — NP ${noz.NP} psi</div>
+                <div class="hosebar" id="viz_main_${key}"></div>
+                <div class="ppEq" id="eq_main_${key}"></div>
+              </div>
+              <div class="barWrap">
+                <div class="barTitle">${bnTitle} ${sumFt(bnSegs)||0}′ @ ${noz.gpm} gpm</div>
+                <div class="hosebar" id="viz_BR_${key}"></div>
+                <div class="ppEq" id="eq_BR_${key}"></div>
+              </div>
+              <div class="ppEq" id="eq_final_${key}"></div>
+              <div class="simpleBox" id="pp_simple_${key}"></div>
+            </div>
+          </details>
+        `;
+        linesTable.appendChild(mathWrap);
+
+        drawHoseBar(document.getElementById(`viz_main_${key}`), splitIntoSections(L.itemsMain), gpmMain, (noz?.NP||0), `Main ${sumFt(L.itemsMain)}′ @ ${gpmMain} gpm`);
+        drawHoseBar(document.getElementById(`viz_BR_${key}`), splitIntoSections(bnSegs), gpmMain, (noz?.NP||0), `${bnTitle} ${sumFt(bnSegs)||0}′`);
+        const {single:_, final, branchEq}=eqStringsWye(L);
+        document.getElementById(`eq_main_${key}`).textContent = `Main FL = ` + splitIntoSections(L.itemsMain).map(s=>Math.round(FL(gpmMain, s.size, s.lengthFt))).join(' + ') || '0';
+        document.getElementById(`eq_BR_${key}`).textContent = branchEq;
+        document.getElementById(`eq_final_${key}`).textContent = final;
+        document.getElementById(`pp_simple_${key}`).innerHTML = ppExplainHTML(L);
+
+      } else {
+        // No wye
+        mathWrap.innerHTML = `
+          <details class="math" open>
+            <summary>Line math</summary>
+            <div class="hoseviz">
+              <div class="hoseLegend">
+                <span class="legSwatch sw175"></span> 1¾″
+                <span class="legSwatch sw25"></span> 2½″
+                <span class="legSwatch sw5"></span> 5″
+              </div>
+              <div class="barWrap">
+                <div class="barTitle">Main ${b.mainLen}′ @ ${b.flow} gpm — NP ${L.nozRight.NP} psi</div>
+                <div class="hosebar" id="viz_main_${key}"></div>
+                <div class="ppEq" id="eq_main_${key}"></div>
+              </div>
+              <div class="simpleBox" id="pp_simple_${key}"></div>
+            </div>
+          </details>
+        `;
+        linesTable.appendChild(mathWrap);
+
+        drawHoseBar(document.getElementById(`viz_main_${key}`), splitIntoSections(L.itemsMain), gpmMain, (L.nozRight?.NP||0), `Main ${sumFt(L.itemsMain)}′ @ ${gpmMain} gpm`);
+        document.getElementById(`eq_main_${key}`).textContent = eqStringNoWye(L);
+        document.getElementById(`pp_simple_${key}`).innerHTML = ppExplainHTML(L);
+      }
     }
   });
 }
@@ -702,7 +867,7 @@ overlay.addEventListener('click', (e)=>{
     const seg = L.itemsMain[0] || {size:'1.75',lengthFt:200};
     teSize.value = seg.size;
     teLen.value  = seg.lengthFt||0;
-    teNoz.value  = L.nozRight.id; // right is main nozzle for non-wye
+    teNoz.value  = (isSingleWye(L)? activeNozzle(L)?.id : L.nozRight.id) || L.nozRight.id;
   } else if(where==='L'){
     const seg = L.itemsLeft[0] || {size:'1.75',lengthFt:100};
     teSize.value = seg.size;
@@ -712,15 +877,15 @@ overlay.addEventListener('click', (e)=>{
     const seg = L.itemsRight[0] || {size:'1.75',lengthFt:100};
     teSize.value = seg.size;
     teLen.value = seg.lengthFt;
-    teNoz.value = (L.nozRight||NOZ.chiefXD).id;
+    teNoz.value = (L.nozRight||NOZ.chiefXD265).id;
   }
 
   // Branch controls visibility
   branchBlock.classList.toggle('is-hidden', teWye.value==='off');
-  teLenA.value = (L.itemsLeft[0]?.lengthFt)||100;
-  teLenB.value = (L.itemsRight[0]?.lengthFt)||100;
+  teLenA.value = (L.itemsLeft[0]?.lengthFt)||0;
+  teLenB.value = (L.itemsRight[0]?.lengthFt)||0;
   teNozA.value = (L.nozLeft?.id)||'chiefXD';
-  teNozB.value = (L.nozRight?.id)||'chiefXD';
+  teNozB.value = (L.nozRight?.id)||'chiefXD265';
 
   // Position & show
   placeEditor(e.clientX, e.clientY);
@@ -748,23 +913,23 @@ document.getElementById('teApply').addEventListener('click', ()=>{
     L.itemsMain = [{size, lengthFt:len}];
     if(!wyeOn){
       L.hasWye=false; L.itemsLeft=[]; L.itemsRight=[];
-      L.nozRight = noz; // nozzle on the main
+      L.nozRight = noz; // nozzle on the main/single
     }else{
       L.hasWye=true;
-      const lenA = Math.max(0, +teLenA.value||100);
-      const lenB = Math.max(0, +teLenB.value||100);
-      L.itemsLeft  = [{size:'1.75',lengthFt:lenA}];
-      L.itemsRight = [{size:'1.75',lengthFt:lenB}];
-      L.nozLeft  = NOZ[teNozA.value];
-      L.nozRight = NOZ[teNozB.value];
+      const lenA = Math.max(0, +teLenA.value||0);
+      const lenB = Math.max(0, +teLenB.value||0);
+      L.itemsLeft  = lenA? [{size:'1.75',lengthFt:lenA}] : [];
+      L.itemsRight = lenB? [{size:'1.75',lengthFt:lenB}] : [];
+      L.nozLeft  = NOZ[teNozA.value] || L.nozLeft;
+      L.nozRight = NOZ[teNozB.value] || L.nozRight;
     }
   } else if(where==='L'){
     L.hasWye = wyeOn || true; // editing branch implies wye on
-    L.itemsLeft  = [{size, lengthFt:len}];
+    L.itemsLeft  = len? [{size, lengthFt:len}] : [];
     L.nozLeft = noz;
   } else if(where==='R'){
     L.hasWye = wyeOn || true;
-    L.itemsRight = [{size, lengthFt:len}];
+    L.itemsRight = len? [{size, lengthFt:len}] : [];
     L.nozRight = noz;
   }
 
