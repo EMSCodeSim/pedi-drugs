@@ -292,8 +292,8 @@
             <li>Elevation: ~0.434 psi per foot</li>
             <li>Standpipe: start around 150 psi (check policy)</li>
             <li>Sprinkler on hydrant: often 100–150 psi to FDC (verify system)</li>
-            <li>Wye/appliance loss: ~10 psi (if used with two flowing branches)</li>
-            <li>Large LDH supply keeps intake ≥ 20 psi residual</li>
+            <li>Wye/appliance loss: ~10 psi (if two flowing branches)</li>
+            <li>Keep intake ≥ 20 psi residual</li>
           </ul>
         </div>
       </div>
@@ -378,9 +378,9 @@ const PSI_PER_FT = 0.434;
 const COEFF = { "1.75":15.5, "2.5":2, "5":0.08 };
 const COLORS = {"1.75":"#ff6b6b","2.5":"#6ecbff","5":"#ecd464"};
 const defaultPresets = {
-  left:  {len:200, size:'1.75', noz:'chiefXD'},         // 185 @ 50
-  back:  {len:200, size:'1.75', noz:'chiefXD'},         // 185 @ 50
-  right: {len:250, size:'2.5',  noz:'chiefXD265'}       // ChiefXD 265 @ 50 (per your change)
+  left:  {len:200, size:'1.75', noz:'chiefXD'},
+  back:  {len:200, size:'1.75', noz:'chiefXD'},
+  right: {len:250, size:'2.5',  noz:'chiefXD265'}
 };
 
 /* ===== Nozzles ===== */
@@ -538,9 +538,9 @@ function addTip(key, where, x, y){
 /* Draw Calculations view */
 function drawAll(){
   const viewH = Math.ceil(computeNeededHeightPx());
-  overlay.setAttribute('viewBox', `0 0 ${TRUCK_W} ${viewH}`);
-  stage.style.height = viewH + 'px';
-  truckImg.setAttribute('y', String(truckTopY(viewH)));
+  $('#overlay').setAttribute('viewBox', `0 0 ${TRUCK_W} ${viewH}`);
+  $('#stage').style.height = viewH + 'px';
+  $('#truckImg').setAttribute('y', String(truckTopY(viewH)));
 
   clearGroup(G_hoses); clearGroup(G_branches); clearGroup(G_tips); clearGroup(G_labels); clearGroup(G_supply);
 
@@ -655,7 +655,7 @@ function refreshTotals(){
   }
 }
 
-/* Equations + plain-English box (same as before) */
+/* Equations + plain-English box (fixed string building) */
 function breakdown(L){
   const leftLen  = sumFt(L.itemsLeft)||0, rightLen = sumFt(L.itemsRight)||0;
   const single = isSingleWye(L);
@@ -723,57 +723,80 @@ function eqStringsWye(L){
   }
 }
 function fmt(n){ return Math.round(n); }
+function fmtSegLabel(lenFt, size){
+  return `${lenFt}′ ${size==='2.5'?'2½″':(size==='1.75'?'1¾″':size+'″')}`;
+}
 function ppExplainHTML(L){
   const b = breakdown(L);
   const mainSecs = splitIntoSections(L.itemsMain);
   const mainFLs = mainSecs.map(s => FL(b.flow, s.size, s.lengthFt));
+  const mainParts = mainSecs.map((s,i)=>`${fmt(mainFLs[i])} (${fmtSegLabel(s.lengthFt, s.size)})`);
   const mainFLsum = mainFLs.reduce((a,c)=>a+c,0);
+  const elevStr = `${b.elevPsi>=0? '+':''}${fmt(b.elevPsi)}`;
 
   if(!L.hasWye){
-    return `<div><b>Simple PP:</b>
-      <ul class="simpleList">
-        <li><b>Nozzle Pressure</b> = ${fmt(L.nozRight?.NP||0)} psi</li>
-        <li><b>Main FL</b> = ${mainSecs.length? mainSecs.map((s,i)=>\`${fmt(mainFLs[i])} (${s.lengthFt}′ ${s.size==='2.5'?'2½″':s.size==='1.75'?'1¾″':s.size+'″'})\`).join(' + ') : 0} = <b>${fmt(mainFLsum)} psi</b></li>
-        <li><b>Elevation</b> = ${b.elevPsi>=0? '+':''}${fmt(b.elevPsi)} psi</li>
-      </ul>
-      <div style="margin-top:6px"><b>PP = NP + Main FL ± Elev = ${fmt(L.nozRight?.NP||0)} + ${fmt(mainFLsum)} ${b.elevPsi>=0?'+':''}${fmt(b.elevPsi)} = <span style="color:var(--ok)">${fmt(b.PDP)} psi</span></b></div></div>`;
+    return `
+      <div><b>Simple PP:</b>
+        <ul class="simpleList">
+          <li><b>Nozzle Pressure</b> = ${fmt(L.nozRight?.NP||0)} psi</li>
+          <li><b>Friction Loss (Main)</b> = ${mainSecs.length ? mainParts.join(' + ') : 0} = <b>${fmt(mainFLsum)} psi</b></li>
+          <li><b>Elevation</b> = ${elevStr} psi</li>
+        </ul>
+        <div style="margin-top:6px"><b>PP = NP + Main FL ± Elev = ${fmt(L.nozRight?.NP||0)} + ${fmt(mainFLsum)} ${elevStr} = <span style="color:var(--ok)">${fmt(b.PDP)} psi</span></b></div>
+      </div>
+    `;
   } else if(b.single){
     const side = b.side==='L'?'A':'B';
     const noz = activeNozzle(L);
     const brSecs = splitIntoSections(b.side==='L'?L.itemsLeft:L.itemsRight);
     const brFLs = brSecs.map(s => FL(noz.gpm, s.size, s.lengthFt));
+    const brParts = brSecs.map((s,i)=>`${fmt(brFLs[i])} (${fmtSegLabel(s.lengthFt, s.size)})`);
     const brSum = brFLs.reduce((x,y)=>x+y,0);
-    return `<div><b>Simple PP (Single branch via wye):</b>
-      <ul class="simpleList">
-        <li><b>Nozzle Pressure</b> = ${fmt(noz.NP)} psi</li>
-        <li><b>Branch ${side} FL</b> = ${brSecs.length? brFLs.map((v,i)=>\`${fmt(v)} (${brSecs[i].lengthFt}′ ${brSecs[i].size==='2.5'?'2½″':brSecs[i].size==='1.75'?'1¾″':brSecs[i].size+'″'})\`).join(' + '):0} = <b>${fmt(brSum)} psi</b></li>
-        <li><b>Main FL</b> = ${mainSecs.length? mainFLs.map((v,i)=>\`${fmt(v)} (${mainSecs[i].lengthFt}′ ${mainSecs[i].size==='2.5'?'2½″':mainSecs[i].size==='1.75'?'1¾″':mainSecs[i].size+'″'})\`).join(' + '):0} = <b>${fmt(mainFLsum)} psi</b></li>
-        <li><b>Elevation</b> = ${b.elevPsi>=0? '+':''}${fmt(b.elevPsi)} psi</li>
-      </ul>
-      <div style="margin-top:6px"><b>PP = NP + Branch FL + Main FL ± Elev
-           = ${fmt(noz.NP)} + ${fmt(brSum)} + ${fmt(mainFLsum)} ${b.elevPsi>=0?'+':''}${fmt(b.elevPsi)}
-           = <span style="color:var(--ok)">${fmt(b.PDP)} psi</span></b></div></div>`;
+
+    return `
+      <div><b>Simple PP (Single branch via wye):</b>
+        <ul class="simpleList">
+          <li><b>Nozzle Pressure</b> = ${fmt(noz.NP)} psi</li>
+          <li><b>Branch ${side} FL</b> = ${brSecs.length ? brParts.join(' + ') : 0} = <b>${fmt(brSum)} psi</b></li>
+          <li><b>Main FL</b> = ${mainSecs.length ? mainParts.join(' + ') : 0} = <b>${fmt(mainFLsum)} psi</b></li>
+          <li><b>Elevation</b> = ${elevStr} psi</li>
+        </ul>
+        <div style="margin-top:6px">
+          <b>PP = NP + Branch FL + Main FL ± Elev
+             = ${fmt(noz.NP)} + ${fmt(brSum)} + ${fmt(mainFLsum)} ${elevStr}
+             = <span style="color:var(--ok)">${fmt(b.PDP)} psi</span></b>
+        </div>
+      </div>
+    `;
   } else {
     const aSecs = splitIntoSections(L.itemsLeft);
     const bSecs = splitIntoSections(L.itemsRight);
     const aFLs = aSecs.map(s => FL(L.nozLeft?.gpm||0, s.size, s.lengthFt));
     const bFLs = bSecs.map(s => FL(L.nozRight?.gpm||0, s.size, s.lengthFt));
+    const aParts = aSecs.map((s,i)=>`${fmt(aFLs[i])} (${fmtSegLabel(s.lengthFt, s.size)})`);
+    const bParts = bSecs.map((s,i)=>`${fmt(bFLs[i])} (${fmtSegLabel(s.lengthFt, s.size)})`);
     const aNeed = (L.nozLeft?.NP||0) + aFLs.reduce((x,y)=>x+y,0);
     const bNeed = (L.nozRight?.NP||0)+ bFLs.reduce((x,y)=>x+y,0);
     const maxNeed = Math.max(aNeed, bNeed);
     const wyeLoss = L.wyeLoss||0;
-    return `<div><b>Simple PP (Wye):</b>
-      <ul class="simpleList">
-        <li><b>Branch A need</b> = NP ${fmt(L.nozLeft?.NP||0)} + FL ${aSecs.length? aFLs.map((v,i)=>\`${fmt(v)} (${aSecs[i].lengthFt}′ 1¾″)\`).join(' + '):0} = <b>${fmt(aNeed)} psi</b></li>
-        <li><b>Branch B need</b> = NP ${fmt(L.nozRight?.NP||0)} + FL ${bSecs.length? bFLs.map((v,i)=>\`${fmt(v)} (${bSecs[i].lengthFt}′ 1¾″)\`).join(' + '):0} = <b>${fmt(bNeed)} psi</b></li>
-        <li><b>Take the higher branch</b> = <b>${fmt(maxNeed)} psi</b></li>
-        <li><b>Main FL</b> = ${mainSecs.length? mainFLs.map((v,i)=>\`${fmt(v)} (${mainSecs[i].lengthFt}′ ${mainSecs[i].size==='2.5'?'2½″':mainSecs[i].size==='1.75'?'1¾″':mainSecs[i].size+'″'})\`).join(' + '):0} = <b>${fmt(mainFLsum)} psi</b></li>
-        ${wyeLoss? `<li><b>Wye loss</b> = +${fmt(wyeLoss)} psi</li>` : ``}
-        <li><b>Elevation</b> = ${b.elevPsi>=0?'+':''}${fmt(b.elevPsi)} psi</li>
-      </ul>
-      <div style="margin-top:6px"><b>PP = max(A,B) + Main FL ${wyeLoss?`+ Wye`:``} ± Elev
-           = ${fmt(maxNeed)} + ${fmt(mainFLsum)} ${wyeLoss?`+ ${fmt(wyeLoss)} `:``}${b.elevPsi>=0?'+':''}${fmt(b.elevPsi)}
-           = <span style="color:var(--ok)">${fmt(b.PDP)} psi</span></b></div></div>`;
+
+    return `
+      <div><b>Simple PP (Wye):</b>
+        <ul class="simpleList">
+          <li><b>Branch A need</b> = NP ${fmt(L.nozLeft?.NP||0)} + FL ${aSecs.length ? aParts.join(' + ') : 0} = <b>${fmt(aNeed)} psi</b></li>
+          <li><b>Branch B need</b> = NP ${fmt(L.nozRight?.NP||0)} + FL ${bSecs.length ? bParts.join(' + ') : 0} = <b>${fmt(bNeed)} psi</b></li>
+          <li><b>Take the higher branch</b> = <b>${fmt(maxNeed)} psi</b></li>
+          <li><b>Main FL</b> (total ${b.flow} gpm) = ${mainSecs.length ? mainParts.join(' + ') : 0} = <b>${fmt(mainFLsum)} psi</b></li>
+          ${wyeLoss? `<li><b>Wye loss</b> = +${fmt(wyeLoss)} psi</li>` : ``}
+          <li><b>Elevation</b> = ${elevStr} psi</li>
+        </ul>
+        <div style="margin-top:6px">
+          <b>PP = max(A,B) + Main FL ${wyeLoss?`+ Wye`:``} ± Elev
+             = ${fmt(maxNeed)} + ${fmt(mainFLsum)} ${wyeLoss?`+ ${fmt(wyeLoss)} `:``}${elevStr}
+             = <span style="color:var(--ok)">${fmt(b.PDP)} psi</span></b>
+        </div>
+      </div>
+    `;
   }
 }
 
@@ -1070,10 +1093,10 @@ let practiceAnswer = null;
 function randomPick(arr){ return arr[Math.floor(Math.random()*arr.length)]; }
 function makePractice(){
   clearPractice();
-  // Randomize a single line: choose size, length, nozzle, maybe wye
+  // Randomize a single line
   const sizeMain = Math.random()<0.4 ? '2.5' : '1.75';
   const lenMain = [150,200,250,300][Math.floor(Math.random()*4)];
-  const wye = Math.random()<0.35; // 35% chance of wye
+  const wye = Math.random()<0.35;
   const elev = [0,10,20,30,40][Math.floor(Math.random()*5)];
   const nozChoices = [NOZ.chiefXD, NOZ.fog150_75, NOZ.fog185_75, NOZ.sb15_16, NOZ.sb1_1_8, NOZ.chiefXD265];
   const noz = randomPick(nozChoices);
@@ -1084,7 +1107,6 @@ function makePractice(){
   const pathData = `M ${sx},${sy} Q 200 ${sy-totalPx*0.6} ${ex},${ey}`;
   const base=document.createElementNS('http://www.w3.org/2000/svg','path'); base.setAttribute('d', pathData); G_hosesP.appendChild(base);
   const segs=[{size:sizeMain,lengthFt:lenMain}];
-  // draw main
   const totalLen = base.getTotalLength();
   const p1=document.createElementNS('http://www.w3.org/2000/svg','path'); p1.setAttribute('class','hoseBase shadow'); p1.setAttribute('d', pathData); G_hosesP.appendChild(p1);
   const p2=document.createElementNS('http://www.w3.org/2000/svg','path'); p2.setAttribute('class',`hoseBase ${sizeMain==='2.5'?'hose25':'hose175'}`); p2.setAttribute('d', pathData); p2.setAttribute('stroke-dasharray', `${totalLen} ${totalLen}`); p2.setAttribute('stroke-dashoffset','0'); G_hosesP.appendChild(p2);
@@ -1106,17 +1128,15 @@ function makePractice(){
   const mainFL = FL_total(flow, segs);
   let PDP=0;
   if(wye){
-    // 2 branches: pick higher branch need vs main nozzle branch
     const bnFL = FL_total(branchNoz.gpm, branchSegs);
     const needA = branchNoz.NP + bnFL;
-    const needB = noz.NP; // main end acts as nozzle branch with 0' branch
+    const needB = noz.NP;
     PDP = Math.max(needA, needB) + mainFL + wyeLoss + elev*PSI_PER_FT;
   } else {
     PDP = noz.NP + mainFL + elev*PSI_PER_FT;
   }
   practiceAnswer = Math.round(PDP);
 
-  // Labels
   const npLabel = wye ? 'via Wye' : `Nozzle ${noz.NP} psi`;
   const lbl = `${lenMain}′ @ ${wye? (noz.gpm + (branchNoz?.gpm||0)) : noz.gpm} gpm — ${npLabel}${elev?` — Elev ${elev}′`:''}`;
   const text=document.createElementNS('http://www.w3.org/2000/svg','text'); text.setAttribute('x', ex); text.setAttribute('y', ey-10); text.setAttribute('text-anchor','middle'); text.setAttribute('fill','#eaf2ff'); text.setAttribute('font-size','12'); text.textContent = lbl; G_labelsP.appendChild(text);
@@ -1140,7 +1160,6 @@ $('#revealBtn').addEventListener('click', ()=>{ if(practiceAnswer||practiceAnswe
 function populateSettings(){
   const sels = [$('#s_noz1'),$('#s_noz2'),$('#s_noz3')];
   sels.forEach(sel=> sel.innerHTML = NOZ_LIST.map(n=>`<option value="${n.id}">${n.name}</option>`).join('') );
-  // Load existing
   $('#s_len1').value = currentPresets.left.len; $('#s_sz1').value = currentPresets.left.size; $('#s_noz1').value = currentPresets.left.noz;
   $('#s_len2').value = currentPresets.back.len; $('#s_sz2').value = currentPresets.back.size; $('#s_noz2').value = currentPresets.back.noz;
   $('#s_len3').value = currentPresets.right.len; $('#s_sz3').value = currentPresets.right.size; $('#s_noz3').value = currentPresets.right.noz;
